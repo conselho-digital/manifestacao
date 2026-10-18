@@ -10,15 +10,18 @@ import { useAvenueRealtime } from "../net/useAvenueRealtime.js";
 import { Joystick } from "../ui/Joystick.js";
 import { Hud } from "../ui/Hud.js";
 import { VehiclePicker } from "../ui/VehiclePicker.js";
+import { StoreButton } from "../ui/StoreButton.js";
+import { Store } from "../shop/Store.js";
 
 /**
  * Cena de jogo: avenida 3D, jogador local, jogadores remotos (Realtime),
- * HUD (placar + chat), seletor de veículo e joystick de toque.
+ * HUD (placar + chat), seletor de veículo, loja e joystick de toque.
  */
 export function Game({ avatar }: { avatar: AvatarConfig }) {
   const { inputRef, setJoystick } = useInput();
   const net = useAvenueRealtime(avatar);
   const [vehicle, setVehicle] = useState<VehicleId>("nenhum");
+  const [storeOpen, setStoreOpen] = useState(false);
 
   return (
     <>
@@ -48,12 +51,14 @@ export function Game({ avatar }: { avatar: AvatarConfig }) {
 
       <Joystick onMove={setJoystick} />
       <VehiclePicker value={vehicle} onChange={setVehicle} />
+      <StoreButton onClick={() => setStoreOpen(true)} />
       <Hud
         online={net.online}
         scores={net.scores}
         chatLog={net.chatLog}
         onChat={net.sendChat}
       />
+      {storeOpen && <Store onClose={() => setStoreOpen(false)} />}
     </>
   );
 }
