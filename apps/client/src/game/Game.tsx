@@ -11,6 +11,7 @@ import { Joystick } from "../ui/Joystick.js";
 import { Hud } from "../ui/Hud.js";
 import { VehiclePicker } from "../ui/VehiclePicker.js";
 import { StoreButton } from "../ui/StoreButton.js";
+import { TopRightPanel } from "../ui/TopRightPanel.js";
 import { Store } from "../shop/Store.js";
 
 /**
@@ -18,10 +19,12 @@ import { Store } from "../shop/Store.js";
  * HUD (placar + chat), seletor de veículo, loja e joystick de toque.
  */
 export function Game({ avatar }: { avatar: AvatarConfig }) {
-  const { inputRef, setJoystick } = useInput();
-  const net = useAvenueRealtime(avatar);
   const [vehicle, setVehicle] = useState<VehicleId>("nenhum");
   const [storeOpen, setStoreOpen] = useState(false);
+  // Pausa o movimento por teclado enquanto a loja (modal) está aberta; o
+  // joystick já fica coberto pelo overlay da loja (zIndex maior).
+  const { inputRef, setJoystick } = useInput(!storeOpen);
+  const net = useAvenueRealtime(avatar);
 
   return (
     <>
@@ -50,8 +53,10 @@ export function Game({ avatar }: { avatar: AvatarConfig }) {
       </Canvas>
 
       <Joystick onMove={setJoystick} />
-      <VehiclePicker value={vehicle} onChange={setVehicle} />
-      <StoreButton onClick={() => setStoreOpen(true)} />
+      <TopRightPanel>
+        <StoreButton onClick={() => setStoreOpen(true)} />
+        <VehiclePicker value={vehicle} onChange={setVehicle} />
+      </TopRightPanel>
       <Hud
         online={net.online}
         scores={net.scores}

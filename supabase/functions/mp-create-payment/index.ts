@@ -2,15 +2,24 @@
 //
 // Fluxo (CLAUDE.md §5):
 //  1. valida o usuário (JWT do Supabase) e o item
-//  2. cria o pagamento Pix no Mercado Pago
-//  3. grava orders.status = 'pending' com external_reference (idempotência)
+//  2. grava orders.status = 'pending' com external_reference ANTES de criar o
+//     pagamento no Mercado Pago (nunca o contrário — ver nota de robustez abaixo)
+//  3. cria o pagamento Pix no Mercado Pago
 //  4. devolve QR Code / copia-e-cola para o cliente
 //
 // Segredos (configurar em Supabase → Edge Functions → Secrets):
 //   MP_ACCESS_TOKEN, SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
 //
-// Observação: a liberação do item NÃO acontece aqui — só no webhook confirmado
-// (mp-webhook). Nunca conceder entitlement sem pagamento aprovado.
+// Observação: a liberação do item NÃO acontece aqui no caminho normal — só no
+// webhook confirmado (mp-webhook). A única exceção é o caminho de reaproveitar
+// um pedido pendente que, ao reconsultar, já veio "approved" no Mercado Pago
+// (corrida com o webhook, que pode ainda não ter processado); nesse caso
+// concedemos aqui com a mesma idempotência/transição atômica do webhook.
+//
+// Nota de robustez: a ORDEM importa. Criar o pagamento no Mercado Pago antes
+// de garantir a linha em `orders` deixaria um pagamento "órfão" (dinheiro
+// cobrado, sem registro local) se o INSERT falhasse depois. Por isso o pedido
+// é gravado primeiro (sem mp_payment_id ainda) e só então chamamos o MP.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { corsHeaders } from "../_shared/cors.ts";
@@ -45,11 +54,11 @@ Deno.serve(async (req) => {
       .single();
     if (itemErr || !item || !item.active) return json({ error: "item_invalid" }, 400);
 
-    // Idempotência: reaproveita um pedido pendente recente do mesmo usuário+item
-    // em vez de criar outra cobrança a cada clique.
+    // Reaproveita um pedido pendente recente do mesmo usuário+item em vez de
+    // criar outra cobrança a cada clique.
     const { data: pending } = await admin
       .from("orders")
-      .select("mp_payment_id, external_reference")
+      .select("id, mp_payment_id, external_reference, status")
       .eq("user_id", userId)
       .eq("item_id", item.id)
       .eq("status", "pending")
@@ -64,6 +73,7 @@ Deno.serve(async (req) => {
       );
       if (existing.ok) {
         const ep = await existing.json();
+
         if (ep.status === "pending") {
           const tx = ep.point_of_interaction?.transaction_data ?? {};
           return json({
@@ -73,10 +83,39 @@ Deno.serve(async (req) => {
             ticketUrl: tx.ticket_url ?? null,
           });
         }
+
+        if (ep.status === "approved") {
+          // Já foi pago — provavelmente o webhook ainda não processou. Concede
+          // aqui mesmo, com a mesma idempotência do webhook (nunca duas vezes,
+          // nunca sem conferir o valor), em vez de criar uma SEGUNDA cobrança.
+          await grantPaidOrder(admin, pending.id, userId, item.id, Number(ep.transaction_amount), item.price_cents);
+          return json({ orderRef: pending.external_reference, qrCode: null, qrCodeBase64: null, ticketUrl: null, paid: true });
+        }
+
+        // rejected/cancelled/expired/outro: segue para criar uma cobrança nova.
       }
     }
 
     const externalReference = crypto.randomUUID();
+
+    // Grava o pedido ANTES de chamar o Mercado Pago (ver nota de robustez no
+    // topo do arquivo): se isto falhar, nenhum pagamento é criado — nunca
+    // cobramos sem ter onde registrar a confirmação depois.
+    const { data: orderRow, error: orderErr } = await admin
+      .from("orders")
+      .insert({
+        user_id: userId,
+        item_id: item.id,
+        amount_cents: item.price_cents,
+        external_reference: externalReference,
+        status: "pending",
+      })
+      .select("id")
+      .single();
+    if (orderErr || !orderRow) {
+      console.error("order_insert_failed", orderErr?.message);
+      return json({ error: "order_failed" }, 500);
+    }
 
     // Cria o pagamento Pix no Mercado Pago.
     const mpRes = await fetch("https://api.mercadopago.com/v1/payments", {
@@ -87,7 +126,7 @@ Deno.serve(async (req) => {
         "X-Idempotency-Key": externalReference,
       },
       body: JSON.stringify({
-        transaction_amount: item.price_cents / 100,
+        transaction_amount: Number((item.price_cents / 100).toFixed(2)),
         description: item.label,
         payment_method_id: "pix",
         external_reference: externalReference,
@@ -97,22 +136,16 @@ Deno.serve(async (req) => {
     const mp = await mpRes.json();
     if (!mpRes.ok) {
       console.error("mp_error", mp);
+      // O pedido local já existe como 'pending' sem mp_payment_id; uma nova
+      // tentativa do usuário cai de novo neste bloco (sem mp_payment_id,
+      // pula o reaproveitamento) e tenta criar o pagamento outra vez — sem
+      // deixar nenhum pagamento cobrado sem registro.
       return json({ error: "payment_provider_error" }, 502);
     }
 
-    // Registra o pedido pendente (idempotente por external_reference).
-    const { error: orderErr } = await admin.from("orders").insert({
-      user_id: userId,
-      item_id: item.id,
-      amount_cents: item.price_cents,
-      mp_payment_id: String(mp.id),
-      external_reference: externalReference,
-      status: "pending",
-    });
-    if (orderErr) {
-      console.error("order_insert_failed", orderErr.message);
-      return json({ error: "order_failed" }, 500);
-    }
+    // Preenche o id do pagamento no pedido já existente (best effort: mesmo
+    // se isto falhar, o webhook encontra o pedido pelo external_reference).
+    await admin.from("orders").update({ mp_payment_id: String(mp.id) }).eq("id", orderRow.id);
 
     const tx = mp.point_of_interaction?.transaction_data ?? {};
     return json({
@@ -126,6 +159,33 @@ Deno.serve(async (req) => {
     return json({ error: "internal" }, 500);
   }
 });
+
+/**
+ * Concede o entitlement e marca o pedido como pago, de forma idempotente
+ * (mesma lógica do mp-webhook): só grava se a transição pending->paid for
+ * esta chamada, e confere o valor pago contra o esperado antes de conceder.
+ */
+async function grantPaidOrder(
+  admin: ReturnType<typeof createClient>,
+  orderId: string,
+  userId: string,
+  itemId: string,
+  paidAmount: number,
+  expectedCents: number,
+): Promise<void> {
+  if (Math.round(paidAmount * 100) !== expectedCents) {
+    console.error("amount_mismatch_on_create_payment", { orderId, paidAmount, expectedCents });
+    return;
+  }
+  await admin
+    .from("entitlements")
+    .upsert({ user_id: userId, item_id: itemId, source: "purchase" }, { onConflict: "user_id,item_id", ignoreDuplicates: true });
+  await admin
+    .from("orders")
+    .update({ status: "paid", paid_at: new Date().toISOString() })
+    .eq("id", orderId)
+    .eq("status", "pending");
+}
 
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {

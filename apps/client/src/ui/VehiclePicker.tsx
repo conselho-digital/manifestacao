@@ -6,8 +6,9 @@ interface VehiclePickerProps {
 }
 
 /**
- * Seletor de veículo (canto superior direito). Na Fase 2 todos estão
- * liberados; na Fase 3 itens pagos (carro de som) passam a exigir posse.
+ * Seletor de veículo. Sem posicionamento próprio — fica dentro do
+ * TopRightPanel (junto do StoreButton). Na Fase 2 todos estão liberados;
+ * na Fase 3 itens pagos (carro de som) passam a exigir posse.
  */
 export function VehiclePicker({ value, onChange }: VehiclePickerProps) {
   return (
@@ -15,14 +16,10 @@ export function VehiclePicker({ value, onChange }: VehiclePickerProps) {
       role="group"
       aria-label="Veículo"
       style={{
-        position: "fixed",
-        top: "calc(env(safe-area-inset-top, 0px) + 10px)",
-        right: "calc(env(safe-area-inset-right, 0px) + 10px)",
         display: "flex",
         flexDirection: "column",
         alignItems: "flex-end",
         gap: 6,
-        zIndex: 6,
       }}
     >
       <span

@@ -56,10 +56,18 @@ export function Store({ onClose }: StoreProps) {
   }, [owned, charge, pendingItem]);
 
   async function buy(item: CatalogItem) {
+    if (pendingItem) return; // já há uma compra em andamento; evita duplo clique
     setError(null);
+    setPendingItem(item.id);
     try {
-      setPendingItem(item.id);
       const c = await createPixCharge(item.id);
+      if (c.paid) {
+        // Já estava aprovado (corrida com o webhook); o servidor já concedeu
+        // o item — não há QR Code para mostrar, só atualiza o inventário.
+        await refresh();
+        setPendingItem(null);
+        return;
+      }
       setCharge(c);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro ao criar cobrança");
@@ -135,7 +143,7 @@ export function Store({ onClose }: StoreProps) {
           </div>
         )}
 
-        {error && <p style={{ color: "#ff6b6b", fontSize: "var(--t-ui)" }}>{error}</p>}
+        {error && <p style={{ color: "var(--danger)", fontSize: "var(--t-ui)" }}>{error}</p>}
 
         {charge && (
           <PixPanel charge={charge} onCancel={() => { setCharge(null); setPendingItem(null); }} />
@@ -161,18 +169,27 @@ export function Store({ onClose }: StoreProps) {
                 >
                   <div>
                     <div style={{ fontWeight: 700, fontSize: "var(--t-body)" }}>{itemLabel(item)}</div>
-                    <div style={{ fontSize: "var(--t-ui)", color: "var(--ink-dim)" }}>
+                    <div
+                      style={{
+                        fontSize: "var(--t-ui)",
+                        // Preço é informação de decisão: só fica discreto quando grátis.
+                        color: free ? "var(--ink-dim)" : "var(--ink)",
+                        fontWeight: free ? 400 : 600,
+                      }}
+                    >
                       {free ? "Grátis" : formatBRL(item.price_cents)}
                     </div>
                   </div>
-                  {has || free ? (
+                  {has ? (
                     <span style={{ fontSize: "var(--t-ui)", color: "var(--accent)", fontWeight: 700 }}>
-                      {has ? "Adquirido" : "Disponível"}
+                      Adquirido
                     </span>
+                  ) : free ? (
+                    <span style={{ fontSize: "var(--t-ui)", color: "var(--ink-dim)" }}>Já disponível</span>
                   ) : (
                     <button
                       type="button"
-                      disabled={!session || pendingItem === item.id}
+                      disabled={!session || pendingItem !== null}
                       onClick={() => void buy(item)}
                       style={buyBtnStyle}
                     >
@@ -201,6 +218,11 @@ function PixPanel({ charge, onCancel }: { charge: PixCharge; onCancel: () => voi
           src={`data:image/png;base64,${charge.qrCodeBase64}`}
           alt="QR Code Pix"
           style={{ width: 220, height: 220, borderRadius: "var(--r-md)", background: "#fff" }}
+          onError={(e) => {
+            // Base64 malformado/incompleto: esconde a imagem quebrada e deixa
+            // o botão "copiar código Pix" como alternativa.
+            (e.currentTarget as HTMLImageElement).style.display = "none";
+          }}
         />
       )}
       {charge.qrCode && (
@@ -214,8 +236,11 @@ function PixPanel({ charge, onCancel }: { charge: PixCharge; onCancel: () => voi
           {copied ? "Copiado!" : "Copiar código Pix"}
         </button>
       )}
-      <p style={{ margin: 0, fontSize: "var(--t-ui)", color: "var(--ink-dim)" }}>
-        Aguardando confirmação do pagamento…
+      <p style={{ margin: 0, fontSize: "var(--t-ui)", color: "var(--ink-dim)", textAlign: "center" }}>
+        Aguardando confirmação do pagamento… a liberação do item costuma levar
+        alguns segundos após o Pix ser pago. Pode fechar a loja: a confirmação
+        acontece em segundo plano e o item aparece aqui na próxima vez que
+        você abrir.
       </p>
       <button type="button" onClick={onCancel} style={linkBtnStyle}>
         Cancelar
@@ -225,8 +250,8 @@ function PixPanel({ charge, onCancel }: { charge: PixCharge; onCancel: () => voi
 }
 
 const closeBtnStyle: React.CSSProperties = {
-  minHeight: 36,
-  padding: "6px 14px",
+  minHeight: 44,
+  padding: "10px 16px",
   fontSize: "var(--t-ui)",
   borderRadius: "var(--r-sm)",
   border: "1px solid var(--line)",
@@ -248,8 +273,8 @@ const primaryBtnStyle: React.CSSProperties = {
 };
 
 const buyBtnStyle: React.CSSProperties = {
-  minHeight: 36,
-  padding: "8px 16px",
+  minHeight: 44,
+  padding: "10px 18px",
   fontSize: "var(--t-ui)",
   fontWeight: 700,
   borderRadius: "var(--r-sm)",
@@ -260,6 +285,8 @@ const buyBtnStyle: React.CSSProperties = {
 };
 
 const linkBtnStyle: React.CSSProperties = {
+  minHeight: 44,
+  padding: "10px 4px",
   background: "none",
   border: "none",
   color: "var(--ink-dim)",

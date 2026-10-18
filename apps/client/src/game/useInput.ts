@@ -6,19 +6,28 @@ export interface InputVector {
   z: number;
 }
 
+const ZERO: InputVector = { x: 0, z: 0 };
+
 /**
  * Entrada de movimento unificada: teclado (WASD/setas) + joystick de toque.
  * Retorna um ref lido a cada frame e um setter que o joystick alimenta.
  * z negativo = para frente (longe da câmera).
+ *
+ * `enabled`: quando false (ex. um modal como a loja está aberto), o input
+ * fica zerado mesmo que teclas continuem pressionadas — evita que o avatar
+ * se mova "por baixo" de um diálogo aberto.
  */
-export function useInput() {
+export function useInput(enabled = true) {
   const inputRef = useRef<InputVector>({ x: 0, z: 0 });
   const keyRef = useRef<InputVector>({ x: 0, z: 0 });
   const joyRef = useRef<InputVector>({ x: 0, z: 0 });
   const pressed = useRef<Set<string>>(new Set());
+  const enabledRef = useRef(enabled);
+  enabledRef.current = enabled;
 
   // Combina teclado e joystick; teclado tem prioridade se ativo.
   const read = (): InputVector => {
+    if (!enabledRef.current) return ZERO;
     const k = keyRef.current;
     if (k.x !== 0 || k.z !== 0) return k;
     return joyRef.current;
@@ -29,6 +38,12 @@ export function useInput() {
   const apply = () => {
     inputRef.current = read();
   };
+
+  // Reaplica imediatamente quando `enabled` muda (zera o movimento ao abrir
+  // um modal, mesmo sem nenhum novo evento de teclado/toque).
+  useEffect(() => {
+    apply();
+  }, [enabled]);
 
   useEffect(() => {
     const recompute = () => {

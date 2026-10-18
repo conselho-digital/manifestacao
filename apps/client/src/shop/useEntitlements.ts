@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import { getSupabase } from "../net/supabase.js";
 
@@ -8,14 +8,19 @@ import { getSupabase } from "../net/supabase.js";
  */
 export function useEntitlements(session: Session | null) {
   const [owned, setOwned] = useState<Set<string>>(new Set());
+  // Descarta respostas atrasadas de uma sessão anterior (ex.: usuário
+  // deslogou/trocou de conta enquanto um fetch ainda estava em voo).
+  const requestId = useRef(0);
 
   const refresh = useCallback(async () => {
+    const myRequest = ++requestId.current;
     const supabase = getSupabase();
     if (!supabase || !session) {
-      setOwned(new Set());
+      if (myRequest === requestId.current) setOwned(new Set());
       return;
     }
     const { data } = await supabase.from("entitlements").select("item_id").eq("user_id", session.user.id);
+    if (myRequest !== requestId.current) return; // resposta obsoleta, ignora
     setOwned(new Set((data ?? []).map((r) => r.item_id as string)));
   }, [session]);
 

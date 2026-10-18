@@ -2,7 +2,10 @@ interface StoreButtonProps {
   onClick: () => void;
 }
 
-/** Botão fixo para abrir a loja (canto inferior direito). */
+/**
+ * Botão para abrir a loja. Sem posicionamento próprio — fica dentro do
+ * TopRightPanel (junto do VehiclePicker), fora da área de toque do joystick.
+ */
 export function StoreButton({ onClick }: StoreButtonProps) {
   return (
     <button
@@ -10,12 +13,8 @@ export function StoreButton({ onClick }: StoreButtonProps) {
       onClick={onClick}
       aria-label="Abrir loja"
       style={{
-        position: "fixed",
-        right: "calc(env(safe-area-inset-right, 0px) + 10px)",
-        bottom: "calc(env(safe-area-inset-bottom, 0px) + 10px)",
-        zIndex: 6,
-        minHeight: 48,
-        minWidth: 48,
+        minHeight: 44,
+        minWidth: 44,
         padding: "10px 18px",
         fontSize: "var(--t-ui)",
         fontWeight: 700,

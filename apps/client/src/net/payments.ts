@@ -5,6 +5,9 @@ export interface PixCharge {
   qrCode: string | null;
   qrCodeBase64: string | null;
   ticketUrl: string | null;
+  /** true quando o pagamento já estava aprovado (corrida com o webhook);
+   * o item já foi concedido no servidor, não há QR Code para mostrar. */
+  paid?: boolean;
 }
 
 /**
