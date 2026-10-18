@@ -43,6 +43,10 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
   const net = useAvenueRealtime(avatar);
 
   const transformRef = useRef<PlayerTransform>({ x: 0, z: 0, rotationY: 0 });
+  // Só true depois do primeiro useFrame do Player — evita que um clique no
+  // instante do mount (antes do R3F rodar o primeiro frame) borrife na
+  // origem do mundo (0,0) em vez de ignorar o clique.
+  const transformReadyRef = useRef(false);
 
   // Cartucho de spray: contador local (client-trust, como o resto do MVP não
   // autoritativo — CLAUDE.md §4). Recarrega sozinho até o máximo.
@@ -55,6 +59,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
   }, []);
 
   const handleSpray = useCallback(() => {
+    if (!transformReadyRef.current) return;
     setSprayCharges((c) => {
       if (c <= 0) return c;
       const { x, z, rotationY } = transformRef.current;
@@ -89,6 +94,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
           inputRef={inputRef}
           onMove={net.sendMove}
           transformRef={transformRef}
+          transformReadyRef={transformReadyRef}
         />
         <RemotePlayers ids={net.remoteIds} playersRef={net.playersRef} />
       </Canvas>
@@ -96,6 +102,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
       <Joystick onMove={setJoystick} />
       <TopRightPanel>
         <StoreButton onClick={onOpenStore} />
+        <SprayButton charges={sprayCharges} maxCharges={SPRAY_CARTRIDGE_SIZE} onSpray={handleSpray} />
         <VehiclePicker
           value={vehicle}
           onChange={setVehicle}
@@ -104,7 +111,6 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
           loading={entitlementsLoading}
         />
       </TopRightPanel>
-      <SprayButton charges={sprayCharges} maxCharges={SPRAY_CARTRIDGE_SIZE} onSpray={handleSpray} />
       <Hud
         online={net.online}
         scores={net.scores}

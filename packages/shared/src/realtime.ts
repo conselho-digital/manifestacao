@@ -46,7 +46,10 @@ export interface ChatBroadcast {
  * SPRAY_LIFETIME_MS, ver game/spray.ts).
  */
 export interface SprayBroadcast {
+  /** Id da marca em si (não do remetente — cada spray tem o seu). */
   id: string;
+  /** Chave de presence de quem enviou — usada para limitar a taxa na recepção. */
+  senderId: string;
   /** Posição no mundo (plano XZ) onde a marca aparece. */
   x: number;
   z: number;

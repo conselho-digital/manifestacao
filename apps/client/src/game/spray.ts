@@ -26,6 +26,18 @@ export const SPRAY_REFILL_INTERVAL_MS = 8_000;
 /** Distância à frente do jogador onde a marca aparece ao usar o spray. */
 export const SPRAY_REACH = 1.6;
 
+/**
+ * Intervalo mínimo entre envios aceitos (por remetente), tanto no cliente
+ * (defesa própria, independente do cartucho — alguém pode chamar sendSpray
+ * direto pelo DevTools, ignorando o botão) quanto na recepção (todo mundo
+ * que recebe o broadcast aplica o mesmo limite, então um remetente malicioso
+ * não consegue inundar o canal mesmo ignorando o limite do próprio cliente).
+ */
+export const SPRAY_MIN_INTERVAL_MS = 400;
+
+/** Tamanho máximo aceito para o `id` de uma marca vinda da rede. */
+export const SPRAY_ID_MAX_LENGTH = 64;
+
 export interface SprayMark {
   id: string;
   x: number;

@@ -21,7 +21,36 @@ import {
   type VehicleId,
 } from "@manifestacao/shared";
 import { getSupabase } from "./supabase.js";
-import { SPRAY_CLEANUP_INTERVAL_MS, SPRAY_LIFETIME_MS, SPRAY_MAX_MARKS, type SprayMark } from "../game/spray.js";
+import {
+  SPRAY_CLEANUP_INTERVAL_MS,
+  SPRAY_ID_MAX_LENGTH,
+  SPRAY_LIFETIME_MS,
+  SPRAY_MAX_MARKS,
+  SPRAY_MIN_INTERVAL_MS,
+  type SprayMark,
+} from "../game/spray.js";
+import { clampToAvenue } from "../game/world.js";
+
+/** `typeof === "number"` deixa passar NaN/Infinity; isto não. */
+function isFiniteNumber(v: unknown): v is number {
+  return typeof v === "number" && Number.isFinite(v);
+}
+
+/**
+ * Insere uma marca de spray e aplica o limite SPRAY_MAX_MARKS — usado tanto
+ * para marcas recebidas de outros jogadores quanto para a própria (antes
+ * só o handler de broadcast recebido aparava o mapa; a própria marca do
+ * jogador nunca passava por ali, podendo passar do limite ao longo de uma
+ * sessão longa).
+ */
+function addSprayMark(map: Map<string, SprayMark>, mark: SprayMark): void {
+  map.set(mark.id, mark);
+  while (map.size > SPRAY_MAX_MARKS) {
+    const oldestId = map.keys().next().value;
+    if (oldestId === undefined) break;
+    map.delete(oldestId);
+  }
+}
 
 export interface RemotePlayer extends PresenceState {
   x: number;
@@ -85,6 +114,11 @@ export function useAvenueRealtime(self: AvatarConfig) {
   // recriar a lista inteira a cada marca nova.
   const sprayMarksRef = useRef<Map<string, SprayMark>>(new Map());
   const [sprayVersion, setSprayVersion] = useState(0);
+  // Último spray aceito de cada remetente (chave de presence) — limita a
+  // taxa na RECEPÇÃO, então um cliente malicioso não derruba todo mundo só
+  // por ignorar o próprio cooldown de envio.
+  const lastSprayBySenderRef = useRef<Map<string, number>>(new Map());
+  const lastOwnSprayAtRef = useRef(0);
 
   // Acrescenta uma mensagem ao log, validando o campo `team` vindo da rede.
   const pushChat = useCallback((c: ChatBroadcast) => {
@@ -150,11 +184,13 @@ export function useAvenueRealtime(self: AvatarConfig) {
       })
       .on("broadcast", { event: BROADCAST.move }, ({ payload }) => {
         const m = payload as MoveBroadcast;
-        if (m.id === selfId) return;
+        if (m?.id === selfId) return;
+        if (!isFiniteNumber(m?.x) || !isFiniteNumber(m?.z)) return; // NaN/Infinity: ignora
         const existing = playersRef.current.get(m.id);
         if (existing) {
-          existing.x = m.x;
-          existing.z = m.z;
+          const safePos = clampToAvenue(m.x, m.z);
+          existing.x = safePos.x;
+          existing.z = safePos.z;
           existing.facing = m.facing;
           if (isVehicleId(m.vehicle)) existing.vehicle = m.vehicle;
           if (isFlagId(m.flag)) existing.flag = m.flag;
@@ -167,19 +203,29 @@ export function useAvenueRealtime(self: AvatarConfig) {
         const s = payload as SprayBroadcast;
         if (
           typeof s?.id !== "string" ||
-          typeof s.x !== "number" ||
-          typeof s.z !== "number" ||
-          typeof s.color !== "number"
+          s.id.length === 0 ||
+          s.id.length > SPRAY_ID_MAX_LENGTH ||
+          !isFiniteNumber(s.x) ||
+          !isFiniteNumber(s.z) ||
+          !isFiniteNumber(s.color)
         ) {
-          return; // payload malformado vindo da rede: ignora
+          return; // payload malformado/hostil vindo da rede: ignora
         }
-        sprayMarksRef.current.set(s.id, { id: s.id, x: s.x, z: s.z, color: s.color, createdAt: Date.now() });
-        // Limite de marcas simultâneas: remove as mais antigas primeiro.
-        while (sprayMarksRef.current.size > SPRAY_MAX_MARKS) {
-          const oldestId = sprayMarksRef.current.keys().next().value;
-          if (oldestId === undefined) break;
-          sprayMarksRef.current.delete(oldestId);
+        if (typeof s.senderId !== "string" || s.senderId.length === 0 || s.senderId.length > SPRAY_ID_MAX_LENGTH) {
+          return;
         }
+        // Rate limit de recepção por remetente real: aplicado por quem
+        // RECEBE, então um remetente que ignore o próprio cooldown de envio
+        // ainda não consegue inundar o canal — todo cliente descarta o
+        // excesso da mesma forma.
+        const now = Date.now();
+        const last = lastSprayBySenderRef.current.get(s.senderId) ?? 0;
+        if (now - last < SPRAY_MIN_INTERVAL_MS) return;
+        lastSprayBySenderRef.current.set(s.senderId, now);
+
+        const pos = clampToAvenue(s.x, s.z);
+        const color = Math.max(0, Math.min(0xffffff, Math.trunc(s.color)));
+        addSprayMark(sprayMarksRef.current, { id: s.id, x: pos.x, z: pos.z, color, createdAt: now });
         setSprayVersion((v) => v + 1);
       })
       .subscribe((status) => {
@@ -199,7 +245,11 @@ export function useAvenueRealtime(self: AvatarConfig) {
   const sendMove = useCallback(
     (x: number, z: number, facing: Facing, vehicle: VehicleId, flag: FlagId) => {
       const channel = channelRef.current;
-      if (!channel) return;
+      // "joined" = handshake do canal concluído (equivalente ao status
+      // SUBSCRIBED do callback de .subscribe()); antes disso o Realtime
+      // descarta o send silenciosamente — evita mandar para o vazio logo
+      // ao montar a cena.
+      if (!channel || channel.state !== "joined") return;
       const payload: MoveBroadcast = { id: selfId, x, z, facing, vehicle, flag };
       void channel.send({ type: "broadcast", event: BROADCAST.move, payload });
     },
@@ -219,7 +269,7 @@ export function useAvenueRealtime(self: AvatarConfig) {
       // Mostra a própria mensagem localmente (broadcast não ecoa pro remetente).
       pushChat(payload);
       const channel = channelRef.current;
-      if (channel) {
+      if (channel && channel.state === "joined") {
         void channel.send({ type: "broadcast", event: BROADCAST.chat, payload });
       }
     },
@@ -228,17 +278,28 @@ export function useAvenueRealtime(self: AvatarConfig) {
 
   const sendSpray = useCallback(
     (x: number, z: number, color: number) => {
+      // Cooldown próprio: defesa adicional (o cartucho em Game.tsx já limita
+      // o uso pela UI, mas isso é chamável direto, ex. via DevTools — o
+      // cooldown de recepção no handler acima é quem garante o limite de
+      // verdade para os outros clientes; este aqui evita gastar cartucho
+      // mandando mensagens que serão descartadas do outro lado mesmo assim).
+      const now = Date.now();
+      if (now - lastOwnSprayAtRef.current < SPRAY_MIN_INTERVAL_MS) return;
+      lastOwnSprayAtRef.current = now;
+
       const id = crypto.randomUUID ? crypto.randomUUID() : String(Math.random());
-      // Mostra a própria marca localmente (broadcast não ecoa pro remetente).
-      sprayMarksRef.current.set(id, { id, x, z, color, createdAt: Date.now() });
+      const pos = clampToAvenue(x, z);
+      // Mostra a própria marca localmente (broadcast não ecoa pro remetente);
+      // também passa pelo limite de SPRAY_MAX_MARKS, igual às recebidas.
+      addSprayMark(sprayMarksRef.current, { id, x: pos.x, z: pos.z, color, createdAt: now });
       setSprayVersion((v) => v + 1);
       const channel = channelRef.current;
-      if (channel) {
-        const payload: SprayBroadcast = { id, x, z, color };
+      if (channel && channel.state === "joined") {
+        const payload: SprayBroadcast = { id, senderId: selfId, x: pos.x, z: pos.z, color };
         void channel.send({ type: "broadcast", event: BROADCAST.spray, payload });
       }
     },
-    [],
+    [selfId],
   );
 
   // Limpeza periódica das marcas expiradas — independente da conexão
@@ -254,6 +315,13 @@ export function useAvenueRealtime(self: AvatarConfig) {
         }
       }
       if (changed) setSprayVersion((v) => v + 1);
+
+      // O mapa de rate-limit por remetente não está sujeito a SPRAY_MAX_MARKS
+      // (é por remetente, não por marca); sem isto cresceria sem fim ao
+      // longo de uma sessão longa com muitos jogadores passando.
+      for (const [sender, last] of lastSprayBySenderRef.current) {
+        if (now - last > SPRAY_LIFETIME_MS) lastSprayBySenderRef.current.delete(sender);
+      }
     }, SPRAY_CLEANUP_INTERVAL_MS);
     return () => clearInterval(t);
   }, []);

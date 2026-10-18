@@ -29,6 +29,8 @@ interface PlayerProps {
   onMove: (x: number, z: number, facing: Facing, vehicle: VehicleId, flag: FlagId) => void;
   /** Atualizado a cada frame com a posição atual (opcional). */
   transformRef?: { current: PlayerTransform };
+  /** Marcado true após o primeiro frame — transformRef só é confiável depois disso. */
+  transformReadyRef?: { current: boolean };
 }
 
 const SEND_INTERVAL = 1 / 12; // ~12 updates/s
@@ -44,7 +46,17 @@ function facingOf(x: number, z: number, prev: Facing): Facing {
  * Jogador local: move o avatar pelo input (velocidade ajustada pelo veículo),
  * mantém a câmera seguindo e envia posição + veículo + bandeira via Realtime.
  */
-export function Player({ color, name, flag, vehicle, modelUrl, inputRef, onMove, transformRef }: PlayerProps) {
+export function Player({
+  color,
+  name,
+  flag,
+  vehicle,
+  modelUrl,
+  inputRef,
+  onMove,
+  transformRef,
+  transformReadyRef,
+}: PlayerProps) {
   const ref = useRef<Group>(null);
   const camera = useThree((s) => s.camera);
   const facing = useRef<Facing>("down");
@@ -82,6 +94,7 @@ export function Player({ color, name, flag, vehicle, modelUrl, inputRef, onMove,
       transformRef.current.x = g.position.x;
       transformRef.current.z = g.position.z;
       transformRef.current.rotationY = g.rotation.y;
+      if (transformReadyRef) transformReadyRef.current = true;
     }
 
     if (len === 0) {
