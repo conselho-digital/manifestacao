@@ -1,0 +1,1 @@
+# Referência\n\nCópia estática do site publicado em manifestacao.com, guardada apenas como referência. NÃO é o código-fonte do jogo e não deve ser reutilizada (marca/arte/código são de terceiros). O jogo próprio fica em `apps/` e `packages/`.
