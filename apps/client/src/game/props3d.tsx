@@ -1,5 +1,7 @@
 import { useGLTF } from "@react-three/drei";
 import type { VehicleId } from "@manifestacao/shared";
+import { useProximitySound } from "./ProximitySound.js";
+import { useUserGestureUnlocked } from "./useUserGesture.js";
 
 /** Bandeira carregada ao lado do avatar: mastro + tecido colorido. */
 export function Flag3D({ color }: { color: number }) {
@@ -47,10 +49,13 @@ export function Vehicle3D({ vehicle }: { vehicle: VehicleId }) {
         <meshStandardMaterial color={bodyColor} />
       </mesh>
       {vehicle === "carro_som" && (
-        <mesh position={[0, 1.15, -0.6]}>
-          <boxGeometry args={[1.4, 0.8, 1.2]} />
-          <meshStandardMaterial color={0x272d37} />
-        </mesh>
+        <>
+          <mesh position={[0, 1.15, -0.6]}>
+            <boxGeometry args={[1.4, 0.8, 1.2]} />
+            <meshStandardMaterial color={0x272d37} />
+          </mesh>
+          <CarSomSound />
+        </>
       )}
       {[
         [-0.8, 0.3, 1] as const,
@@ -71,4 +76,16 @@ export function Vehicle3D({ vehicle }: { vehicle: VehicleId }) {
 export function GlbModel({ url }: { url: string }) {
   const { scene } = useGLTF(url);
   return <primitive object={scene} />;
+}
+
+/**
+ * Som ambiente do carro de som (síntese WebAudio, sem arquivo de terceiros).
+ * Herda a posição do veículo por estar montado dentro do mesmo <group>.
+ * Precisa de um gesto do usuário para o AudioContext iniciar (política dos
+ * navegadores) — por isso só liga no primeiro clique/toque na página.
+ */
+function CarSomSound() {
+  const unlocked = useUserGestureUnlocked();
+  const audioRef = useProximitySound(unlocked);
+  return audioRef.current ? <primitive object={audioRef.current} /> : null;
 }
