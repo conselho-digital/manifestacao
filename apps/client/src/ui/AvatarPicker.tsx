@@ -21,6 +21,7 @@ import {
 } from "@manifestacao/shared";
 import { signInWithGoogle, signOut } from "../auth/useAuth.js";
 import { isOnlineEnabled } from "../config/env.js";
+import { TeamFlagIcon } from "./TeamFlagIcon.js";
 
 const STORAGE_KEY = "manifestacao.avatar";
 
@@ -146,8 +147,16 @@ export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore
                   type="button"
                   aria-pressed={selected}
                   onClick={() => setTeam(id)}
-                  style={{ ...chip(selected, hexColor(t.color)), textAlign: "left", width: "100%" }}
+                  style={{
+                    ...chip(selected, hexColor(t.color)),
+                    textAlign: "left",
+                    width: "100%",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 10,
+                  }}
                 >
+                  <TeamFlagIcon color={hexColor(t.color)} />
                   {t.label}
                 </button>
               );

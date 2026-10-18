@@ -6,6 +6,9 @@
  * Troque livremente conforme a decisão de produto (§8).
  */
 
+// O id interno "roxo" ficou do nome original do time; manter como está
+// evita uma migration (é um valor de enum no Postgres). Só o nome exibido
+// e a cor mudaram para vermelho.
 export type TeamId = "verde" | "roxo" | "neutro";
 
 export interface Team {
@@ -19,7 +22,7 @@ export interface Team {
 // Cores ajustadas para bom contraste no tema escuro (fundo asfalto).
 export const TEAMS: Record<TeamId, Team> = {
   verde: { id: "verde", label: "Verdes", color: 0x2ecc71 },
-  roxo: { id: "roxo", label: "Roxos", color: 0x9b5de5 },
+  roxo: { id: "roxo", label: "Vermelhos", color: 0xe5484d },
   neutro: { id: "neutro", label: "Neutros", color: 0x8b97a3 },
 };
 

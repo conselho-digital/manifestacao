@@ -35,7 +35,7 @@ export function isCharacterId(v: unknown): v is CharacterId {
 }
 
 // ── Bandeiras ──────────────────────────────────────────────────────────────
-export type FlagId = "nenhuma" | "time" | "verde" | "amarela" | "branca";
+export type FlagId = "nenhuma" | "time" | "verde" | "amarela" | "branca" | "vermelha";
 
 export interface Flag {
   id: FlagId;
@@ -50,9 +50,10 @@ export const FLAGS: Record<FlagId, Flag> = {
   verde: { id: "verde", label: "Verde", color: 0x2ecc71 },
   amarela: { id: "amarela", label: "Amarela", color: 0xffd12e },
   branca: { id: "branca", label: "Branca", color: 0xf2f4f7 },
+  vermelha: { id: "vermelha", label: "Vermelha", color: 0xe5484d },
 };
 
-export const FLAG_IDS: FlagId[] = ["nenhuma", "time", "verde", "amarela", "branca"];
+export const FLAG_IDS: FlagId[] = ["nenhuma", "time", "verde", "amarela", "branca", "vermelha"];
 
 export function isFlagId(v: unknown): v is FlagId {
   return typeof v === "string" && Object.hasOwn(FLAGS, v);
