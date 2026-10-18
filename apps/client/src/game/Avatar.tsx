@@ -49,7 +49,10 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
       )}
 
       {flag !== "nenhuma" && (
-        <Flag3D color={flagColor(flag, color)} emblem={flag === "vermelha" ? "star-burst" : undefined} />
+        <Flag3D
+          color={flagColor(flag, color)}
+          emblem={flag === "vermelha" ? "star-burst" : flag === "verde" ? "ring" : undefined}
+        />
       )}
       <Vehicle3D vehicle={vehicle} />
 

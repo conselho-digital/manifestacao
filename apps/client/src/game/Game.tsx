@@ -1,16 +1,20 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import type { AvatarConfig, VehicleId } from "@manifestacao/shared";
 import { Scenery } from "./Scenery.js";
-import { Player } from "./Player.js";
+import { Player, type PlayerTransform } from "./Player.js";
 import { RemotePlayers } from "./RemotePlayers.js";
+import { SprayMarks } from "./SprayMarks.js";
 import { useInput } from "./useInput.js";
 import { modelUrlFor } from "./models.js";
+import { clampToAvenue } from "./world.js";
+import { SPRAY_CARTRIDGE_SIZE, SPRAY_REACH, SPRAY_REFILL_INTERVAL_MS } from "./spray.js";
 import { useAvenueRealtime } from "../net/useAvenueRealtime.js";
 import { Joystick } from "../ui/Joystick.js";
 import { Hud } from "../ui/Hud.js";
 import { VehiclePicker } from "../ui/VehiclePicker.js";
 import { StoreButton } from "../ui/StoreButton.js";
+import { SprayButton } from "../ui/SprayButton.js";
 import { TopRightPanel } from "../ui/TopRightPanel.js";
 
 interface GameProps {
@@ -27,8 +31,8 @@ interface GameProps {
 
 /**
  * Cena de jogo: avenida 3D, jogador local, jogadores remotos (Realtime),
- * HUD (placar + chat), seletor de veículo e joystick de toque. Sessão/loja
- * não vivem aqui — ver App.tsx.
+ * HUD (placar + chat), seletor de veículo, spray e joystick de toque.
+ * Sessão/loja não vivem aqui — ver App.tsx.
  */
 export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }: GameProps) {
   const [vehicle, setVehicle] = useState<VehicleId>("nenhum");
@@ -37,6 +41,29 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
   // loja (zIndex maior), então só o teclado precisa dessa trava explícita.
   const { inputRef, setJoystick } = useInput(!paused);
   const net = useAvenueRealtime(avatar);
+
+  const transformRef = useRef<PlayerTransform>({ x: 0, z: 0, rotationY: 0 });
+
+  // Cartucho de spray: contador local (client-trust, como o resto do MVP não
+  // autoritativo — CLAUDE.md §4). Recarrega sozinho até o máximo.
+  const [sprayCharges, setSprayCharges] = useState(SPRAY_CARTRIDGE_SIZE);
+  useEffect(() => {
+    const t = setInterval(() => {
+      setSprayCharges((c) => Math.min(SPRAY_CARTRIDGE_SIZE, c + 1));
+    }, SPRAY_REFILL_INTERVAL_MS);
+    return () => clearInterval(t);
+  }, []);
+
+  const handleSpray = useCallback(() => {
+    setSprayCharges((c) => {
+      if (c <= 0) return c;
+      const { x, z, rotationY } = transformRef.current;
+      // "Na frente" do jogador, na direção para onde ele está virado.
+      const target = clampToAvenue(x + Math.sin(rotationY) * SPRAY_REACH, z + Math.cos(rotationY) * SPRAY_REACH);
+      net.sendSpray(target.x, target.z, avatar.shirt);
+      return c - 1;
+    });
+  }, [net, avatar.shirt]);
 
   return (
     <>
@@ -52,6 +79,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
           shadow-mapSize-height={1024}
         />
         <Scenery />
+        <SprayMarks marksRef={net.sprayMarksRef} version={net.sprayVersion} />
         <Player
           color={avatar.shirt}
           name={avatar.nickname}
@@ -60,6 +88,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
           modelUrl={modelUrlFor(avatar.character)}
           inputRef={inputRef}
           onMove={net.sendMove}
+          transformRef={transformRef}
         />
         <RemotePlayers ids={net.remoteIds} playersRef={net.playersRef} />
       </Canvas>
@@ -75,6 +104,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
           loading={entitlementsLoading}
         />
       </TopRightPanel>
+      <SprayButton charges={sprayCharges} maxCharges={SPRAY_CARTRIDGE_SIZE} onSpray={handleSpray} />
       <Hud
         online={net.online}
         scores={net.scores}

@@ -5,7 +5,7 @@ import type { VehicleId } from "@manifestacao/shared";
 import { useProximitySound } from "./ProximitySound.js";
 import { useUserGestureUnlocked } from "./useUserGesture.js";
 
-export type FlagEmblem = "star-burst";
+export type FlagEmblem = "star-burst" | "ring";
 
 /**
  * Emblema desenhado por código (nunca uma imagem importada): um polígono de
@@ -39,6 +39,16 @@ function StarBurst({ color = 0xf2f4f7, points = 6, size = 0.2 }: { color?: numbe
   );
 }
 
+/** Anel vazado simples — formas geométricas genéricas, sem significado partidário. */
+function RingEmblem({ color = 0xf2f4f7, radius = 0.17, thickness = 0.045 }: { color?: number; radius?: number; thickness?: number }) {
+  return (
+    <mesh position={[0, 0, 0.002]}>
+      <ringGeometry args={[radius - thickness, radius, 32]} />
+      <meshStandardMaterial color={color} side={2} />
+    </mesh>
+  );
+}
+
 /** Bandeira carregada ao lado do avatar: mastro, tecido colorido e emblema opcional. */
 export function Flag3D({ color, emblem }: { color: number; emblem?: FlagEmblem }) {
   return (
@@ -53,6 +63,7 @@ export function Flag3D({ color, emblem }: { color: number; emblem?: FlagEmblem }
           <meshStandardMaterial color={color} side={2} />
         </mesh>
         {emblem === "star-burst" && <StarBurst />}
+        {emblem === "ring" && <RingEmblem />}
       </group>
     </group>
   );

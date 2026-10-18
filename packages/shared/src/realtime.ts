@@ -40,8 +40,22 @@ export interface ChatBroadcast {
   text: string;
 }
 
+/**
+ * Evento de broadcast: marca de spray numa parede (efêmera — nunca persiste
+ * em banco, só vive na memória dos clientes conectados; some sozinha após
+ * SPRAY_LIFETIME_MS, ver game/spray.ts).
+ */
+export interface SprayBroadcast {
+  id: string;
+  /** Posição no mundo (plano XZ) onde a marca aparece. */
+  x: number;
+  z: number;
+  color: number;
+}
+
 /** Nomes dos eventos de broadcast. */
 export const BROADCAST = {
   move: "move",
   chat: "chat",
+  spray: "spray",
 } as const;

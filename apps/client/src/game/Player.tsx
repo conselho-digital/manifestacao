@@ -11,6 +11,14 @@ import { Avatar } from "./Avatar.js";
 import { WALK_SPEED, clampToAvenue } from "./world.js";
 import type { InputVector } from "./useInput.js";
 
+/** Posição + rotação atuais do jogador local, lidas fora do Canvas (ex.: botão de spray). */
+export interface PlayerTransform {
+  x: number;
+  z: number;
+  /** Rotação em torno de Y, radianos — usada para calcular "na minha frente". */
+  rotationY: number;
+}
+
 interface PlayerProps {
   color: number;
   name: string;
@@ -19,6 +27,8 @@ interface PlayerProps {
   modelUrl: string | null;
   inputRef: { current: InputVector };
   onMove: (x: number, z: number, facing: Facing, vehicle: VehicleId, flag: FlagId) => void;
+  /** Atualizado a cada frame com a posição atual (opcional). */
+  transformRef?: { current: PlayerTransform };
 }
 
 const SEND_INTERVAL = 1 / 12; // ~12 updates/s
@@ -34,7 +44,7 @@ function facingOf(x: number, z: number, prev: Facing): Facing {
  * Jogador local: move o avatar pelo input (velocidade ajustada pelo veículo),
  * mantém a câmera seguindo e envia posição + veículo + bandeira via Realtime.
  */
-export function Player({ color, name, flag, vehicle, modelUrl, inputRef, onMove }: PlayerProps) {
+export function Player({ color, name, flag, vehicle, modelUrl, inputRef, onMove, transformRef }: PlayerProps) {
   const ref = useRef<Group>(null);
   const camera = useThree((s) => s.camera);
   const facing = useRef<Facing>("down");
@@ -67,6 +77,12 @@ export function Player({ color, name, flag, vehicle, modelUrl, inputRef, onMove 
     tmp.current.copy(g.position).add(CAMERA_OFFSET);
     camera.position.lerp(tmp.current, 1 - Math.pow(0.001, delta));
     camera.lookAt(g.position.x, g.position.y + 1, g.position.z);
+
+    if (transformRef) {
+      transformRef.current.x = g.position.x;
+      transformRef.current.z = g.position.z;
+      transformRef.current.rotationY = g.rotation.y;
+    }
 
     if (len === 0) {
       accum.current = 0;

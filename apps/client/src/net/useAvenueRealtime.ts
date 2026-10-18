@@ -16,10 +16,12 @@ import {
   type FlagId,
   type MoveBroadcast,
   type PresenceState,
+  type SprayBroadcast,
   type TeamId,
   type VehicleId,
 } from "@manifestacao/shared";
 import { getSupabase } from "./supabase.js";
+import { SPRAY_CLEANUP_INTERVAL_MS, SPRAY_LIFETIME_MS, SPRAY_MAX_MARKS, type SprayMark } from "../game/spray.js";
 
 export interface RemotePlayer extends PresenceState {
   x: number;
@@ -77,6 +79,12 @@ export function useAvenueRealtime(self: AvatarConfig) {
   const [chatLog, setChatLog] = useState<ChatEntry[]>([]);
   const [remoteIds, setRemoteIds] = useState<string[]>([]);
   const chatKey = useRef(0);
+
+  // Marcas de spray: efêmeras, só em memória (nunca em banco — CLAUDE.md §3).
+  // Mapa + contador de versão (em vez de guardar o array no state) evita
+  // recriar a lista inteira a cada marca nova.
+  const sprayMarksRef = useRef<Map<string, SprayMark>>(new Map());
+  const [sprayVersion, setSprayVersion] = useState(0);
 
   // Acrescenta uma mensagem ao log, validando o campo `team` vindo da rede.
   const pushChat = useCallback((c: ChatBroadcast) => {
@@ -155,6 +163,25 @@ export function useAvenueRealtime(self: AvatarConfig) {
       .on("broadcast", { event: BROADCAST.chat }, ({ payload }) => {
         if (payload?.id !== selfId) pushChat(payload as ChatBroadcast);
       })
+      .on("broadcast", { event: BROADCAST.spray }, ({ payload }) => {
+        const s = payload as SprayBroadcast;
+        if (
+          typeof s?.id !== "string" ||
+          typeof s.x !== "number" ||
+          typeof s.z !== "number" ||
+          typeof s.color !== "number"
+        ) {
+          return; // payload malformado vindo da rede: ignora
+        }
+        sprayMarksRef.current.set(s.id, { id: s.id, x: s.x, z: s.z, color: s.color, createdAt: Date.now() });
+        // Limite de marcas simultâneas: remove as mais antigas primeiro.
+        while (sprayMarksRef.current.size > SPRAY_MAX_MARKS) {
+          const oldestId = sprayMarksRef.current.keys().next().value;
+          if (oldestId === undefined) break;
+          sprayMarksRef.current.delete(oldestId);
+        }
+        setSprayVersion((v) => v + 1);
+      })
       .subscribe((status) => {
         const subscribed = status === "SUBSCRIBED";
         setOnline(subscribed);
@@ -199,5 +226,49 @@ export function useAvenueRealtime(self: AvatarConfig) {
     [selfId, self.nickname, self.team, pushChat],
   );
 
-  return { selfId, playersRef, online, scores, chatLog, remoteIds, sendMove, sendChat };
+  const sendSpray = useCallback(
+    (x: number, z: number, color: number) => {
+      const id = crypto.randomUUID ? crypto.randomUUID() : String(Math.random());
+      // Mostra a própria marca localmente (broadcast não ecoa pro remetente).
+      sprayMarksRef.current.set(id, { id, x, z, color, createdAt: Date.now() });
+      setSprayVersion((v) => v + 1);
+      const channel = channelRef.current;
+      if (channel) {
+        const payload: SprayBroadcast = { id, x, z, color };
+        void channel.send({ type: "broadcast", event: BROADCAST.spray, payload });
+      }
+    },
+    [],
+  );
+
+  // Limpeza periódica das marcas expiradas — independente da conexão
+  // (funciona também offline, onde as marcas são só locais).
+  useEffect(() => {
+    const t = setInterval(() => {
+      const now = Date.now();
+      let changed = false;
+      for (const [id, mark] of sprayMarksRef.current) {
+        if (now - mark.createdAt > SPRAY_LIFETIME_MS) {
+          sprayMarksRef.current.delete(id);
+          changed = true;
+        }
+      }
+      if (changed) setSprayVersion((v) => v + 1);
+    }, SPRAY_CLEANUP_INTERVAL_MS);
+    return () => clearInterval(t);
+  }, []);
+
+  return {
+    selfId,
+    playersRef,
+    online,
+    scores,
+    chatLog,
+    remoteIds,
+    sprayMarksRef,
+    sprayVersion,
+    sendMove,
+    sendChat,
+    sendSpray,
+  };
 }
