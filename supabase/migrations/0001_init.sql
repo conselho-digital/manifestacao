@@ -151,12 +151,16 @@ create policy "créditos do dono" on user_credits
 -- Cartazes: dono lê os seus; aprovados são lidos por todos.
 create policy "cartazes do dono" on custom_signs
   for select using (auth.uid() = user_id or status = 'approved');
+-- INSERT só no estado inicial: o cliente não pode auto-aprovar nem marcar
+-- crédito. A aprovação acontece via Edge Function (moderação) com service_role.
 create policy "cria cartaz próprio" on custom_signs
-  for insert with check (auth.uid() = user_id);
+  for insert with check (
+    auth.uid() = user_id and status = 'pending' and credit_used = false
+  );
 
--- Lances ativos: leitura pública; criação via service_role após pagamento.
-create policy "lances públicos" on billboard_bids
-  for select using (true);
+-- Lances ativos: só os já moderados (status 'active') são lidos publicamente.
+create policy "lances ativos públicos" on billboard_bids
+  for select using (status = 'active');
 
 -- Superchats aprovados: leitura pública.
 create policy "superchats aprovados" on superchats

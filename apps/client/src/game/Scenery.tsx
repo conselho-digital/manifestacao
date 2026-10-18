@@ -33,7 +33,7 @@ export function Scenery() {
         return (
           <mesh key={i} rotation={[-Math.PI / 2, 0, 0]} position={[x, 0.01, 0]}>
             <planeGeometry args={[3, 0.3]} />
-            <meshStandardMaterial color={0xf1c40f} />
+            <meshStandardMaterial color={0xffd12e} />
           </mesh>
         );
       })}

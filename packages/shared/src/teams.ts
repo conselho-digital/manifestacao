@@ -16,14 +16,20 @@ export interface Team {
   color: number;
 }
 
+// Cores ajustadas para bom contraste no tema escuro (fundo asfalto).
 export const TEAMS: Record<TeamId, Team> = {
-  verde: { id: "verde", label: "Verdes", color: 0x27ae60 },
-  roxo: { id: "roxo", label: "Roxos", color: 0x8e44ad },
-  neutro: { id: "neutro", label: "Neutros", color: 0x95a5a6 },
+  verde: { id: "verde", label: "Verdes", color: 0x2ecc71 },
+  roxo: { id: "roxo", label: "Roxos", color: 0x9b5de5 },
+  neutro: { id: "neutro", label: "Neutros", color: 0x8b97a3 },
 };
 
 export const TEAM_IDS: TeamId[] = ["verde", "roxo", "neutro"];
 
 export function isTeamId(value: unknown): value is TeamId {
   return typeof value === "string" && value in TEAMS;
+}
+
+/** Converte uma cor numérica (0xrrggbb) em string hex CSS (#rrggbb). */
+export function hexColor(color: number): string {
+  return "#" + color.toString(16).padStart(6, "0");
 }

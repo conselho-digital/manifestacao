@@ -17,6 +17,19 @@ export function useInput() {
   const joyRef = useRef<InputVector>({ x: 0, z: 0 });
   const pressed = useRef<Set<string>>(new Set());
 
+  // Combina teclado e joystick; teclado tem prioridade se ativo.
+  const read = (): InputVector => {
+    const k = keyRef.current;
+    if (k.x !== 0 || k.z !== 0) return k;
+    return joyRef.current;
+  };
+
+  // Atualiza o ref lido a cada frame pelo Player. Chamado nos próprios
+  // handlers (sem depender de re-render do React).
+  const apply = () => {
+    inputRef.current = read();
+  };
+
   useEffect(() => {
     const recompute = () => {
       const k = pressed.current;
@@ -27,6 +40,7 @@ export function useInput() {
       if (k.has("w") || k.has("arrowup")) z -= 1;
       if (k.has("s") || k.has("arrowdown")) z += 1;
       keyRef.current = { x, z };
+      apply();
     };
     const down = (e: KeyboardEvent) => {
       pressed.current.add(e.key.toLowerCase());
@@ -53,15 +67,8 @@ export function useInput() {
   /** Alimentado pelo joystick de toque (valores em [-1, 1]). */
   const setJoystick = (x: number, z: number) => {
     joyRef.current = { x, z };
+    apply();
   };
-
-  /** Combina teclado e joystick; teclado tem prioridade se ativo. */
-  const read = (): InputVector => {
-    const k = keyRef.current;
-    if (k.x !== 0 || k.z !== 0) return k;
-    return joyRef.current;
-  };
-  inputRef.current = read();
 
   return { inputRef, read, setJoystick };
 }

@@ -45,6 +45,37 @@ Deno.serve(async (req) => {
       .single();
     if (itemErr || !item || !item.active) return json({ error: "item_invalid" }, 400);
 
+    // Idempotência: reaproveita um pedido pendente recente do mesmo usuário+item
+    // em vez de criar outra cobrança a cada clique.
+    const { data: pending } = await admin
+      .from("orders")
+      .select("mp_payment_id, external_reference")
+      .eq("user_id", userId)
+      .eq("item_id", item.id)
+      .eq("status", "pending")
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (pending?.mp_payment_id) {
+      const existing = await fetch(
+        `https://api.mercadopago.com/v1/payments/${pending.mp_payment_id}`,
+        { headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` } },
+      );
+      if (existing.ok) {
+        const ep = await existing.json();
+        if (ep.status === "pending") {
+          const tx = ep.point_of_interaction?.transaction_data ?? {};
+          return json({
+            orderRef: pending.external_reference,
+            qrCode: tx.qr_code ?? null,
+            qrCodeBase64: tx.qr_code_base64 ?? null,
+            ticketUrl: tx.ticket_url ?? null,
+          });
+        }
+      }
+    }
+
     const externalReference = crypto.randomUUID();
 
     // Cria o pagamento Pix no Mercado Pago.
@@ -64,7 +95,10 @@ Deno.serve(async (req) => {
       }),
     });
     const mp = await mpRes.json();
-    if (!mpRes.ok) return json({ error: "mp_error", detail: mp }, 502);
+    if (!mpRes.ok) {
+      console.error("mp_error", mp);
+      return json({ error: "payment_provider_error" }, 502);
+    }
 
     // Registra o pedido pendente (idempotente por external_reference).
     const { error: orderErr } = await admin.from("orders").insert({
@@ -75,7 +109,10 @@ Deno.serve(async (req) => {
       external_reference: externalReference,
       status: "pending",
     });
-    if (orderErr) return json({ error: "order_insert_failed", detail: orderErr.message }, 500);
+    if (orderErr) {
+      console.error("order_insert_failed", orderErr.message);
+      return json({ error: "order_failed" }, 500);
+    }
 
     const tx = mp.point_of_interaction?.transaction_data ?? {};
     return json({
@@ -85,7 +122,8 @@ Deno.serve(async (req) => {
       ticketUrl: tx.ticket_url ?? null,
     });
   } catch (e) {
-    return json({ error: "internal", detail: String(e) }, 500);
+    console.error("mp-create-payment internal", e);
+    return json({ error: "internal" }, 500);
   }
 });
 

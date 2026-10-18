@@ -32,6 +32,7 @@ export function Player({ color, name, inputRef, onMove }: PlayerProps) {
   const camera = useThree((s) => s.camera);
   const facing = useRef<Facing>("down");
   const accum = useRef(0);
+  const wasMoving = useRef(false);
   const tmp = useRef(new Vector3());
 
   useFrame((_, delta) => {
@@ -55,9 +56,14 @@ export function Player({ color, name, inputRef, onMove }: PlayerProps) {
     camera.lookAt(g.position.x, g.position.y + 1, g.position.z);
 
     accum.current += delta;
-    if (accum.current >= SEND_INTERVAL && len > 0) {
+    if (len > 0 && accum.current >= SEND_INTERVAL) {
       accum.current = 0;
       onMove(g.position.x, g.position.z, facing.current);
+      wasMoving.current = true;
+    } else if (len === 0 && wasMoving.current) {
+      // Envia um último quadro na parada para os remotos verem a posição exata.
+      onMove(g.position.x, g.position.z, facing.current);
+      wasMoving.current = false;
     }
   });
 

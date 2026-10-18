@@ -3,6 +3,7 @@ import {
   MAX_NICKNAME_LENGTH,
   TEAMS,
   TEAM_IDS,
+  hexColor,
   isTeamId,
   type AvatarConfig,
   type TeamId,
@@ -17,10 +18,6 @@ function loadSaved(): Partial<AvatarConfig> {
   } catch {
     return {};
   }
-}
-
-function hex(color: number): string {
-  return "#" + color.toString(16).padStart(6, "0");
 }
 
 /** Entrada em 1 clique: escolher lado e apelido. Visual salvo no localStorage. */
@@ -52,26 +49,43 @@ export function AvatarPicker({ onReady }: { onReady: (a: AvatarConfig) => void }
         alignItems: "center",
         justifyContent: "center",
         gap: 20,
-        padding: 24,
+        padding:
+          "max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left))",
         textAlign: "center",
       }}
     >
-      <h1 style={{ margin: 0, fontSize: 28, fontWeight: 800 }}>Entre na avenida</h1>
-      <p style={{ margin: 0, opacity: 0.75, fontSize: 15 }}>Escolha o seu lado e o seu apelido.</p>
+      <h1
+        style={{
+          margin: 0,
+          fontFamily: "var(--font-display)",
+          fontSize: "var(--t-display)",
+          fontWeight: 400,
+          letterSpacing: "-0.02em",
+          lineHeight: 0.95,
+          textTransform: "uppercase",
+        }}
+      >
+        Entre na avenida
+      </h1>
+      <p style={{ margin: 0, color: "var(--ink-dim)", fontSize: "var(--t-body)" }}>
+        Escolha o seu lado e o seu apelido.
+      </p>
 
       <input
         value={nickname}
         onChange={(e) => setNickname(e.target.value)}
         maxLength={MAX_NICKNAME_LENGTH}
         placeholder="Seu apelido"
+        aria-label="Apelido"
         style={{
           width: "min(320px, 80vw)",
+          minHeight: 44,
           padding: "12px 14px",
           fontSize: 16,
-          borderRadius: 10,
-          border: "1px solid #2b3139",
-          background: "#0f1216",
-          color: "#f5f6f7",
+          borderRadius: "var(--r-md)",
+          border: "1px solid var(--line)",
+          background: "var(--surface)",
+          color: "var(--ink)",
         }}
       />
 
@@ -83,17 +97,20 @@ export function AvatarPicker({ onReady }: { onReady: (a: AvatarConfig) => void }
             <button
               key={id}
               type="button"
+              aria-pressed={selected}
               onClick={() => setTeam(id)}
               style={{
                 minWidth: 96,
+                minHeight: 44,
                 padding: "12px 16px",
                 fontSize: 15,
                 fontWeight: 700,
-                borderRadius: 10,
+                borderRadius: "var(--r-md)",
                 cursor: "pointer",
-                border: `2px solid ${hex(t.color)}`,
-                background: selected ? hex(t.color) : "transparent",
-                color: selected ? "#0f1216" : "#f5f6f7",
+                border: `2px solid ${hexColor(t.color)}`,
+                background: selected ? hexColor(t.color) : "var(--surface)",
+                color: selected ? "#15181d" : "var(--ink)",
+                transition: "transform .08s, background .12s",
               }}
             >
               {t.label}
@@ -105,15 +122,16 @@ export function AvatarPicker({ onReady }: { onReady: (a: AvatarConfig) => void }
       <button
         type="submit"
         style={{
-          marginTop: 4,
+          minHeight: 44,
           padding: "14px 32px",
           fontSize: 17,
           fontWeight: 800,
-          borderRadius: 12,
+          borderRadius: "var(--r-lg)",
           border: "none",
           cursor: "pointer",
-          background: "#f5f6f7",
-          color: "#0f1216",
+          background: "var(--accent)",
+          color: "var(--on-accent)",
+          transition: "transform .08s",
         }}
       >
         Entrar

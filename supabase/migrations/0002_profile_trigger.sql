@@ -9,14 +9,19 @@ security definer
 set search_path = public
 as $$
 begin
+  -- Trunca em 20 (limite do check de nickname): nomes longos do Google
+  -- não podem quebrar o cadastro.
   insert into public.profiles (id, google_sub, nickname)
   values (
     new.id,
     new.raw_user_meta_data ->> 'provider_id',
-    coalesce(
-      nullif(trim(new.raw_user_meta_data ->> 'full_name'), ''),
-      nullif(trim(new.raw_user_meta_data ->> 'name'), ''),
-      'Anônimo'
+    left(
+      coalesce(
+        nullif(trim(new.raw_user_meta_data ->> 'full_name'), ''),
+        nullif(trim(new.raw_user_meta_data ->> 'name'), ''),
+        'Anônimo'
+      ),
+      20
     )
   )
   on conflict (id) do nothing;

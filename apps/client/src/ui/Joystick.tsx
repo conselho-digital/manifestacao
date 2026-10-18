@@ -80,7 +80,8 @@ export function Joystick({ onMove }: JoystickProps) {
               width: 44,
               height: 44,
               borderRadius: "50%",
-              background: "rgba(255,255,255,0.35)",
+              background: "rgba(255,255,255,0.6)",
+              border: "2px solid rgba(21,24,29,0.5)",
             }}
           />
         </>

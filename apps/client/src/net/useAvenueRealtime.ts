@@ -3,7 +3,9 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import {
   AVENUE_CHANNEL,
   BROADCAST,
+  MAX_CHAT_LENGTH,
   TEAM_IDS,
+  isTeamId,
   type AvatarConfig,
   type ChatBroadcast,
   type Facing,
@@ -17,6 +19,11 @@ export interface RemotePlayer extends PresenceState {
   x: number;
   z: number;
   facing: Facing;
+}
+
+/** Mensagem de chat com chave local estável para render no React. */
+export interface ChatEntry extends ChatBroadcast {
+  key: number;
 }
 
 const MAX_CHAT = 30;
@@ -41,8 +48,21 @@ export function useAvenueRealtime(self: AvatarConfig) {
 
   const [online, setOnline] = useState(false);
   const [scores, setScores] = useState<Record<TeamId, number>>(emptyScores);
-  const [chatLog, setChatLog] = useState<ChatBroadcast[]>([]);
+  const [chatLog, setChatLog] = useState<ChatEntry[]>([]);
   const [remoteIds, setRemoteIds] = useState<string[]>([]);
+  const chatKey = useRef(0);
+
+  // Acrescenta uma mensagem ao log, validando o campo `team` vindo da rede.
+  const pushChat = useCallback((c: ChatBroadcast) => {
+    const safe: ChatEntry = {
+      id: String(c.id ?? ""),
+      nickname: String(c.nickname ?? "").slice(0, 40),
+      team: isTeamId(c.team) ? c.team : "neutro",
+      text: String(c.text ?? "").slice(0, MAX_CHAT_LENGTH),
+      key: chatKey.current++,
+    };
+    setChatLog((log) => [...log.slice(-(MAX_CHAT - 1)), safe]);
+  }, []);
 
   useEffect(() => {
     const supabase = getSupabase();
@@ -92,14 +112,12 @@ export function useAvenueRealtime(self: AvatarConfig) {
         }
       })
       .on("broadcast", { event: BROADCAST.chat }, ({ payload }) => {
-        const c = payload as ChatBroadcast;
-        setChatLog((log) => [...log.slice(-(MAX_CHAT - 1)), c]);
+        if (payload?.id !== selfId) pushChat(payload as ChatBroadcast);
       })
       .subscribe((status) => {
-        if (status === "SUBSCRIBED") {
-          setOnline(true);
-          void channel.track(presence);
-        }
+        const subscribed = status === "SUBSCRIBED";
+        setOnline(subscribed);
+        if (subscribed) void channel.track(presence);
       });
 
     return () => {
@@ -122,7 +140,7 @@ export function useAvenueRealtime(self: AvatarConfig) {
 
   const sendChat = useCallback(
     (text: string) => {
-      const trimmed = text.trim();
+      const trimmed = text.trim().slice(0, MAX_CHAT_LENGTH);
       if (!trimmed) return;
       const payload: ChatBroadcast = {
         id: selfId,
@@ -131,13 +149,13 @@ export function useAvenueRealtime(self: AvatarConfig) {
         text: trimmed,
       };
       // Mostra a própria mensagem localmente (broadcast não ecoa pro remetente).
-      setChatLog((log) => [...log.slice(-(MAX_CHAT - 1)), payload]);
+      pushChat(payload);
       const channel = channelRef.current;
       if (channel) {
         void channel.send({ type: "broadcast", event: BROADCAST.chat, payload });
       }
     },
-    [selfId, self.nickname, self.team],
+    [selfId, self.nickname, self.team, pushChat],
   );
 
   return { selfId, playersRef, online, scores, chatLog, remoteIds, sendMove, sendChat };
