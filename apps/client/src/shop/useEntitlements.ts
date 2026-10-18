@@ -8,6 +8,7 @@ import { getSupabase } from "../net/supabase.js";
  */
 export function useEntitlements(session: Session | null) {
   const [owned, setOwned] = useState<Set<string>>(new Set());
+  const [loading, setLoading] = useState(true);
   // Descarta respostas atrasadas de uma sessão anterior (ex.: usuário
   // deslogou/trocou de conta enquanto um fetch ainda estava em voo).
   const requestId = useRef(0);
@@ -16,17 +17,21 @@ export function useEntitlements(session: Session | null) {
     const myRequest = ++requestId.current;
     const supabase = getSupabase();
     if (!supabase || !session) {
-      if (myRequest === requestId.current) setOwned(new Set());
+      if (myRequest === requestId.current) {
+        setOwned(new Set());
+        setLoading(false);
+      }
       return;
     }
     const { data } = await supabase.from("entitlements").select("item_id").eq("user_id", session.user.id);
     if (myRequest !== requestId.current) return; // resposta obsoleta, ignora
     setOwned(new Set((data ?? []).map((r) => r.item_id as string)));
+    setLoading(false);
   }, [session]);
 
   useEffect(() => {
     void refresh();
   }, [refresh]);
 
-  return { owned, refresh };
+  return { owned, refresh, loading };
 }

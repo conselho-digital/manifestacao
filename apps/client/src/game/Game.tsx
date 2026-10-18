@@ -7,31 +7,36 @@ import { RemotePlayers } from "./RemotePlayers.js";
 import { useInput } from "./useInput.js";
 import { modelUrlFor } from "./models.js";
 import { useAvenueRealtime } from "../net/useAvenueRealtime.js";
-import { useAuth } from "../auth/useAuth.js";
-import { useEntitlements } from "../shop/useEntitlements.js";
 import { Joystick } from "../ui/Joystick.js";
 import { Hud } from "../ui/Hud.js";
 import { VehiclePicker } from "../ui/VehiclePicker.js";
 import { StoreButton } from "../ui/StoreButton.js";
 import { TopRightPanel } from "../ui/TopRightPanel.js";
-import { Store } from "../shop/Store.js";
+
+interface GameProps {
+  avatar: AvatarConfig;
+  /** Itens que o usuário possui (vem de cima — App.tsx — compartilhado com a Store). */
+  owned: ReadonlySet<string>;
+  /** Abre a loja (também vive em App.tsx, fora do ciclo de vida do jogo). */
+  onOpenStore: () => void;
+  /** true enquanto a loja (ou outro modal) está aberta por cima do jogo. */
+  paused: boolean;
+  /** true enquanto a sessão/posses ainda não terminaram de carregar. */
+  entitlementsLoading: boolean;
+}
 
 /**
  * Cena de jogo: avenida 3D, jogador local, jogadores remotos (Realtime),
- * HUD (placar + chat), seletor de veículo, loja e joystick de toque.
+ * HUD (placar + chat), seletor de veículo e joystick de toque. Sessão/loja
+ * não vivem aqui — ver App.tsx.
  */
-export function Game({ avatar }: { avatar: AvatarConfig }) {
+export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }: GameProps) {
   const [vehicle, setVehicle] = useState<VehicleId>("nenhum");
-  const [storeOpen, setStoreOpen] = useState(false);
-  // Pausa o movimento por teclado enquanto a loja (modal) está aberta; o
-  // joystick já fica coberto pelo overlay da loja (zIndex maior).
-  const { inputRef, setJoystick } = useInput(!storeOpen);
+  // Pausa o movimento por teclado enquanto a loja (renderizada por cima,
+  // em App.tsx) está aberta. O joystick já fica coberto pelo overlay da
+  // loja (zIndex maior), então só o teclado precisa dessa trava explícita.
+  const { inputRef, setJoystick } = useInput(!paused);
   const net = useAvenueRealtime(avatar);
-
-  // Sessão/posses compartilhadas entre o gating do VehiclePicker e a Store
-  // (uma única fonte, em vez de cada um buscar por conta própria).
-  const { session, loading: authLoading } = useAuth();
-  const { owned, refresh } = useEntitlements(session);
 
   return (
     <>
@@ -61,12 +66,13 @@ export function Game({ avatar }: { avatar: AvatarConfig }) {
 
       <Joystick onMove={setJoystick} />
       <TopRightPanel>
-        <StoreButton onClick={() => setStoreOpen(true)} />
+        <StoreButton onClick={onOpenStore} />
         <VehiclePicker
           value={vehicle}
           onChange={setVehicle}
           owned={owned}
-          onLocked={() => setStoreOpen(true)}
+          onLocked={onOpenStore}
+          loading={entitlementsLoading}
         />
       </TopRightPanel>
       <Hud
@@ -75,15 +81,6 @@ export function Game({ avatar }: { avatar: AvatarConfig }) {
         chatLog={net.chatLog}
         onChat={net.sendChat}
       />
-      {storeOpen && (
-        <Store
-          onClose={() => setStoreOpen(false)}
-          session={session}
-          authLoading={authLoading}
-          owned={owned}
-          refresh={refresh}
-        />
-      )}
     </>
   );
 }

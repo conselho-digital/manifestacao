@@ -14,6 +14,9 @@ interface VehiclePickerProps {
   owned: ReadonlySet<string>;
   /** Chamado ao clicar num veículo bloqueado (abre a loja). */
   onLocked: (vehicle: VehicleId) => void;
+  /** true enquanto a posse ainda não terminou de carregar: não mostra
+   * cadeado nem preço (pode ser falso-positivo), só desabilita a troca. */
+  loading: boolean;
 }
 
 function formatBRL(cents: number): string {
@@ -27,7 +30,7 @@ function formatBRL(cents: number): string {
  * clique abre a loja em vez de selecionar. O estado travado é comunicado só
  * por cor/opacidade (sem ícones/emoji, fora do sistema de tokens do app).
  */
-export function VehiclePicker({ value, onChange, owned, onLocked }: VehiclePickerProps) {
+export function VehiclePicker({ value, onChange, owned, onLocked, loading }: VehiclePickerProps) {
   const [pressed, setPressed] = useState<VehicleId | null>(null);
 
   return (
@@ -55,16 +58,21 @@ export function VehiclePicker({ value, onChange, owned, onLocked }: VehiclePicke
       {VEHICLE_IDS.map((id) => {
         const selected = id === value;
         const needsEntitlement = vehicleRequiresEntitlement(id);
-        const unlocked = !needsEntitlement || owned.has(`vehicle:${id}`) || hasVehicleViaPremium(id, owned);
-        const label = unlocked
-          ? VEHICLES[id].label
-          : `${VEHICLES[id].label} · ${formatBRL(VEHICLES[id].priceCents)}`;
+        // Enquanto carrega, trata como destravado na aparência (sem cadeado
+        // nem preço piscando) mas desabilita a troca — evita tanto o
+        // falso "bloqueado" para quem já possui quanto uma seleção que
+        // seria revertida assim que a posse real chegar.
+        const unlocked = loading || !needsEntitlement || owned.has(`vehicle:${id}`) || hasVehicleViaPremium(id, owned);
+        const label =
+          !loading && !unlocked ? `${VEHICLES[id].label} · ${formatBRL(VEHICLES[id].priceCents)}` : VEHICLES[id].label;
         return (
           <button
             key={id}
             type="button"
             aria-pressed={selected}
-            aria-label={unlocked ? undefined : `${VEHICLES[id].label} — bloqueado, toque para comprar na loja`}
+            aria-busy={loading}
+            aria-label={!loading && !unlocked ? `${VEHICLES[id].label} — bloqueado, toque para comprar na loja` : undefined}
+            disabled={loading}
             onClick={() => (unlocked ? onChange(id) : onLocked(id))}
             onPointerDown={() => setPressed(id)}
             onPointerUp={() => setPressed(null)}
@@ -79,8 +87,8 @@ export function VehiclePicker({ value, onChange, owned, onLocked }: VehiclePicke
               border: `1px solid ${selected ? "var(--accent)" : "var(--line)"}`,
               background: selected ? "var(--accent)" : "var(--scrim)",
               color: selected ? "var(--on-accent)" : unlocked ? "var(--ink)" : "var(--ink-dim)",
-              opacity: unlocked ? 1 : 0.85,
-              cursor: "pointer",
+              opacity: loading ? 0.6 : unlocked ? 1 : 0.85,
+              cursor: loading ? "default" : "pointer",
               transform: pressed === id ? "scale(0.96)" : "scale(1)",
               transition: "transform .08s, background .12s, opacity .12s",
             }}

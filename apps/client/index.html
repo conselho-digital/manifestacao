@@ -73,6 +73,20 @@
         font-family: inherit;
         -webkit-tap-highlight-color: transparent;
       }
+      summary {
+        list-style: none;
+      }
+      summary::-webkit-details-marker {
+        display: none;
+      }
+      summary::after {
+        content: "+";
+        color: var(--ink-dim);
+        font-weight: 400;
+      }
+      details[open] summary::after {
+        content: "–";
+      }
     </style>
   </head>
   <body>
