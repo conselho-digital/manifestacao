@@ -9,11 +9,14 @@ marca, arte ou código do original. Visão completa e plano de fases em
 
 ```
 apps/
-  client/   Cliente web (Phaser 3 + Vite, TypeScript)
-  server/   Servidor de jogo autoritativo (Node) — stub na Fase 0
-  api/      API de contas/loja/moderação (Node) — stub na Fase 0
+  client/   Cliente web 3D (Vite + React + React Three Fiber, TypeScript)
+  server/   Servidor de jogo autoritativo (Node) — reservado p/ escala (§4 do CLAUDE)
+  api/      Stub HTTP (a lógica de contas/loja vai p/ Supabase Edge Functions)
 packages/
-  shared/   Tipos e constantes compartilhados (protocolo, times, mundo)
+  shared/   Tipos e constantes compartilhados (protocolo, times, mundo, realtime)
+supabase/
+  migrations/   Schema + RLS (Postgres)
+  functions/    Edge Functions (Mercado Pago Pix, webhook, Resend)
 reference/  Cópia estática do site original, só como referência (não reutilizar)
 ```
 
@@ -31,12 +34,18 @@ pnpm dev:server   # servidor de jogo (stub) em :2567
 pnpm dev:api      # api (stub) em :3000
 ```
 
-### Fase 0 (atual)
+Para multiplayer, copie `apps/client/.env.example` para `apps/client/.env.local`
+e preencha `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY`. Sem isso, o cliente
+roda em modo offline (só o jogador local).
 
-Fundação do monorepo, tipos compartilhados e um protótipo jogável **local**:
-avenida desenhada por código, um personagem controlável por teclado
-(WASD/setas) e por joystick de toque no celular, com escolha de time e
-apelido. Ainda **sem rede** — a sincronização multiplayer entra na Fase 1.
+### Fase 1 (atual)
+
+Cliente **3D** (React Three Fiber): avenida, avatar controlável por teclado
+(WASD/setas) e joystick de toque, câmera que segue, escolha de time/apelido.
+Multiplayer MVP via **Supabase Realtime** (presence + broadcast de posição e
+chat) — ativa quando as credenciais do Supabase estão configuradas. Schema,
+RLS e Edge Functions de pagamento/e-mail já versionados em `supabase/`
+(dependem das suas chaves para funcionar).
 
 ## Convenções
 

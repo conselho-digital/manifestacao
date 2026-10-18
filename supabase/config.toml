@@ -1,0 +1,21 @@
+# Configuração do projeto Supabase (CLI). Ajuste project_id ao linkar
+# com `supabase link`. Login apenas via Google (CLAUDE.md §5).
+
+project_id = "manifestacao"
+
+[auth]
+enabled = true
+site_url = "http://localhost:5173"
+additional_redirect_urls = ["http://localhost:5173"]
+
+# E-mail/senha desligado de propósito: sem confirmação/recuperação de e-mail.
+[auth.email]
+enable_signup = false
+
+[auth.external.google]
+enabled = true
+client_id = "env(SUPABASE_AUTH_GOOGLE_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_GOOGLE_SECRET)"
+
+[realtime]
+enabled = true

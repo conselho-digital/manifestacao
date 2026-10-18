@@ -107,12 +107,20 @@
 
 ## 6. Personagens e assets 3D
 
-- Formato **glTF/GLB**, low-poly estilizado, otimizado para web/mobile (Draco/meshopt, polycount baixo, texturas pequenas).
-- Preferir **CC0 / domínio público**; se CC-BY, registrar a atribuição em `CREDITS.md`.
-- Fontes candidatas (o agente de pesquisa está confirmando licenças — ver relatório):
-  Quaternius (CC0), Kenney.nl (CC0), Poly Pizza (agregador), KayKit, Mixamo (animações de caminhada/rig).
-- **Regra**: nenhum asset entra sem licença compatível com **uso comercial** (o jogo cobra via Pix). Atribuições em `CREDITS.md`.
-- Avatares não devem representar **pessoas reais** (ver §8).
+- Formato **glTF/GLB**, low-poly estilizado, otimizado para web/mobile.
+- Preferir **CC0 / domínio público**; se CC-BY, registrar a atribuição em `CREDITS.md` e numa tela de créditos no jogo.
+- Fontes confirmadas (licenças verificadas — ver `CREDITS.md`):
+  - **Personagem que anda (melhor opção)**: **KayKit** (CC0, GLTF nativo, rig humanoide + 133 animações incluindo caminhada) ou **Quaternius** (CC0, base + animation library). Tudo do mesmo autor evita retarget entre fornecedores.
+  - **Veículos / cenário urbano**: **Kenney.nl** (CC0, City Kit/Car Kit), **Quaternius** (Cars/Public Transport).
+  - **Iluminação / texturas**: **Poly Haven** (CC0, HDRIs e PBR).
+  - **Agregador**: **Poly Pizza** (GLB; CC0 e CC-BY — checar por modelo). **Sketchfab** (filtrar CC0/CC-BY, **excluir NC/ND**).
+  - **Mixamo** (Adobe): ok para rig/animação, mas **não redistribuir** arquivos crus (só embutidos, convertidos para GLB) e exporta só FBX/DAE.
+  - **Não usar**: Ready Player Me (serviço público encerrado em jan/2026); CC-BY-NC e CC-BY-ND num jogo pago.
+- **Otimização**: Draco/meshopt na geometria, KTX2/Basis nas texturas, compartilhar um esqueleto entre avatares, `InstancedMesh` para prédios/postes, LOD e lazy-load por área.
+- **Regra**: nenhum asset entra sem licença compatível com **uso comercial** (o jogo cobra via Pix). Avatares não representam **pessoas reais** (ver §9).
+
+> Estado atual: os avatares da Fase 1 são **geométricos (gerados por código)**,
+> placeholder até entrarem os modelos glTF CC0 na Fase 2.
 
 ---
 
