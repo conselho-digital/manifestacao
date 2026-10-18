@@ -86,6 +86,6 @@ export function GlbModel({ url }: { url: string }) {
  */
 function CarSomSound() {
   const unlocked = useUserGestureUnlocked();
-  const audioRef = useProximitySound(unlocked);
-  return audioRef.current ? <primitive object={audioRef.current} /> : null;
+  const audio = useProximitySound(unlocked);
+  return audio ? <primitive object={audio} /> : null;
 }

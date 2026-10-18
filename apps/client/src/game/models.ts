@@ -16,5 +16,9 @@ export const CHARACTER_MODELS: Record<CharacterId, string | null> = {
 };
 
 export function modelUrlFor(character: CharacterId): string | null {
+  // Defesa em profundidade: só lê se for chave própria do registro (evita
+  // resolver para algo herdado do prototype caso o valor não tenha passado
+  // por isCharacterId antes de chegar aqui).
+  if (!Object.hasOwn(CHARACTER_MODELS, character)) return null;
   return CHARACTER_MODELS[character] ?? null;
 }

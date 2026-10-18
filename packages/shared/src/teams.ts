@@ -26,7 +26,9 @@ export const TEAMS: Record<TeamId, Team> = {
 export const TEAM_IDS: TeamId[] = ["verde", "roxo", "neutro"];
 
 export function isTeamId(value: unknown): value is TeamId {
-  return typeof value === "string" && value in TEAMS;
+  // Object.hasOwn (não `in`): `in` percorre o prototype chain, então uma
+  // string como "constructor" ou "toString" passaria a validação.
+  return typeof value === "string" && Object.hasOwn(TEAMS, value);
 }
 
 /** Converte uma cor numérica (0xrrggbb) em string hex CSS (#rrggbb). */

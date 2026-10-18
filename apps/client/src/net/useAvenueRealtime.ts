@@ -4,7 +4,9 @@ import {
   AVENUE_CHANNEL,
   BROADCAST,
   MAX_CHAT_LENGTH,
+  MAX_NICKNAME_LENGTH,
   TEAM_IDS,
+  isCharacterId,
   isFlagId,
   isTeamId,
   isVehicleId,
@@ -35,6 +37,25 @@ const MAX_CHAT = 30;
 
 function emptyScores(): Record<TeamId, number> {
   return Object.fromEntries(TEAM_IDS.map((t) => [t, 0])) as Record<TeamId, number>;
+}
+
+/**
+ * Sanitiza um PresenceState vindo da rede: outro cliente conectado ao canal
+ * (chave anônima pública) pode enviar `channel.track()` com qualquer payload,
+ * incluindo tipos errados (nickname como objeto, por exemplo), o que
+ * quebraria o render React de todo mundo que recebesse esse jogador. Nunca
+ * confiar nesses campos sem validar/coagir para o tipo esperado.
+ */
+function sanitizePresence(id: string, p: unknown): PresenceState {
+  const raw = (p ?? {}) as Partial<Record<keyof PresenceState, unknown>>;
+  return {
+    id,
+    nickname: String(raw.nickname ?? "Anônimo").slice(0, MAX_NICKNAME_LENGTH),
+    team: isTeamId(raw.team) ? raw.team : "neutro",
+    shirt: typeof raw.shirt === "number" && Number.isFinite(raw.shirt) ? raw.shirt : 0x8b97a3,
+    character: isCharacterId(raw.character) ? raw.character : "comum",
+    flag: isFlagId(raw.flag) ? raw.flag : "nenhuma",
+  };
 }
 
 /**
@@ -89,16 +110,27 @@ export function useAvenueRealtime(self: AvatarConfig) {
 
     channel
       .on("presence", { event: "sync" }, () => {
+        // Chaveamos pela chave REAL de presence (atribuída pelo Supabase a
+        // partir de config.presence.key), não por um campo `id` autodeclarado
+        // no payload — evita que alguém se identifique com o id de outro
+        // jogador já conectado.
         const state = channel.presenceState<PresenceState>();
         const next = emptyScores();
         const seen = new Set<string>();
-        for (const entries of Object.values(state)) {
-          for (const p of entries) {
-            seen.add(p.id);
-            if (p.team in next) next[p.team] += 1;
-            if (p.id !== selfId && !playersRef.current.has(p.id)) {
-              playersRef.current.set(p.id, { ...p, x: 0, z: 0, facing: "down", vehicle: "nenhum" });
-            }
+        for (const [presenceKey, entries] of Object.entries(state)) {
+          const raw = entries[0];
+          seen.add(presenceKey);
+          const safe = sanitizePresence(presenceKey, raw);
+          if (safe.team in next) next[safe.team] += 1;
+          if (presenceKey === selfId) continue;
+          const existing = playersRef.current.get(presenceKey);
+          if (existing) {
+            // Já conhecido: atualiza o visual (nickname/time/personagem/
+            // bandeira podem ter mudado) mantendo posição/facing/veículo
+            // atuais, que vêm do broadcast de move, não do presence.
+            Object.assign(existing, safe);
+          } else {
+            playersRef.current.set(presenceKey, { ...safe, x: 0, z: 0, facing: "down", vehicle: "nenhum" });
           }
         }
         // Remove quem saiu.

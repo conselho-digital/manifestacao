@@ -30,15 +30,17 @@ function loadSaved(): Partial<AvatarConfig> {
 }
 
 const chip = (selected: boolean, accent?: string): React.CSSProperties => ({
-  minHeight: 40,
+  minHeight: 44,
   padding: "8px 14px",
   fontSize: 14,
   fontWeight: 700,
   borderRadius: "var(--r-md)",
   cursor: "pointer",
-  border: `2px solid ${accent ?? "var(--line)"}`,
+  // A borda colorida só aparece quando selecionado; senão fica neutra
+  // (evitava um efeito "arco-íris" com todas as opções coloridas).
+  border: `2px solid ${selected && accent ? accent : "var(--line)"}`,
   background: selected ? (accent ?? "var(--surface-2)") : "var(--surface)",
-  color: selected && accent ? "#15181d" : "var(--ink)",
+  color: selected && accent ? "var(--on-accent)" : "var(--ink)",
   transition: "transform .08s, background .12s",
 });
 
@@ -74,7 +76,7 @@ export function AvatarPicker({ onReady }: { onReady: (a: AvatarConfig) => void }
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: 16,
+        gap: 22,
         padding:
           "max(24px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left))",
         textAlign: "center",
@@ -113,35 +115,41 @@ export function AvatarPicker({ onReady }: { onReady: (a: AvatarConfig) => void }
         }}
       />
 
-      <Label>Lado</Label>
-      <Row>
-        {TEAM_IDS.map((id) => (
-          <button key={id} type="button" aria-pressed={id === team} onClick={() => setTeam(id)} style={chip(id === team, hexColor(TEAMS[id].color))}>
-            {TEAMS[id].label}
-          </button>
-        ))}
-      </Row>
-
-      <Label>Personagem</Label>
-      <Row>
-        {CHARACTER_IDS.map((id) => (
-          <button key={id} type="button" aria-pressed={id === character} onClick={() => setCharacter(id)} style={chip(id === character)}>
-            {CHARACTERS[id].label}
-          </button>
-        ))}
-      </Row>
-
-      <Label>Bandeira</Label>
-      <Row>
-        {FLAG_IDS.map((id) => {
-          const accent = id === "nenhuma" ? undefined : hexColor(flagColor(id, TEAMS[team].color));
-          return (
-            <button key={id} type="button" aria-pressed={id === flag} onClick={() => setFlag(id)} style={chip(id === flag, accent)}>
-              {FLAGS[id].label}
+      <Section>
+        <Label>Lado</Label>
+        <Row>
+          {TEAM_IDS.map((id) => (
+            <button key={id} type="button" aria-pressed={id === team} onClick={() => setTeam(id)} style={chip(id === team, hexColor(TEAMS[id].color))}>
+              {TEAMS[id].label}
             </button>
-          );
-        })}
-      </Row>
+          ))}
+        </Row>
+      </Section>
+
+      <Section>
+        <Label>Personagem</Label>
+        <Row>
+          {CHARACTER_IDS.map((id) => (
+            <button key={id} type="button" aria-pressed={id === character} onClick={() => setCharacter(id)} style={chip(id === character, "var(--accent)")}>
+              {CHARACTERS[id].label}
+            </button>
+          ))}
+        </Row>
+      </Section>
+
+      <Section>
+        <Label>Bandeira</Label>
+        <Row>
+          {FLAG_IDS.map((id) => {
+            const accent = id === "nenhuma" ? "var(--accent)" : hexColor(flagColor(id, TEAMS[team].color));
+            return (
+              <button key={id} type="button" aria-pressed={id === flag} onClick={() => setFlag(id)} style={chip(id === flag, accent)}>
+                {FLAGS[id].label}
+              </button>
+            );
+          })}
+        </Row>
+      </Section>
 
       <button
         type="submit"
@@ -163,6 +171,13 @@ export function AvatarPicker({ onReady }: { onReady: (a: AvatarConfig) => void }
       </button>
     </form>
   );
+}
+
+function Section({ children }: { children: React.ReactNode }) {
+  // Agrupa rótulo + linha de chips com um espaçamento interno menor que o
+  // espaçamento entre seções (gap do container pai), dando hierarquia de
+  // 3 blocos distintos em vez de uma lista plana.
+  return <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>{children}</div>;
 }
 
 function Label({ children }: { children: React.ReactNode }) {

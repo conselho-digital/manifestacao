@@ -28,7 +28,9 @@ export const CHARACTERS: Record<CharacterId, Character> = {
 export const CHARACTER_IDS: CharacterId[] = ["comum", "jovem", "trabalhador", "tiozao"];
 
 export function isCharacterId(v: unknown): v is CharacterId {
-  return typeof v === "string" && v in CHARACTERS;
+  // Object.hasOwn (não `in`): evita que "constructor"/"toString" etc.
+  // (herdados do prototype) passem como ID válido.
+  return typeof v === "string" && Object.hasOwn(CHARACTERS, v);
 }
 
 // ── Bandeiras ──────────────────────────────────────────────────────────────
@@ -52,7 +54,7 @@ export const FLAGS: Record<FlagId, Flag> = {
 export const FLAG_IDS: FlagId[] = ["nenhuma", "time", "verde", "amarela", "branca"];
 
 export function isFlagId(v: unknown): v is FlagId {
-  return typeof v === "string" && v in FLAGS;
+  return typeof v === "string" && Object.hasOwn(FLAGS, v);
 }
 
 /** Cor efetiva da bandeira, resolvendo "time" para a cor do time. */
@@ -91,7 +93,7 @@ export const VEHICLES: Record<VehicleId, Vehicle> = {
 export const VEHICLE_IDS: VehicleId[] = ["nenhum", "moto", "carro", "carro_som"];
 
 export function isVehicleId(v: unknown): v is VehicleId {
-  return typeof v === "string" && v in VEHICLES;
+  return typeof v === "string" && Object.hasOwn(VEHICLES, v);
 }
 
 /** Linha do catálogo para o seed SQL de `catalog_items`. */

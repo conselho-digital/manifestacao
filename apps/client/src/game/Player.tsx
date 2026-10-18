@@ -68,14 +68,19 @@ export function Player({ color, name, flag, vehicle, modelUrl, inputRef, onMove 
     camera.position.lerp(tmp.current, 1 - Math.pow(0.001, delta));
     camera.lookAt(g.position.x, g.position.y + 1, g.position.z);
 
-    accum.current += delta;
-    if (len > 0 && accum.current >= SEND_INTERVAL) {
+    if (len === 0) {
       accum.current = 0;
-      onMove(g.position.x, g.position.z, facing.current, vehicleRef.current, flagRef.current);
-      wasMoving.current = true;
-    } else if (len === 0 && wasMoving.current) {
-      onMove(g.position.x, g.position.z, facing.current, vehicleRef.current, flagRef.current);
-      wasMoving.current = false;
+      if (wasMoving.current) {
+        onMove(g.position.x, g.position.z, facing.current, vehicleRef.current, flagRef.current);
+        wasMoving.current = false;
+      }
+    } else {
+      accum.current += delta;
+      if (accum.current >= SEND_INTERVAL) {
+        accum.current = 0;
+        onMove(g.position.x, g.position.z, facing.current, vehicleRef.current, flagRef.current);
+        wasMoving.current = true;
+      }
     }
   });
 

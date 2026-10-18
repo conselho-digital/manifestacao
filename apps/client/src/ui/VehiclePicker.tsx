@@ -20,10 +20,22 @@ export function VehiclePicker({ value, onChange }: VehiclePickerProps) {
         right: "calc(env(safe-area-inset-right, 0px) + 10px)",
         display: "flex",
         flexDirection: "column",
+        alignItems: "flex-end",
         gap: 6,
         zIndex: 6,
       }}
     >
+      <span
+        style={{
+          fontSize: "var(--t-ui)",
+          color: "var(--ink-dim)",
+          textTransform: "uppercase",
+          letterSpacing: "0.08em",
+          paddingRight: 2,
+        }}
+      >
+        Veículo
+      </span>
       {VEHICLE_IDS.map((id) => {
         const selected = id === value;
         return (

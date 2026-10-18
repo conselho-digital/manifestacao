@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useState } from "react";
 import { AudioListener, PositionalAudio } from "three";
 import { useThree } from "@react-three/fiber";
 
@@ -11,12 +11,17 @@ import { useThree } from "@react-three/fiber";
  * arquivo de música de terceiros — evita qualquer questão de licença de
  * áudio enquanto não entra uma trilha própria (ver CREDITS.md).
  */
-export function useProximitySound(active: boolean) {
+export function useProximitySound(active: boolean): PositionalAudio | null {
   const { camera } = useThree();
-  const audioRef = useRef<PositionalAudio | null>(null);
+  // useState (não useRef): precisamos que a criação do áudio dispare
+  // re-render, senão o <primitive> nunca chega a montar na árvore de cena.
+  const [audio, setAudio] = useState<PositionalAudio | null>(null);
 
   useEffect(() => {
-    if (!active) return;
+    if (!active) {
+      setAudio(null);
+      return;
+    }
 
     let listener = camera.children.find(
       (c): c is AudioListener => c instanceof AudioListener,
@@ -26,29 +31,33 @@ export function useProximitySound(active: boolean) {
       camera.add(listener);
     }
 
-    const audio = new PositionalAudio(listener);
-    audio.setRefDistance(4);
-    audio.setMaxDistance(28);
-    audio.setRolloffFactor(1.6);
-    audio.setDistanceModel("inverse");
-    audio.setVolume(0.5);
-
     const ctx = listener.context;
+    // Navegadores exigem o AudioContext "resumido" após o gesto do usuário;
+    // ele pode nascer suspenso mesmo dentro do handler de gesto.
+    if (ctx.state === "suspended") void ctx.resume();
+
+    const instance = new PositionalAudio(listener);
+    instance.setRefDistance(4);
+    instance.setMaxDistance(28);
+    instance.setRolloffFactor(1.6);
+    instance.setDistanceModel("inverse");
+    instance.setVolume(0.5);
+
     const osc = ctx.createOscillator();
     osc.type = "square";
     osc.frequency.value = 196;
     osc.start();
 
-    audio.setNodeSource(osc as unknown as AudioBufferSourceNode);
-    audioRef.current = audio;
+    instance.setNodeSource(osc as unknown as AudioBufferSourceNode);
+    setAudio(instance);
 
     return () => {
       osc.stop();
       osc.disconnect();
-      audio.disconnect();
-      audioRef.current = null;
+      instance.disconnect();
+      setAudio(null);
     };
   }, [active, camera]);
 
-  return audioRef;
+  return audio;
 }

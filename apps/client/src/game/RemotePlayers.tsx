@@ -16,6 +16,21 @@ interface RemotePlayersProps {
  */
 export function RemotePlayers({ ids, playersRef }: RemotePlayersProps) {
   const groups = useRef<Map<string, Group>>(new Map());
+  // Callback ref estável por id: evita recriar a função (e desmontar/remontar
+  // a referência no Three.js) a cada render de RemotePlayers.
+  const refCallbacks = useRef<Map<string, (g: Group | null) => void>>(new Map());
+
+  function refFor(id: string): (g: Group | null) => void {
+    let fn = refCallbacks.current.get(id);
+    if (!fn) {
+      fn = (g) => {
+        if (g) groups.current.set(id, g);
+        else groups.current.delete(id);
+      };
+      refCallbacks.current.set(id, fn);
+    }
+    return fn;
+  }
 
   useFrame((_, delta) => {
     const t = 1 - Math.pow(0.002, delta);
@@ -36,10 +51,7 @@ export function RemotePlayers({ ids, playersRef }: RemotePlayersProps) {
         return (
           <Avatar
             key={id}
-            ref={(g) => {
-              if (g) groups.current.set(id, g);
-              else groups.current.delete(id);
-            }}
+            ref={refFor(id)}
             color={p.shirt}
             name={p.nickname}
             flag={p.flag}
