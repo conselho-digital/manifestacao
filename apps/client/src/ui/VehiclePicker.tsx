@@ -1,4 +1,11 @@
-import { VEHICLES, VEHICLE_IDS, hasVehicleViaPremium, vehicleRequiresEntitlement, type VehicleId } from "@manifestacao/shared";
+import { useState } from "react";
+import {
+  VEHICLES,
+  VEHICLE_IDS,
+  hasVehicleViaPremium,
+  vehicleRequiresEntitlement,
+  type VehicleId,
+} from "@manifestacao/shared";
 
 interface VehiclePickerProps {
   value: VehicleId;
@@ -9,13 +16,20 @@ interface VehiclePickerProps {
   onLocked: (vehicle: VehicleId) => void;
 }
 
+function formatBRL(cents: number): string {
+  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+}
+
 /**
  * Seletor de veículo. Sem posicionamento próprio — fica dentro do
  * TopRightPanel (junto do StoreButton). Veículos com preço (carro de som)
  * exigem posse (entitlement direto ou via passe Premium); sem posse, o
- * clique abre a loja em vez de selecionar.
+ * clique abre a loja em vez de selecionar. O estado travado é comunicado só
+ * por cor/opacidade (sem ícones/emoji, fora do sistema de tokens do app).
  */
 export function VehiclePicker({ value, onChange, owned, onLocked }: VehiclePickerProps) {
+  const [pressed, setPressed] = useState<VehicleId | null>(null);
+
   return (
     <div
       role="group"
@@ -42,12 +56,19 @@ export function VehiclePicker({ value, onChange, owned, onLocked }: VehiclePicke
         const selected = id === value;
         const needsEntitlement = vehicleRequiresEntitlement(id);
         const unlocked = !needsEntitlement || owned.has(`vehicle:${id}`) || hasVehicleViaPremium(id, owned);
+        const label = unlocked
+          ? VEHICLES[id].label
+          : `${VEHICLES[id].label} · ${formatBRL(VEHICLES[id].priceCents)}`;
         return (
           <button
             key={id}
             type="button"
             aria-pressed={selected}
+            aria-label={unlocked ? undefined : `${VEHICLES[id].label} — bloqueado, toque para comprar na loja`}
             onClick={() => (unlocked ? onChange(id) : onLocked(id))}
+            onPointerDown={() => setPressed(id)}
+            onPointerUp={() => setPressed(null)}
+            onPointerLeave={() => setPressed((p) => (p === id ? null : p))}
             style={{
               minHeight: 44,
               minWidth: 112,
@@ -58,12 +79,13 @@ export function VehiclePicker({ value, onChange, owned, onLocked }: VehiclePicke
               border: `1px solid ${selected ? "var(--accent)" : "var(--line)"}`,
               background: selected ? "var(--accent)" : "var(--scrim)",
               color: selected ? "var(--on-accent)" : unlocked ? "var(--ink)" : "var(--ink-dim)",
+              opacity: unlocked ? 1 : 0.85,
               cursor: "pointer",
-              transition: "transform .08s, background .12s",
+              transform: pressed === id ? "scale(0.96)" : "scale(1)",
+              transition: "transform .08s, background .12s, opacity .12s",
             }}
           >
-            {VEHICLES[id].label}
-            {!unlocked && " 🔒"}
+            {label}
           </button>
         );
       })}

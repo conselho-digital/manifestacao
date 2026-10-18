@@ -163,11 +163,68 @@ export function Store({ onClose, session, authLoading, owned, refresh }: StorePr
         )}
 
         {!charge && (
-          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+          <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
             {catalogLoading && <li style={{ color: "var(--ink-dim)", fontSize: "var(--t-ui)" }}>Carregando…</li>}
             {items.map((item) => {
               const has = owned.has(item.id);
               const free = item.price_cents === 0;
+              const description = itemDescription(item);
+
+              const priceLine = (
+                <span
+                  style={{
+                    fontSize: "var(--t-ui)",
+                    color: free ? "var(--ink-dim)" : "var(--ink)",
+                    fontWeight: free ? 400 : 600,
+                  }}
+                >
+                  {free ? "Grátis" : formatBRL(item.price_cents)}
+                </span>
+              );
+
+              const action = has ? (
+                <span style={{ fontSize: "var(--t-ui)", color: "var(--accent)", fontWeight: 700 }}>
+                  Adquirido
+                </span>
+              ) : free ? (
+                <span style={{ fontSize: "var(--t-ui)", color: "var(--ink-dim)" }}>Já disponível</span>
+              ) : (
+                <button
+                  type="button"
+                  disabled={!session || pendingItem !== null}
+                  onClick={() => void buy(item)}
+                  style={buyBtnStyle}
+                >
+                  {pendingItem === item.id ? "…" : "Comprar"}
+                </button>
+              );
+
+              // Itens com descrição (ex. Premium) ganham layout empilhado,
+              // full-width — um card de uma linha (nome+preço) não cabe uma
+              // frase de benefícios sem ficar espremido contra o botão.
+              if (description) {
+                return (
+                  <li
+                    key={item.id}
+                    style={{
+                      padding: "12px",
+                      borderRadius: "var(--r-md)",
+                      background: "var(--surface-2)",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: 6,
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, fontSize: "var(--t-body)" }}>{itemLabel(item)}</div>
+                    <div style={{ fontSize: "var(--t-ui)", color: "var(--ink-dim)" }}>{description}</div>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 2 }}>
+                      {priceLine}
+                      {action}
+                    </div>
+                  </li>
+                );
+              }
+
               return (
                 <li
                   key={item.id}
@@ -180,41 +237,11 @@ export function Store({ onClose, session, authLoading, owned, refresh }: StorePr
                     background: "var(--surface-2)",
                   }}
                 >
-                  <div style={{ maxWidth: "70%" }}>
+                  <div>
                     <div style={{ fontWeight: 700, fontSize: "var(--t-body)" }}>{itemLabel(item)}</div>
-                    {itemDescription(item) && (
-                      <div style={{ fontSize: "var(--t-ui)", color: "var(--ink-dim)", marginTop: 2 }}>
-                        {itemDescription(item)}
-                      </div>
-                    )}
-                    <div
-                      style={{
-                        fontSize: "var(--t-ui)",
-                        // Preço é informação de decisão: só fica discreto quando grátis.
-                        color: free ? "var(--ink-dim)" : "var(--ink)",
-                        fontWeight: free ? 400 : 600,
-                        marginTop: 2,
-                      }}
-                    >
-                      {free ? "Grátis" : formatBRL(item.price_cents)}
-                    </div>
+                    {priceLine}
                   </div>
-                  {has ? (
-                    <span style={{ fontSize: "var(--t-ui)", color: "var(--accent)", fontWeight: 700 }}>
-                      Adquirido
-                    </span>
-                  ) : free ? (
-                    <span style={{ fontSize: "var(--t-ui)", color: "var(--ink-dim)" }}>Já disponível</span>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={!session || pendingItem !== null}
-                      onClick={() => void buy(item)}
-                      style={buyBtnStyle}
-                    >
-                      {pendingItem === item.id ? "…" : "Comprar"}
-                    </button>
-                  )}
+                  {action}
                 </li>
               );
             })}
