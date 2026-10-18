@@ -1,245 +1,168 @@
-# CLAUDE.md — Jogo de manifestação online multiplayer (navegador)
+# CLAUDE.md — Manifestação Online (jogo web multiplayer 3D)
 
-> Projeto inspirado no **Paulista Livre** (manifestacao.com). Este arquivo descreve o que o produto de referência faz, como reconstruir algo equivalente e em que ordem.
-> **Não copie** nome, marca, logotipo, arte, textos ou código do original. Construa identidade própria.
+> Jogo **próprio**, inspirado no conceito do Paulista Livre (manifestacao.com):
+> uma manifestação online e satírica numa avenida, no navegador (celular e PC).
+> **Não copiar** nome, marca, logotipo, arte, textos nem código do original —
+> identidade e conteúdo são próprios. O site original serve só de referência
+> (cópia estática guardada em `reference/`, não reutilizar).
 
 ---
 
-## 0. Fluxo de git
+## 0. Fluxo de git (regra fixa)
 
-- Não abrir pull requests neste repositório.
-- Sempre fazer commit e push direto na branch `main`.
+- **Sem pull requests.** Commit e push **direto na `main`**.
 - Não criar branches de trabalho.
+- Mensagens de commit em pt-BR, curtas e descritivas.
 
 ---
 
-## 1. Visão do produto
+## 1. Decisões de arquitetura (fechadas)
 
-Um jogo **multijogador em tempo real, no navegador** (celular e PC), que recria uma avenida famosa como palco de uma **manifestação virtual satírica**. O jogador escolhe um **lado/time**, monta o **visual**, caminha pela avenida com outras pessoas ao vivo, conversa, leva bandeira/cartaz, dirige veículos, picha paredes e compra destaque (telões, superchats).
+| Camada | Escolha | Observações |
+|---|---|---|
+| **Front-end** | **Vercel** | Vite + React + **React Three Fiber (Three.js)** para a cena 3D. PWA, mobile-first. |
+| **Back-end / dados** | **Supabase** | Postgres, Auth, Storage, Realtime e Edge Functions. |
+| **Multiplayer em tempo real** | **Supabase Realtime** (presence + broadcast) no MVP | Ver §4 — a Vercel não hospeda WebSocket persistente; servidor autoritativo dedicado é o caminho de escala. |
+| **Pagamentos** | **Mercado Pago (Pix)** | Cobrança + webhook em Edge Function. Idempotente. Sem guardar CPF/cartão. |
+| **Contas / login** | **Google OAuth apenas**, via Supabase Auth | Sem e-mail+senha → sem confirmação/recuperação de e-mail. |
+| **E-mail transacional** | **Resend** | Recibos e avisos (via Edge Function). Não é usado para login. |
+| **Personagens / 3D** | Modelos **glTF/GLB gratuitos** (CC0 de preferência) | Ver §6 e o relatório do agente de pesquisa. |
 
-Princípios:
-- **Entrar em 1 clique**: jogar grátis, sem login (o original passou a cobrar R$10 de contas novas — decisão de negócio, ver §8).
-- **Mobile-first**: precisa rodar bem em celular médio.
-- **Tudo efêmero**: chat, pixações e posições vivem só na memória do servidor.
-- **Monetização por itens avulsos** via Pix, sem assinatura.
+### Stack concreta
+- **Cliente**: `apps/client` — Vite + React + TypeScript + `@react-three/fiber` + `@react-three/drei`. Deploy na Vercel (`vercel.json` já builda só o cliente).
+- **Supabase**: `supabase/` — migrations SQL, Edge Functions (`functions/`), políticas RLS.
+- **Compartilhado**: `packages/shared` — tipos de protocolo, times, constantes do mundo.
+- **Servidor de jogo** (`apps/server`): opcional/escala — servidor autoritativo Node quando Supabase Realtime não bastar (ver §4).
 
----
-
-## 2. Inventário de funcionalidades (referência)
-
-### 2.1 Entrada e personagem
-- Escolher **lado/time** (o original tem 3: PT, PL e Missão, com placar por partido).
-- Escolher **personagem** (básicos grátis; especiais/caricaturas pagos, a partir de ~R$29,90).
-- Personalizar **visual**: camisa, aparência.
-- **Apelido** público (sugerido pelo login, editável).
-- Visual salvo no `localStorage` e na conta.
-
-### 2.2 Mundo e movimento
-- Mapa da avenida com prédios, calçadas, **telões** e **palanques**.
-- Andar livremente; outros jogadores sincronizados em tempo real.
-- **Emotes**: dançar, acenar, comemorar.
-- **Placar ao vivo** de presença por time.
-
-### 2.3 Comunicação
-- **Chat global** da avenida.
-- **Chat de proximidade** (só quem está perto).
-- **Palanque com microfone**: equipe libera o jogador; voz **ao vivo**, não gravada.
-- **Som ambiente**: caixa/carro de som toca música para quem está perto, mostrando o nome.
-
-### 2.4 Itens e objetos
-- **Bandeiras** (catálogo) e **bandeiras personalizadas**.
-- **Cartazes personalizados** (imagem/texto do jogador, com aprovação).
-- **Spray / pixação**: pintar e apagar paredes; cartuchos de tinta (grátis + comprados); tinta some em algumas horas; **zonas proibidas** para pixar.
-- Objetos divertidos: **dinossauro, calango** etc.
-
-### 2.5 Veículos
-- Moto, carro comum, **carro de som**, **carreta/caminhão de som**, **dirigível**.
-- Subir no carro de som = fazer campanha para o time.
-
-### 2.6 Telões (leilão)
-- Telões exibem **vídeo/imagem** enviados por jogadores.
-- **Quem paga mais fica com o telão**; lance superado vira **crédito** na conta.
-- Anúncio pode ter **link** (abre em nova aba).
-- Conteúdo verificado **antes** do pagamento.
-
-### 2.7 Superchat
-- Não exige conta: nome + mensagem + valor.
-- Aparece em destaque e é **lido em voz alta** (TTS).
-
-### 2.8 Conta
-- Login opcional para jogar, obrigatório para comprar.
-- Métodos: **e-mail + senha**, **Google OAuth**, **Kick OAuth**.
-- Idade mínima 13; menores de 18 com autorização dos responsáveis.
-- Conta compartilhada com outro jogo da mesma equipe (Brasil TD) — padrão "um SSO para vários jogos".
-
-### 2.9 Monetização (preços de referência)
-| Item | Preço |
-|---|---|
-| Premium (permanente) | R$10 — personagem fica conectado após sair, moto, carro, caixa de som, spray ilimitado, 5 cartazes |
-| Cartaz extra | R$2 (crédito só gasto se aprovado) |
-| Passe Personagens | R$350 — todos os personagens atuais e futuros |
-| Passe Garagem & Objetos | R$300 — veículos, objetos, cartazes ilimitados |
-| Passe Total | R$500 — tudo + bandeiras + recursos novos |
-| Itens avulsos | até ~R$200 (carro de som etc.) |
-| Telões / superchat / doações | valor livre, à parte |
-
-Pagamento **só Pix** (Woovi/OpenPix), pagamento único, sem guardar CPF/cartão.
-
-### 2.10 Moderação
-- Painel da equipe: apelido, lado, chat, denúncias e IP de quem está online (só em memória).
-- Ações: **silenciar**, **banir IP temporariamente**, **remover conteúdo**, **recolher a lata de spray**.
-- **Denúncias** de pixação guardam trecho, denunciante e autor.
-- Verificação automática de imagens/vídeos (Google Cloud Vision + LLM via OpenRouter) **antes** do Pix.
-- Rate limit por **hash do IP** (não o IP cru).
-
-### 2.11 "Personagem sempre conectado" (Premium)
-- Após o jogador sair, o avatar continua na avenida (NPC parado), inflando presença do time.
+> Nota de migração: a Fase 0 foi prototipada em Phaser (2D). Como os personagens
+> agora são **modelos 3D**, o cliente migra para React Three Fiber. O protótipo
+> Phaser serve de referência de movimento e pode ser removido quando o cliente 3D
+> cobrir a mesma função.
 
 ---
 
-## 3. Arquitetura sugerida
+## 2. Princípios
 
-O back-end do original não é público; a stack abaixo é **inferida** da política de privacidade e escolhida para reproduzir o comportamento.
+- **Entrar em 1 clique**: jogar sem login; conta só para comprar.
+- **Mobile-first**: rodar bem em celular médio (viewport 380px, GPU/CPU modestas).
+- **Efêmero**: chat, posições e pixações vivem só em memória/Realtime; nunca em banco.
+- **Servidor autoritativo**: nunca confiar em posição, saldo ou item vindos do cliente.
+- **Monetização por itens avulsos** via Pix, pagamento único, sem assinatura.
+- **Textos de interface em pt-BR.**
 
-```
-[Cliente Web (PWA)] ──WebSocket──> [Servidor de jogo (estado em memória)]
-        │                                   │
-        ├──HTTPS──> [API (auth, loja, moderação)] ──> [Postgres]
-        │                                   │
-        └──WebRTC (voz palanque)            ├──> Woovi/OpenPix (Pix + webhook)
-                                            ├──> Google Cloud Vision / LLM (moderação)
-[Cloudflare: CDN, WAF, DDoS] na frente      └──> Google TTS (superchat)
-```
+---
 
-### Stack recomendada
-- **Cliente**: TypeScript + **Phaser 3** ou **PixiJS** (2D top-down/isométrico) — leve no celular. Vite.
-- **Servidor de jogo**: Node.js + **Colyseus** (salas, sync de estado, interpolação) ou `uWebSockets.js` puro.
-- **API**: Node (Fastify/Hono) ou Supabase (Auth + Postgres + Edge Functions).
-- **Banco**: Postgres (contas, compras, inventário, créditos, aprovações).
-- **Cache/pub-sub**: Redis (se houver mais de uma instância de sala).
-- **Voz**: LiveKit (SFU WebRTC) para o palanque.
-- **Mídia**: Cloudflare R2 / Supabase Storage para cartazes e vídeos de telão.
-- **Infra**: Cloudflare na frente; servidor de jogo em VPS (Fly.io, Hetzner).
+## 3. Funcionalidades (escopo-alvo)
 
-### Modelo de dados (mínimo)
-- `users` (id, email, password_hash, google_id, kick_id, nickname, birth_ack, created_at, access_type)
-- `sessions` (token_hash, user_id, ip_hash, expires_at)
-- `avatars` (user_id, team, character_id, shirt, appearance)
-- `catalog_items` (id, kind[flag|vehicle|object|sound|character|pass], price_cents, team_restriction)
-- `orders` (id, user_id, item_id, amount_cents, pix_ref, status, created_at)
-- `entitlements` (user_id, item_id, source[purchase|grant|pass], granted_by, created_at)
-- `custom_signs` (id, user_id, image_url, text, status[pending|approved|rejected], credit_used)
-- `billboard_bids` (id, billboard_id, user_id, media_url, link, amount_cents, status)
+- **Entrada/personagem**: escolher lado/time, apelido público, visual do avatar 3D.
+- **Mundo/movimento**: avenida 3D com prédios e calçadas; andar livre; outros jogadores sincronizados; placar de presença por time; emotes (dançar, acenar, comemorar).
+- **Comunicação**: chat global e de proximidade; (fases avançadas) palanque com voz ao vivo; som ambiente por proximidade.
+- **Itens**: bandeiras, cartazes personalizados (com moderação), spray/pixação efêmera.
+- **Veículos**: moto, carro, carro de som.
+- **Telões**: leilão — quem paga mais exibe; lance superado vira crédito.
+- **Superchat**: nome + mensagem + valor, exibido em destaque.
+- **Moderação**: painel de equipe; silenciar, remover, banir por hash de IP; verificação de conteúdo antes de cobrar/exibir.
+
+---
+
+## 4. Multiplayer: Supabase Realtime vs. servidor dedicado
+
+- **MVP (Supabase Realtime)**: usar *Presence* (quem está online, por time) e *Broadcast* (posição/emote/chat). Simples, sem servidor próprio, cabe na Vercel + Supabase. Limitação: não é autoritativo — validar o que der no cliente e no banco (RLS), e aceitar que posição é "best effort".
+- **Escala (servidor autoritativo)**: quando precisar de anti-cheat, interest management e salas (200–300 jogadores), subir um servidor Node (ex.: Fly.io) com WebSocket, mantendo o Supabase para dados/auth/pagamentos. **A Vercel não serve WebSocket persistente** — por isso o servidor de jogo fica fora dela.
+
+---
+
+## 5. Contas, pagamentos e e-mail
+
+### Login (Google apenas, Supabase Auth)
+- Provider Google habilitado no Supabase; redirect para a Vercel.
+- Guardar só `sub` (id Google) + e-mail verificado; nome vira sugestão de apelido editável.
+- Sem e-mail/senha → nada de "confirmar e-mail" nem "recuperar conta".
+
+### Pagamentos (Mercado Pago, Pix)
+1. Cliente autenticado + captcha escolhe item → Edge Function cria pagamento Pix no Mercado Pago → retorna QR Code / copia-e-cola.
+2. **Webhook** do Mercado Pago (Edge Function) confirma → marca `orders.status = paid` → cria `entitlement` → notifica cliente via Realtime.
+3. **Idempotência** pela referência do pagamento (`external_reference` / id MP). Nunca liberar item sem webhook confirmado.
+4. Guardar segredos (`MP_ACCESS_TOKEN`, webhook secret) só no Supabase/Vercel (env), nunca no cliente nem no repo.
+
+### E-mail (Resend)
+- Recibos de compra e avisos via Edge Function chamando a API da Resend.
+- Chave `RESEND_API_KEY` só no servidor.
+
+### Modelo de dados (mínimo, Postgres/Supabase)
+- `profiles` (id = auth.uid, google_sub, nickname, team, created_at)
+- `avatars` (user_id, model_id, team, shirt, appearance)
+- `catalog_items` (id, kind, price_cents, team_restriction)
+- `orders` (id, user_id, item_id, amount_cents, mp_payment_id, external_reference, status, created_at)
+- `entitlements` (user_id, item_id, source, granted_by, created_at)
 - `user_credits` (user_id, balance_cents)
-- `superchats` (id, name, message, amount_cents, voice, status)
-- `spray_cartridges` (user_id, opened_count, remaining_in_current)
+- `custom_signs` (id, user_id, image_url, text, status, credit_used)
+- `billboard_bids` (id, billboard_id, user_id, media_url, link, amount_cents, status)
+- `superchats` (id, name, message, amount_cents, status)
 - `moderation_log` (actor, target, action, reason, created_at)
-- `stage_sessions` (user_id, stage_id, started_at, duration)
 
-**Não persistir**: chat, posições, pixações, IP cru.
-
-### Protocolo em tempo real (mensagens)
-- `join {team, avatar}` / `leave`
-- `move {x, y, dir}` (cliente envia input; servidor autoritativo; ~10–20 ticks/s)
-- `emote {type}`
-- `chat {scope: global|near, text}`
-- `equip {item}` / `vehicle_enter|exit`
-- `spray_paint {cells}` / `spray_erase`
-- `music_play {track}`
-- `billboard_update` (broadcast quando leilão muda)
-- `superchat` (broadcast + URL do áudio TTS)
-- `team_score` (broadcast periódico)
-- Mod: `mute`, `ban_ip`, `remove`, `confiscate_spray`
-
-### Escala
-- **Interest management** por grade/área: só enviar entidades próximas.
-- **Sharding** da avenida em salas/instâncias quando lotar (ex.: 200–300 jogadores por sala).
-- Delta compression; snapshots binários (MessagePack).
+**Não persistir**: chat, posições, pixações, IP cru. **RLS ligada** em todas as tabelas; nunca expor `service_role` ao cliente.
 
 ---
 
-## 4. Fluxos críticos
+## 6. Personagens e assets 3D
 
-**Compra via Pix**
-1. Usuário logado + captcha escolhe item → API cria cobrança Woovi → retorna QR Code/copia-e-cola.
-2. Webhook Woovi confirma → `orders.status = paid` → cria `entitlement` → notifica cliente via WS.
-3. Idempotência pelo `pix_ref`.
-
-**Cartaz / telão personalizado**
-1. Upload → Cloud Vision (SafeSearch) + LLM (texto/contexto) → `pending`.
-2. Se aprovado automaticamente ou por humano → libera Pix (ou consome crédito).
-3. Rejeitado não gasta crédito.
-
-**Leilão de telão**
-- Lance > lance atual → vence; anterior recebe valor como `user_credits`.
-- Definir duração mínima de exibição por lance.
-
-**Superchat**
-- Moderação de texto → Pix → TTS → broadcast.
+- Formato **glTF/GLB**, low-poly estilizado, otimizado para web/mobile (Draco/meshopt, polycount baixo, texturas pequenas).
+- Preferir **CC0 / domínio público**; se CC-BY, registrar a atribuição em `CREDITS.md`.
+- Fontes candidatas (o agente de pesquisa está confirmando licenças — ver relatório):
+  Quaternius (CC0), Kenney.nl (CC0), Poly Pizza (agregador), KayKit, Mixamo (animações de caminhada/rig).
+- **Regra**: nenhum asset entra sem licença compatível com **uso comercial** (o jogo cobra via Pix). Atribuições em `CREDITS.md`.
+- Avatares não devem representar **pessoas reais** (ver §8).
 
 ---
 
-## 5. Plano por fases
+## 7. Processo por etapa (agentes obrigatórios)
 
-**Fase 0 — Fundação (1 semana)**
-- Repo monorepo (cliente, servidor de jogo, API, shared types).
-- Mapa simples da avenida, 1 personagem, movimento local.
+A cada etapa de desenvolvimento (cada fase/feature entregue), rodar **três** revisões por subagente antes de considerar a etapa concluída:
 
-**Fase 1 — MVP multiplayer (2–3 semanas)**
-- Servidor autoritativo, sync de jogadores, apelido, escolha de time.
-- Chat global e de proximidade; emotes; placar por time.
-- Deploy com Cloudflare. Teste com 100 bots.
+1. **Agente de bugs** — lê o código novo/alterado e procura defeitos nas funções (regressões, casos de borda, erros de estado, tipos). Pode usar `/code-review`. Entrega lista de achados priorizada.
+2. **Agente de segurança (strix)** — usa a skill `strix-pentest` **somente contra o nosso próprio app** (local ou nosso deploy na Vercel/Supabase) e/ou revisão do nosso código. **NUNCA** mirar `manifestacao.com` nem qualquer alvo de terceiros — isso seria ataque não autorizado. Requer Docker/alvo próprio no ar; enquanto não houver, usar `/security-review` sobre o nosso código. Foco: RLS, webhooks de pagamento, segredos, injeção, autorização.
+3. **Agente de visual (taste)** — usa a skill `taste-skill` (e `impeccable`/`web-design-guidelines` quando couber) para manter a página com bom acabamento: hierarquia, tipografia, espaçamento, consistência, responsivo.
 
-**Fase 2 — Conteúdo e identidade (2 semanas)**
-- Personagens, camisas, bandeiras do catálogo.
-- Veículos (moto, carro, carro de som).
-- Som ambiente por proximidade.
-
-**Fase 3 — Contas e pagamentos (2 semanas)**
-- Auth e-mail/Google (+ Kick opcional), sessões em cookie.
-- Integração Woovi/OpenPix + webhook; inventário; Premium; passes.
-
-**Fase 4 — Conteúdo gerado por usuários (2–3 semanas)**
-- Spray com cartuchos, expiração e zonas proibidas.
-- Cartazes personalizados com moderação automática.
-- Telões com leilão e créditos; superchat com TTS.
-
-**Fase 5 — Moderação e voz (2 semanas)**
-- Painel admin (online, chat, denúncias, mute/ban).
-- Palanque com LiveKit, liberação por moderador.
-- "Personagem sempre conectado" do Premium.
-
-**Fase 6 — Lançamento**
-- Páginas Sobre, Termos, Privacidade (LGPD: DPO, direitos art. 18).
-- Teste de carga, anti-cheat básico, rate limits.
-- PWA, OG image, SEO.
+Regras dos agentes:
+- Rodar em paralelo quando não houver dependência entre eles.
+- Achados viram tarefas; corrigir e revalidar antes de seguir.
+- Segredos e chaves nunca aparecem em logs, prompts ou commits.
 
 ---
 
-## 6. Regras para o Claude neste projeto
-- TypeScript estrito em tudo; tipos de mensagem em `shared/`.
-- Servidor **sempre autoritativo**: nunca confiar em posição, saldo ou item enviado pelo cliente.
-- Nada de chat/posição/pixação em banco.
-- Todo conteúdo enviado por usuário passa por moderação **antes** de cobrar e de exibir.
-- Pagamentos idempotentes; nunca liberar item sem webhook confirmado.
-- Mobile-first: testar em viewport 380px e em CPU limitada.
-- Textos de interface em pt-BR.
+## 8. Plano por fases
+
+- **Fase 0 — Fundação** ✅ monorepo, tipos compartilhados, protótipo de movimento, deploy base na Vercel.
+- **Fase 1 — Cliente 3D + multiplayer MVP**: cena 3D (avenida + avatar glTF), controle mobile/teclado, Supabase Realtime (presence/broadcast), apelido, time, placar, chat. Rodar os 3 agentes (§7).
+- **Fase 2 — Conteúdo e identidade**: catálogo de personagens/camisas/bandeiras, veículos (moto, carro, carro de som), som por proximidade.
+- **Fase 3 — Contas e pagamentos**: Google OAuth (Supabase), Mercado Pago Pix + webhook, inventário/entitlements, Premium, recibos via Resend.
+- **Fase 4 — Conteúdo do usuário**: spray efêmero, cartazes com moderação, telões com leilão/créditos, superchat.
+- **Fase 5 — Moderação e voz**: painel admin, palanque com voz, "personagem sempre conectado" (Premium).
+- **Fase 6 — Lançamento**: Sobre/Termos/Privacidade (LGPD), teste de carga, anti-cheat básico, rate limits, PWA/SEO.
+
+Em cada fase: entregar → rodar agentes de bugs/segurança/visual (§7) → corrigir → commit/push na `main`.
 
 ---
 
-## 7. Riscos e pontos legais
-- **Políticos reais como personagens**: risco de direito de imagem e de **legislação eleitoral** (TSE) em período de campanha. Avaliar com advogado; preferir caricaturas fictícias.
-- **Marca/arte do original**: não reutilizar.
-- **LGPD**: controlador definido, DPO, exclusão de conta, retenção mínima.
-- **Menores**: idade mínima e consentimento dos responsáveis para compras.
+## 9. Riscos e pontos legais
+
+- **Pessoas reais como personagens**: evitar (direito de imagem + legislação eleitoral/TSE). Usar caricaturas fictícias e times neutros.
+- **Marca/arte/código do original**: não reutilizar.
+- **Licença de assets 3D**: só compatível com uso comercial; atribuição em `CREDITS.md`.
+- **LGPD**: controlador/DPO definidos, exclusão de conta, retenção mínima, só dados necessários do Google.
 - **CDC**: direito de arrependimento em compras digitais.
-- **Anúncios com link**: risco de golpe — moderar e permitir remoção.
+- **Pagamentos**: idempotência, webhook confirmado, segredos fora do cliente.
+- **Conteúdo do usuário**: moderar antes de cobrar e de exibir; permitir remoção e denúncia.
 
 ---
 
-## 8. Decisões em aberto
-- Gratuito sem login ou acesso pago (o original mudou para R$10 em contas novas)?
-- Quais times/lados e se haverá personagens de pessoas reais.
-- Avenida/cidade escolhida e estilo visual (pixel art, isométrico, low-poly 2D).
-- Phaser vs PixiJS; Colyseus vs servidor próprio.
-- Supabase vs API própria.
+## 10. Regras para o Claude neste projeto
+
+- TypeScript estrito em tudo; tipos de protocolo em `packages/shared`.
+- Servidor/RLS sempre autoritativos; nunca confiar no cliente.
+- Nada de chat/posição/pixação em banco.
+- Pagamentos idempotentes; item só após webhook confirmado.
+- Segredos só em env do Supabase/Vercel; nunca no repo.
+- Mobile-first; pt-BR na interface.
+- Seguir o §0 (git) e o §7 (agentes por etapa) sempre.
