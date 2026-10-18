@@ -5,6 +5,7 @@
  * autoritativo dedicado, quando existir, usa os tipos de `protocol.ts`.
  */
 
+import type { CharacterId, FlagId, VehicleId } from "./catalog.js";
 import type { TeamId } from "./teams.js";
 import type { Facing } from "./world.js";
 
@@ -17,14 +18,18 @@ export interface PresenceState {
   nickname: string;
   team: TeamId;
   shirt: number;
+  character: CharacterId;
+  flag: FlagId;
 }
 
-/** Evento de broadcast: movimento de um jogador. */
+/** Evento de broadcast: movimento + estado dinâmico de um jogador. */
 export interface MoveBroadcast {
   id: string;
   x: number;
   z: number;
   facing: Facing;
+  vehicle: VehicleId;
+  flag: FlagId;
 }
 
 /** Evento de broadcast: mensagem de chat (efêmera). */

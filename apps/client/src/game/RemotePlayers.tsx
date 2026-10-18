@@ -1,6 +1,8 @@
 import { useRef } from "react";
 import { Group } from "three";
 import { useFrame } from "@react-three/fiber";
+import { Avatar } from "./Avatar.js";
+import { modelUrlFor } from "./models.js";
 import type { RemotePlayer } from "../net/useAvenueRealtime.js";
 
 interface RemotePlayersProps {
@@ -9,8 +11,8 @@ interface RemotePlayersProps {
 }
 
 /**
- * Renderiza os outros jogadores e interpola suas posições a cada frame em
- * direção ao último valor recebido via broadcast (suaviza a baixa taxa de rede).
+ * Renderiza os outros jogadores (corpo + bandeira + veículo) e interpola suas
+ * posições a cada frame em direção ao último valor recebido via broadcast.
  */
 export function RemotePlayers({ ids, playersRef }: RemotePlayersProps) {
   const groups = useRef<Map<string, Group>>(new Map());
@@ -32,22 +34,18 @@ export function RemotePlayers({ ids, playersRef }: RemotePlayersProps) {
         const p = playersRef.current.get(id);
         if (!p) return null;
         return (
-          <group
+          <Avatar
             key={id}
             ref={(g) => {
               if (g) groups.current.set(id, g);
               else groups.current.delete(id);
             }}
-          >
-            <mesh position={[0, 0.9, 0]} castShadow>
-              <capsuleGeometry args={[0.35, 0.8, 4, 12]} />
-              <meshStandardMaterial color={p.shirt} />
-            </mesh>
-            <mesh position={[0, 1.7, 0]} castShadow>
-              <sphereGeometry args={[0.28, 16, 16]} />
-              <meshStandardMaterial color={0xf2d2b6} />
-            </mesh>
-          </group>
+            color={p.shirt}
+            name={p.nickname}
+            flag={p.flag}
+            vehicle={p.vehicle}
+            modelUrl={modelUrlFor(p.character)}
+          />
         );
       })}
     </>

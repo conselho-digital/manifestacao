@@ -1,20 +1,24 @@
+import { useState } from "react";
 import { Canvas } from "@react-three/fiber";
-import type { AvatarConfig } from "@manifestacao/shared";
+import type { AvatarConfig, VehicleId } from "@manifestacao/shared";
 import { Scenery } from "./Scenery.js";
 import { Player } from "./Player.js";
 import { RemotePlayers } from "./RemotePlayers.js";
 import { useInput } from "./useInput.js";
+import { modelUrlFor } from "./models.js";
 import { useAvenueRealtime } from "../net/useAvenueRealtime.js";
 import { Joystick } from "../ui/Joystick.js";
 import { Hud } from "../ui/Hud.js";
+import { VehiclePicker } from "../ui/VehiclePicker.js";
 
 /**
  * Cena de jogo: avenida 3D, jogador local, jogadores remotos (Realtime),
- * HUD (placar + chat) e joystick de toque.
+ * HUD (placar + chat), seletor de veículo e joystick de toque.
  */
 export function Game({ avatar }: { avatar: AvatarConfig }) {
   const { inputRef, setJoystick } = useInput();
   const net = useAvenueRealtime(avatar);
+  const [vehicle, setVehicle] = useState<VehicleId>("nenhum");
 
   return (
     <>
@@ -33,6 +37,9 @@ export function Game({ avatar }: { avatar: AvatarConfig }) {
         <Player
           color={avatar.shirt}
           name={avatar.nickname}
+          flag={avatar.flag}
+          vehicle={vehicle}
+          modelUrl={modelUrlFor(avatar.character)}
           inputRef={inputRef}
           onMove={net.sendMove}
         />
@@ -40,6 +47,7 @@ export function Game({ avatar }: { avatar: AvatarConfig }) {
       </Canvas>
 
       <Joystick onMove={setJoystick} />
+      <VehiclePicker value={vehicle} onChange={setVehicle} />
       <Hud
         online={net.online}
         scores={net.scores}

@@ -5,13 +5,17 @@ import {
   BROADCAST,
   MAX_CHAT_LENGTH,
   TEAM_IDS,
+  isFlagId,
   isTeamId,
+  isVehicleId,
   type AvatarConfig,
   type ChatBroadcast,
   type Facing,
+  type FlagId,
   type MoveBroadcast,
   type PresenceState,
   type TeamId,
+  type VehicleId,
 } from "@manifestacao/shared";
 import { getSupabase } from "./supabase.js";
 
@@ -19,6 +23,7 @@ export interface RemotePlayer extends PresenceState {
   x: number;
   z: number;
   facing: Facing;
+  vehicle: VehicleId;
 }
 
 /** Mensagem de chat com chave local estável para render no React. */
@@ -73,6 +78,8 @@ export function useAvenueRealtime(self: AvatarConfig) {
       nickname: self.nickname,
       team: self.team,
       shirt: self.shirt,
+      character: self.character,
+      flag: self.flag,
     };
 
     const channel = supabase.channel(AVENUE_CHANNEL, {
@@ -90,7 +97,7 @@ export function useAvenueRealtime(self: AvatarConfig) {
             seen.add(p.id);
             if (p.team in next) next[p.team] += 1;
             if (p.id !== selfId && !playersRef.current.has(p.id)) {
-              playersRef.current.set(p.id, { ...p, x: 0, z: 0, facing: "down" });
+              playersRef.current.set(p.id, { ...p, x: 0, z: 0, facing: "down", vehicle: "nenhum" });
             }
           }
         }
@@ -109,6 +116,8 @@ export function useAvenueRealtime(self: AvatarConfig) {
           existing.x = m.x;
           existing.z = m.z;
           existing.facing = m.facing;
+          if (isVehicleId(m.vehicle)) existing.vehicle = m.vehicle;
+          if (isFlagId(m.flag)) existing.flag = m.flag;
         }
       })
       .on("broadcast", { event: BROADCAST.chat }, ({ payload }) => {
@@ -126,13 +135,13 @@ export function useAvenueRealtime(self: AvatarConfig) {
       void supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [selfId, self.nickname, self.team, self.shirt]);
+  }, [selfId, self.nickname, self.team, self.shirt, self.character, self.flag]);
 
   const sendMove = useCallback(
-    (x: number, z: number, facing: Facing) => {
+    (x: number, z: number, facing: Facing, vehicle: VehicleId, flag: FlagId) => {
       const channel = channelRef.current;
       if (!channel) return;
-      const payload: MoveBroadcast = { id: selfId, x, z, facing };
+      const payload: MoveBroadcast = { id: selfId, x, z, facing, vehicle, flag };
       void channel.send({ type: "broadcast", event: BROADCAST.move, payload });
     },
     [selfId],

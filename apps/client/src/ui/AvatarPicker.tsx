@@ -1,11 +1,20 @@
 import { useState } from "react";
 import {
+  CHARACTERS,
+  CHARACTER_IDS,
+  FLAGS,
+  FLAG_IDS,
   MAX_NICKNAME_LENGTH,
   TEAMS,
   TEAM_IDS,
+  flagColor,
   hexColor,
+  isCharacterId,
+  isFlagId,
   isTeamId,
   type AvatarConfig,
+  type CharacterId,
+  type FlagId,
   type TeamId,
 } from "@manifestacao/shared";
 
@@ -20,16 +29,33 @@ function loadSaved(): Partial<AvatarConfig> {
   }
 }
 
-/** Entrada em 1 clique: escolher lado e apelido. Visual salvo no localStorage. */
+const chip = (selected: boolean, accent?: string): React.CSSProperties => ({
+  minHeight: 40,
+  padding: "8px 14px",
+  fontSize: 14,
+  fontWeight: 700,
+  borderRadius: "var(--r-md)",
+  cursor: "pointer",
+  border: `2px solid ${accent ?? "var(--line)"}`,
+  background: selected ? (accent ?? "var(--surface-2)") : "var(--surface)",
+  color: selected && accent ? "#15181d" : "var(--ink)",
+  transition: "transform .08s, background .12s",
+});
+
+/** Entrada em 1 clique: time, apelido, personagem e bandeira. */
 export function AvatarPicker({ onReady }: { onReady: (a: AvatarConfig) => void }) {
   const saved = loadSaved();
   const [team, setTeam] = useState<TeamId>(isTeamId(saved.team) ? saved.team : TEAM_IDS[0]);
   const [nickname, setNickname] = useState(saved.nickname ?? "");
+  const [character, setCharacter] = useState<CharacterId>(
+    isCharacterId(saved.character) ? saved.character : "comum",
+  );
+  const [flag, setFlag] = useState<FlagId>(isFlagId(saved.flag) ? saved.flag : "nenhuma");
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     const name = nickname.trim().slice(0, MAX_NICKNAME_LENGTH) || "Anônimo";
-    const avatar: AvatarConfig = { team, nickname: name, shirt: TEAMS[team].color };
+    const avatar: AvatarConfig = { team, nickname: name, shirt: TEAMS[team].color, character, flag };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(avatar));
     } catch {
@@ -48,10 +74,11 @@ export function AvatarPicker({ onReady }: { onReady: (a: AvatarConfig) => void }
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "center",
-        gap: 20,
+        gap: 16,
         padding:
-          "max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left))",
+          "max(24px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left))",
         textAlign: "center",
+        overflowY: "auto",
       }}
     >
       <h1
@@ -67,9 +94,6 @@ export function AvatarPicker({ onReady }: { onReady: (a: AvatarConfig) => void }
       >
         Entre na avenida
       </h1>
-      <p style={{ margin: 0, color: "var(--ink-dim)", fontSize: "var(--t-body)" }}>
-        Escolha o seu lado e o seu apelido.
-      </p>
 
       <input
         value={nickname}
@@ -89,41 +113,42 @@ export function AvatarPicker({ onReady }: { onReady: (a: AvatarConfig) => void }
         }}
       />
 
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", justifyContent: "center" }}>
-        {TEAM_IDS.map((id) => {
-          const t = TEAMS[id];
-          const selected = id === team;
+      <Label>Lado</Label>
+      <Row>
+        {TEAM_IDS.map((id) => (
+          <button key={id} type="button" aria-pressed={id === team} onClick={() => setTeam(id)} style={chip(id === team, hexColor(TEAMS[id].color))}>
+            {TEAMS[id].label}
+          </button>
+        ))}
+      </Row>
+
+      <Label>Personagem</Label>
+      <Row>
+        {CHARACTER_IDS.map((id) => (
+          <button key={id} type="button" aria-pressed={id === character} onClick={() => setCharacter(id)} style={chip(id === character)}>
+            {CHARACTERS[id].label}
+          </button>
+        ))}
+      </Row>
+
+      <Label>Bandeira</Label>
+      <Row>
+        {FLAG_IDS.map((id) => {
+          const accent = id === "nenhuma" ? undefined : hexColor(flagColor(id, TEAMS[team].color));
           return (
-            <button
-              key={id}
-              type="button"
-              aria-pressed={selected}
-              onClick={() => setTeam(id)}
-              style={{
-                minWidth: 96,
-                minHeight: 44,
-                padding: "12px 16px",
-                fontSize: 15,
-                fontWeight: 700,
-                borderRadius: "var(--r-md)",
-                cursor: "pointer",
-                border: `2px solid ${hexColor(t.color)}`,
-                background: selected ? hexColor(t.color) : "var(--surface)",
-                color: selected ? "#15181d" : "var(--ink)",
-                transition: "transform .08s, background .12s",
-              }}
-            >
-              {t.label}
+            <button key={id} type="button" aria-pressed={id === flag} onClick={() => setFlag(id)} style={chip(id === flag, accent)}>
+              {FLAGS[id].label}
             </button>
           );
         })}
-      </div>
+      </Row>
 
       <button
         type="submit"
         style={{
-          minHeight: 44,
-          padding: "14px 32px",
+          marginTop: 8,
+          minHeight: 48,
+          padding: "14px 36px",
           fontSize: 17,
           fontWeight: 800,
           borderRadius: "var(--r-lg)",
@@ -138,4 +163,16 @@ export function AvatarPicker({ onReady }: { onReady: (a: AvatarConfig) => void }
       </button>
     </form>
   );
+}
+
+function Label({ children }: { children: React.ReactNode }) {
+  return (
+    <span style={{ fontSize: "var(--t-ui)", color: "var(--ink-dim)", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+      {children}
+    </span>
+  );
+}
+
+function Row({ children }: { children: React.ReactNode }) {
+  return <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "center", maxWidth: "min(420px, 92vw)" }}>{children}</div>;
 }

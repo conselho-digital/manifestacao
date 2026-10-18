@@ -6,15 +6,18 @@
  * INPUT (intenção); o servidor responde com ESTADO (verdade).
  */
 
+import type { CharacterId, FlagId } from "./catalog.js";
 import type { TeamId } from "./teams.js";
 import type { Facing, MoveInput } from "./world.js";
 
-/** Avatar escolhido pelo jogador (Fase 0: só time + apelido + cor da camisa). */
+/** Avatar escolhido pelo jogador: time, apelido, visual, personagem e bandeira. */
 export interface AvatarConfig {
   team: TeamId;
   nickname: string;
-  /** Cor da camisa em hex (#rrggbb). */
+  /** Cor da camisa (0xrrggbb numérico). */
   shirt: number;
+  character: CharacterId;
+  flag: FlagId;
 }
 
 /** Estado de um jogador visível na avenida, como o servidor o reporta. */
