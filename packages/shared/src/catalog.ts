@@ -1,9 +1,10 @@
 /**
- * Catálogo de conteúdo (Fase 2): personagens, bandeiras e veículos.
+ * Catálogo de conteúdo: personagens, bandeiras, veículos e passes.
  *
- * Na Fase 2 a seleção é livre (identidade visual). A posse paga (entitlements)
- * e os preços só passam a valer na Fase 3. Os preços aqui são referência e
- * alimentam o seed de `catalog_items`.
+ * A partir da Fase 3 a posse paga (entitlements) passa a ser exigida de
+ * verdade para os itens com preço (hoje: carro de som e o passe Premium).
+ * Personagens/bandeiras seguem de seleção livre por enquanto — o preço é
+ * só referência até a Fase 4 cobrir moderação/posse de conteúdo cosmético.
  */
 
 import type { TeamId } from "./teams.js";
@@ -96,10 +97,46 @@ export function isVehicleId(v: unknown): v is VehicleId {
   return typeof v === "string" && Object.hasOwn(VEHICLES, v);
 }
 
+/** Veículos que exigem posse (entitlement `vehicle:<id>`) para selecionar. */
+export function vehicleRequiresEntitlement(id: VehicleId): boolean {
+  return VEHICLES[id].priceCents > 0;
+}
+
+// ── Passes ──────────────────────────────────────────────────────────────
+export type PassId = "premium";
+
+export interface Pass {
+  id: PassId;
+  label: string;
+  description: string;
+  priceCents: number;
+}
+
+export const PASSES: Record<PassId, Pass> = {
+  premium: {
+    id: "premium",
+    label: "Premium",
+    description:
+      "Personagem sempre conectado, moto, carro, caixa de som básica inclusa (libera o carro de som), spray ilimitado e 5 cartazes.",
+    priceCents: 1000,
+  },
+};
+
+export const PASS_IDS: PassId[] = ["premium"];
+
+export function isPassId(v: unknown): v is PassId {
+  return typeof v === "string" && Object.hasOwn(PASSES, v);
+}
+
+/** O passe Premium inclui o carro de som (caixa de som básica). */
+export function hasVehicleViaPremium(vehicle: VehicleId, owned: ReadonlySet<string>): boolean {
+  return vehicle === "carro_som" && owned.has("pass:premium");
+}
+
 /** Linha do catálogo para o seed SQL de `catalog_items`. */
 export interface CatalogRow {
   id: string;
-  kind: "character" | "flag" | "vehicle";
+  kind: "character" | "flag" | "vehicle" | "pass";
   label: string;
   priceCents: number;
   teamRestriction: TeamId | null;
@@ -115,5 +152,7 @@ export function catalogRows(): CatalogRow[] {
   for (const v of Object.values(VEHICLES))
     if (v.id !== "nenhum")
       rows.push({ id: `vehicle:${v.id}`, kind: "vehicle", label: v.label, priceCents: v.priceCents, teamRestriction: null });
+  for (const p of Object.values(PASSES))
+    rows.push({ id: `pass:${p.id}`, kind: "pass", label: p.label, priceCents: p.priceCents, teamRestriction: null });
   return rows;
 }

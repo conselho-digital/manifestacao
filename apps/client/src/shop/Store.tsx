@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { CHARACTERS, FLAGS, VEHICLES, isCharacterId, isFlagId, isVehicleId } from "@manifestacao/shared";
-import { useAuth, signInWithGoogle, signOut } from "../auth/useAuth.js";
+import type { Session } from "@supabase/supabase-js";
+import { CHARACTERS, FLAGS, PASSES, VEHICLES, isCharacterId, isFlagId, isPassId, isVehicleId } from "@manifestacao/shared";
+import { signInWithGoogle, signOut } from "../auth/useAuth.js";
 import { useCatalog, type CatalogItem } from "./useCatalog.js";
-import { useEntitlements } from "./useEntitlements.js";
 import { createPixCharge, type PixCharge } from "../net/payments.js";
 import { isOnlineEnabled } from "../config/env.js";
 
@@ -16,11 +16,23 @@ function itemLabel(item: CatalogItem): string {
   if (item.kind === "character" && isCharacterId(slug)) return CHARACTERS[slug].label;
   if (item.kind === "flag" && isFlagId(slug)) return FLAGS[slug].label;
   if (item.kind === "vehicle" && isVehicleId(slug)) return VEHICLES[slug].label;
+  if (item.kind === "pass" && isPassId(slug)) return PASSES[slug].label;
   return item.label;
+}
+
+/** Descrição opcional (hoje só o passe Premium tem). */
+function itemDescription(item: CatalogItem): string | null {
+  const [, slug] = item.id.split(":");
+  if (item.kind === "pass" && isPassId(slug)) return PASSES[slug].description;
+  return null;
 }
 
 interface StoreProps {
   onClose: () => void;
+  session: Session | null;
+  authLoading: boolean;
+  owned: ReadonlySet<string>;
+  refresh: () => Promise<void>;
 }
 
 /**
@@ -28,11 +40,12 @@ interface StoreProps {
  * Pix via Edge Function e mostra o QR Code até a compra ser confirmada
  * (o webhook do Mercado Pago libera o item; aqui só fazemos polling do
  * próprio inventário — nunca liberamos nada no cliente sem confirmação).
+ *
+ * Sessão/posses vêm de cima (Game.tsx) para serem compartilhadas com o
+ * gating do VehiclePicker, em vez de cada um buscar por conta própria.
  */
-export function Store({ onClose }: StoreProps) {
-  const { session, loading: authLoading } = useAuth();
+export function Store({ onClose, session, authLoading, owned, refresh }: StoreProps) {
   const { items, loading: catalogLoading } = useCatalog();
-  const { owned, refresh } = useEntitlements(session);
   const [charge, setCharge] = useState<PixCharge | null>(null);
   const [pendingItem, setPendingItem] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -167,14 +180,20 @@ export function Store({ onClose }: StoreProps) {
                     background: "var(--surface-2)",
                   }}
                 >
-                  <div>
+                  <div style={{ maxWidth: "70%" }}>
                     <div style={{ fontWeight: 700, fontSize: "var(--t-body)" }}>{itemLabel(item)}</div>
+                    {itemDescription(item) && (
+                      <div style={{ fontSize: "var(--t-ui)", color: "var(--ink-dim)", marginTop: 2 }}>
+                        {itemDescription(item)}
+                      </div>
+                    )}
                     <div
                       style={{
                         fontSize: "var(--t-ui)",
                         // Preço é informação de decisão: só fica discreto quando grátis.
                         color: free ? "var(--ink-dim)" : "var(--ink)",
                         fontWeight: free ? 400 : 600,
+                        marginTop: 2,
                       }}
                     >
                       {free ? "Grátis" : formatBRL(item.price_cents)}

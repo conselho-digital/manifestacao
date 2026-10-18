@@ -3,7 +3,7 @@ import { getSupabase } from "../net/supabase.js";
 
 export interface CatalogItem {
   id: string;
-  kind: "character" | "flag" | "vehicle";
+  kind: "character" | "flag" | "vehicle" | "pass";
   label: string;
   price_cents: number;
 }

@@ -7,6 +7,8 @@ import { RemotePlayers } from "./RemotePlayers.js";
 import { useInput } from "./useInput.js";
 import { modelUrlFor } from "./models.js";
 import { useAvenueRealtime } from "../net/useAvenueRealtime.js";
+import { useAuth } from "../auth/useAuth.js";
+import { useEntitlements } from "../shop/useEntitlements.js";
 import { Joystick } from "../ui/Joystick.js";
 import { Hud } from "../ui/Hud.js";
 import { VehiclePicker } from "../ui/VehiclePicker.js";
@@ -25,6 +27,11 @@ export function Game({ avatar }: { avatar: AvatarConfig }) {
   // joystick já fica coberto pelo overlay da loja (zIndex maior).
   const { inputRef, setJoystick } = useInput(!storeOpen);
   const net = useAvenueRealtime(avatar);
+
+  // Sessão/posses compartilhadas entre o gating do VehiclePicker e a Store
+  // (uma única fonte, em vez de cada um buscar por conta própria).
+  const { session, loading: authLoading } = useAuth();
+  const { owned, refresh } = useEntitlements(session);
 
   return (
     <>
@@ -55,7 +62,12 @@ export function Game({ avatar }: { avatar: AvatarConfig }) {
       <Joystick onMove={setJoystick} />
       <TopRightPanel>
         <StoreButton onClick={() => setStoreOpen(true)} />
-        <VehiclePicker value={vehicle} onChange={setVehicle} />
+        <VehiclePicker
+          value={vehicle}
+          onChange={setVehicle}
+          owned={owned}
+          onLocked={() => setStoreOpen(true)}
+        />
       </TopRightPanel>
       <Hud
         online={net.online}
@@ -63,7 +75,15 @@ export function Game({ avatar }: { avatar: AvatarConfig }) {
         chatLog={net.chatLog}
         onChat={net.sendChat}
       />
-      {storeOpen && <Store onClose={() => setStoreOpen(false)} />}
+      {storeOpen && (
+        <Store
+          onClose={() => setStoreOpen(false)}
+          session={session}
+          authLoading={authLoading}
+          owned={owned}
+          refresh={refresh}
+        />
+      )}
     </>
   );
 }
