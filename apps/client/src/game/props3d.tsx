@@ -1,20 +1,59 @@
+import { useMemo } from "react";
+import { Shape } from "three";
 import { useGLTF } from "@react-three/drei";
 import type { VehicleId } from "@manifestacao/shared";
 import { useProximitySound } from "./ProximitySound.js";
 import { useUserGestureUnlocked } from "./useUserGesture.js";
 
-/** Bandeira carregada ao lado do avatar: mastro + tecido colorido. */
-export function Flag3D({ color }: { color: number }) {
+export type FlagEmblem = "star-burst";
+
+/**
+ * Emblema desenhado por código (nunca uma imagem importada): um polígono de
+ * N pontas com raio alternado (externo/interno) — uma estrela "sparkle" de
+ * um único traço, não duas estrelas sobrepostas (que formariam um hexagrama,
+ * símbolo real). Deliberadamente diferente de qualquer bandeira partidária
+ * conhecida (nº de pontas e estilo distintos).
+ */
+function StarBurst({ color = 0xf2f4f7, points = 6, size = 0.2 }: { color?: number; points?: number; size?: number }) {
+  const shape = useMemo(() => {
+    const outer = size;
+    const inner = size * 0.42;
+    const s = new Shape();
+    for (let i = 0; i < points * 2; i++) {
+      const r = i % 2 === 0 ? outer : inner;
+      const angle = (i / (points * 2)) * Math.PI * 2 - Math.PI / 2;
+      const x = Math.cos(angle) * r;
+      const y = Math.sin(angle) * r;
+      if (i === 0) s.moveTo(x, y);
+      else s.lineTo(x, y);
+    }
+    s.closePath();
+    return s;
+  }, [points, size]);
+
+  return (
+    <mesh position={[0, 0, 0.002]}>
+      <shapeGeometry args={[shape]} />
+      <meshStandardMaterial color={color} side={2} />
+    </mesh>
+  );
+}
+
+/** Bandeira carregada ao lado do avatar: mastro, tecido colorido e emblema opcional. */
+export function Flag3D({ color, emblem }: { color: number; emblem?: FlagEmblem }) {
   return (
     <group position={[0.45, 0, 0]}>
       <mesh position={[0, 1.4, 0]}>
         <cylinderGeometry args={[0.03, 0.03, 2.8, 6]} />
         <meshStandardMaterial color={0x8a8f98} />
       </mesh>
-      <mesh position={[0.5, 2.3, 0]}>
-        <planeGeometry args={[1, 0.6]} />
-        <meshStandardMaterial color={color} side={2} />
-      </mesh>
+      <group position={[0.5, 2.3, 0]}>
+        <mesh>
+          <planeGeometry args={[1, 0.6]} />
+          <meshStandardMaterial color={color} side={2} />
+        </mesh>
+        {emblem === "star-burst" && <StarBurst />}
+      </group>
     </group>
   );
 }

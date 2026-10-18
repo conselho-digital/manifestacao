@@ -48,7 +48,9 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
         <ProceduralBody color={color} />
       )}
 
-      {flag !== "nenhuma" && <Flag3D color={flagColor(flag, color)} />}
+      {flag !== "nenhuma" && (
+        <Flag3D color={flagColor(flag, color)} emblem={flag === "vermelha" ? "star-burst" : undefined} />
+      )}
       <Vehicle3D vehicle={vehicle} />
 
       {name && (
