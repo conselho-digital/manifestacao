@@ -135,7 +135,13 @@ export function GoogleSignInButton({ onSignedIn }: GoogleSignInButtonProps) {
     }
     let cancelled = false;
     const timeout = setTimeout(() => {
-      if (!cancelled) setStatus((s) => (s === "loading" ? "fallback" : s));
+      if (cancelled) return;
+      setStatus((s) => {
+        if (s !== "loading") return s;
+        console.warn("[GIS] script/initialize não terminou a tempo, caindo pro redirect.");
+        setErrorMsg("Login rápido demorou demais, usando redirecionamento…");
+        return "fallback";
+      });
     }, GIS_LOAD_TIMEOUT_MS);
 
     // Nonce único por tentativa de login: amarra o ID token do Google a esta
@@ -206,8 +212,15 @@ export function GoogleSignInButton({ onSignedIn }: GoogleSignInButtonProps) {
         renderButton();
         setStatus("ready");
       })
-      .catch(() => {
-        if (!cancelled) setStatus("fallback");
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        // Diagnóstico: motivo exato de o GIS não ter ficado pronto (script
+        // bloqueado, renderButton rejeitado pelo navegador etc.) — sem isso,
+        // qualquer falha aqui virava um fallback silencioso, sem pista do
+        // porquê no console.
+        console.error("[GIS] falha ao inicializar o login do Google:", err);
+        setErrorMsg("Login rápido indisponível, usando redirecionamento…");
+        setStatus("fallback");
       });
 
     window.addEventListener("resize", renderButton);
@@ -252,6 +265,9 @@ export function GoogleSignInButton({ onSignedIn }: GoogleSignInButtonProps) {
         >
           Continuar com o Google
         </button>
+        {status === "fallback" && errorMsg && (
+          <p style={{ margin: "6px 0 0", fontSize: "var(--t-ui)", color: "var(--danger)" }}>{errorMsg}</p>
+        )}
       </div>
     );
   }
