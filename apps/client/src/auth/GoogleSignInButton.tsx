@@ -14,6 +14,12 @@ interface GooglePromptNotification {
   isNotDisplayed(): boolean;
   isSkippedMoment(): boolean;
   isDismissedMoment(): boolean;
+  /** Motivo exato de não ter aparecido (ex.: "suppressed_by_user", "opt_out_or_no_session") — só quando isNotDisplayed(). */
+  getNotDisplayedReason?(): string;
+  /** Motivo exato de ter sido pulado (ex.: "auto_cancel", "user_cancel", "tap_outside", "issuing_failed") — só quando isSkippedMoment(). */
+  getSkippedReason?(): string;
+  /** Motivo exato de ter sido fechado manualmente — só quando isDismissedMoment(). */
+  getDismissedReason?(): string;
 }
 interface GoogleAccountsId {
   initialize(config: {
@@ -89,7 +95,9 @@ interface GoogleSignInButtonProps {
  * redirect de página inteira (`signInWithGoogle`).
  */
 export function GoogleSignInButton({ onSignedIn }: GoogleSignInButtonProps) {
-  const [status, setStatus] = useState<"loading" | "ready" | "fallback" | "signing-in" | "error">("loading");
+  const [status, setStatus] = useState<
+    "loading" | "ready" | "fallback" | "fallback-reason" | "signing-in" | "error"
+  >("loading");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   // Nonce cru (mandado pro Supabase) — gerado uma vez por montagem/tentativa.
   const nonceRef = useRef<string | null>(null);
@@ -190,6 +198,18 @@ export function GoogleSignInButton({ onSignedIn }: GoogleSignInButtonProps) {
       // O seletor não apareceu, foi pulado ou foi fechado manualmente sem
       // escolher conta — sem fallback aqui, o clique não faria nada visível.
       if (notification.isNotDisplayed() || notification.isSkippedMoment() || notification.isDismissedMoment()) {
+        // Diagnóstico temporário: motivo exato do Google pra não mostrar o
+        // seletor (ex.: cooldown do One Tap, FedCM desabilitado no
+        // navegador, etc.) — ajuda a confirmar a causa raiz antes de cair
+        // pro redirect, que escurece esse motivo.
+        const reason =
+          notification.getNotDisplayedReason?.() ??
+          notification.getSkippedReason?.() ??
+          notification.getDismissedReason?.() ??
+          "desconhecido";
+        console.warn("[GIS] prompt não mostrado, motivo:", reason);
+        setStatus("fallback-reason");
+        setErrorMsg(`Login rápido indisponível (${reason}), usando redirecionamento…`);
         void signInWithGoogle();
       }
     });
@@ -225,7 +245,7 @@ export function GoogleSignInButton({ onSignedIn }: GoogleSignInButtonProps) {
       >
         {busy ? "Entrando…" : "Continuar com o Google"}
       </button>
-      {status === "error" && errorMsg && (
+      {(status === "error" || status === "fallback-reason") && errorMsg && (
         <p style={{ margin: "6px 0 0", fontSize: "var(--t-ui)", color: "var(--danger)" }}>{errorMsg}</p>
       )}
     </div>
