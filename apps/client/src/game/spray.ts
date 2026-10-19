@@ -23,8 +23,11 @@ export const SPRAY_MAX_MARKS = 400;
 export const SPRAY_CARTRIDGE_SIZE = 15;
 export const SPRAY_REFILL_INTERVAL_MS = 8_000;
 
-/** Distância à frente do jogador onde a marca aparece ao usar o spray. */
-export const SPRAY_REACH = 1.6;
+/**
+ * Alcance máximo do spray a partir do jogador: a marca vai onde a mira (centro
+ * da tela) cruza o chão, mas nunca além desta distância.
+ */
+export const SPRAY_MAX_RANGE = 14;
 
 /**
  * Intervalo mínimo entre envios aceitos (por remetente), tanto no cliente

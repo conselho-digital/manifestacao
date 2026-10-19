@@ -9,13 +9,14 @@ import {
 } from "@manifestacao/shared";
 import { Avatar } from "./Avatar.js";
 import {
-  CAMERA_DISTANCE,
+  CAMERA_LOOK_AHEAD_RATIO,
   CAMERA_PIVOT_HEIGHT,
   RUN_MULTIPLIER,
   WALK_SPEED,
   clampToAvenue,
 } from "./world.js";
 import type { InputVector } from "./useInput.js";
+import { SPRAY_MAX_RANGE } from "./spray.js";
 
 /** Posição + rotação atuais do jogador local, lidas fora do Canvas (ex.: botão de spray). */
 export interface PlayerTransform {
@@ -36,6 +37,10 @@ interface PlayerProps {
   cameraYawRef: { current: number };
   /** Inclinação vertical da câmera (radianos), mesma zona de arrasto. */
   cameraPitchRef: { current: number };
+  /** Distância da câmera ao personagem (menor no PC). */
+  cameraDistance: number;
+  /** Atualizado a cada frame com o ponto do chão sob a mira (centro da tela) — onde o spray cai. */
+  aimRef: { current: { x: number; z: number } };
   /** true enquanto o botão de correr está pressionado. */
   runRef: { current: boolean };
   onMove: (x: number, z: number, facing: Facing, vehicle: VehicleId, flag: FlagId) => void;
@@ -66,6 +71,8 @@ export function Player({
   inputRef,
   cameraYawRef,
   cameraPitchRef,
+  cameraDistance,
+  aimRef,
   runRef,
   onMove,
   transformRef,
@@ -83,6 +90,7 @@ export function Player({
   const flagRef = useRef(flag);
   flagRef.current = flag;
   const tmp = useRef(new Vector3());
+  const aimDir = useRef(new Vector3());
 
   useFrame((_, delta) => {
     const g = ref.current;
@@ -126,12 +134,39 @@ export function Player({
     const pivotY = g.position.y + CAMERA_PIVOT_HEIGHT;
     const pivotZ = g.position.z;
     tmp.current.set(
-      pivotX - Math.sin(yaw) * CAMERA_DISTANCE * cosPitch,
-      pivotY + Math.sin(pitch) * CAMERA_DISTANCE,
-      pivotZ - Math.cos(yaw) * CAMERA_DISTANCE * cosPitch,
+      pivotX - Math.sin(yaw) * cameraDistance * cosPitch,
+      pivotY + Math.sin(pitch) * cameraDistance,
+      pivotZ - Math.cos(yaw) * cameraDistance * cosPitch,
     );
     camera.position.lerp(tmp.current, 1 - Math.pow(0.001, delta));
-    camera.lookAt(pivotX, pivotY, pivotZ);
+    // Olha um pouco à frente do personagem: assim o centro da tela (onde fica
+    // a mira do spray) cai no chão à frente dele, em vez de em cima da cabeça.
+    const ahead = cameraDistance * CAMERA_LOOK_AHEAD_RATIO;
+    camera.lookAt(pivotX + Math.sin(yaw) * ahead, pivotY, pivotZ + Math.cos(yaw) * ahead);
+
+    // Mira: raio do centro da tela até o chão (y=0), limitado ao alcance do spray.
+    camera.getWorldDirection(aimDir.current);
+    const d = aimDir.current;
+    let ax: number;
+    let az: number;
+    if (d.y < -0.01) {
+      const t = -camera.position.y / d.y;
+      ax = camera.position.x + d.x * t;
+      az = camera.position.z + d.z * t;
+    } else {
+      // Olhando pro horizonte/céu: sem ponto no chão, usa o alcance máximo na direção do olhar.
+      ax = pivotX + d.x * SPRAY_MAX_RANGE;
+      az = pivotZ + d.z * SPRAY_MAX_RANGE;
+    }
+    const dx = ax - g.position.x;
+    const dz = az - g.position.z;
+    const dist = Math.hypot(dx, dz);
+    if (dist > SPRAY_MAX_RANGE) {
+      ax = g.position.x + (dx / dist) * SPRAY_MAX_RANGE;
+      az = g.position.z + (dz / dist) * SPRAY_MAX_RANGE;
+    }
+    aimRef.current.x = ax;
+    aimRef.current.z = az;
 
     if (transformRef) {
       transformRef.current.x = g.position.x;

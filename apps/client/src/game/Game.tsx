@@ -7,8 +7,8 @@ import { RemotePlayers } from "./RemotePlayers.js";
 import { SprayMarks } from "./SprayMarks.js";
 import { useInput } from "./useInput.js";
 import { modelUrlFor } from "./models.js";
-import { CAMERA_PITCH_DEFAULT, clampToAvenue } from "./world.js";
-import { SPRAY_CARTRIDGE_SIZE, SPRAY_REACH, SPRAY_REFILL_INTERVAL_MS } from "./spray.js";
+import { CAMERA_DISTANCE, CAMERA_DISTANCE_DESKTOP, CAMERA_PITCH_DEFAULT, CAMERA_PIVOT_HEIGHT } from "./world.js";
+import { SPRAY_CARTRIDGE_SIZE, SPRAY_REFILL_INTERVAL_MS } from "./spray.js";
 import { useAvenueRealtime } from "../net/useAvenueRealtime.js";
 import { Joystick } from "../ui/Joystick.js";
 import { CameraLook } from "../ui/CameraLook.js";
@@ -18,6 +18,7 @@ import { VehiclePicker } from "../ui/VehiclePicker.js";
 import { StoreButton } from "../ui/StoreButton.js";
 import { SprayButton } from "../ui/SprayButton.js";
 import { TopRightPanel } from "../ui/TopRightPanel.js";
+import { Crosshair } from "../ui/Crosshair.js";
 import { useIsTouch } from "../ui/useIsTouch.js";
 import { hasVehicleViaPremium, vehicleRequiresEntitlement } from "@manifestacao/shared";
 
@@ -56,6 +57,9 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
   const cameraYawRef = useRef(0);
   const cameraPitchRef = useRef(CAMERA_PITCH_DEFAULT);
   const runRef = useRef(false);
+  // Ponto do chão sob a mira (centro da tela), atualizado a cada frame pelo Player.
+  const aimRef = useRef({ x: 0, z: 0 });
+  const cameraDistance = isTouch ? CAMERA_DISTANCE : CAMERA_DISTANCE_DESKTOP;
 
   // PC: Shift (segurado) corre. No celular o botão "Correr" faz o mesmo.
   useEffect(() => {
@@ -107,9 +111,8 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
     if (!transformReadyRef.current) return;
     setSprayCharges((c) => {
       if (c <= 0) return c;
-      const { x, z, rotationY } = transformRef.current;
-      // "Na frente" do jogador, na direção para onde ele está virado.
-      const target = clampToAvenue(x + Math.sin(rotationY) * SPRAY_REACH, z + Math.cos(rotationY) * SPRAY_REACH);
+      // Onde a mira (centro da tela) cruza o chão — ver Player.tsx.
+      const target = aimRef.current;
       net.sendSpray(target.x, target.z, avatar.shirt);
       return c - 1;
     });
@@ -120,7 +123,17 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
       {/* Posição calculada com os mesmos yaw=0/pitch padrão que o Player.tsx
           usa pra orbitar a câmera — evita um salto/giro perceptível da
           câmera logo na entrada, antes do primeiro frame recalcular. */}
-      <Canvas shadows camera={{ position: [0, 9.63, -11.39], fov: 55 }}>
+      <Canvas
+        shadows
+        camera={{
+          position: [
+            0,
+            CAMERA_PIVOT_HEIGHT + Math.sin(CAMERA_PITCH_DEFAULT) * cameraDistance,
+            -Math.cos(CAMERA_PITCH_DEFAULT) * cameraDistance,
+          ],
+          fov: 55,
+        }}
+      >
         <color attach="background" args={[SKY_COLOR]} />
         <fog attach="fog" args={[SKY_COLOR, 60, 180]} />
         <hemisphereLight args={["#bfdcff", "#4a5a3c", 0.55]} />
@@ -155,6 +168,8 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
           inputRef={inputRef}
           cameraYawRef={cameraYawRef}
           cameraPitchRef={cameraPitchRef}
+          cameraDistance={cameraDistance}
+          aimRef={aimRef}
           runRef={runRef}
           onMove={net.sendMove}
           transformRef={transformRef}
@@ -187,6 +202,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
           Segure <strong>Shift</strong> para correr
         </div>
       )}
+      <Crosshair />
       <TopRightPanel>
         <StoreButton onClick={onOpenStore} />
         <SprayButton charges={sprayCharges} maxCharges={SPRAY_CARTRIDGE_SIZE} onSpray={handleSpray} />

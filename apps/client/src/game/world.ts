@@ -10,6 +10,10 @@ export const AVATAR_RADIUS = 0.5;
 
 // ── Câmera de terceira pessoa (livre: gira e inclina em torno do personagem) ──
 export const CAMERA_DISTANCE = 14;
+/** PC: câmera mais colada no personagem (metade da distância do celular). */
+export const CAMERA_DISTANCE_DESKTOP = CAMERA_DISTANCE / 2;
+/** Fração da distância da câmera que o olhar avança à frente do personagem — põe a mira (centro da tela) à frente dele, não na cabeça. */
+export const CAMERA_LOOK_AHEAD_RATIO = 0.3;
 /** Altura do ponto que a câmera mira/orbita (ombro/cabeça do personagem). */
 export const CAMERA_PIVOT_HEIGHT = 1.5;
 /** Inclinação inicial (radianos) — mantém o enquadramento parecido com o antigo offset fixo. */
