@@ -79,6 +79,9 @@ export interface Vehicle {
   priceCents: number;
 }
 
+// PREÇOS PROVISÓRIOS (moto, carro, carro de som) — a definir. Ao mudar, atualize
+// também supabase/migrations (nova migration de update em catalog_items): a
+// cobrança lê o preço do banco, e a lista da lateral lê daqui.
 export const VEHICLES: Record<VehicleId, Vehicle> = {
   nenhum: { id: "nenhum", label: "A pé", speedMul: 1, playsMusic: false, priceCents: 0 },
   moto: { id: "moto", label: "Moto", speedMul: 2.2, playsMusic: false, priceCents: 2990 },
