@@ -15,8 +15,11 @@ export function CookieConsent() {
   if (accepted || dismissed) return null;
 
   const accept = () => {
-    recordAccepted();
-    setAccepted(true);
+    // Se o cookie não colar (bloqueado, modo privado restrito), só esconde
+    // nesta sessão — sem isso, o banner "funcionava" visualmente mas voltava
+    // pra sempre na próxima visita, sem explicar por quê.
+    if (recordAccepted()) setAccepted(true);
+    else setDismissed(true);
   };
 
   return (
@@ -24,15 +27,23 @@ export function CookieConsent() {
       role="dialog"
       aria-label="Consentimento de cookies"
       style={{
+        // No topo, não embaixo: a faixa inferior já é ocupada pelo joystick,
+        // botão de correr (dentro do jogo) e pelo CTA de entrar (na tela de
+        // início) — embaixo, o banner ficava maior que essas barras e
+        // cobria tudo, inclusive deixando o botão de entrar inacessível.
         position: "fixed",
         left: 0,
         right: 0,
-        bottom: 0,
-        zIndex: 20,
+        top: 0,
+        // Menor que o modal da Loja (zIndex 20, shop/Store.tsx) — a Loja já
+        // pode ser aberta a partir da tela de entrada, antes de decidir
+        // sobre o banner; o banner não deveria disputar espaço com um modal
+        // de pagamento. Ainda maior que o resto da UI do jogo (até 6).
+        zIndex: 15,
         padding:
-          "16px max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left))",
+          "max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 16px max(16px, env(safe-area-inset-left))",
         background: "var(--surface)",
-        borderTop: "1px solid var(--line)",
+        borderBottom: "1px solid var(--line)",
       }}
     >
       <div

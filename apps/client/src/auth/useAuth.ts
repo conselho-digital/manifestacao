@@ -8,6 +8,25 @@ export interface AuthState {
 }
 
 /**
+ * Marca que um login por redirect está em andamento — a página recarrega
+ * inteira ao voltar do Google, então é só assim que o AvatarPicker sabe (já
+ * remontado do zero) que deve entrar direto no jogo em vez de mostrar o
+ * botão "Entrar na avenida" de novo. Ver `consumePendingGoogleRedirect()`.
+ */
+const PENDING_REDIRECT_KEY = "manifestacao.pendingGoogleRedirect";
+
+/** true só na primeira leitura depois de um redirect pendente; já limpa a marca ao ler. */
+export function consumePendingGoogleRedirect(): boolean {
+  try {
+    const pending = localStorage.getItem(PENDING_REDIRECT_KEY) === "1";
+    if (pending) localStorage.removeItem(PENDING_REDIRECT_KEY);
+    return pending;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Sessão de autenticação (login só Google, CLAUDE.md §5). Em modo offline
  * (sem credenciais do Supabase) fica sempre deslogado — login é opcional
  * para jogar, só necessário para comprar.
@@ -55,6 +74,11 @@ export function useAuth(): AuthState {
 export async function signInWithGoogle(): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) return;
+  try {
+    localStorage.setItem(PENDING_REDIRECT_KEY, "1");
+  } catch {
+    /* modo privado: sem a marca, só perde o auto-entrar pós-redirect */
+  }
   await supabase.auth.signInWithOAuth({
     provider: "google",
     options: { redirectTo: window.location.origin },

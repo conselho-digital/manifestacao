@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import {
   CHARACTERS,
@@ -18,7 +18,7 @@ import {
   type FlagId,
   type TeamId,
 } from "@manifestacao/shared";
-import { signInWithGoogle, signOut } from "../auth/useAuth.js";
+import { consumePendingGoogleRedirect, signInWithGoogle, signOut } from "../auth/useAuth.js";
 import { GoogleSignInButton } from "../auth/GoogleSignInButton.js";
 import { isOnlineEnabled } from "../config/env.js";
 import { TeamFlagIcon } from "./TeamFlagIcon.js";
@@ -71,6 +71,18 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
   // direto. Em modo offline (sem Supabase configurado) não há como logar,
   // então segue liberado — senão o jogo ficaria impossível de abrir.
   const needsLogin = isOnlineEnabled && !session;
+
+  // O fluxo de login por redirect (fallback do GIS) recarrega a página
+  // inteira ao voltar do Google — sem isso, a pessoa escolhia tudo, logava,
+  // e caía de novo nesta tela precisando clicar "Entrar na avenida" outra
+  // vez. `consumePendingGoogleRedirect()` só volta true nessa remontagem
+  // específica (já limpa a marca ao ler), então entra direto no jogo.
+  useEffect(() => {
+    if (!session) return;
+    if (!consumePendingGoogleRedirect()) return;
+    onReady(buildAvatar());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session]);
 
   const buildAvatar = (): AvatarConfig => {
     const name = nickname.trim().slice(0, MAX_NICKNAME_LENGTH) || "Anônimo";

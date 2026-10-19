@@ -29,9 +29,15 @@ export function hasAcceptedCookie(): boolean {
  * Recusar NUNCA grava cookie nenhum — "só salva quando aceitar" é a regra:
  * quem recusa só tem o banner escondido nesta sessão (volta a aparecer na
  * próxima visita, já que nada fica persistido).
+ *
+ * Retorna se a gravação realmente colou (relê o cookie depois de escrever)
+ * — cookies bloqueados/modo privado restrito fariam `document.cookie =` ser
+ * um no-op silencioso; sem essa checagem, "Aceitar" pareceria funcionar mas
+ * o banner voltaria pra sempre na próxima visita, sem nenhum aviso.
  */
-export function recordAccepted(): void {
+export function recordAccepted(): boolean {
   const maxAge = CONSENT_MAX_AGE_DAYS * 24 * 60 * 60;
   const secure = window.location.protocol === "https:" ? "; Secure" : "";
   document.cookie = `${CONSENT_COOKIE_NAME}=accepted; max-age=${maxAge}; path=/; SameSite=Lax${secure}`;
+  return hasAcceptedCookie();
 }
