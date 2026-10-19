@@ -3,7 +3,7 @@ import { googleClientId } from "../config/env.js";
 import { signInWithGoogle, signInWithGoogleIdToken } from "./useAuth.js";
 
 const GIS_SCRIPT_SRC = "https://accounts.google.com/gsi/client";
-const GIS_LOAD_TIMEOUT_MS = 4000;
+const GIS_LOAD_TIMEOUT_MS = 8000;
 /** Limite da própria API do Google pro parâmetro `width` do botão renderizado. */
 const GIS_BUTTON_MAX_WIDTH = 400;
 
