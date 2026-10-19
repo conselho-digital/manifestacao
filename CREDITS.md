@@ -7,8 +7,11 @@ exigem crédito, mas registramos mesmo assim como prova de licença; assets CC-B
 
 ## Modelos 3D / sprites
 
-_(nenhum asset de terceiro em uso ainda — os avatares atuais são geométricos,
-gerados por código.)_
+| Arquivo | Descrição | Licença | Uso |
+|---|---|---|---|
+| `apps/client/public/models/scenery/masp.glb` | MASP (Museu de Arte de São Paulo), simplificado — marco visual do cenário | CC0 (informado pelo usuário) | Prédio de cenário no mapa inicial |
+
+Os avatares de personagem ainda são geométricos, gerados por código.
 
 Fontes aprovadas para uso comercial (ver CLAUDE.md §6):
 
