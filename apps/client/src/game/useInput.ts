@@ -8,6 +8,12 @@ export interface InputVector {
 
 const ZERO: InputVector = { x: 0, z: 0 };
 
+/** true quando o foco está num campo de texto (ex.: chat) — o teclado não deve mexer no jogo. */
+export function isTypingTarget(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false;
+  return target.isContentEditable || target.tagName === "INPUT" || target.tagName === "TEXTAREA" || target.tagName === "SELECT";
+}
+
 /**
  * Entrada de movimento unificada: teclado (WASD/setas) + joystick de toque.
  * Retorna um ref lido a cada frame e um setter que o joystick alimenta.
@@ -60,6 +66,7 @@ export function useInput(enabled = true) {
       apply();
     };
     const down = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target)) return;
       pressed.current.add(e.key.toLowerCase());
       recompute();
     };
@@ -71,10 +78,17 @@ export function useInput(enabled = true) {
       pressed.current.clear();
       recompute();
     };
+    // Ao focar um campo de texto com uma tecla de movimento ainda segurada, o
+    // keyup iria pro campo — zera pra o personagem não ficar andando sozinho.
+    const focusIn = (e: FocusEvent) => {
+      if (isTypingTarget(e.target)) blur();
+    };
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
     window.addEventListener("blur", blur);
+    window.addEventListener("focusin", focusIn);
     return () => {
+      window.removeEventListener("focusin", focusIn);
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
       window.removeEventListener("blur", blur);

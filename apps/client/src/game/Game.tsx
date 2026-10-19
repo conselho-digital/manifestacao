@@ -5,7 +5,7 @@ import { Scenery } from "./Scenery.js";
 import { Player, type PlayerTransform } from "./Player.js";
 import { RemotePlayers } from "./RemotePlayers.js";
 import { SprayMarks } from "./SprayMarks.js";
-import { useInput } from "./useInput.js";
+import { isTypingTarget, useInput } from "./useInput.js";
 import { modelUrlFor } from "./models.js";
 import { CAMERA_DISTANCE, CAMERA_DISTANCE_DESKTOP, CAMERA_PITCH_DEFAULT, CAMERA_PIVOT_HEIGHT } from "./world.js";
 import { SPRAY_CARTRIDGE_SIZE, SPRAY_REFILL_INTERVAL_MS } from "./spray.js";
@@ -64,7 +64,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
   // PC: Shift (segurado) corre. No celular o botão "Correr" faz o mesmo.
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
-      if (e.key === "Shift") runRef.current = true;
+      if (e.key === "Shift" && !isTypingTarget(e.target)) runRef.current = true;
     };
     const up = (e: KeyboardEvent) => {
       if (e.key === "Shift") runRef.current = false;
@@ -72,10 +72,15 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
     const release = () => {
       runRef.current = false;
     };
+    const focusIn = (e: FocusEvent) => {
+      if (isTypingTarget(e.target)) release();
+    };
     window.addEventListener("keydown", down);
     window.addEventListener("keyup", up);
     window.addEventListener("blur", release);
+    window.addEventListener("focusin", focusIn);
     return () => {
+      window.removeEventListener("focusin", focusIn);
       window.removeEventListener("keydown", down);
       window.removeEventListener("keyup", up);
       window.removeEventListener("blur", release);
