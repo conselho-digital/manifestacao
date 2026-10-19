@@ -44,7 +44,14 @@ export function useAuth(): AuthState {
   return { session, loading };
 }
 
-/** Inicia o login com Google (redireciona e volta para a mesma página). */
+/**
+ * Login com Google via redirect de página inteira (fluxo OAuth padrão do
+ * Supabase). Funciona sempre, mas a tela do Google mostra a URL do projeto
+ * Supabase ("Prosseguir para xxx.supabase.co"), não o domínio do jogo —
+ * veja `GoogleSignInButton.tsx` para o fluxo sem redirect (preferido).
+ * Mantido como alternativa (ex.: Google Identity Services bloqueado por
+ * algum bloqueador de conteúdo).
+ */
 export async function signInWithGoogle(): Promise<void> {
   const supabase = getSupabase();
   if (!supabase) return;
@@ -52,6 +59,18 @@ export async function signInWithGoogle(): Promise<void> {
     provider: "google",
     options: { redirectTo: window.location.origin },
   });
+}
+
+/**
+ * Login com Google a partir de um ID token (JWT) já obtido no cliente via
+ * Google Identity Services — sem redirect de página inteira. Ver
+ * `GoogleSignInButton.tsx`, que coleta o token e chama isto.
+ */
+export async function signInWithGoogleIdToken(idToken: string): Promise<{ error: Error | null }> {
+  const supabase = getSupabase();
+  if (!supabase) return { error: new Error("Supabase não configurado") };
+  const { error } = await supabase.auth.signInWithIdToken({ provider: "google", token: idToken });
+  return { error };
 }
 
 export async function signOut(): Promise<void> {

@@ -19,6 +19,7 @@ import {
   type TeamId,
 } from "@manifestacao/shared";
 import { signInWithGoogle, signOut } from "../auth/useAuth.js";
+import { GoogleSignInButton } from "../auth/GoogleSignInButton.js";
 import { isOnlineEnabled } from "../config/env.js";
 import { TeamFlagIcon } from "./TeamFlagIcon.js";
 import { AvatarGlyph } from "./AvatarGlyph.js";
@@ -71,8 +72,7 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
   // então segue liberado — senão o jogo ficaria impossível de abrir.
   const needsLogin = isOnlineEnabled && !session;
 
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const buildAvatar = (): AvatarConfig => {
     const name = nickname.trim().slice(0, MAX_NICKNAME_LENGTH) || "Anônimo";
     const avatar: AvatarConfig = { team, nickname: name, shirt: TEAMS[team].color, character, flag };
     try {
@@ -80,15 +80,28 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
     } catch {
       /* modo privado: segue sem persistir */
     }
+    return avatar;
+  };
+
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const avatar = buildAvatar();
     if (needsLogin) {
-      // Salva a seleção ANTES do redirect do OAuth (a página recarrega
-      // inteira ao voltar do Google) — sem isso, quem escolhe tudo antes de
-      // logar perdia time/personagem/bandeira e tinha que escolher de novo.
+      // Só alcançado se o form for submetido sem o botão do Google (ex.:
+      // Enter no campo de apelido) — o fluxo normal usa GoogleSignInButton
+      // na barra fixa, que não passa por aqui. Salva ANTES do redirect do
+      // OAuth (a página recarrega inteira ao voltar do Google) — sem isso,
+      // quem escolhe tudo antes de logar perdia time/personagem/bandeira.
       void signInWithGoogle();
       return;
     }
     onReady(avatar);
   };
+
+  // GIS loga sem recarregar a página (ver GoogleSignInButton) — assim que a
+  // sessão é confirmada, já entra direto no jogo com o que foi escolhido,
+  // sem precisar de um segundo clique em "Entrar na avenida".
+  const handleSignedIn = () => onReady(buildAvatar());
 
   const teamColorHex = hexColor(TEAMS[team].color);
 
@@ -372,41 +385,57 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
           background: "linear-gradient(to top, var(--bg) 60%, transparent)",
         }}
       >
-        <button
-          type="submit"
-          form="avatar-picker-form"
-          disabled={isOnlineEnabled && authLoading}
-          style={{
-            width: "min(720px, 100%)",
-            margin: "0 auto",
-            display: "block",
-            minHeight: 52,
-            padding: "14px 32px",
-            fontSize: 17,
-            fontWeight: 800,
-            borderRadius: "var(--r-lg)",
-            border: "none",
-            cursor: isOnlineEnabled && authLoading ? "default" : "pointer",
-            opacity: isOnlineEnabled && authLoading ? 0.6 : 1,
-            background: "var(--accent)",
-            color: "var(--on-accent)",
-            transition: "transform .08s, opacity .12s",
-          }}
-        >
-          {isOnlineEnabled && authLoading ? "Carregando…" : needsLogin ? "Entrar com Google" : "Entrar na avenida"}
-        </button>
-        {needsLogin && !authLoading && (
-          <p
+        {isOnlineEnabled && authLoading ? (
+          <button
+            type="button"
+            disabled
             style={{
-              margin: "8px auto 0",
-              width: "min(640px, 100%)",
-              textAlign: "center",
-              fontSize: "var(--t-ui)",
-              color: "var(--ink-dim)",
+              width: "min(720px, 100%)",
+              margin: "0 auto",
+              display: "block",
+              minHeight: 52,
+              padding: "14px 32px",
+              fontSize: 17,
+              fontWeight: 800,
+              borderRadius: "var(--r-lg)",
+              border: "none",
+              cursor: "default",
+              opacity: 0.6,
+              background: "var(--accent)",
+              color: "var(--on-accent)",
             }}
           >
-            Conta é obrigatória pra entrar na avenida.
-          </p>
+            Carregando…
+          </button>
+        ) : needsLogin ? (
+          <div style={{ width: "min(720px, 100%)", margin: "0 auto", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+            <GoogleSignInButton onSignedIn={handleSignedIn} />
+            <p style={{ margin: 0, textAlign: "center", fontSize: "var(--t-ui)", color: "var(--ink-dim)" }}>
+              Conta é obrigatória pra entrar na avenida.
+            </p>
+          </div>
+        ) : (
+          <button
+            type="submit"
+            form="avatar-picker-form"
+            style={{
+              width: "min(720px, 100%)",
+              margin: "0 auto",
+              display: "block",
+              minHeight: 52,
+              padding: "14px 32px",
+              fontSize: 17,
+              fontWeight: 800,
+              borderRadius: "var(--r-lg)",
+              border: "none",
+              cursor: "pointer",
+              background: "var(--accent)",
+              color: "var(--on-accent)",
+              transition: "transform .08s",
+            }}
+          >
+            Entrar na avenida
+          </button>
         )}
       </div>
     </div>

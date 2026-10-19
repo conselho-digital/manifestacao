@@ -12,3 +12,12 @@ export const supabaseConfig =
 
 /** true quando há credenciais do Supabase para ligar o Realtime. */
 export const isOnlineEnabled = supabaseConfig !== null;
+
+/**
+ * Client ID OAuth do Google (público — não é segredo, é o mesmo valor que
+ * fica visível no HTML de qualquer app que usa Google Identity Services).
+ * Usado para o botão de login via GIS (apps/client/src/auth/GoogleSignInButton.tsx),
+ * que evita o redirect de página inteira (e a tela do Google mostrando a
+ * URL do Supabase) do fluxo `signInWithOAuth` padrão.
+ */
+export const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined;
