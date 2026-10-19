@@ -22,6 +22,7 @@ import {
 import { signInWithGoogle, signOut } from "../auth/useAuth.js";
 import { isOnlineEnabled } from "../config/env.js";
 import { TeamFlagIcon } from "./TeamFlagIcon.js";
+import { AvatarGlyph } from "./AvatarGlyph.js";
 
 const STORAGE_KEY = "manifestacao.avatar";
 
@@ -34,19 +35,6 @@ function loadSaved(): Partial<AvatarConfig> {
   }
 }
 
-const chip = (selected: boolean, accent?: string): React.CSSProperties => ({
-  minHeight: 44,
-  padding: "8px 14px",
-  fontSize: 14,
-  fontWeight: 700,
-  borderRadius: "var(--r-md)",
-  cursor: "pointer",
-  border: `2px solid ${selected && accent ? accent : "var(--line)"}`,
-  background: selected ? (accent ?? "var(--surface-2)") : "var(--surface)",
-  color: selected && accent ? "var(--on-accent)" : "var(--ink)",
-  transition: "transform .08s, background .12s",
-});
-
 interface AvatarPickerProps {
   onReady: (a: AvatarConfig) => void;
   session: Session | null;
@@ -56,9 +44,9 @@ interface AvatarPickerProps {
 }
 
 /**
- * Tela de entrada: time, apelido e (opcionais) personagem/bandeira, conta e
- * Premium. Layout responsivo em duas colunas (empilha sozinho em telas
- * estreitas via CSS grid — sem JS de breakpoint).
+ * Tela de entrada: logo + conta no topo, seletor de lado, grade de
+ * personagens (com bandeira/Premium dentro da mesma seção) e um botão de
+ * entrar fixo embaixo. Identidade e nomes são próprios — ver CLAUDE.md §9.
  */
 export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore }: AvatarPickerProps) {
   const saved = loadSaved();
@@ -68,6 +56,7 @@ export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore
     isCharacterId(saved.character) ? saved.character : "comum",
   );
   const [flag, setFlag] = useState<FlagId>(isFlagId(saved.flag) ? saved.flag : "nenhuma");
+  const [customizing, setCustomizing] = useState(false);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,6 +72,7 @@ export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore
 
   const premium = PASSES.premium;
   const hasPremium = owned.has("pass:premium");
+  const teamColorHex = hexColor(TEAMS[team].color);
 
   return (
     <div
@@ -90,57 +80,70 @@ export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore
         position: "fixed",
         inset: 0,
         overflowY: "auto",
-        padding:
-          "max(24px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(24px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left))",
         display: "flex",
         flexDirection: "column",
-        alignItems: "center",
-        gap: 24,
       }}
     >
-      <header style={{ textAlign: "center", maxWidth: 560 }}>
-        <h1
+      {/* Topo: logo + conta */}
+      <header
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          gap: 10,
+          padding:
+            "max(14px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 14px max(16px, env(safe-area-inset-left))",
+          borderBottom: "1px solid var(--line)",
+        }}
+      >
+        <div
           style={{
-            margin: 0,
             fontFamily: "var(--font-display)",
-            fontSize: "var(--t-display)",
+            fontSize: 22,
             fontWeight: 400,
-            letterSpacing: "-0.02em",
-            lineHeight: 0.95,
+            letterSpacing: "-0.01em",
             textTransform: "uppercase",
           }}
         >
-          Manifestação Online
-        </h1>
-        <p style={{ margin: "8px 0 0", color: "var(--ink-dim)", fontSize: "var(--t-body)" }}>
-          Escolha o seu lado e entre na avenida.
-        </p>
+          Manifestação <span style={{ color: "var(--accent)" }}>Online</span>
+        </div>
+
+        {isOnlineEnabled && !authLoading && (
+          <>
+            {session ? (
+              <button type="button" onClick={() => void signOut()} style={smallBtnStyle}>
+                Sair
+              </button>
+            ) : (
+              <button type="button" onClick={() => void signInWithGoogle()} style={smallAccentBtnStyle}>
+                Entrar com Google
+              </button>
+            )}
+          </>
+        )}
       </header>
 
       <form
+        id="avatar-picker-form"
         onSubmit={submit}
         style={{
-          width: "min(760px, 100%)",
+          flex: 1,
           display: "flex",
           flexDirection: "column",
-          gap: 16,
+          gap: 20,
+          padding: "20px max(16px, env(safe-area-inset-right)) 100px max(16px, env(safe-area-inset-left))",
+          width: "min(720px, 100%)",
+          margin: "0 auto",
         }}
       >
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-          gap: 16,
-          alignItems: "start",
-        }}
-      >
-        {/* Coluna: lado */}
-        <section style={cardStyle}>
-          <Label>Lado</Label>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: 10 }}>
+        {/* Lado */}
+        <section>
+          <SectionTitle>De que lado você está?</SectionTitle>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginTop: 10 }}>
             {TEAM_IDS.map((id) => {
               const t = TEAMS[id];
               const selected = id === team;
+              const c = hexColor(t.color);
               return (
                 <button
                   key={id}
@@ -148,15 +151,23 @@ export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore
                   aria-pressed={selected}
                   onClick={() => setTeam(id)}
                   style={{
-                    ...chip(selected, hexColor(t.color)),
-                    textAlign: "left",
-                    width: "100%",
+                    minHeight: 64,
                     display: "flex",
+                    flexDirection: "column",
                     alignItems: "center",
-                    gap: 10,
+                    justifyContent: "center",
+                    gap: 6,
+                    borderRadius: "var(--r-md)",
+                    border: `2px solid ${selected ? c : "var(--line)"}`,
+                    background: selected ? "var(--surface-2)" : "var(--surface)",
+                    color: "var(--ink)",
+                    fontWeight: 700,
+                    fontSize: 14,
+                    cursor: "pointer",
+                    transition: "transform .08s, border-color .12s",
                   }}
                 >
-                  <TeamFlagIcon color={hexColor(t.color)} />
+                  <TeamFlagIcon color={c} />
                   {t.label}
                 </button>
               );
@@ -164,10 +175,15 @@ export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore
           </div>
         </section>
 
-        {/* Coluna: entrada */}
-        <section style={{ ...cardStyle, display: "flex", flexDirection: "column", gap: 14 }}>
-          <div>
-            <Label htmlFor="nickname">Seu apelido</Label>
+        {/* Personagem */}
+        <section style={cardStyle}>
+          <SectionTitle>Escolha seu personagem</SectionTitle>
+          <p style={{ margin: "4px 0 0", color: "var(--ink-dim)", fontSize: "var(--t-ui)" }}>
+            Visual e bandeira você personaliza aqui — seu nome aparece pros outros na avenida.
+          </p>
+
+          <div style={{ marginTop: 14 }}>
+            <Label htmlFor="nickname">Apelido</Label>
             <input
               id="nickname"
               value={nickname}
@@ -188,60 +204,111 @@ export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore
             />
           </div>
 
-          {isOnlineEnabled && (
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
-              <div>
-                <div style={{ fontSize: "var(--t-ui)", fontWeight: 700 }}>Conta opcional</div>
-                <div style={{ fontSize: "var(--t-ui)", color: "var(--ink-dim)" }}>
-                  Jogue sem login. Entre para guardar compras e visual.
-                </div>
-              </div>
-              {!authLoading &&
-                (session ? (
-                  <button type="button" onClick={() => void signOut()} style={smallBtnStyle}>
-                    Sair
-                  </button>
-                ) : (
-                  <button type="button" onClick={() => void signInWithGoogle()} style={smallAccentBtnStyle}>
-                    Entrar
-                  </button>
-                ))}
-            </div>
-          )}
-
-          <details style={detailsStyle}>
-            <summary style={summaryStyle}>
-              Personalizar personagem <span style={{ color: "var(--ink-dim)", fontWeight: 400 }}>Opcional</span>
-            </summary>
-            <div style={{ display: "flex", flexDirection: "column", gap: 10, marginTop: 10 }}>
-              <div>
-                <Label>Personagem</Label>
-                <Row>
-                  {CHARACTER_IDS.map((id) => (
-                    <button
-                      key={id}
-                      type="button"
-                      aria-pressed={id === character}
-                      onClick={() => setCharacter(id)}
-                      style={chip(id === character, "var(--accent)")}
+          <div
+            style={{
+              marginTop: 14,
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))",
+              gap: 10,
+            }}
+          >
+            {CHARACTER_IDS.map((id) => {
+              const selected = id === character;
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => setCharacter(id)}
+                  style={{
+                    position: "relative",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    gap: 6,
+                    padding: "12px 6px",
+                    borderRadius: "var(--r-md)",
+                    border: `2px solid ${selected ? "var(--accent)" : "var(--line)"}`,
+                    background: selected ? "var(--surface-2)" : "var(--surface)",
+                    cursor: "pointer",
+                  }}
+                >
+                  {selected && (
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: 6,
+                        right: 6,
+                        width: 18,
+                        height: 18,
+                        borderRadius: "50%",
+                        background: "var(--accent)",
+                        color: "var(--on-accent)",
+                        fontSize: 12,
+                        fontWeight: 900,
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                      }}
                     >
-                      {CHARACTERS[id].label}
-                    </button>
-                  ))}
-                </Row>
-              </div>
+                      ✓
+                    </span>
+                  )}
+                  <AvatarGlyph color={teamColorHex} />
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)", textAlign: "center" }}>
+                    {CHARACTERS[id].label}
+                  </span>
+                </button>
+              );
+            })}
+
+            {isOnlineEnabled && (
+              <button
+                type="button"
+                onClick={onOpenStore}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: 4,
+                  padding: "12px 6px",
+                  borderRadius: "var(--r-md)",
+                  border: "2px dashed var(--line)",
+                  background: "transparent",
+                  color: "var(--ink-dim)",
+                  cursor: "pointer",
+                }}
+              >
+                <span style={{ fontSize: 22, lineHeight: 1 }}>+</span>
+                <span style={{ fontSize: 12, fontWeight: 700 }}>Loja</span>
+              </button>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setCustomizing((v) => !v)}
+            style={{ ...smallBtnStyle, marginTop: 14 }}
+          >
+            {customizing ? "Ocultar bandeira e Premium" : "Bandeira e Premium"}
+          </button>
+
+          {customizing && (
+            <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 14 }}>
               <div>
                 <Label>Bandeira</Label>
                 <Row>
                   {FLAG_IDS.map((id) => {
                     const accent = id === "nenhuma" ? "var(--accent)" : hexColor(flagColor(id, TEAMS[team].color));
+                    const selected = id === flag;
                     return (
                       <button
                         key={id}
                         type="button"
-                        aria-pressed={id === flag}
+                        aria-pressed={selected}
                         onClick={() => setFlag(id)}
-                        style={chip(id === flag, accent)}
+                        style={chip(selected, accent)}
                       >
                         {FLAGS[id].label}
                       </button>
@@ -249,36 +316,45 @@ export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore
                   })}
                 </Row>
               </div>
-            </div>
-          </details>
 
-          {isOnlineEnabled && (
-            <details style={detailsStyle}>
-              <summary style={summaryStyle}>
-                Premium e passes{" "}
-                <span style={{ color: "var(--ink-dim)", fontWeight: 400 }}>
-                  {hasPremium ? "Você tem" : "Ver benefícios"}
-                </span>
-              </summary>
-              <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 6 }}>
-                <div style={{ fontSize: "var(--t-ui)", color: "var(--ink-dim)" }}>{premium.description}</div>
-                <button
-                  type="button"
-                  onClick={onOpenStore}
-                  style={{ ...smallAccentBtnStyle, alignSelf: "flex-start" }}
-                >
-                  {hasPremium ? "Ver loja" : "Comprar na loja"}
-                </button>
-              </div>
-            </details>
+              {isOnlineEnabled && (
+                <div style={{ borderTop: "1px solid var(--line)", paddingTop: 10 }}>
+                  <div style={{ fontSize: "var(--t-ui)", fontWeight: 700 }}>
+                    Premium {hasPremium && <span style={{ color: "var(--accent)" }}>· você tem</span>}
+                  </div>
+                  <div style={{ fontSize: "var(--t-ui)", color: "var(--ink-dim)", marginTop: 4 }}>
+                    {premium.description}
+                  </div>
+                  <button type="button" onClick={onOpenStore} style={{ ...smallAccentBtnStyle, marginTop: 8 }}>
+                    {hasPremium ? "Ver loja" : "Comprar na loja"}
+                  </button>
+                </div>
+              )}
+            </div>
           )}
         </section>
-      </div>
+      </form>
 
+      {/* Barra fixa de entrada */}
+      <div
+        style={{
+          position: "fixed",
+          left: 0,
+          right: 0,
+          bottom: 0,
+          padding:
+            "12px max(16px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left))",
+          background: "linear-gradient(to top, var(--bg) 60%, transparent)",
+        }}
+      >
         <button
           type="submit"
+          form="avatar-picker-form"
           style={{
-            minHeight: 48,
+            width: "min(720px, 100%)",
+            margin: "0 auto",
+            display: "block",
+            minHeight: 52,
             padding: "14px 32px",
             fontSize: 17,
             fontWeight: 800,
@@ -290,9 +366,9 @@ export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore
             transition: "transform .08s",
           }}
         >
-          Entrar no jogo
+          Entrar na avenida
         </button>
-      </form>
+      </div>
     </div>
   );
 }
@@ -304,19 +380,18 @@ const cardStyle: React.CSSProperties = {
   padding: 16,
 };
 
-const detailsStyle: React.CSSProperties = {
-  borderTop: "1px solid var(--line)",
-  paddingTop: 10,
-};
-
-const summaryStyle: React.CSSProperties = {
-  cursor: "pointer",
-  fontSize: "var(--t-ui)",
+const chip = (selected: boolean, accent?: string): React.CSSProperties => ({
+  minHeight: 44,
+  padding: "8px 14px",
+  fontSize: 14,
   fontWeight: 700,
-  display: "flex",
-  justifyContent: "space-between",
-  listStyle: "none",
-};
+  borderRadius: "var(--r-md)",
+  cursor: "pointer",
+  border: `2px solid ${selected && accent ? accent : "var(--line)"}`,
+  background: selected ? (accent ?? "var(--surface-2)") : "var(--surface)",
+  color: selected && accent ? "var(--on-accent)" : "var(--ink)",
+  transition: "transform .08s, background .12s",
+});
 
 const smallBtnStyle: React.CSSProperties = {
   minHeight: 36,
@@ -341,6 +416,23 @@ const smallAccentBtnStyle: React.CSSProperties = {
   color: "var(--on-accent)",
   cursor: "pointer",
 };
+
+function SectionTitle({ children }: { children: React.ReactNode }) {
+  return (
+    <h2
+      style={{
+        margin: 0,
+        fontFamily: "var(--font-display)",
+        fontSize: 22,
+        fontWeight: 400,
+        letterSpacing: "-0.01em",
+        textTransform: "uppercase",
+      }}
+    >
+      {children}
+    </h2>
+  );
+}
 
 function Label({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) {
   return (
