@@ -4,13 +4,15 @@ import { signInWithGoogle, signInWithGoogleIdToken } from "./useAuth.js";
 
 const GIS_SCRIPT_SRC = "https://accounts.google.com/gsi/client";
 const GIS_LOAD_TIMEOUT_MS = 4000;
-/** Largura fixa do botão — o GIS não aceita "100%", só px. */
-const BUTTON_WIDTH = 320;
 
 // Tipagem mínima da API do Google Identity Services que usamos (não há
 // pacote de tipos oficial pequeno o bastante para valer a pena instalar).
 interface GoogleIdCredentialResponse {
   credential: string;
+}
+interface GooglePromptNotification {
+  isNotDisplayed(): boolean;
+  isSkippedMoment(): boolean;
 }
 interface GoogleAccountsId {
   initialize(config: {
@@ -19,10 +21,8 @@ interface GoogleAccountsId {
     /** Amarra o ID token a esta tentativa de login — ver uso abaixo. */
     nonce?: string;
   }): void;
-  renderButton(
-    parent: HTMLElement,
-    options: { type: "standard"; theme: "outline" | "filled_black"; size: "large" | "medium"; text: "signin_with" | "continue_with"; shape: "pill" | "rectangular"; width?: number },
-  ): void;
+  /** Dispara o seletor de conta do Google (One Tap/seleção), sem precisar do botão com a marca deles. */
+  prompt(momentListener?: (n: GooglePromptNotification) => void): void;
 }
 declare global {
   interface Window {
@@ -61,30 +61,42 @@ function loadGisScript(): Promise<void> {
   return promise;
 }
 
+/** SHA-256 em hex — ver por que o nonce do lado do Google precisa ser o hash, não o valor cru, logo abaixo. */
+async function sha256Hex(value: string): Promise<string> {
+  const bytes = new TextEncoder().encode(value);
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
 interface GoogleSignInButtonProps {
   /** Chamado depois que o login no Supabase é confirmado com sucesso. */
   onSignedIn?: () => void;
 }
 
 /**
- * Botão de login "Continuar com o Google" via Google Identity Services
- * (GIS): não redireciona a página inteira, então a tela de escolha de
- * conta do Google não mostra a URL do projeto Supabase — fica só o
- * seletor de conta embutido. O token (JWT) coletado é repassado pro
- * Supabase via `signInWithIdToken`, tudo em segundo plano.
+ * Botão "Continuar com o Google" com a nossa cara (amarelo, mesmo estilo do
+ * resto do app) em vez do widget com a marca do Google — ele só dispara
+ * `google.accounts.id.prompt()` (Google Identity Services), que mostra o
+ * seletor de conta sem redirecionar a página inteira nem mostrar a URL do
+ * projeto Supabase. O token (JWT) coletado é repassado pro Supabase via
+ * `signInWithIdToken`, tudo em segundo plano.
  *
- * Se o script do Google não carregar (bloqueador de conteúdo, rede, etc.),
- * cai para o login por redirect de página inteira (`signInWithGoogle`).
+ * Se o script do Google não carregar, ou o prompt não aparecer por algum
+ * motivo do navegador (cooldown do One Tap, bloqueio, etc.), cai pro
+ * redirect de página inteira (`signInWithGoogle`).
  */
 export function GoogleSignInButton({ onSignedIn }: GoogleSignInButtonProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
   const [status, setStatus] = useState<"loading" | "ready" | "fallback" | "signing-in" | "error">("loading");
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  // Nonce cru (mandado pro Supabase) — gerado uma vez por montagem/tentativa.
+  const nonceRef = useRef<string | null>(null);
 
   // `onSignedIn` muda de identidade a cada render do AvatarPicker (nickname
   // mudando, time mudando etc.) — se o efeito abaixo dependesse dele
-  // diretamente, reinicializaria o GIS (e recriaria o botão) a cada tecla.
-  // Guardando num ref, o efeito só depende do client ID (fixo).
+  // diretamente, reinicializaria o GIS a cada tecla. Guardando num ref, o
+  // efeito só depende do client ID (fixo).
   const onSignedInRef = useRef(onSignedIn);
   onSignedInRef.current = onSignedIn;
 
@@ -102,22 +114,33 @@ export function GoogleSignInButton({ onSignedIn }: GoogleSignInButtonProps) {
       if (!cancelled) setStatus((s) => (s === "loading" ? "fallback" : s));
     }, GIS_LOAD_TIMEOUT_MS);
 
-    // Nonce único por tentativa de login: amarra o ID token do Google a
-    // esta sessão de navegador específica, fechando a janela de replay que
-    // um ID token "solto" (sem nonce) teria se vazasse por outro canal.
+    // Nonce único por tentativa de login: amarra o ID token do Google a esta
+    // sessão de navegador específica, fechando a janela de replay que um ID
+    // token "solto" (sem nonce) teria se vazasse por outro canal.
+    //
+    // O Google (via FedCM, usado por baixo dos panos no fluxo de prompt())
+    // embute no token o HASH SHA-256 do nonce que foi passado em
+    // `initialize()`, não o valor cru — é assim que o próprio Google e a
+    // documentação do Supabase recomendam. Se mandarmos o nonce cru pros
+    // dois lados (initialize E signInWithIdToken), o valor do token nunca
+    // bate com o que o Supabase espera, e o login falha com um erro genérico
+    // mesmo a conta do Google tendo sido escolhida com sucesso.
     const nonce = crypto.randomUUID();
+    nonceRef.current = nonce;
 
-    loadGisScript()
-      .then(() => {
-        if (cancelled || !window.google || !containerRef.current) return;
+    Promise.all([loadGisScript(), sha256Hex(nonce)])
+      .then(([, hashedNonce]) => {
+        if (cancelled || !window.google) return;
         window.google.accounts.id.initialize({
           client_id: clientId,
-          nonce,
+          nonce: hashedNonce,
           callback: (res) => {
             if (cancelled) return;
             setStatus("signing-in");
             setErrorMsg(null);
-            void signInWithGoogleIdToken(res.credential, nonce).then(({ error }) => {
+            const currentNonce = nonceRef.current;
+            if (!currentNonce) return;
+            void signInWithGoogleIdToken(res.credential, currentNonce).then(({ error }) => {
               if (cancelled) return;
               if (error) {
                 setStatus("error");
@@ -127,16 +150,6 @@ export function GoogleSignInButton({ onSignedIn }: GoogleSignInButtonProps) {
               onSignedInRef.current?.();
             });
           },
-        });
-        window.google.accounts.id.renderButton(containerRef.current, {
-          type: "standard",
-          // Outline: mais coerente com o resto da UI (superfícies
-          // escuras-mas-não-pretas) do que o preto puro do filled_black.
-          theme: "outline",
-          size: "large",
-          text: "continue_with",
-          shape: "pill",
-          width: BUTTON_WIDTH,
         });
         setStatus("ready");
       })
@@ -150,51 +163,45 @@ export function GoogleSignInButton({ onSignedIn }: GoogleSignInButtonProps) {
     };
   }, []);
 
-  if (status === "fallback") {
-    // Google Identity Services indisponível — volta pro redirect de página
-    // inteira (CLAUDE.md §2: conta obrigatória, mas sempre precisa de uma
-    // forma de logar, mesmo que o GIS esteja bloqueado).
-    return (
-      <button
-        type="button"
-        onClick={() => void signInWithGoogle()}
-        style={{
-          minHeight: 44,
-          width: BUTTON_WIDTH,
-          maxWidth: "100%",
-          padding: "10px 18px",
-          fontSize: "var(--t-ui)",
-          fontWeight: 700,
-          borderRadius: 999,
-          border: "1px solid var(--line)",
-          background: "var(--surface)",
-          color: "var(--ink)",
-          cursor: "pointer",
-        }}
-      >
-        Continuar com o Google
-      </button>
-    );
-  }
+  const click = () => {
+    if (status !== "ready" || !window.google) {
+      void signInWithGoogle();
+      return;
+    }
+    window.google.accounts.id.prompt((notification) => {
+      // O seletor não apareceu (cooldown do One Tap, navegador sem suporte,
+      // etc.) — sem fallback aqui, o clique não faria nada visível.
+      if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+        void signInWithGoogle();
+      }
+    });
+  };
+
+  const busy = status === "signing-in";
 
   return (
     <div>
-      {/* minHeight reserva o espaço do botão do Google antes dele terminar
-          de carregar — sem isso, o texto de aviso abaixo "pulava" pra cima
-          quando o botão finalmente aparecia. */}
-      <div
-        ref={containerRef}
+      <button
+        type="button"
+        onClick={click}
+        disabled={busy}
         style={{
           minHeight: 44,
-          width: BUTTON_WIDTH,
+          width: 320,
           maxWidth: "100%",
-          opacity: status === "signing-in" ? 0.6 : 1,
-          pointerEvents: status === "signing-in" ? "none" : "auto",
+          padding: "10px 18px",
+          fontSize: "var(--t-ui)",
+          fontWeight: 800,
+          borderRadius: 999,
+          border: "none",
+          background: "var(--accent)",
+          color: "var(--on-accent)",
+          cursor: busy ? "default" : "pointer",
+          opacity: busy ? 0.6 : 1,
         }}
-      />
-      {status === "signing-in" && (
-        <p style={{ margin: "6px 0 0", fontSize: "var(--t-ui)", color: "var(--ink-dim)" }}>Entrando…</p>
-      )}
+      >
+        {busy ? "Entrando…" : "Continuar com o Google"}
+      </button>
       {status === "error" && errorMsg && (
         <p style={{ margin: "6px 0 0", fontSize: "var(--t-ui)", color: "var(--danger)" }}>{errorMsg}</p>
       )}
