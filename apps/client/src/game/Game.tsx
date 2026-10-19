@@ -220,6 +220,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
         />
       </TopRightPanel>
       <Hud
+        enterFocusesChat={!paused}
         online={net.online}
         scores={net.scores}
         chatLog={net.chatLog}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   MAX_CHAT_LENGTH,
   TEAMS,
@@ -14,6 +14,8 @@ interface HudProps {
   scores: Record<TeamId, number>;
   chatLog: ChatEntry[];
   onChat: (text: string) => void;
+  /** false enquanto um modal (ex.: loja) está aberto — Enter não foca o chat. */
+  enterFocusesChat?: boolean;
 }
 
 /** Cor de time segura: ignora `team` inválido vindo da rede (defensivo). */
@@ -22,8 +24,24 @@ function teamColor(team: unknown): string {
 }
 
 /** Sobreposição 2D: placar por time, estado da conexão e chat efêmero. */
-export function Hud({ online, scores, chatLog, onChat }: HudProps) {
+export function Hud({ online, scores, chatLog, onChat, enterFocusesChat = true }: HudProps) {
   const [text, setText] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Enter foca o chat (PC). Ignora se já está digitando ou se o foco está num
+  // botão/link (Enter ali ativa o próprio controle).
+  useEffect(() => {
+    if (!enterFocusesChat) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Enter" || e.repeat || e.isComposing) return;
+      const t = e.target;
+      if (t instanceof HTMLElement && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "A"].includes(t.tagName))) return;
+      e.preventDefault();
+      inputRef.current?.focus();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [enterFocusesChat]);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -104,8 +122,13 @@ export function Hud({ online, scores, chatLog, onChat }: HudProps) {
         </div>
         <form onSubmit={submit}>
           <input
+            ref={inputRef}
             value={text}
             onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              // Esc devolve o teclado ao jogo.
+              if (e.key === "Escape") e.currentTarget.blur();
+            }}
             maxLength={MAX_CHAT_LENGTH}
             placeholder="Conversar…"
             aria-label="Mensagem de chat"
