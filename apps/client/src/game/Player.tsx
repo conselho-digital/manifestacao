@@ -10,6 +10,7 @@ import {
 import { Avatar } from "./Avatar.js";
 import {
   CAMERA_LOOK_AHEAD_RATIO,
+  CAMERA_SHOULDER_RATIO,
   CAMERA_PIVOT_HEIGHT,
   RUN_MULTIPLIER,
   WALK_SPEED,
@@ -137,12 +138,22 @@ export function Player({
     const pivotX = g.position.x;
     const pivotY = g.position.y + CAMERA_PIVOT_HEIGHT;
     const pivotZ = g.position.z;
-    // Posição desejada da câmera (esfera em volta do pivô), encurtada se o
-    // chão/obstáculo estiver no caminho — a câmera nunca atravessa nada.
-    dir.current.set(-Math.sin(yaw) * cosPitch, Math.sin(pitch), -Math.cos(yaw) * cosPitch);
+    // Câmera "sobre o ombro" (estilo GTA): o ponto que a câmera orbita e mira
+    // fica deslocado pra DIREITA do personagem, então ele aparece à esquerda do
+    // centro da tela e a mira (centro) nunca cai em cima dele.
+    const shoulder = cameraDistance * CAMERA_SHOULDER_RATIO;
+    const shX = -Math.cos(yaw) * shoulder;
+    const shZ = Math.sin(yaw) * shoulder;
     pivot.current.set(pivotX, pivotY, pivotZ);
-    const wanted = allowedCameraDistance(pivot.current, dir.current, cameraDistance);
-    tmp.current.copy(pivot.current).addScaledVector(dir.current, wanted);
+    dir.current.set(-Math.sin(yaw) * cosPitch, Math.sin(pitch), -Math.cos(yaw) * cosPitch);
+    // Posição desejada = ponto do ombro + recuo; encurtada se chão/obstáculo
+    // estiver entre a cabeça do personagem e a câmera (nunca atravessa nada).
+    tmp.current.set(pivotX + shX, pivotY, pivotZ + shZ).addScaledVector(dir.current, cameraDistance);
+    offset.current.copy(tmp.current).sub(pivot.current);
+    const wantedDist = offset.current.length();
+    offset.current.divideScalar(wantedDist);
+    const wanted = allowedCameraDistance(pivot.current, offset.current, wantedDist);
+    tmp.current.copy(pivot.current).addScaledVector(offset.current, wanted);
     camera.position.lerp(tmp.current, 1 - Math.pow(0.001, delta));
     // O lerp suaviza o afastamento, mas a aproximação é imediata: se a câmera
     // (ainda a caminho) ficou além do permitido, encosta já no limite.
@@ -156,7 +167,7 @@ export function Player({
     // Olha um pouco à frente do personagem: assim o centro da tela (onde fica
     // a mira do spray) cai no chão à frente dele, em vez de em cima da cabeça.
     const ahead = cameraDistance * CAMERA_LOOK_AHEAD_RATIO;
-    camera.lookAt(pivotX + Math.sin(yaw) * ahead, pivotY, pivotZ + Math.cos(yaw) * ahead);
+    camera.lookAt(pivotX + shX + Math.sin(yaw) * ahead, pivotY, pivotZ + shZ + Math.cos(yaw) * ahead);
 
     // Mira: raio do centro da tela até o chão (y=0), limitado ao alcance do spray.
     camera.getWorldDirection(aimDir.current);

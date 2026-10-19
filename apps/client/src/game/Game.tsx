@@ -7,7 +7,7 @@ import { RemotePlayers } from "./RemotePlayers.js";
 import { SprayMarks } from "./SprayMarks.js";
 import { isTypingTarget, useInput } from "./useInput.js";
 import { modelUrlFor } from "./models.js";
-import { CAMERA_DISTANCE_MOBILE, CAMERA_DISTANCE_DESKTOP, CAMERA_PITCH_DEFAULT, CAMERA_PIVOT_HEIGHT } from "./world.js";
+import { CAMERA_SHOULDER_RATIO, CAMERA_DISTANCE_MOBILE, CAMERA_DISTANCE_DESKTOP, CAMERA_PITCH_DEFAULT, CAMERA_PIVOT_HEIGHT } from "./world.js";
 import { SPRAY_CARTRIDGE_SIZE, SPRAY_REFILL_INTERVAL_MS } from "./spray.js";
 import { useAvenueRealtime } from "../net/useAvenueRealtime.js";
 import { Joystick } from "../ui/Joystick.js";
@@ -145,7 +145,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
         shadows
         camera={{
           position: [
-            0,
+            -cameraDistance * CAMERA_SHOULDER_RATIO,
             CAMERA_PIVOT_HEIGHT + Math.sin(CAMERA_PITCH_DEFAULT) * cameraDistance,
             -Math.cos(CAMERA_PITCH_DEFAULT) * cameraDistance,
           ],

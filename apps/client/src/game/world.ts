@@ -16,6 +16,8 @@ export const CAMERA_DISTANCE_MOBILE = CAMERA_DISTANCE * 0.75;
 export const CAMERA_DISTANCE_DESKTOP = CAMERA_DISTANCE / 2;
 /** Fração da distância da câmera que o olhar avança à frente do personagem — põe a mira (centro da tela) à frente dele, não na cabeça. */
 export const CAMERA_LOOK_AHEAD_RATIO = 0.3;
+/** Deslocamento lateral da câmera (sobre o ombro direito), como fração da distância. */
+export const CAMERA_SHOULDER_RATIO = 0.14;
 /** Altura do ponto que a câmera mira/orbita (ombro/cabeça do personagem). */
 export const CAMERA_PIVOT_HEIGHT = 1.5;
 /** Inclinação inicial (radianos) — mantém o enquadramento parecido com o antigo offset fixo. */
