@@ -24,7 +24,8 @@ import { isOnlineEnabled } from "../config/env.js";
 import { TeamFlagIcon } from "./TeamFlagIcon.js";
 import { AvatarGlyph } from "./AvatarGlyph.js";
 
-const STORAGE_KEY = "manifestacao.avatar";
+export const AVATAR_STORAGE_KEY = "manifestacao.avatar";
+const STORAGE_KEY = AVATAR_STORAGE_KEY;
 
 function loadSaved(): Partial<AvatarConfig> {
   try {

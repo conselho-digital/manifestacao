@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import type { AvatarConfig } from "@manifestacao/shared";
-import { AvatarPicker } from "./ui/AvatarPicker.js";
+import { AVATAR_STORAGE_KEY, AvatarPicker } from "./ui/AvatarPicker.js";
 import { CookieConsent } from "./ui/CookieConsent.js";
 import { Game } from "./game/Game.js";
 import { Store } from "./shop/Store.js";
-import { useAuth } from "./auth/useAuth.js";
+import { signOut, useAuth } from "./auth/useAuth.js";
 import { useEntitlements } from "./shop/useEntitlements.js";
 
 /**
@@ -33,6 +33,21 @@ export function App() {
     if (storeOpen) void refresh();
   }, [storeOpen, refresh]);
 
+  const changeAvatar = (a: AvatarConfig) => {
+    setAvatar(a);
+    try {
+      localStorage.setItem(AVATAR_STORAGE_KEY, JSON.stringify(a));
+    } catch {
+      /* modo privado: vale só nesta sessão */
+    }
+  };
+
+  // Sai da conta e volta pra tela inicial.
+  const exitPlatform = () => {
+    void signOut();
+    setAvatar(null);
+  };
+
   return (
     <>
       {avatar ? (
@@ -42,6 +57,8 @@ export function App() {
           onOpenStore={() => setStoreOpen(true)}
           paused={storeOpen}
           entitlementsLoading={ownedLoading}
+          onAvatarChange={changeAvatar}
+          onExit={exitPlatform}
         />
       ) : (
         <AvatarPicker

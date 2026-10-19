@@ -16,6 +16,8 @@ import { RunButton } from "../ui/RunButton.js";
 import { Hud } from "../ui/Hud.js";
 import { VehiclePicker } from "../ui/VehiclePicker.js";
 import { StoreButton } from "../ui/StoreButton.js";
+import { OptionsButton } from "../ui/OptionsButton.js";
+import { OptionsModal } from "../ui/OptionsModal.js";
 import { SprayButton } from "../ui/SprayButton.js";
 import { TopRightPanel } from "../ui/TopRightPanel.js";
 import { Crosshair } from "../ui/Crosshair.js";
@@ -35,6 +37,10 @@ interface GameProps {
   paused: boolean;
   /** true enquanto a sessão/posses ainda não terminaram de carregar. */
   entitlementsLoading: boolean;
+  /** Aplica mudanças de perfil (equipe, personagem, apelido) feitas em Opções. */
+  onAvatarChange: (a: AvatarConfig) => void;
+  /** Sai da conta e volta pra tela inicial. */
+  onExit: () => void;
 }
 
 /**
@@ -42,12 +48,13 @@ interface GameProps {
  * HUD (placar + chat), seletor de veículo, spray e joystick de toque.
  * Sessão/loja não vivem aqui — ver App.tsx.
  */
-export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }: GameProps) {
+export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, onAvatarChange, onExit }: GameProps) {
+  const [optionsOpen, setOptionsOpen] = useState(false);
   const [vehicle, setVehicle] = useState<VehicleId>("nenhum");
   // Pausa o movimento por teclado enquanto a loja (renderizada por cima,
   // em App.tsx) está aberta. O joystick já fica coberto pelo overlay da
   // loja (zIndex maior), então só o teclado precisa dessa trava explícita.
-  const { inputRef, setJoystick } = useInput(!paused);
+  const { inputRef, setJoystick } = useInput(!paused && !optionsOpen);
   const net = useAvenueRealtime(avatar);
   const isTouch = useIsTouch();
 
@@ -209,7 +216,10 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
       )}
       <Crosshair />
       <TopRightPanel>
-        <StoreButton onClick={onOpenStore} />
+        <div style={{ display: "flex", gap: 8 }}>
+          <OptionsButton onClick={() => setOptionsOpen(true)} />
+          <StoreButton onClick={onOpenStore} />
+        </div>
         <SprayButton charges={sprayCharges} maxCharges={SPRAY_CARTRIDGE_SIZE} onSpray={handleSpray} />
         <VehiclePicker
           value={vehicle}
@@ -219,8 +229,19 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
           loading={entitlementsLoading}
         />
       </TopRightPanel>
+      {optionsOpen && (
+        <OptionsModal
+          avatar={avatar}
+          onSave={(a) => {
+            onAvatarChange(a);
+            setOptionsOpen(false);
+          }}
+          onClose={() => setOptionsOpen(false)}
+          onExit={onExit}
+        />
+      )}
       <Hud
-        enterFocusesChat={!paused}
+        enterFocusesChat={!paused && !optionsOpen}
         online={net.online}
         scores={net.scores}
         chatLog={net.chatLog}
