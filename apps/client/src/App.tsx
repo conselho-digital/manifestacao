@@ -47,7 +47,6 @@ export function App() {
           onReady={setAvatar}
           session={session}
           authLoading={authLoading}
-          owned={owned}
           onOpenStore={() => setStoreOpen(true)}
         />
       )}

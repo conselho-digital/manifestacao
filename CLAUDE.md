@@ -43,7 +43,7 @@
 
 ## 2. Princípios
 
-- **Entrar em 1 clique**: jogar sem login; conta só para comprar.
+- **Conta obrigatória para jogar** (decisão de produto — revisado): entrar no mapa exige login Google quando o modo online está disponível. Em modo offline (sem Supabase configurado) o acesso segue liberado, já que não há como autenticar.
 - **Mobile-first**: rodar bem em celular médio (viewport 380px, GPU/CPU modestas).
 - **Efêmero**: chat, posições e pixações vivem só em memória/Realtime; nunca em banco.
 - **Servidor autoritativo**: nunca confiar em posição, saldo ou item vindos do cliente.

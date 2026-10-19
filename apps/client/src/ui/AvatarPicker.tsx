@@ -6,7 +6,6 @@ import {
   FLAGS,
   FLAG_IDS,
   MAX_NICKNAME_LENGTH,
-  PASSES,
   TEAMS,
   TEAM_IDS,
   flagColor,
@@ -45,16 +44,17 @@ interface AvatarPickerProps {
   onReady: (a: AvatarConfig) => void;
   session: Session | null;
   authLoading: boolean;
-  owned: ReadonlySet<string>;
   onOpenStore: () => void;
 }
 
 /**
- * Tela de entrada: logo + conta no topo, seletor de lado, grade de
- * personagens (com bandeira/Premium dentro da mesma seção) e um botão de
- * entrar fixo embaixo. Identidade e nomes são próprios — ver CLAUDE.md §9.
+ * Tela de entrada: logo + Premium + conta no topo, seletor de lado, grade
+ * de personagens com bandeira, e um botão de entrar fixo embaixo. Entrar no
+ * mapa exige conta Google (quando o modo online está disponível) — sem
+ * sessão, o botão principal faz login em vez de abrir o jogo direto.
+ * Identidade e nomes são próprios — ver CLAUDE.md §9.
  */
-export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore }: AvatarPickerProps) {
+export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: AvatarPickerProps) {
   // Inicializador lazy: lê o localStorage só na primeira renderização, não a
   // cada tecla digitada (useState(saved...) re-rodaria loadSaved() sempre).
   const [saved] = useState(loadSaved);
@@ -64,7 +64,12 @@ export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore
     isCharacterId(saved.character) ? saved.character : "comum",
   );
   const [flag, setFlag] = useState<FlagId>(isFlagId(saved.flag) ? saved.flag : "nenhuma");
-  const [customizing, setCustomizing] = useState(false);
+
+  // Conta obrigatória pra entrar no mapa (quando o modo online está
+  // disponível): sem sessão, o botão principal faz login em vez de entrar
+  // direto. Em modo offline (sem Supabase configurado) não há como logar,
+  // então segue liberado — senão o jogo ficaria impossível de abrir.
+  const needsLogin = isOnlineEnabled && !session;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -75,11 +80,16 @@ export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore
     } catch {
       /* modo privado: segue sem persistir */
     }
+    if (needsLogin) {
+      // Salva a seleção ANTES do redirect do OAuth (a página recarrega
+      // inteira ao voltar do Google) — sem isso, quem escolhe tudo antes de
+      // logar perdia time/personagem/bandeira e tinha que escolher de novo.
+      void signInWithGoogle();
+      return;
+    }
     onReady(avatar);
   };
 
-  const premium = PASSES.premium;
-  const hasPremium = owned.has("pass:premium");
   const teamColorHex = hexColor(TEAMS[team].color);
 
   return (
@@ -109,31 +119,41 @@ export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore
         <div
           style={{
             fontFamily: "var(--font-display)",
-            fontSize: 22,
+            // clamp em vez de tamanho fixo: encolhe sozinha em telas muito
+            // estreitas (com o botão Premium agora também no header) em vez
+            // de truncar com reticências.
+            fontSize: "clamp(16px, 5.5vw, 22px)",
             fontWeight: 400,
             letterSpacing: "-0.01em",
             textTransform: "uppercase",
             whiteSpace: "nowrap",
             overflow: "hidden",
             textOverflow: "ellipsis",
+            minWidth: 0,
           }}
         >
           Manifestação <span style={{ color: "var(--accent)" }}>Online</span>
         </div>
 
-        {isOnlineEnabled && !authLoading && (
-          <div style={{ flexShrink: 0 }}>
-            {session ? (
-              <button type="button" onClick={() => void signOut()} style={smallBtnStyle}>
-                Sair
-              </button>
-            ) : (
-              // Texto curto (não "Entrar com Google") pra nunca disputar
-              // espaço com a logo em telas estreitas (~360-380px).
-              <button type="button" onClick={() => void signInWithGoogle()} style={smallAccentBtnStyle}>
-                Entrar
-              </button>
-            )}
+        {isOnlineEnabled && (
+          <div style={{ display: "flex", alignItems: "center", gap: 8, flexShrink: 0 }}>
+            <button type="button" onClick={onOpenStore} style={premiumPillStyle}>
+              Premium
+            </button>
+            {!authLoading &&
+              (session ? (
+                <button type="button" onClick={() => void signOut()} style={smallBtnStyle}>
+                  Sair
+                </button>
+              ) : (
+                // Texto curto (não "Entrar com Google") pra nunca disputar
+                // espaço com a logo em telas estreitas (~360-380px). Estilo
+                // neutro (não accent) pra não competir em peso com o pill
+                // "Premium" — só uma ação de destaque por header.
+                <button type="button" onClick={() => void signInWithGoogle()} style={smallBtnStyle}>
+                  Entrar
+                </button>
+              ))}
           </div>
         )}
       </header>
@@ -317,65 +337,26 @@ export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore
             )}
           </div>
 
-          <button
-            type="button"
-            onClick={() => setCustomizing((v) => !v)}
-            aria-expanded={customizing}
-            style={{ ...smallBtnStyle, marginTop: 14, display: "inline-flex", alignItems: "center", gap: 6 }}
-          >
-            Bandeira e Premium
-            <span
-              aria-hidden="true"
-              style={{
-                display: "inline-block",
-                transition: "transform .15s",
-                transform: customizing ? "rotate(180deg)" : "rotate(0deg)",
-              }}
-            >
-              ▾
-            </span>
-          </button>
-
-          {customizing && (
-            <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 14 }}>
-              <div>
-                <Label>Bandeira</Label>
-                <Row>
-                  {FLAG_IDS.map((id) => {
-                    const accent = id === "nenhuma" ? "var(--accent)" : hexColor(flagColor(id, TEAMS[team].color));
-                    const selected = id === flag;
-                    return (
-                      <button
-                        key={id}
-                        type="button"
-                        aria-pressed={selected}
-                        onClick={() => setFlag(id)}
-                        style={chip(selected, accent)}
-                      >
-                        {FLAGS[id].label}
-                      </button>
-                    );
-                  })}
-                </Row>
-              </div>
-
-              {isOnlineEnabled && (
-                // Separado por um passo de tom (var(--surface-2)), não por
-                // uma linha — mesma regra aplicada no header.
-                <div style={{ background: "var(--surface-2)", borderRadius: "var(--r-md)", padding: 12 }}>
-                  <div style={{ fontSize: "var(--t-ui)", fontWeight: 700 }}>
-                    Premium {hasPremium && <span style={{ color: "var(--accent)" }}>· você tem</span>}
-                  </div>
-                  <div style={{ fontSize: "var(--t-ui)", color: "var(--ink)", marginTop: 4, maxWidth: "56ch" }}>
-                    {premium.description}
-                  </div>
-                  <button type="button" onClick={onOpenStore} style={{ ...smallAccentBtnStyle, marginTop: 8 }}>
-                    {hasPremium ? "Ver loja" : "Comprar na loja"}
+          <div style={{ marginTop: 14 }}>
+            <Label>Bandeira</Label>
+            <Row>
+              {FLAG_IDS.map((id) => {
+                const accent = id === "nenhuma" ? "var(--accent)" : hexColor(flagColor(id, TEAMS[team].color));
+                const selected = id === flag;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => setFlag(id)}
+                    style={chip(selected, accent)}
+                  >
+                    {FLAGS[id].label}
                   </button>
-                </div>
-              )}
-            </div>
-          )}
+                );
+              })}
+            </Row>
+          </div>
         </section>
       </form>
 
@@ -394,6 +375,7 @@ export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore
         <button
           type="submit"
           form="avatar-picker-form"
+          disabled={isOnlineEnabled && authLoading}
           style={{
             width: "min(720px, 100%)",
             margin: "0 auto",
@@ -404,14 +386,28 @@ export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore
             fontWeight: 800,
             borderRadius: "var(--r-lg)",
             border: "none",
-            cursor: "pointer",
+            cursor: isOnlineEnabled && authLoading ? "default" : "pointer",
+            opacity: isOnlineEnabled && authLoading ? 0.6 : 1,
             background: "var(--accent)",
             color: "var(--on-accent)",
-            transition: "transform .08s",
+            transition: "transform .08s, opacity .12s",
           }}
         >
-          Entrar na avenida
+          {isOnlineEnabled && authLoading ? "Carregando…" : needsLogin ? "Entrar com Google" : "Entrar na avenida"}
         </button>
+        {needsLogin && !authLoading && (
+          <p
+            style={{
+              margin: "8px auto 0",
+              width: "min(640px, 100%)",
+              textAlign: "center",
+              fontSize: "var(--t-ui)",
+              color: "var(--ink-dim)",
+            }}
+          >
+            Conta é obrigatória pra entrar na avenida.
+          </p>
+        )}
       </div>
     </div>
   );
@@ -449,12 +445,12 @@ const smallBtnStyle: React.CSSProperties = {
   cursor: "pointer",
 };
 
-const smallAccentBtnStyle: React.CSSProperties = {
+const premiumPillStyle: React.CSSProperties = {
   minHeight: 36,
-  padding: "8px 14px",
+  padding: "8px 16px",
   fontSize: "var(--t-ui)",
-  fontWeight: 700,
-  borderRadius: "var(--r-sm)",
+  fontWeight: 800,
+  borderRadius: 999,
   border: "none",
   background: "var(--accent)",
   color: "var(--on-accent)",

@@ -23,10 +23,16 @@ export function useAuth(): AuthState {
       return;
     }
 
-    supabase.auth.getSession().then(({ data }) => {
-      setSession(data.session);
-      setLoading(false);
-    });
+    supabase.auth
+      .getSession()
+      .then(({ data }) => {
+        setSession(data.session);
+        setLoading(false);
+      })
+      // Sem isso, uma rejeição aqui travava `loading` em true pra sempre —
+      // inclusive o próprio botão de login, que fica desabilitado enquanto
+      // authLoading for true.
+      .catch(() => setLoading(false));
 
     const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
