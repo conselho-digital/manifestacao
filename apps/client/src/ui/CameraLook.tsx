@@ -1,8 +1,11 @@
 import { useEffect, useRef } from "react";
+import { clampPitch } from "../game/world.js";
 
 interface CameraLookProps {
-  /** Ângulo da câmera (radianos) — arrastar na horizontal gira em torno do personagem. */
+  /** Ângulo horizontal da câmera (radianos) — arrastar na horizontal gira em torno do personagem. */
   yawRef: { current: number };
+  /** Inclinação vertical (radianos) — arrastar na vertical olha pra cima/baixo. */
+  pitchRef: { current: number };
 }
 
 /** Pixels de arrasto para girar 1 radiano (quanto menor, mais sensível). */
@@ -14,13 +17,15 @@ function wrapAngle(a: number): number {
 
 /**
  * Zona de arrasto invisível na metade direita da tela: controla a câmera de
- * terceira pessoa (como em jogos de câmera livre), sem joystick visual —
- * só o movimento vindo do dedo. Fica embaixo do TopRightPanel (zIndex menor),
- * então os botões de Loja/Veículo/Correr continuam clicáveis por cima.
+ * terceira pessoa livre (gira E inclina em torno do personagem, como em
+ * jogos de terceira pessoa), sem joystick visual — só o movimento vindo do
+ * dedo. Fica embaixo do TopRightPanel (zIndex menor), então os botões de
+ * Loja/Veículo/Correr continuam clicáveis por cima.
  */
-export function CameraLook({ yawRef }: CameraLookProps) {
+export function CameraLook({ yawRef, pitchRef }: CameraLookProps) {
   const pointer = useRef<number | null>(null);
   const lastX = useRef(0);
+  const lastY = useRef(0);
 
   // Se a aba perde foco/fica oculta com o dedo ainda "tocando" (troca de
   // app, notificação), o pointerup pode nunca chegar — sem isso o arrasto
@@ -42,13 +47,20 @@ export function CameraLook({ yawRef }: CameraLookProps) {
     pointer.current = e.pointerId;
     (e.target as Element).setPointerCapture(e.pointerId);
     lastX.current = e.clientX;
+    lastY.current = e.clientY;
   };
 
   const move = (e: React.PointerEvent) => {
     if (e.pointerId !== pointer.current) return;
     const dx = e.clientX - lastX.current;
+    const dy = e.clientY - lastY.current;
     lastX.current = e.clientX;
+    lastY.current = e.clientY;
     yawRef.current = wrapAngle(yawRef.current + dx / PX_PER_RADIAN);
+    // Arrastar pra cima (dy negativo) inclina a câmera pra baixo (pitch
+    // menor), olhando mais de frente/de baixo — como puxar a câmera junto
+    // com o dedo. Pitch não é circular, por isso é clampado (não wrapAngle).
+    pitchRef.current = clampPitch(pitchRef.current + dy / PX_PER_RADIAN);
   };
 
   const end = (e: React.PointerEvent) => {

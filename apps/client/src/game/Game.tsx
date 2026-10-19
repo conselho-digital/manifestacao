@@ -7,7 +7,7 @@ import { RemotePlayers } from "./RemotePlayers.js";
 import { SprayMarks } from "./SprayMarks.js";
 import { useInput } from "./useInput.js";
 import { modelUrlFor } from "./models.js";
-import { clampToAvenue } from "./world.js";
+import { CAMERA_PITCH_DEFAULT, clampToAvenue } from "./world.js";
 import { SPRAY_CARTRIDGE_SIZE, SPRAY_REACH, SPRAY_REFILL_INTERVAL_MS } from "./spray.js";
 import { useAvenueRealtime } from "../net/useAvenueRealtime.js";
 import { Joystick } from "../ui/Joystick.js";
@@ -44,10 +44,11 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
   const { inputRef, setJoystick } = useInput(!paused);
   const net = useAvenueRealtime(avatar);
 
-  // Ângulo da câmera (controlado pelo arrasto na metade direita da tela) e
-  // estado do botão de correr — lidos a cada frame pelo Player, sem passar
-  // por re-render do React.
+  // Ângulo/inclinação da câmera (controlados pelo arrasto na metade direita
+  // da tela) e estado do botão de correr — lidos a cada frame pelo Player,
+  // sem passar por re-render do React.
   const cameraYawRef = useRef(0);
+  const cameraPitchRef = useRef(CAMERA_PITCH_DEFAULT);
   const runRef = useRef(false);
 
   const transformRef = useRef<PlayerTransform>({ x: 0, z: 0, rotationY: 0 });
@@ -80,10 +81,10 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
 
   return (
     <>
-      {/* Z negativo: combina com o sinal que Player.tsx usa pra calcular a
-          câmera (yaw inicial 0 → atrás do personagem fica em -Z), evitando
-          um giro perceptível da câmera logo na entrada. */}
-      <Canvas shadows camera={{ position: [0, 10, -14], fov: 55 }}>
+      {/* Posição calculada com os mesmos yaw=0/pitch padrão que o Player.tsx
+          usa pra orbitar a câmera — evita um salto/giro perceptível da
+          câmera logo na entrada, antes do primeiro frame recalcular. */}
+      <Canvas shadows camera={{ position: [0, 9.63, -11.39], fov: 55 }}>
         <color attach="background" args={["#161a1f"]} />
         <fog attach="fog" args={["#161a1f", 40, 120]} />
         <ambientLight intensity={0.6} />
@@ -104,6 +105,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
           modelUrl={modelUrlFor(avatar.character)}
           inputRef={inputRef}
           cameraYawRef={cameraYawRef}
+          cameraPitchRef={cameraPitchRef}
           runRef={runRef}
           onMove={net.sendMove}
           transformRef={transformRef}
@@ -113,7 +115,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
       </Canvas>
 
       <Joystick onMove={setJoystick} />
-      <CameraLook yawRef={cameraYawRef} />
+      <CameraLook yawRef={cameraYawRef} pitchRef={cameraPitchRef} />
       <RunButton runRef={runRef} />
       <TopRightPanel>
         <StoreButton onClick={onOpenStore} />

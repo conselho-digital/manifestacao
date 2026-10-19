@@ -8,7 +8,13 @@ import {
   type VehicleId,
 } from "@manifestacao/shared";
 import { Avatar } from "./Avatar.js";
-import { RUN_MULTIPLIER, WALK_SPEED, clampToAvenue } from "./world.js";
+import {
+  CAMERA_DISTANCE,
+  CAMERA_PIVOT_HEIGHT,
+  RUN_MULTIPLIER,
+  WALK_SPEED,
+  clampToAvenue,
+} from "./world.js";
 import type { InputVector } from "./useInput.js";
 
 /** Posição + rotação atuais do jogador local, lidas fora do Canvas (ex.: botão de spray). */
@@ -26,8 +32,10 @@ interface PlayerProps {
   vehicle: VehicleId;
   modelUrl: string | null;
   inputRef: { current: InputVector };
-  /** Ângulo da câmera (radianos), controlado pela zona de arrasto da direita. */
+  /** Ângulo horizontal da câmera (radianos), controlado pela zona de arrasto da direita. */
   cameraYawRef: { current: number };
+  /** Inclinação vertical da câmera (radianos), mesma zona de arrasto. */
+  cameraPitchRef: { current: number };
   /** true enquanto o botão de correr está pressionado. */
   runRef: { current: boolean };
   onMove: (x: number, z: number, facing: Facing, vehicle: VehicleId, flag: FlagId) => void;
@@ -38,8 +46,6 @@ interface PlayerProps {
 }
 
 const SEND_INTERVAL = 1 / 12; // ~12 updates/s
-const CAMERA_HEIGHT = 10;
-const CAMERA_DISTANCE = 14;
 
 function facingOf(x: number, z: number, prev: Facing): Facing {
   if (x === 0 && z === 0) return prev;
@@ -59,6 +65,7 @@ export function Player({
   modelUrl,
   inputRef,
   cameraYawRef,
+  cameraPitchRef,
   runRef,
   onMove,
   transformRef,
@@ -105,19 +112,26 @@ export function Player({
       facing.current = facingOf(worldX, worldZ, facing.current);
     }
 
-    // Câmera atrás do personagem: desloca na direção oposta ao ângulo
-    // controlado pelo arrasto da direita (forward = (sin, cos) do ângulo).
+    // Câmera orbital livre: gira (yaw) e inclina (pitch) em torno de um
+    // pivô na altura do personagem, controlada pela zona de arrasto da
+    // direita — não fica mais presa a um offset fixo no mundo, dá pra olhar
+    // pra frente/pra cima de verdade. forward(yaw) = (sin, cos) do ângulo.
     // Nota: com o avatar geométrico atual (simétrico, sem frente/trás visível)
     // não há como confirmar visualmente o lado; ao entrar um modelo glTF com
     // frente definida, revalidar se a câmera fica atrás das costas ou na frente
     // e inverter o sinal aqui se necessário.
+    const pitch = cameraPitchRef.current;
+    const cosPitch = Math.cos(pitch);
+    const pivotX = g.position.x;
+    const pivotY = g.position.y + CAMERA_PIVOT_HEIGHT;
+    const pivotZ = g.position.z;
     tmp.current.set(
-      g.position.x - Math.sin(yaw) * CAMERA_DISTANCE,
-      g.position.y + CAMERA_HEIGHT,
-      g.position.z - Math.cos(yaw) * CAMERA_DISTANCE,
+      pivotX - Math.sin(yaw) * CAMERA_DISTANCE * cosPitch,
+      pivotY + Math.sin(pitch) * CAMERA_DISTANCE,
+      pivotZ - Math.cos(yaw) * CAMERA_DISTANCE * cosPitch,
     );
     camera.position.lerp(tmp.current, 1 - Math.pow(0.001, delta));
-    camera.lookAt(g.position.x, g.position.y + 1, g.position.z);
+    camera.lookAt(pivotX, pivotY, pivotZ);
 
     if (transformRef) {
       transformRef.current.x = g.position.x;
