@@ -11,6 +11,8 @@ import { clampToAvenue } from "./world.js";
 import { SPRAY_CARTRIDGE_SIZE, SPRAY_REACH, SPRAY_REFILL_INTERVAL_MS } from "./spray.js";
 import { useAvenueRealtime } from "../net/useAvenueRealtime.js";
 import { Joystick } from "../ui/Joystick.js";
+import { CameraLook } from "../ui/CameraLook.js";
+import { RunButton } from "../ui/RunButton.js";
 import { Hud } from "../ui/Hud.js";
 import { VehiclePicker } from "../ui/VehiclePicker.js";
 import { StoreButton } from "../ui/StoreButton.js";
@@ -42,6 +44,12 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
   const { inputRef, setJoystick } = useInput(!paused);
   const net = useAvenueRealtime(avatar);
 
+  // Ângulo da câmera (controlado pelo arrasto na metade direita da tela) e
+  // estado do botão de correr — lidos a cada frame pelo Player, sem passar
+  // por re-render do React.
+  const cameraYawRef = useRef(0);
+  const runRef = useRef(false);
+
   const transformRef = useRef<PlayerTransform>({ x: 0, z: 0, rotationY: 0 });
   // Só true depois do primeiro useFrame do Player — evita que um clique no
   // instante do mount (antes do R3F rodar o primeiro frame) borrife na
@@ -72,7 +80,10 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
 
   return (
     <>
-      <Canvas shadows camera={{ position: [0, 10, 14], fov: 55 }}>
+      {/* Z negativo: combina com o sinal que Player.tsx usa pra calcular a
+          câmera (yaw inicial 0 → atrás do personagem fica em -Z), evitando
+          um giro perceptível da câmera logo na entrada. */}
+      <Canvas shadows camera={{ position: [0, 10, -14], fov: 55 }}>
         <color attach="background" args={["#161a1f"]} />
         <fog attach="fog" args={["#161a1f", 40, 120]} />
         <ambientLight intensity={0.6} />
@@ -92,6 +103,8 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
           vehicle={vehicle}
           modelUrl={modelUrlFor(avatar.character)}
           inputRef={inputRef}
+          cameraYawRef={cameraYawRef}
+          runRef={runRef}
           onMove={net.sendMove}
           transformRef={transformRef}
           transformReadyRef={transformReadyRef}
@@ -100,6 +113,8 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
       </Canvas>
 
       <Joystick onMove={setJoystick} />
+      <CameraLook yawRef={cameraYawRef} />
+      <RunButton runRef={runRef} />
       <TopRightPanel>
         <StoreButton onClick={onOpenStore} />
         <SprayButton charges={sprayCharges} maxCharges={SPRAY_CARTRIDGE_SIZE} onSpray={handleSpray} />

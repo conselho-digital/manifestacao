@@ -5,6 +5,7 @@
 export const AVENUE_LENGTH = 200; // eixo X
 export const AVENUE_WIDTH = 40; // eixo Z
 export const WALK_SPEED = 6; // unidades/segundo
+export const RUN_MULTIPLIER = 1.7;
 export const AVATAR_RADIUS = 0.5;
 
 export type Facing3D = "up" | "down" | "left" | "right";

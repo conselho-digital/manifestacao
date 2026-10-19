@@ -82,12 +82,14 @@ export function Hud({ online, scores, chatLog, onChat }: HudProps) {
         </span>
       </div>
 
-      {/* Chat */}
+      {/* Chat: fica no topo (não embaixo) pra não disputar espaço com a
+          bolinha fixa do joystick, que agora ocupa todo o canto inferior
+          esquerdo da tela. */}
       <div
         style={{
           position: "fixed",
           left: "calc(env(safe-area-inset-left, 0px) + 10px)",
-          bottom: "calc(env(safe-area-inset-bottom, 0px) + 10px)",
+          top: "calc(env(safe-area-inset-top, 0px) + 54px)",
           width: "min(360px, 80vw)",
           zIndex: 6,
         }}

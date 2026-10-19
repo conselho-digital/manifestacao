@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 interface JoystickProps {
   /** x e z normalizados em [-1, 1]; z negativo = para frente. */
@@ -24,11 +24,31 @@ export function Joystick({ onMove }: JoystickProps) {
   const [active, setActive] = useState(false);
   const pointer = useRef<number | null>(null);
   const anchorRef = useRef<{ x: number; y: number } | null>(null);
+  const zoneRef = useRef<HTMLDivElement | null>(null);
 
   const anchorOf = (zone: Element): { x: number; y: number } => {
+    // getBoundingClientRect já exclui a área sob a gesture bar do sistema
+    // quando a zona usa env(safe-area-inset-*) no CSS (ver estilo abaixo).
     const rect = zone.getBoundingClientRect();
     return { x: rect.left + ANCHOR_INSET, y: rect.bottom - ANCHOR_INSET };
   };
+
+  // Recalcula o anchor se a viewport mudar com o dedo ainda tocando (ex.:
+  // rotação de tela, barra de endereço recolhendo) — sem isso o dx/dy ficava
+  // medido contra um canto que não é mais onde a bolinha é desenhada.
+  useEffect(() => {
+    const recalc = () => {
+      if (pointer.current !== null && zoneRef.current) {
+        anchorRef.current = anchorOf(zoneRef.current);
+      }
+    };
+    window.addEventListener("resize", recalc);
+    window.addEventListener("orientationchange", recalc);
+    return () => {
+      window.removeEventListener("resize", recalc);
+      window.removeEventListener("orientationchange", recalc);
+    };
+  }, []);
 
   const start = (e: React.PointerEvent) => {
     if (pointer.current !== null) return;
@@ -63,6 +83,7 @@ export function Joystick({ onMove }: JoystickProps) {
 
   return (
     <div
+      ref={zoneRef}
       onPointerDown={start}
       onPointerMove={move}
       onPointerUp={end}
@@ -73,6 +94,11 @@ export function Joystick({ onMove }: JoystickProps) {
         width: "50%",
         bottom: 0,
         height: "55%",
+        // Garante que a bolinha fixa (ancorada no canto desta zona) não
+        // caia sob a gesture bar do sistema em iOS/Android.
+        paddingLeft: "env(safe-area-inset-left, 0px)",
+        paddingBottom: "env(safe-area-inset-bottom, 0px)",
+        boxSizing: "border-box",
         touchAction: "none",
         zIndex: 5,
       }}
@@ -85,7 +111,7 @@ export function Joystick({ onMove }: JoystickProps) {
           width: BASE_SIZE,
           height: BASE_SIZE,
           borderRadius: "50%",
-          background: "rgba(255,255,255,0.08)",
+          background: active ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.08)",
           border: "1px solid var(--line)",
           transition: active ? "none" : "background .15s",
         }}
