@@ -65,11 +65,19 @@ export async function signInWithGoogle(): Promise<void> {
  * Login com Google a partir de um ID token (JWT) já obtido no cliente via
  * Google Identity Services — sem redirect de página inteira. Ver
  * `GoogleSignInButton.tsx`, que coleta o token e chama isto.
+ *
+ * `nonce`: o mesmo valor passado em `google.accounts.id.initialize({nonce})`
+ * — o Supabase confere que bate com o nonce embutido no token antes de
+ * aceitar, impedindo que um ID token vazado por outro canal (log, extensão
+ * maliciosa) seja reaproveitado fora desta tentativa de login específica.
  */
-export async function signInWithGoogleIdToken(idToken: string): Promise<{ error: Error | null }> {
+export async function signInWithGoogleIdToken(
+  idToken: string,
+  nonce: string,
+): Promise<{ error: Error | null }> {
   const supabase = getSupabase();
   if (!supabase) return { error: new Error("Supabase não configurado") };
-  const { error } = await supabase.auth.signInWithIdToken({ provider: "google", token: idToken });
+  const { error } = await supabase.auth.signInWithIdToken({ provider: "google", token: idToken, nonce });
   return { error };
 }
 
