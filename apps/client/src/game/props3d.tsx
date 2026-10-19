@@ -5,7 +5,7 @@ import type { VehicleId } from "@manifestacao/shared";
 import { useProximitySound } from "./ProximitySound.js";
 import { useUserGestureUnlocked } from "./useUserGesture.js";
 
-export type FlagEmblem = "star-burst" | "ring";
+export type FlagEmblem = "star-burst" | "ring" | "stripe";
 
 /**
  * Emblema desenhado por código (nunca uma imagem importada): um polígono de
@@ -49,6 +49,20 @@ function RingEmblem({ color = 0xf2f4f7, radius = 0.17, thickness = 0.045 }: { co
   );
 }
 
+/**
+ * Faixa horizontal centralizada — segunda cor sobre o tecido (ex.: verde +
+ * amarelo). Bloco de cor simples, sem nenhum layout de bandeira real (não é
+ * diagonal nem traz símbolo/brasão — só a faixa).
+ */
+function StripeBand({ color = 0xffd12e, height = 0.2 }: { color?: number; height?: number }) {
+  return (
+    <mesh position={[0, 0, 0.002]}>
+      <planeGeometry args={[1, height]} />
+      <meshStandardMaterial color={color} side={2} />
+    </mesh>
+  );
+}
+
 /** Bandeira carregada ao lado do avatar: mastro, tecido colorido e emblema opcional. */
 export function Flag3D({ color, emblem }: { color: number; emblem?: FlagEmblem }) {
   return (
@@ -64,6 +78,7 @@ export function Flag3D({ color, emblem }: { color: number; emblem?: FlagEmblem }
         </mesh>
         {emblem === "star-burst" && <StarBurst />}
         {emblem === "ring" && <RingEmblem />}
+        {emblem === "stripe" && <StripeBand />}
       </group>
     </group>
   );

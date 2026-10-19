@@ -51,7 +51,10 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
       {flag !== "nenhuma" && (
         <Flag3D
           color={flagColor(flag, color)}
-          emblem={flag === "vermelha" ? "star-burst" : flag === "verde" ? "ring" : undefined}
+          // Vermelha: emblema "star-burst" (6 pontas) — não um emblema real de
+          // partido. Verde: faixa amarela sobre o verde (cores nacionais
+          // genéricas, sem brasão nem layout de bandeira real nenhuma).
+          emblem={flag === "vermelha" ? "star-burst" : flag === "verde" ? "stripe" : undefined}
         />
       )}
       <Vehicle3D vehicle={vehicle} />
