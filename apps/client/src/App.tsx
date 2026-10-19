@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import type { AvatarConfig } from "@manifestacao/shared";
 import { AvatarPicker } from "./ui/AvatarPicker.js";
+import { CookieConsent } from "./ui/CookieConsent.js";
 import { Game } from "./game/Game.js";
 import { Store } from "./shop/Store.js";
 import { useAuth } from "./auth/useAuth.js";
@@ -59,6 +60,7 @@ export function App() {
           refresh={refresh}
         />
       )}
+      <CookieConsent />
     </>
   );
 }
