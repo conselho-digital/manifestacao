@@ -5,6 +5,7 @@ import { signInWithGoogle, signOut } from "../auth/useAuth.js";
 import { useCatalog, type CatalogItem } from "./useCatalog.js";
 import { createPixCharge, type PixCharge } from "../net/payments.js";
 import { isOnlineEnabled } from "../config/env.js";
+import { ProductThumb } from "./ProductThumb.js";
 
 function formatBRL(cents: number): string {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -237,9 +238,12 @@ export function Store({ onClose, session, authLoading, owned, refresh }: StorePr
                     background: "var(--surface-2)",
                   }}
                 >
-                  <div>
-                    <div style={{ fontWeight: 700, fontSize: "var(--t-body)" }}>{itemLabel(item)}</div>
-                    {priceLine}
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+                    <ProductThumb itemId={item.id} />
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: "var(--t-body)" }}>{itemLabel(item)}</div>
+                      {priceLine}
+                    </div>
                   </div>
                   {action}
                 </li>

@@ -56,7 +56,7 @@ export function RemotePlayers({ ids, playersRef }: RemotePlayersProps) {
             name={p.nickname}
             flag={p.flag}
             vehicle={p.vehicle}
-            modelUrl={modelUrlFor(p.character)}
+            modelUrl={modelUrlFor(p.character, p.team)}
           />
         );
       })}

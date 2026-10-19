@@ -1,4 +1,6 @@
-import { useMemo } from "react";
+import { Suspense, useMemo } from "react";
+import { GlbModel } from "./props3d.js";
+import { sprayModelUrl } from "./models.js";
 import type { SprayMark } from "./spray.js";
 
 interface SprayMarksProps {
@@ -19,15 +21,27 @@ interface SprayMarksProps {
 export function SprayMarks({ marksRef, version }: SprayMarksProps) {
   // `version` força o recálculo da lista quando o mapa muda.
   const marks = useMemo(() => [...marksRef.current.values()], [marksRef, version]);
+  // Modelo .glb de spray enviado pelo admin (se houver) no lugar da mancha.
+  const modelUrl = sprayModelUrl();
 
   return (
     <>
-      {marks.map((m) => (
-        <mesh key={m.id} position={[m.x, 0.015, m.z]} rotation={[-Math.PI / 2, 0, 0]}>
-          <circleGeometry args={[0.35, 16]} />
-          <meshStandardMaterial color={m.color} />
-        </mesh>
-      ))}
+      {marks.map((m) => {
+        const circle = (
+          <mesh position={[m.x, 0.015, m.z]} rotation={[-Math.PI / 2, 0, 0]}>
+            <circleGeometry args={[0.35, 16]} />
+            <meshStandardMaterial color={m.color} />
+          </mesh>
+        );
+        if (!modelUrl) return <group key={m.id}>{circle}</group>;
+        return (
+          <Suspense key={m.id} fallback={circle}>
+            <group position={[m.x, 0.015, m.z]}>
+              <GlbModel url={modelUrl} />
+            </group>
+          </Suspense>
+        );
+      })}
     </>
   );
 }

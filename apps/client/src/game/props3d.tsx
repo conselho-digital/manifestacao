@@ -1,9 +1,11 @@
-import { useMemo } from "react";
+import { Suspense, useMemo } from "react";
 import { Shape } from "three";
 import { useGLTF } from "@react-three/drei";
+import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import type { VehicleId } from "@manifestacao/shared";
 import { useProximitySound } from "./ProximitySound.js";
 import { useUserGestureUnlocked } from "./useUserGesture.js";
+import { vehicleModelUrl } from "./models.js";
 
 export type FlagEmblem = "star-burst" | "ring" | "stripe";
 
@@ -84,9 +86,20 @@ export function Flag3D({ color, emblem }: { color: number; emblem?: FlagEmblem }
   );
 }
 
-/** Representação simples do veículo sob/ao redor do avatar. */
+/** Veículo: modelo .glb do admin quando houver; senão a forma geométrica. */
 export function Vehicle3D({ vehicle }: { vehicle: VehicleId }) {
   if (vehicle === "nenhum") return null;
+  const url = vehicleModelUrl(vehicle);
+  if (!url) return <ProceduralVehicle vehicle={vehicle} />;
+  return (
+    <Suspense fallback={<ProceduralVehicle vehicle={vehicle} />}>
+      <GlbModel url={url} />
+    </Suspense>
+  );
+}
+
+/** Representação simples do veículo sob/ao redor do avatar. */
+export function ProceduralVehicle({ vehicle }: { vehicle: VehicleId }) {
   if (vehicle === "moto") {
     return (
       <group>
@@ -140,7 +153,10 @@ export function Vehicle3D({ vehicle }: { vehicle: VehicleId }) {
 /** Modelo glTF do personagem (usado quando há URL registrada). */
 export function GlbModel({ url }: { url: string }) {
   const { scene } = useGLTF(url);
-  return <primitive object={scene} />;
+  // Clone por uso: o cache do useGLTF devolve a MESMA cena; sem clonar, o
+  // mesmo modelo em dois jogadores brigaria pelo mesmo pai (só um aparece).
+  const instance = useMemo(() => cloneSkinned(scene), [scene]);
+  return <primitive object={instance} />;
 }
 
 /**

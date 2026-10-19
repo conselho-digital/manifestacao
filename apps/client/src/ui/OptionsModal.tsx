@@ -19,6 +19,8 @@ interface OptionsModalProps {
   onClose: () => void;
   /** Sai da conta e volta pra tela inicial. */
   onExit: () => void;
+  /** Só passado para contas admin: abre o painel de admin. */
+  onOpenAdmin?: () => void;
 }
 
 /**
@@ -26,7 +28,7 @@ interface OptionsModalProps {
  * ou sair da plataforma. As mudanças só valem ao clicar em "Salvar" (evita
  * reentrar no canal em tempo real a cada tecla digitada no apelido).
  */
-export function OptionsModal({ avatar, onSave, onClose, onExit }: OptionsModalProps) {
+export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin }: OptionsModalProps) {
   const [team, setTeam] = useState<TeamId>(avatar.team);
   const [nickname, setNickname] = useState(avatar.nickname);
   const [character, setCharacter] = useState<CharacterId>(avatar.character);
@@ -210,6 +212,25 @@ export function OptionsModal({ avatar, onSave, onClose, onExit }: OptionsModalPr
         >
           Salvar
         </button>
+
+        {onOpenAdmin && (
+          <button
+            type="button"
+            onClick={onOpenAdmin}
+            style={{
+              minHeight: 44,
+              borderRadius: "var(--r-lg)",
+              border: "1px solid var(--accent)",
+              background: "transparent",
+              color: "var(--accent)",
+              fontSize: "var(--t-ui)",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Painel de admin
+          </button>
+        )}
 
         <button
           type="button"

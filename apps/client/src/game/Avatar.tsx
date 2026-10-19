@@ -3,6 +3,7 @@ import { Group } from "three";
 import { Html } from "@react-three/drei";
 import { flagColor, type FlagId, type VehicleId } from "@manifestacao/shared";
 import { Flag3D, Vehicle3D, GlbModel } from "./props3d.js";
+import { flagModelUrl } from "./models.js";
 
 interface AvatarProps {
   /** Cor da camisa/time (0xrrggbb). */
@@ -30,6 +31,28 @@ function ProceduralBody({ color }: { color: number }) {
   );
 }
 
+/** Bandeira: modelo .glb do admin quando houver; senão o mastro com tecido. */
+function FlagProp({ flag, color }: { flag: FlagId; color: number }) {
+  const cloth = (
+    <Flag3D
+      color={flagColor(flag, color)}
+      // Vermelha: emblema "star-burst" (6 pontas) — não um emblema real de
+      // partido. Verde: faixa amarela sobre o verde (cores nacionais
+      // genéricas, sem brasão nem layout de bandeira real nenhuma).
+      emblem={flag === "vermelha" ? "star-burst" : flag === "verde" ? "stripe" : undefined}
+    />
+  );
+  const url = flagModelUrl(flag);
+  if (!url) return cloth;
+  return (
+    <Suspense fallback={cloth}>
+      <group position={[0.45, 0, 0]}>
+        <GlbModel url={url} />
+      </group>
+    </Suspense>
+  );
+}
+
 /**
  * Avatar: corpo (modelo glTF CC0 ou geométrico), bandeira opcional, veículo
  * opcional e etiqueta de apelido. Usado pelo jogador local e pelos remotos.
@@ -48,15 +71,7 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
         <ProceduralBody color={color} />
       )}
 
-      {flag !== "nenhuma" && (
-        <Flag3D
-          color={flagColor(flag, color)}
-          // Vermelha: emblema "star-burst" (6 pontas) — não um emblema real de
-          // partido. Verde: faixa amarela sobre o verde (cores nacionais
-          // genéricas, sem brasão nem layout de bandeira real nenhuma).
-          emblem={flag === "vermelha" ? "star-burst" : flag === "verde" ? "stripe" : undefined}
-        />
-      )}
+      {flag !== "nenhuma" && <FlagProp flag={flag} color={color} />}
       <Vehicle3D vehicle={vehicle} />
 
       {name && (

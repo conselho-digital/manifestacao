@@ -1,0 +1,168 @@
+import {
+  CHARACTERS,
+  CHARACTER_IDS,
+  FLAGS,
+  FLAG_IDS,
+  TEAMS,
+  TEAM_IDS,
+  VEHICLES,
+  VEHICLE_IDS,
+  isCharacterId,
+  isFlagId,
+  isTeamId,
+  isVehicleId,
+  type CharacterId,
+  type FlagId,
+  type TeamId,
+  type VehicleId,
+} from "@manifestacao/shared";
+import { getSupabase } from "../net/supabase.js";
+import { supabaseConfig } from "./env.js";
+
+/**
+ * Configuração do jogo editável pelo admin (tabela `game_config` + catálogo).
+ * Os valores padrão continuam em packages/shared; aqui eles são SOBRESCRITOS
+ * em memória (mutando os objetos compartilhados) quando o banco tem valores.
+ * Tudo que vem do banco é revalidado aqui — o RLS já limita quem escreve, mas
+ * o cliente não confia cegamente no que lê.
+ */
+
+export const MAX_LABEL_LENGTH = 30;
+export const ASSET_BUCKET = "game-assets";
+
+export interface TeamOverride {
+  label?: string;
+  color?: number;
+}
+export interface FlagOverride {
+  label?: string;
+  color?: number;
+}
+export interface GameConfig {
+  teams: Partial<Record<TeamId, TeamOverride>>;
+  flags: Partial<Record<FlagId, FlagOverride>>;
+  /** slot → URL pública de um .glb. Slots: ver `isModelSlot`. */
+  models: Record<string, string>;
+}
+
+export const EMPTY_CONFIG: GameConfig = { teams: {}, flags: {}, models: {} };
+
+// Valores padrão capturados na primeira execução — permitem "restaurar" ao
+// reaplicar uma config sem override (ex.: admin removeu uma mudança).
+const DEFAULTS = {
+  teams: Object.fromEntries(TEAM_IDS.map((id) => [id, { label: TEAMS[id].label, color: TEAMS[id].color }])) as Record<TeamId, Required<TeamOverride>>,
+  flags: Object.fromEntries(FLAG_IDS.map((id) => [id, { label: FLAGS[id].label, color: FLAGS[id].color }])) as Record<FlagId, { label: string; color: number | null }>,
+  characters: Object.fromEntries(CHARACTER_IDS.map((id) => [id, { label: CHARACTERS[id].label, price: CHARACTERS[id].priceCents }])) as Record<CharacterId, { label: string; price: number }>,
+  vehicles: Object.fromEntries(VEHICLE_IDS.map((id) => [id, { label: VEHICLES[id].label, price: VEHICLES[id].priceCents }])) as Record<VehicleId, { label: string; price: number }>,
+};
+
+function cleanLabel(v: unknown): string | undefined {
+  if (typeof v !== "string") return undefined;
+  const t = v.trim().slice(0, MAX_LABEL_LENGTH);
+  return t || undefined;
+}
+function cleanColor(v: unknown): number | undefined {
+  return typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 0xffffff ? v : undefined;
+}
+
+/** Slots de modelo válidos: character:<c>, character:<c>:<team>, vehicle:<v>, flag:<f>, spray. */
+export function isModelSlot(slot: string): boolean {
+  if (slot === "spray") return true;
+  const [kind, id, team, extra] = slot.split(":");
+  if (extra !== undefined) return false;
+  if (kind === "character") return isCharacterId(id) && (team === undefined || isTeamId(team));
+  if (kind === "vehicle") return isVehicleId(id) && team === undefined && id !== "nenhum";
+  if (kind === "flag") return isFlagId(id) && team === undefined && id !== "nenhuma";
+  return false;
+}
+
+/** Só aceita arquivos do nosso bucket público — nunca uma URL qualquer. */
+export function isTrustedModelUrl(url: unknown): url is string {
+  if (typeof url !== "string" || !supabaseConfig) return false;
+  const prefix = `${supabaseConfig.url.replace(/\/$/, "")}/storage/v1/object/public/${ASSET_BUCKET}/`;
+  return url.startsWith(prefix) && !url.includes("..") && /\.glb$/i.test(url);
+}
+
+export function sanitizeConfig(raw: { teams?: unknown; flags?: unknown; models?: unknown }): GameConfig {
+  const out: GameConfig = { teams: {}, flags: {}, models: {} };
+  if (raw.teams && typeof raw.teams === "object") {
+    for (const [id, v] of Object.entries(raw.teams)) {
+      if (!isTeamId(id) || !v || typeof v !== "object") continue;
+      const o = v as Record<string, unknown>;
+      out.teams[id] = { label: cleanLabel(o.label), color: cleanColor(o.color) };
+    }
+  }
+  if (raw.flags && typeof raw.flags === "object") {
+    for (const [id, v] of Object.entries(raw.flags)) {
+      if (!isFlagId(id) || !v || typeof v !== "object") continue;
+      const o = v as Record<string, unknown>;
+      out.flags[id] = { label: cleanLabel(o.label), color: cleanColor(o.color) };
+    }
+  }
+  if (raw.models && typeof raw.models === "object") {
+    for (const [slot, url] of Object.entries(raw.models)) {
+      if (isModelSlot(slot) && isTrustedModelUrl(url)) out.models[slot] = url;
+    }
+  }
+  return out;
+}
+
+interface CatalogRow {
+  id: string;
+  label: string;
+  price_cents: number;
+}
+
+let modelOverrides: Record<string, string> = {};
+
+/** URL do modelo configurado pelo admin para um slot, ou null (usa o padrão). */
+export function modelOverride(slot: string): string | null {
+  return Object.hasOwn(modelOverrides, slot) ? modelOverrides[slot]! : null;
+}
+
+/** Aplica a config (e o catálogo) por cima dos padrões compartilhados. */
+export function applyGameConfig(cfg: GameConfig, catalog: CatalogRow[] = []): void {
+  for (const id of TEAM_IDS) {
+    const o = cfg.teams[id];
+    TEAMS[id].label = o?.label ?? DEFAULTS.teams[id].label;
+    TEAMS[id].color = o?.color ?? DEFAULTS.teams[id].color;
+  }
+  for (const id of FLAG_IDS) {
+    const o = cfg.flags[id];
+    FLAGS[id].label = o?.label ?? DEFAULTS.flags[id].label;
+    FLAGS[id].color = o?.color ?? DEFAULTS.flags[id].color;
+  }
+  for (const row of catalog) {
+    const [kind, id] = row.id.split(":");
+    const label = cleanLabel(row.label);
+    const price = Number.isInteger(row.price_cents) && row.price_cents >= 0 ? row.price_cents : undefined;
+    if (kind === "character" && isCharacterId(id)) {
+      CHARACTERS[id].label = label ?? DEFAULTS.characters[id].label;
+      CHARACTERS[id].priceCents = price ?? DEFAULTS.characters[id].price;
+    } else if (kind === "vehicle" && isVehicleId(id)) {
+      VEHICLES[id].label = label ?? DEFAULTS.vehicles[id].label;
+      VEHICLES[id].priceCents = price ?? DEFAULTS.vehicles[id].price;
+    }
+  }
+  modelOverrides = cfg.models;
+}
+
+/** Busca config + catálogo no Supabase e aplica. Em modo offline, não faz nada. */
+export async function loadAndApplyGameConfig(): Promise<GameConfig> {
+  const supabase = getSupabase();
+  if (!supabase) return EMPTY_CONFIG;
+  const [cfgRes, catRes] = await Promise.all([
+    supabase.from("game_config").select("key, value"),
+    supabase.from("catalog_items").select("id, label, price_cents").eq("active", true),
+  ]);
+  const raw: Record<string, unknown> = {};
+  for (const row of cfgRes.data ?? []) raw[row.key as string] = row.value;
+  const cfg = sanitizeConfig(raw);
+  applyGameConfig(cfg, (catRes.data as CatalogRow[] | null) ?? []);
+  return cfg;
+}
+
+/** Cópia dos modelos configurados hoje (para o painel de admin editar). */
+export function currentModelOverrides(): Record<string, string> {
+  return { ...modelOverrides };
+}

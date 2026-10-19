@@ -1,11 +1,14 @@
-import { useEffect, useState } from "react";
-import type { AvatarConfig } from "@manifestacao/shared";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { TEAMS, type AvatarConfig } from "@manifestacao/shared";
 import { AVATAR_STORAGE_KEY, AvatarPicker } from "./ui/AvatarPicker.js";
 import { CookieConsent } from "./ui/CookieConsent.js";
 import { Game } from "./game/Game.js";
 import { Store } from "./shop/Store.js";
 import { signOut, useAuth } from "./auth/useAuth.js";
 import { useEntitlements } from "./shop/useEntitlements.js";
+import { useIsAdmin } from "./auth/useIsAdmin.js";
+import { loadAndApplyGameConfig } from "./config/gameConfig.js";
+import { clearProductThumbs } from "./shop/ProductThumb.js";
 
 /**
  * Raiz do app: escolhe o avatar e então entra na avenida.
@@ -20,6 +23,30 @@ export function App() {
   const [storeOpen, setStoreOpen] = useState(false);
   const { session, loading: authLoading } = useAuth();
   const { owned, refresh, loading: entitlementsLoading } = useEntitlements(session);
+  const isAdmin = useIsAdmin(session);
+
+  // Config editável pelo admin (equipes, bandeiras, nomes/preços, modelos 3D):
+  // aplicada por cima dos padrões; `configVersion` força o re-render de quem lê.
+  const [configVersion, setConfigVersion] = useState(0);
+  const reloadConfig = useCallback(async () => {
+    try {
+      await loadAndApplyGameConfig();
+    } catch {
+      /* sem rede/Supabase: segue com os padrões */
+    }
+    clearProductThumbs();
+    setConfigVersion((v) => v + 1);
+  }, []);
+  useEffect(() => {
+    void reloadConfig();
+  }, [reloadConfig]);
+
+  // A cor da camisa acompanha a cor atual da equipe (o admin pode mudá-la).
+  const liveAvatar = useMemo(
+    () => (avatar ? { ...avatar, shirt: TEAMS[avatar.team].color } : null),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [avatar, configVersion],
+  );
   // Enquanto a sessão OU o fetch de posses ainda não resolveram, não dá para
   // confiar em `owned` (pode estar vazio só porque ainda não chegou, não
   // porque o usuário realmente não tem o item).
@@ -50,15 +77,17 @@ export function App() {
 
   return (
     <>
-      {avatar ? (
+      {liveAvatar ? (
         <Game
-          avatar={avatar}
+          avatar={liveAvatar}
           owned={owned}
           onOpenStore={() => setStoreOpen(true)}
           paused={storeOpen}
           entitlementsLoading={ownedLoading}
           onAvatarChange={changeAvatar}
           onExit={exitPlatform}
+          isAdmin={isAdmin}
+          onConfigChanged={reloadConfig}
         />
       ) : (
         <AvatarPicker

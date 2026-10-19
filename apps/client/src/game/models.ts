@@ -1,12 +1,12 @@
-import type { CharacterId } from "@manifestacao/shared";
+import type { CharacterId, FlagId, TeamId, VehicleId } from "@manifestacao/shared";
+import { modelOverride } from "../config/gameConfig.js";
 
 /**
- * Registro de modelos 3D por personagem. Quando um GLB CC0 estiver disponível
- * em `public/models/<arquivo>.glb`, aponte a URL aqui — o Avatar carrega o
- * modelo; na ausência, usa o avatar geométrico (fallback).
+ * Registro de modelos 3D. Os arquivos .glb são enviados pelo admin (painel de
+ * admin → bucket `game-assets`) e ficam em `game_config.models`; na ausência,
+ * o jogo usa as formas geométricas geradas por código (fallback).
  *
  * Fontes CC0 recomendadas (ver CLAUDE.md §6 e CREDITS.md): KayKit, Quaternius.
- * Coloque os arquivos em apps/client/public/models/ e registre abaixo.
  */
 export const CHARACTER_MODELS: Record<CharacterId, string | null> = {
   comum: null,
@@ -15,10 +15,28 @@ export const CHARACTER_MODELS: Record<CharacterId, string | null> = {
   tiozao: null,
 };
 
-export function modelUrlFor(character: CharacterId): string | null {
+/** Prioridade: modelo do personagem NA equipe → modelo do personagem → padrão estático. */
+export function modelUrlFor(character: CharacterId, team?: TeamId): string | null {
   // Defesa em profundidade: só lê se for chave própria do registro (evita
   // resolver para algo herdado do prototype caso o valor não tenha passado
   // por isCharacterId antes de chegar aqui).
   if (!Object.hasOwn(CHARACTER_MODELS, character)) return null;
-  return CHARACTER_MODELS[character] ?? null;
+  return (
+    (team ? modelOverride(`character:${character}:${team}`) : null) ??
+    modelOverride(`character:${character}`) ??
+    CHARACTER_MODELS[character] ??
+    null
+  );
+}
+
+export function vehicleModelUrl(vehicle: VehicleId): string | null {
+  return vehicle === "nenhum" ? null : modelOverride(`vehicle:${vehicle}`);
+}
+
+export function flagModelUrl(flag: FlagId): string | null {
+  return flag === "nenhuma" ? null : modelOverride(`flag:${flag}`);
+}
+
+export function sprayModelUrl(): string | null {
+  return modelOverride("spray");
 }

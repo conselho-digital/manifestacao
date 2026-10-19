@@ -18,6 +18,7 @@ import { VehiclePicker } from "../ui/VehiclePicker.js";
 import { StoreButton } from "../ui/StoreButton.js";
 import { OptionsButton } from "../ui/OptionsButton.js";
 import { OptionsModal } from "../ui/OptionsModal.js";
+import { AdminPanel } from "../ui/AdminPanel.js";
 import { SprayButton } from "../ui/SprayButton.js";
 import { TopRightPanel } from "../ui/TopRightPanel.js";
 import { Crosshair } from "../ui/Crosshair.js";
@@ -41,6 +42,10 @@ interface GameProps {
   onAvatarChange: (a: AvatarConfig) => void;
   /** Sai da conta e volta pra tela inicial. */
   onExit: () => void;
+  /** Conta admin: mostra o painel de admin em Opções. */
+  isAdmin: boolean;
+  /** Recarrega a config do jogo depois de o admin salvar algo. */
+  onConfigChanged: () => Promise<void>;
 }
 
 /**
@@ -48,13 +53,14 @@ interface GameProps {
  * HUD (placar + chat), seletor de veículo, spray e joystick de toque.
  * Sessão/loja não vivem aqui — ver App.tsx.
  */
-export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, onAvatarChange, onExit }: GameProps) {
+export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, onAvatarChange, onExit, isAdmin, onConfigChanged }: GameProps) {
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [adminOpen, setAdminOpen] = useState(false);
   const [vehicle, setVehicle] = useState<VehicleId>("nenhum");
   // Pausa o movimento por teclado enquanto a loja (renderizada por cima,
   // em App.tsx) está aberta. O joystick já fica coberto pelo overlay da
   // loja (zIndex maior), então só o teclado precisa dessa trava explícita.
-  const { inputRef, setJoystick } = useInput(!paused && !optionsOpen);
+  const { inputRef, setJoystick } = useInput(!paused && !optionsOpen && !adminOpen);
   const net = useAvenueRealtime(avatar);
   const isTouch = useIsTouch();
 
@@ -176,7 +182,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           name={avatar.nickname}
           flag={avatar.flag}
           vehicle={vehicle}
-          modelUrl={modelUrlFor(avatar.character)}
+          modelUrl={modelUrlFor(avatar.character, avatar.team)}
           inputRef={inputRef}
           cameraYawRef={cameraYawRef}
           cameraPitchRef={cameraPitchRef}
@@ -229,7 +235,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           loading={entitlementsLoading}
         />
       </TopRightPanel>
-      {optionsOpen && (
+      {optionsOpen && !adminOpen && (
         <OptionsModal
           avatar={avatar}
           onSave={(a) => {
@@ -238,10 +244,12 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           }}
           onClose={() => setOptionsOpen(false)}
           onExit={onExit}
+          onOpenAdmin={isAdmin ? () => setAdminOpen(true) : undefined}
         />
       )}
+      {adminOpen && isAdmin && <AdminPanel onClose={() => setAdminOpen(false)} onChanged={onConfigChanged} />}
       <Hud
-        enterFocusesChat={!paused && !optionsOpen}
+        enterFocusesChat={!paused && !optionsOpen && !adminOpen}
         online={net.online}
         scores={net.scores}
         chatLog={net.chatLog}
