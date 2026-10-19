@@ -34,7 +34,15 @@ interface PlayerProps {
 }
 
 const SEND_INTERVAL = 1 / 12; // ~12 updates/s
-const CAMERA_OFFSET = new Vector3(0, 10, 14);
+const CAMERA_HEIGHT = 10;
+const CAMERA_DISTANCE = 14;
+/** Radianos/s máximos de giro da câmera ao redor do personagem. */
+const CAMERA_TURN_SPEED = 6;
+
+/** Diferença angular mais curta de `a` para `b`, já normalizada em [-PI, PI]. */
+function shortestAngleDelta(a: number, b: number): number {
+  return ((b - a + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
+}
 
 function facingOf(x: number, z: number, prev: Facing): Facing {
   if (x === 0 && z === 0) return prev;
@@ -69,6 +77,10 @@ export function Player({
   const flagRef = useRef(flag);
   flagRef.current = flag;
   const tmp = useRef(new Vector3());
+  // Ângulo da câmera ao redor do personagem (terceira pessoa, atrás das
+  // costas). Suavizado com giro máximo por segundo para não "chacoalhar"
+  // a cada pequena correção do joystick.
+  const camAngle = useRef(0);
 
   useFrame((_, delta) => {
     const g = ref.current;
@@ -86,7 +98,21 @@ export function Player({
       facing.current = facingOf(input.x, input.z, facing.current);
     }
 
-    tmp.current.copy(g.position).add(CAMERA_OFFSET);
+    const maxTurn = CAMERA_TURN_SPEED * delta;
+    const turnDelta = shortestAngleDelta(camAngle.current, g.rotation.y);
+    camAngle.current += Math.max(-maxTurn, Math.min(maxTurn, turnDelta));
+
+    // Câmera atrás do personagem: desloca na direção oposta à que ele olha
+    // (forward = (sin, cos) do ângulo), girando junto conforme ele vira.
+    // Nota: com o avatar geométrico atual (simétrico, sem frente/trás visível)
+    // não há como confirmar visualmente o lado; ao entrar um modelo glTF com
+    // frente definida, revalidar se a câmera fica atrás das costas ou na frente
+    // e inverter o sinal aqui se necessário.
+    tmp.current.set(
+      g.position.x - Math.sin(camAngle.current) * CAMERA_DISTANCE,
+      g.position.y + CAMERA_HEIGHT,
+      g.position.z - Math.cos(camAngle.current) * CAMERA_DISTANCE,
+    );
     camera.position.lerp(tmp.current, 1 - Math.pow(0.001, delta));
     camera.lookAt(g.position.x, g.position.y + 1, g.position.z);
 
