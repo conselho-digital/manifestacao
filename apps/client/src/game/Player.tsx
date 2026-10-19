@@ -17,6 +17,7 @@ import {
 } from "./world.js";
 import type { InputVector } from "./useInput.js";
 import { SPRAY_MAX_RANGE } from "./spray.js";
+import { allowedCameraDistance } from "./colliders.js";
 
 /** Posição + rotação atuais do jogador local, lidas fora do Canvas (ex.: botão de spray). */
 export interface PlayerTransform {
@@ -91,6 +92,9 @@ export function Player({
   flagRef.current = flag;
   const tmp = useRef(new Vector3());
   const aimDir = useRef(new Vector3());
+  const dir = useRef(new Vector3());
+  const pivot = useRef(new Vector3());
+  const offset = useRef(new Vector3());
 
   useFrame((_, delta) => {
     const g = ref.current;
@@ -133,12 +137,22 @@ export function Player({
     const pivotX = g.position.x;
     const pivotY = g.position.y + CAMERA_PIVOT_HEIGHT;
     const pivotZ = g.position.z;
-    tmp.current.set(
-      pivotX - Math.sin(yaw) * cameraDistance * cosPitch,
-      pivotY + Math.sin(pitch) * cameraDistance,
-      pivotZ - Math.cos(yaw) * cameraDistance * cosPitch,
-    );
+    // Posição desejada da câmera (esfera em volta do pivô), encurtada se o
+    // chão/obstáculo estiver no caminho — a câmera nunca atravessa nada.
+    dir.current.set(-Math.sin(yaw) * cosPitch, Math.sin(pitch), -Math.cos(yaw) * cosPitch);
+    pivot.current.set(pivotX, pivotY, pivotZ);
+    const wanted = allowedCameraDistance(pivot.current, dir.current, cameraDistance);
+    tmp.current.copy(pivot.current).addScaledVector(dir.current, wanted);
     camera.position.lerp(tmp.current, 1 - Math.pow(0.001, delta));
+    // O lerp suaviza o afastamento, mas a aproximação é imediata: se a câmera
+    // (ainda a caminho) ficou além do permitido, encosta já no limite.
+    offset.current.copy(camera.position).sub(pivot.current);
+    const cur = offset.current.length();
+    if (cur > 1e-4) {
+      offset.current.divideScalar(cur);
+      const limit = allowedCameraDistance(pivot.current, offset.current, cur);
+      if (limit < cur) camera.position.copy(pivot.current).addScaledVector(offset.current, limit);
+    }
     // Olha um pouco à frente do personagem: assim o centro da tela (onde fica
     // a mira do spray) cai no chão à frente dele, em vez de em cima da cabeça.
     const ahead = cameraDistance * CAMERA_LOOK_AHEAD_RATIO;

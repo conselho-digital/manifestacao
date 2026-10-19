@@ -7,7 +7,7 @@ import { RemotePlayers } from "./RemotePlayers.js";
 import { SprayMarks } from "./SprayMarks.js";
 import { isTypingTarget, useInput } from "./useInput.js";
 import { modelUrlFor } from "./models.js";
-import { CAMERA_DISTANCE, CAMERA_DISTANCE_DESKTOP, CAMERA_PITCH_DEFAULT, CAMERA_PIVOT_HEIGHT } from "./world.js";
+import { CAMERA_DISTANCE_MOBILE, CAMERA_DISTANCE_DESKTOP, CAMERA_PITCH_DEFAULT, CAMERA_PIVOT_HEIGHT } from "./world.js";
 import { SPRAY_CARTRIDGE_SIZE, SPRAY_REFILL_INTERVAL_MS } from "./spray.js";
 import { useAvenueRealtime } from "../net/useAvenueRealtime.js";
 import { Joystick } from "../ui/Joystick.js";
@@ -72,7 +72,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
   const runRef = useRef(false);
   // Ponto do chão sob a mira (centro da tela), atualizado a cada frame pelo Player.
   const aimRef = useRef({ x: 0, z: 0 });
-  const cameraDistance = isTouch ? CAMERA_DISTANCE : CAMERA_DISTANCE_DESKTOP;
+  const cameraDistance = isTouch ? CAMERA_DISTANCE_MOBILE : CAMERA_DISTANCE_DESKTOP;
 
   // PC: Shift (segurado) corre. No celular o botão "Correr" faz o mesmo.
   useEffect(() => {

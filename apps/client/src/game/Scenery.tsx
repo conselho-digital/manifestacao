@@ -1,5 +1,6 @@
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react";
-import { Color, InstancedMesh, Matrix4, Mesh, Quaternion, Vector3 } from "three";
+import { Box3, Color, InstancedMesh, Matrix4, Mesh, Quaternion, Sphere, Vector3 } from "three";
+import { clearCameraColliders, setCameraColliders } from "./colliders.js";
 import { useGLTF } from "@react-three/drei";
 import { AVENUE_LENGTH, AVENUE_WIDTH, PARK_GAP, PARK_SIZE } from "./world.js";
 
@@ -36,7 +37,11 @@ function SceneryBuilding({
         obj.receiveShadow = true;
       }
     });
-  }, [scene]);
+    // Caixa envolvente do prédio: a câmera de terceira pessoa não o atravessa.
+    scene.updateMatrixWorld(true);
+    setCameraColliders(`building:${url}`, [], [new Box3().setFromObject(scene)]);
+    return () => clearCameraColliders(`building:${url}`);
+  }, [scene, url]);
 
   return (
     <primitive object={scene} position={position} rotation={[0, rotation, 0]} scale={scale} />
@@ -50,6 +55,8 @@ useGLTF.preload(MASP_URL);
 // calçada (d=0 encosta na avenida, cresce afastando-se dela).
 const PARK_Z0 = -(AVENUE_WIDTH / 2 + PARK_GAP); // z do lado do parque que encosta na calçada
 const PATH_W = 3;
+/** Árvores 25% mais altas (só no eixo Y — a largura não muda). */
+const TREE_HEIGHT_SCALE = 1.25;
 
 interface PathRect {
   x: number; // centro lateral
@@ -118,16 +125,23 @@ function Park() {
     const m = new Matrix4();
     const q = new Quaternion();
     const color = new Color();
+    const colliders: Sphere[] = [];
     trees.forEach((t, i) => {
-      m.compose(new Vector3(t.x, 1 * t.scale, t.z), q, new Vector3(t.scale, t.scale, t.scale));
+      const h = t.scale * TREE_HEIGHT_SCALE;
+      const size = new Vector3(t.scale, h, t.scale);
+      m.compose(new Vector3(t.x, 1 * h, t.z), q, size);
       trunks.current!.setMatrixAt(i, m);
-      m.compose(new Vector3(t.x, 3.4 * t.scale, t.z), q, new Vector3(t.scale, t.scale, t.scale));
+      m.compose(new Vector3(t.x, 3.4 * h, t.z), q, size);
       crowns.current!.setMatrixAt(i, m);
+      colliders.push(new Sphere(new Vector3(t.x, 3.4 * h, t.z), 1.6 * t.scale));
       crowns.current!.setColorAt(i, color.setHSL(0.3 + t.hue * 0.06, 0.55, 0.2 + t.hue * 0.12));
     });
     trunks.current.instanceMatrix.needsUpdate = true;
     crowns.current.instanceMatrix.needsUpdate = true;
     if (crowns.current.instanceColor) crowns.current.instanceColor.needsUpdate = true;
+    // Copas como esferas: a câmera de terceira pessoa não as atravessa.
+    setCameraColliders("park-trees", colliders);
+    return () => clearCameraColliders("park-trees");
   }, [trees]);
 
   const centerZ = PARK_Z0 - PARK_SIZE / 2;
