@@ -157,7 +157,9 @@ export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore
         {/* Lado */}
         <section>
           <SectionTitle>De que lado você está?</SectionTitle>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginTop: 10 }}>
+          {/* Sempre 3 colunas na mesma linha, mesmo em telas estreitas —
+              os cards encolhem (gap/padding/fonte menores) em vez de quebrar. */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginTop: 10 }}>
             {TEAM_IDS.map((id) => {
               const t = TEAMS[id];
               const selected = id === team;
@@ -170,17 +172,22 @@ export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore
                   onClick={() => setTeam(id)}
                   style={{
                     minHeight: 64,
+                    minWidth: 0,
                     display: "flex",
                     flexDirection: "column",
                     alignItems: "center",
                     justifyContent: "center",
                     gap: 6,
+                    padding: "8px 4px",
                     borderRadius: "var(--r-md)",
                     border: `2px solid ${selected ? c : "var(--line)"}`,
                     background: selected ? "var(--surface-2)" : "var(--surface)",
                     color: "var(--ink)",
                     fontWeight: 700,
-                    fontSize: 14,
+                    fontSize: 13,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
                     cursor: "pointer",
                     transition: "transform .08s, border-color .12s",
                   }}
