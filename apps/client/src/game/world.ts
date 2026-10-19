@@ -31,11 +31,23 @@ export function clampPitch(p: number): number {
 
 export type Facing3D = "up" | "down" | "left" | "right";
 
+/** Parque arborizado do outro lado da avenida (lado -Z): quadrado PARK_SIZE, com calçada PARK_GAP. */
+export const PARK_SIZE = 64;
+export const PARK_GAP = 4;
+
+/**
+ * Limite invisível do mapa: a avenida inteira mais o parque (que é uma
+ * "extensão" no lado -Z, mais estreita que a avenida). O jogador não passa
+ * dessas bordas — nem em posições vindas da rede (ver useAvenueRealtime).
+ */
 export function clampToAvenue(x: number, z: number): { x: number; z: number } {
   const halfL = AVENUE_LENGTH / 2 - AVATAR_RADIUS;
   const halfW = AVENUE_WIDTH / 2 - AVATAR_RADIUS;
-  return {
-    x: Math.max(-halfL, Math.min(halfL, x)),
-    z: Math.max(-halfW, Math.min(halfW, z)),
-  };
+  const parkHalf = PARK_SIZE / 2 - AVATAR_RADIUS;
+  const zMin = -(AVENUE_WIDTH / 2 + PARK_GAP + PARK_SIZE) + AVATAR_RADIUS;
+  const cx = Math.max(-halfL, Math.min(halfL, x));
+  let cz = Math.max(zMin, Math.min(halfW, z));
+  // Fora da largura do parque, a borda sul da avenida vira parede invisível.
+  if (cz < -halfW && Math.abs(cx) > parkHalf) cz = -halfW;
+  return { x: cx, z: cz };
 }

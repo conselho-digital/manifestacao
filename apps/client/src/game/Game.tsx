@@ -19,6 +19,9 @@ import { StoreButton } from "../ui/StoreButton.js";
 import { SprayButton } from "../ui/SprayButton.js";
 import { TopRightPanel } from "../ui/TopRightPanel.js";
 
+const SKY_COLOR = "#8fc4f0";
+const SUN_POSITION: [number, number, number] = [60, 110, -80];
+
 interface GameProps {
   avatar: AvatarConfig;
   /** Itens que o usuário possui (vem de cima — App.tsx — compartilhado com a Store). */
@@ -85,16 +88,29 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
           usa pra orbitar a câmera — evita um salto/giro perceptível da
           câmera logo na entrada, antes do primeiro frame recalcular. */}
       <Canvas shadows camera={{ position: [0, 9.63, -11.39], fov: 55 }}>
-        <color attach="background" args={["#161a1f"]} />
-        <fog attach="fog" args={["#161a1f", 40, 120]} />
-        <ambientLight intensity={0.6} />
+        <color attach="background" args={[SKY_COLOR]} />
+        <fog attach="fog" args={[SKY_COLOR, 60, 180]} />
+        <hemisphereLight args={["#bfdcff", "#4a5a3c", 0.55]} />
+        <ambientLight intensity={0.25} />
+        {/* Sol: luz direcional quente + disco visível no céu, na mesma direção. */}
         <directionalLight
-          position={[20, 40, 20]}
-          intensity={1.1}
+          position={SUN_POSITION}
+          color="#fff1d6"
+          intensity={1.6}
           castShadow
           shadow-mapSize-width={1024}
           shadow-mapSize-height={1024}
+          shadow-camera-left={-60}
+          shadow-camera-right={60}
+          shadow-camera-top={60}
+          shadow-camera-bottom={-60}
+          shadow-camera-near={1}
+          shadow-camera-far={200}
         />
+        <mesh position={SUN_POSITION}>
+          <sphereGeometry args={[9, 24, 16]} />
+          <meshBasicMaterial color="#fff3b0" fog={false} />
+        </mesh>
         <Scenery />
         <SprayMarks marksRef={net.sprayMarksRef} version={net.sprayVersion} />
         <Player

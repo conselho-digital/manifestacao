@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { Color, InstancedMesh, Matrix4, Mesh, Quaternion, Vector3 } from "three";
 import { useGLTF } from "@react-three/drei";
-import { AVENUE_LENGTH, AVENUE_WIDTH } from "./world.js";
+import { AVENUE_LENGTH, AVENUE_WIDTH, PARK_GAP, PARK_SIZE } from "./world.js";
 
 const MASP_URL = "/models/scenery/masp.glb";
 // Modelo original (Sketchfab, exportado de FBX) vem em unidades arbitrárias
@@ -48,8 +48,6 @@ useGLTF.preload(MASP_URL);
 // ── Parque arborizado (inspirado no Trianon): do outro lado da avenida em
 // relação ao MASP. Coordenadas locais: x lateral, d = distância a partir da
 // calçada (d=0 encosta na avenida, cresce afastando-se dela).
-const PARK_SIZE = 64;
-const PARK_GAP = 4; // calçada entre a avenida e o parque
 const PARK_Z0 = -(AVENUE_WIDTH / 2 + PARK_GAP); // z do lado do parque que encosta na calçada
 const PATH_W = 3;
 
