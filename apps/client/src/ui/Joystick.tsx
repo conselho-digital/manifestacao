@@ -42,13 +42,27 @@ export function Joystick({ onMove }: JoystickProps) {
         anchorRef.current = anchorOf(zoneRef.current);
       }
     };
+    // Se a aba perde foco/fica oculta com o dedo ainda "tocando" (troca de
+    // app, notificação), o pointerup pode nunca chegar — sem isso o joystick
+    // travaria permanentemente, ignorando todo novo toque.
+    const release = () => {
+      pointer.current = null;
+      anchorRef.current = null;
+      setActive(false);
+      setKnob({ dx: 0, dy: 0 });
+      onMove(0, 0);
+    };
     window.addEventListener("resize", recalc);
     window.addEventListener("orientationchange", recalc);
+    window.addEventListener("blur", release);
+    document.addEventListener("visibilitychange", release);
     return () => {
       window.removeEventListener("resize", recalc);
       window.removeEventListener("orientationchange", recalc);
+      window.removeEventListener("blur", release);
+      document.removeEventListener("visibilitychange", release);
     };
-  }, []);
+  }, [onMove]);
 
   const start = (e: React.PointerEvent) => {
     if (pointer.current !== null) return;

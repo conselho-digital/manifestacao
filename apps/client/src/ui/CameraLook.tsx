@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 
 interface CameraLookProps {
   /** Ângulo da câmera (radianos) — arrastar na horizontal gira em torno do personagem. */
@@ -21,6 +21,21 @@ function wrapAngle(a: number): number {
 export function CameraLook({ yawRef }: CameraLookProps) {
   const pointer = useRef<number | null>(null);
   const lastX = useRef(0);
+
+  // Se a aba perde foco/fica oculta com o dedo ainda "tocando" (troca de
+  // app, notificação), o pointerup pode nunca chegar — sem isso o arrasto
+  // travaria permanentemente, ignorando todo novo toque na zona.
+  useEffect(() => {
+    const release = () => {
+      pointer.current = null;
+    };
+    window.addEventListener("blur", release);
+    document.addEventListener("visibilitychange", release);
+    return () => {
+      window.removeEventListener("blur", release);
+      document.removeEventListener("visibilitychange", release);
+    };
+  }, []);
 
   const start = (e: React.PointerEvent) => {
     if (pointer.current !== null) return;

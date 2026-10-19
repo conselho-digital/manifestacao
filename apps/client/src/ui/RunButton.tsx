@@ -8,8 +8,9 @@ interface RunButtonProps {
 /**
  * Botão de correr: pressionar e segurar aumenta a velocidade (ver
  * RUN_MULTIPLIER em game/world.ts). Fica no canto inferior direito, dentro
- * da zona de olhar da câmera (CameraLook) mas com zIndex maior — o próprio
- * elemento intercepta o toque antes de chegar à zona de arrasto por trás.
+ * da zona de olhar da câmera (CameraLook) mas com zIndex maior — o
+ * hit-testing do navegador já entrega o toque só ao elemento visualmente no
+ * topo nesse ponto, então o CameraLook por trás nunca chega a recebê-lo.
  */
 export function RunButton({ runRef }: RunButtonProps) {
   const [pressed, setPressed] = useState(false);

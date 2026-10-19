@@ -84,15 +84,19 @@ export function Player({
     const yaw = cameraYawRef.current;
     const input = inputRef.current;
     const len = Math.hypot(input.x, input.z);
-    const runMul = runRef.current ? RUN_MULTIPLIER : 1;
+    // Correr não se aplica dirigindo — o veículo já define a velocidade.
+    const runMul = runRef.current && vehicleRef.current === "nenhum" ? RUN_MULTIPLIER : 1;
     const speed = WALK_SPEED * runMul * (VEHICLES[vehicleRef.current]?.speedMul ?? 1);
     if (len > 0) {
-      // Entrada do joystick é relativa à tela; giramos pelo ângulo da câmera
-      // para mover "pra frente de onde a câmera olha" (terceira pessoa).
+      // Entrada do joystick é relativa à tela (z negativo = pra frente, ver
+      // useInput.ts); giramos pelo ângulo da câmera para mover "pra onde a
+      // câmera olha" (terceira pessoa). forward(yaw) = (sin(yaw), cos(yaw)),
+      // então "pra frente" (input.z=-1) deve mapear pra +forward — daí o
+      // sinal trocado de input.z abaixo em relação a uma rotação 2D comum.
       const sin = Math.sin(yaw);
       const cos = Math.cos(yaw);
-      const worldX = input.x * cos + input.z * sin;
-      const worldZ = -input.x * sin + input.z * cos;
+      const worldX = input.x * cos - input.z * sin;
+      const worldZ = -input.x * sin - input.z * cos;
       const step = (speed * delta) / len;
       const next = clampToAvenue(g.position.x + worldX * step, g.position.z + worldZ * step);
       g.position.x = next.x;
