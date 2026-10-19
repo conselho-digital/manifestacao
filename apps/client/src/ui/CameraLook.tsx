@@ -6,6 +6,8 @@ interface CameraLookProps {
   yawRef: { current: number };
   /** Inclinação vertical (radianos) — arrastar na vertical olha pra cima/baixo. */
   pitchRef: { current: number };
+  /** PC: a zona cobre a tela toda (qualquer clique fora da UI gira a câmera). */
+  fullScreen?: boolean;
 }
 
 /** Pixels de arrasto para girar 1 radiano (quanto menor, mais sensível). */
@@ -16,13 +18,13 @@ function wrapAngle(a: number): number {
 }
 
 /**
- * Zona de arrasto invisível na metade direita da tela: controla a câmera de
+ * Zona de arrasto invisível (metade direita no celular; tela toda no PC): controla a câmera de
  * terceira pessoa livre (gira E inclina em torno do personagem, como em
  * jogos de terceira pessoa), sem joystick visual — só o movimento vindo do
  * dedo. Fica embaixo do TopRightPanel (zIndex menor), então os botões de
  * Loja/Veículo/Correr continuam clicáveis por cima.
  */
-export function CameraLook({ yawRef, pitchRef }: CameraLookProps) {
+export function CameraLook({ yawRef, pitchRef, fullScreen = false }: CameraLookProps) {
   const pointer = useRef<number | null>(null);
   const lastX = useRef(0);
   const lastY = useRef(0);
@@ -78,7 +80,7 @@ export function CameraLook({ yawRef, pitchRef }: CameraLookProps) {
       style={{
         position: "fixed",
         right: 0,
-        width: "50%",
+        width: fullScreen ? "100%" : "50%",
         top: 0,
         bottom: 0,
         touchAction: "none",

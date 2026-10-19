@@ -18,6 +18,8 @@ import { VehiclePicker } from "../ui/VehiclePicker.js";
 import { StoreButton } from "../ui/StoreButton.js";
 import { SprayButton } from "../ui/SprayButton.js";
 import { TopRightPanel } from "../ui/TopRightPanel.js";
+import { useIsTouch } from "../ui/useIsTouch.js";
+import { hasVehicleViaPremium, vehicleRequiresEntitlement } from "@manifestacao/shared";
 
 const SKY_COLOR = "#8fc4f0";
 const SUN_POSITION: [number, number, number] = [60, 110, -80];
@@ -46,6 +48,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
   // loja (zIndex maior), então só o teclado precisa dessa trava explícita.
   const { inputRef, setJoystick } = useInput(!paused);
   const net = useAvenueRealtime(avatar);
+  const isTouch = useIsTouch();
 
   // Ângulo/inclinação da câmera (controlados pelo arrasto na metade direita
   // da tela) e estado do botão de correr — lidos a cada frame pelo Player,
@@ -53,6 +56,36 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
   const cameraYawRef = useRef(0);
   const cameraPitchRef = useRef(CAMERA_PITCH_DEFAULT);
   const runRef = useRef(false);
+
+  // PC: Shift (segurado) corre. No celular o botão "Correr" faz o mesmo.
+  useEffect(() => {
+    const down = (e: KeyboardEvent) => {
+      if (e.key === "Shift") runRef.current = true;
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.key === "Shift") runRef.current = false;
+    };
+    const release = () => {
+      runRef.current = false;
+    };
+    window.addEventListener("keydown", down);
+    window.addEventListener("keyup", up);
+    window.addEventListener("blur", release);
+    return () => {
+      window.removeEventListener("keydown", down);
+      window.removeEventListener("keyup", up);
+      window.removeEventListener("blur", release);
+    };
+  }, []);
+
+  // Todo personagem anda a pé; veículo só com posse. Se a posse sumir (ou o
+  // estado vier de antes da compra), volta pra "A pé".
+  useEffect(() => {
+    if (entitlementsLoading || vehicle === "nenhum") return;
+    const allowed =
+      !vehicleRequiresEntitlement(vehicle) || owned.has(`vehicle:${vehicle}`) || hasVehicleViaPremium(vehicle, owned);
+    if (!allowed) setVehicle("nenhum");
+  }, [vehicle, owned, entitlementsLoading]);
 
   const transformRef = useRef<PlayerTransform>({ x: 0, z: 0, rotationY: 0 });
   // Só true depois do primeiro useFrame do Player — evita que um clique no
@@ -130,9 +163,30 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading }
         <RemotePlayers ids={net.remoteIds} playersRef={net.playersRef} />
       </Canvas>
 
-      <Joystick onMove={setJoystick} />
-      <CameraLook yawRef={cameraYawRef} pitchRef={cameraPitchRef} />
-      <RunButton runRef={runRef} />
+      {isTouch && <Joystick onMove={setJoystick} />}
+      <CameraLook yawRef={cameraYawRef} pitchRef={cameraPitchRef} fullScreen={!isTouch} />
+      {isTouch ? (
+        <RunButton runRef={runRef} />
+      ) : (
+        <div
+          style={{
+            position: "fixed",
+            right: 16,
+            bottom: 16,
+            zIndex: 5,
+            padding: "8px 12px",
+            borderRadius: "var(--r-sm)",
+            border: "1px solid var(--line)",
+            background: "var(--scrim)",
+            color: "var(--ink)",
+            fontSize: "var(--t-ui)",
+            pointerEvents: "none",
+            userSelect: "none",
+          }}
+        >
+          Segure <strong>Shift</strong> para correr
+        </div>
+      )}
       <TopRightPanel>
         <StoreButton onClick={onOpenStore} />
         <SprayButton charges={sprayCharges} maxCharges={SPRAY_CARTRIDGE_SIZE} onSpray={handleSpray} />

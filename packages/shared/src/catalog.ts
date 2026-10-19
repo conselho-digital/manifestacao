@@ -81,8 +81,8 @@ export interface Vehicle {
 
 export const VEHICLES: Record<VehicleId, Vehicle> = {
   nenhum: { id: "nenhum", label: "A pé", speedMul: 1, playsMusic: false, priceCents: 0 },
-  moto: { id: "moto", label: "Moto", speedMul: 2.2, playsMusic: false, priceCents: 0 },
-  carro: { id: "carro", label: "Carro", speedMul: 2.6, playsMusic: false, priceCents: 0 },
+  moto: { id: "moto", label: "Moto", speedMul: 2.2, playsMusic: false, priceCents: 2990 },
+  carro: { id: "carro", label: "Carro", speedMul: 2.6, playsMusic: false, priceCents: 4990 },
   carro_som: {
     id: "carro_som",
     label: "Carro de som",
@@ -129,9 +129,9 @@ export function isPassId(v: unknown): v is PassId {
   return typeof v === "string" && Object.hasOwn(PASSES, v);
 }
 
-/** O passe Premium inclui o carro de som (caixa de som básica). */
+/** O passe Premium inclui moto, carro e o carro de som (caixa de som básica). */
 export function hasVehicleViaPremium(vehicle: VehicleId, owned: ReadonlySet<string>): boolean {
-  return vehicle === "carro_som" && owned.has("pass:premium");
+  return vehicle !== "nenhum" && owned.has("pass:premium");
 }
 
 /** Linha do catálogo para o seed SQL de `catalog_items`. */
