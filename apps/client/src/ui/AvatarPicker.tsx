@@ -29,7 +29,13 @@ const STORAGE_KEY = "manifestacao.avatar";
 function loadSaved(): Partial<AvatarConfig> {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    return raw ? (JSON.parse(raw) as Partial<AvatarConfig>) : {};
+    const parsed = raw ? (JSON.parse(raw) as Partial<AvatarConfig>) : {};
+    // Mesmo truncamento aplicado no submit — um localStorage adulterado
+    // manualmente não deveria conseguir pré-popular um apelido fora do limite.
+    if (typeof parsed.nickname === "string") {
+      parsed.nickname = parsed.nickname.slice(0, MAX_NICKNAME_LENGTH);
+    }
+    return parsed;
   } catch {
     return {};
   }
@@ -49,7 +55,9 @@ interface AvatarPickerProps {
  * entrar fixo embaixo. Identidade e nomes são próprios — ver CLAUDE.md §9.
  */
 export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore }: AvatarPickerProps) {
-  const saved = loadSaved();
+  // Inicializador lazy: lê o localStorage só na primeira renderização, não a
+  // cada tecla digitada (useState(saved...) re-rodaria loadSaved() sempre).
+  const [saved] = useState(loadSaved);
   const [team, setTeam] = useState<TeamId>(isTeamId(saved.team) ? saved.team : TEAM_IDS[0]);
   const [nickname, setNickname] = useState(saved.nickname ?? "");
   const [character, setCharacter] = useState<CharacterId>(
@@ -103,23 +111,28 @@ export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore
             fontWeight: 400,
             letterSpacing: "-0.01em",
             textTransform: "uppercase",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
           }}
         >
           Manifestação <span style={{ color: "var(--accent)" }}>Online</span>
         </div>
 
         {isOnlineEnabled && !authLoading && (
-          <>
+          <div style={{ flexShrink: 0 }}>
             {session ? (
               <button type="button" onClick={() => void signOut()} style={smallBtnStyle}>
                 Sair
               </button>
             ) : (
+              // Texto curto (não "Entrar com Google") pra nunca disputar
+              // espaço com a logo em telas estreitas (~360-380px).
               <button type="button" onClick={() => void signInWithGoogle()} style={smallAccentBtnStyle}>
-                Entrar com Google
+                Entrar
               </button>
             )}
-          </>
+          </div>
         )}
       </header>
 
@@ -131,7 +144,7 @@ export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore
           display: "flex",
           flexDirection: "column",
           gap: 20,
-          padding: "20px max(16px, env(safe-area-inset-right)) 100px max(16px, env(safe-area-inset-left))",
+          padding: "20px max(16px, env(safe-area-inset-right)) 128px max(16px, env(safe-area-inset-left))",
           width: "min(720px, 100%)",
           margin: "0 auto",
         }}
@@ -289,9 +302,20 @@ export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore
           <button
             type="button"
             onClick={() => setCustomizing((v) => !v)}
-            style={{ ...smallBtnStyle, marginTop: 14 }}
+            aria-expanded={customizing}
+            style={{ ...smallBtnStyle, marginTop: 14, display: "inline-flex", alignItems: "center", gap: 6 }}
           >
-            {customizing ? "Ocultar bandeira e Premium" : "Bandeira e Premium"}
+            Bandeira e Premium
+            <span
+              aria-hidden="true"
+              style={{
+                display: "inline-block",
+                transition: "transform .15s",
+                transform: customizing ? "rotate(180deg)" : "rotate(0deg)",
+              }}
+            >
+              ▾
+            </span>
           </button>
 
           {customizing && (
@@ -422,8 +446,10 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
     <h2
       style={{
         margin: 0,
+        // Menor que a logo do header (22px) — título de seção é subordinado
+        // à marca, não compete com ela.
         fontFamily: "var(--font-display)",
-        fontSize: 22,
+        fontSize: 18,
         fontWeight: 400,
         letterSpacing: "-0.01em",
         textTransform: "uppercase",
