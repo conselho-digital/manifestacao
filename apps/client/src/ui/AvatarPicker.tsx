@@ -101,7 +101,9 @@ export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore
           gap: 10,
           padding:
             "max(14px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 14px max(16px, env(safe-area-inset-left))",
-          borderBottom: "1px solid var(--line)",
+          // Sem linha — separado do conteúdo por um passo de tom, não por
+          // uma borda fina (regra de casa: nada de hairlines).
+          background: "var(--surface)",
         }}
       >
         <div
@@ -143,9 +145,12 @@ export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore
           flex: 1,
           display: "flex",
           flexDirection: "column",
-          gap: 20,
+          // Centraliza verticalmente quando sobra altura (desktop/tablet) —
+          // evita o conteúdo ficar preso no topo com um vazio grande embaixo.
+          justifyContent: "center",
+          gap: 28,
           padding: "20px max(16px, env(safe-area-inset-right)) 128px max(16px, env(safe-area-inset-left))",
-          width: "min(720px, 100%)",
+          width: "min(640px, 100%)",
           margin: "0 auto",
         }}
       >
@@ -191,7 +196,7 @@ export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore
         {/* Personagem */}
         <section style={cardStyle}>
           <SectionTitle>Escolha seu personagem</SectionTitle>
-          <p style={{ margin: "4px 0 0", color: "var(--ink-dim)", fontSize: "var(--t-ui)" }}>
+          <p style={{ margin: "6px 0 0", color: "var(--ink)", fontSize: "var(--t-body)", maxWidth: "48ch" }}>
             Visual e bandeira você personaliza aqui — seu nome aparece pros outros na avenida.
           </p>
 
@@ -256,19 +261,25 @@ export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore
                         height: 18,
                         borderRadius: "50%",
                         background: "var(--accent)",
-                        color: "var(--on-accent)",
-                        fontSize: 12,
-                        fontWeight: 900,
                         display: "flex",
                         alignItems: "center",
                         justifyContent: "center",
                       }}
                     >
-                      ✓
+                      <svg width={11} height={9} viewBox="0 0 11 9" aria-hidden="true">
+                        <path
+                          d="M1 4.5L4 7.5L10 1"
+                          fill="none"
+                          stroke="var(--on-accent)"
+                          strokeWidth={1.8}
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        />
+                      </svg>
                     </span>
                   )}
                   <AvatarGlyph color={teamColorHex} />
-                  <span style={{ fontSize: 12, fontWeight: 700, color: "var(--ink)", textAlign: "center" }}>
+                  <span style={{ fontSize: "var(--t-ui)", fontWeight: 700, color: "var(--ink)", textAlign: "center" }}>
                     {CHARACTERS[id].label}
                   </span>
                 </button>
@@ -294,7 +305,7 @@ export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore
                 }}
               >
                 <span style={{ fontSize: 22, lineHeight: 1 }}>+</span>
-                <span style={{ fontSize: 12, fontWeight: 700 }}>Loja</span>
+                <span style={{ fontSize: "var(--t-ui)", fontWeight: 700 }}>Loja</span>
               </button>
             )}
           </div>
@@ -342,11 +353,13 @@ export function AvatarPicker({ onReady, session, authLoading, owned, onOpenStore
               </div>
 
               {isOnlineEnabled && (
-                <div style={{ borderTop: "1px solid var(--line)", paddingTop: 10 }}>
+                // Separado por um passo de tom (var(--surface-2)), não por
+                // uma linha — mesma regra aplicada no header.
+                <div style={{ background: "var(--surface-2)", borderRadius: "var(--r-md)", padding: 12 }}>
                   <div style={{ fontSize: "var(--t-ui)", fontWeight: 700 }}>
                     Premium {hasPremium && <span style={{ color: "var(--accent)" }}>· você tem</span>}
                   </div>
-                  <div style={{ fontSize: "var(--t-ui)", color: "var(--ink-dim)", marginTop: 4 }}>
+                  <div style={{ fontSize: "var(--t-ui)", color: "var(--ink)", marginTop: 4, maxWidth: "56ch" }}>
                     {premium.description}
                   </div>
                   <button type="button" onClick={onOpenStore} style={{ ...smallAccentBtnStyle, marginTop: 8 }}>
@@ -462,10 +475,7 @@ function SectionTitle({ children }: { children: React.ReactNode }) {
 
 function Label({ children, htmlFor }: { children: React.ReactNode; htmlFor?: string }) {
   return (
-    <label
-      htmlFor={htmlFor}
-      style={{ fontSize: "var(--t-ui)", color: "var(--ink-dim)", textTransform: "uppercase", letterSpacing: "0.08em" }}
-    >
+    <label htmlFor={htmlFor} style={{ fontSize: "var(--t-ui)", color: "var(--ink-dim)", fontWeight: 700 }}>
       {children}
     </label>
   );
