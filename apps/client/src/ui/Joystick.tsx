@@ -9,14 +9,18 @@ const MAX = 56;
 const DEAD = 10;
 const BASE_SIZE = MAX * 2;
 const KNOB_SIZE = 44;
-/** Margem do canto inferior esquerdo até o centro da bolinha fixa. */
+/** Margem do canto esquerdo até o centro da bolinha fixa. */
 const ANCHOR_INSET = 28 + MAX;
+/** Margem do canto inferior até o centro da bolinha (mais alta que a lateral). */
+const ANCHOR_INSET_BOTTOM = 84 + MAX;
+/** Folga de toque ao redor da bolinha: só tocando perto dela o joystick responde. */
+const TOUCH_PAD = 28;
 
 /**
  * Joystick virtual de toque, fixo no canto inferior esquerdo (uma "bolinha"
- * sempre visível, como em jogos de terceira pessoa). A área sensível cobre
- * a metade inferior esquerda da tela — tocar em qualquer ponto dela arrasta
- * o botão a partir do centro fixo da base, não de onde o dedo tocou.
+ * sempre visível, como em jogos de terceira pessoa). A área sensível é só
+ * um quadrado em volta da bolinha — o jogador precisa tocar perto dela;
+ * arrasta o botão a partir do centro fixo da base, não de onde o dedo tocou.
  * Em desktop, o jogador usa o teclado e pode ignorá-lo.
  */
 export function Joystick({ onMove }: JoystickProps) {
@@ -30,7 +34,7 @@ export function Joystick({ onMove }: JoystickProps) {
     // getBoundingClientRect já exclui a área sob a gesture bar do sistema
     // quando a zona usa env(safe-area-inset-*) no CSS (ver estilo abaixo).
     const rect = zone.getBoundingClientRect();
-    return { x: rect.left + ANCHOR_INSET, y: rect.bottom - ANCHOR_INSET };
+    return { x: rect.left + ANCHOR_INSET, y: rect.bottom - ANCHOR_INSET_BOTTOM };
   };
 
   // Recalcula o anchor se a viewport mudar com o dedo ainda tocando (ex.:
@@ -105,9 +109,9 @@ export function Joystick({ onMove }: JoystickProps) {
       style={{
         position: "fixed",
         left: 0,
-        width: "50%",
         bottom: 0,
-        height: "55%",
+        width: ANCHOR_INSET + MAX + TOUCH_PAD,
+        height: ANCHOR_INSET_BOTTOM + MAX + TOUCH_PAD,
         // Garante que a bolinha fixa (ancorada no canto desta zona) não
         // caia sob a gesture bar do sistema em iOS/Android.
         paddingLeft: "env(safe-area-inset-left, 0px)",
@@ -121,7 +125,7 @@ export function Joystick({ onMove }: JoystickProps) {
         style={{
           position: "absolute",
           left: ANCHOR_INSET - MAX,
-          bottom: ANCHOR_INSET - MAX,
+          bottom: ANCHOR_INSET_BOTTOM - MAX,
           width: BASE_SIZE,
           height: BASE_SIZE,
           borderRadius: "50%",
@@ -134,7 +138,7 @@ export function Joystick({ onMove }: JoystickProps) {
         style={{
           position: "absolute",
           left: ANCHOR_INSET - KNOB_SIZE / 2 + knob.dx,
-          bottom: ANCHOR_INSET - KNOB_SIZE / 2 - knob.dy,
+          bottom: ANCHOR_INSET_BOTTOM - KNOB_SIZE / 2 - knob.dy,
           width: KNOB_SIZE,
           height: KNOB_SIZE,
           borderRadius: "50%",

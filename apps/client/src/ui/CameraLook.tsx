@@ -56,7 +56,8 @@ export function CameraLook({ yawRef, pitchRef }: CameraLookProps) {
     const dy = e.clientY - lastY.current;
     lastX.current = e.clientX;
     lastY.current = e.clientY;
-    yawRef.current = wrapAngle(yawRef.current + dx / PX_PER_RADIAN);
+    // Sentido invertido: arrastar pra direita gira a câmera pra esquerda.
+    yawRef.current = wrapAngle(yawRef.current - dx / PX_PER_RADIAN);
     // Arrastar pra cima (dy negativo) inclina a câmera pra baixo (pitch
     // menor), olhando mais de frente/de baixo — como puxar a câmera junto
     // com o dedo. Pitch não é circular, por isso é clampado (não wrapAngle).
