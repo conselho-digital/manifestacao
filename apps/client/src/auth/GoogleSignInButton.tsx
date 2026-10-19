@@ -236,9 +236,28 @@ export function GoogleSignInButton({ onSignedIn }: GoogleSignInButtonProps) {
 
   const busy = status === "signing-in";
 
-  if (status === "fallback" || status === "loading") {
+  const showFallback = status === "fallback" || status === "loading";
+
+  // O container do botão do Google fica SEMPRE montado (só colapsado quando
+  // não é a vez dele). Antes ele só existia depois de `ready`, mas `ready`
+  // só era setado depois de achar o container — impasse que fazia o login
+  // rápido sempre estourar o timeout e cair pro redirect.
+  const googleContainer = (
+    <div
+      ref={containerRef}
+      style={{
+        display: "flex",
+        justifyContent: "center",
+        height: showFallback || busy ? 0 : undefined,
+        overflow: showFallback || busy ? "hidden" : undefined,
+      }}
+    />
+  );
+
+  if (showFallback) {
     return (
       <div>
+        {googleContainer}
         {/* Mesmo tamanho do botão "Entrar na avenida" que ele substitui nesta
             mesma barra fixa — sem isso, a troca de estado (logado/deslogado)
             fazia o CTA "encolher" visivelmente (altura, fonte e largura
@@ -277,7 +296,7 @@ export function GoogleSignInButton({ onSignedIn }: GoogleSignInButtonProps) {
       {/* O Google desenha o botão dentro deste container (iframe dele) —
           escondido enquanto `signing-in`, pra não deixar clicável durante o
           processamento, com um botão nosso (desabilitado) no lugar. */}
-      <div ref={containerRef} style={{ display: busy ? "none" : "flex", justifyContent: "center" }} />
+      {googleContainer}
       {busy && (
         <button
           type="button"
