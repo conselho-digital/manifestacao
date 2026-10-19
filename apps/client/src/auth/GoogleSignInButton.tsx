@@ -13,6 +13,7 @@ interface GoogleIdCredentialResponse {
 interface GooglePromptNotification {
   isNotDisplayed(): boolean;
   isSkippedMoment(): boolean;
+  isDismissedMoment(): boolean;
 }
 interface GoogleAccountsId {
   initialize(config: {
@@ -92,6 +93,12 @@ export function GoogleSignInButton({ onSignedIn }: GoogleSignInButtonProps) {
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   // Nonce cru (mandado pro Supabase) — gerado uma vez por montagem/tentativa.
   const nonceRef = useRef<string | null>(null);
+  // Separado de `status`: `status` também guarda o resultado da ÚLTIMA
+  // tentativa (signing-in/error), então usá-lo pra decidir "o GIS está
+  // pronto?" travava o botão no fallback de redirect pra sempre depois de
+  // um erro — mesmo com o GIS funcionando perfeitamente, `click()` nunca
+  // mais via `status === "ready"` de novo.
+  const giReadyRef = useRef(false);
 
   // `onSignedIn` muda de identidade a cada render do AvatarPicker (nickname
   // mudando, time mudando etc.) — se o efeito abaixo dependesse dele
@@ -128,6 +135,11 @@ export function GoogleSignInButton({ onSignedIn }: GoogleSignInButtonProps) {
     const nonce = crypto.randomUUID();
     nonceRef.current = nonce;
 
+    // `google.accounts.id` é um singleton global do script do Google — se um
+    // dia existir mais de uma instância desse componente montada ao mesmo
+    // tempo, a segunda `initialize()` sobrescreveria o nonce/callback da
+    // primeira. Hoje só há uma instância (AvatarPicker.tsx), então não é um
+    // problema real, só uma armadilha a lembrar se isso mudar.
     Promise.all([loadGisScript(), sha256Hex(nonce)])
       .then(([, hashedNonce]) => {
         if (cancelled || !window.google) return;
@@ -151,6 +163,7 @@ export function GoogleSignInButton({ onSignedIn }: GoogleSignInButtonProps) {
             });
           },
         });
+        giReadyRef.current = true;
         setStatus("ready");
       })
       .catch(() => {
@@ -164,14 +177,19 @@ export function GoogleSignInButton({ onSignedIn }: GoogleSignInButtonProps) {
   }, []);
 
   const click = () => {
-    if (status !== "ready" || !window.google) {
+    if (!giReadyRef.current || !window.google) {
       void signInWithGoogle();
       return;
     }
+    // Limpa o erro da tentativa anterior — sem isso, clicar de novo depois
+    // de um "Não deu pra entrar" deixava a mensagem antiga na tela mesmo
+    // enquanto uma nova tentativa já estava em andamento.
+    setStatus("ready");
+    setErrorMsg(null);
     window.google.accounts.id.prompt((notification) => {
-      // O seletor não apareceu (cooldown do One Tap, navegador sem suporte,
-      // etc.) — sem fallback aqui, o clique não faria nada visível.
-      if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+      // O seletor não apareceu, foi pulado ou foi fechado manualmente sem
+      // escolher conta — sem fallback aqui, o clique não faria nada visível.
+      if (notification.isNotDisplayed() || notification.isSkippedMoment() || notification.isDismissedMoment()) {
         void signInWithGoogle();
       }
     });
