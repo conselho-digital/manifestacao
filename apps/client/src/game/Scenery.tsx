@@ -1,9 +1,16 @@
-import { useEffect, useMemo } from "react";
+import { Suspense, useEffect, useMemo } from "react";
 import { Mesh } from "three";
 import { useGLTF } from "@react-three/drei";
 import { AVENUE_LENGTH, AVENUE_WIDTH } from "./world.js";
 
 const MASP_URL = "/models/scenery/masp.glb";
+// Modelo original (Sketchfab, exportado de FBX) vem em unidades arbitrárias
+// bem maiores que a cena (~1500x466x524). Escala medida via bounding box
+// (GLTFLoader + Box3) para a altura final ficar ~14 unidades — na mesma
+// faixa dos prédios-placeholder anteriores (8-24). Y compensa o pivô do
+// modelo (base ~139.67 unidades abaixo da origem local) para encostar no chão.
+const MASP_SCALE = 0.03;
+const MASP_Y_OFFSET = 4.19;
 
 /**
  * Prédio de cenário carregado de um glTF (CC0 — ver CREDITS.md). Habilita
@@ -64,8 +71,15 @@ export function Scenery() {
         </mesh>
       ))}
 
-      {/* Marco visual: MASP ao lado da avenida */}
-      <SceneryBuilding url={MASP_URL} position={[0, 0, AVENUE_WIDTH / 2 + 6]} />
+      {/* Marco visual: MASP ao lado da avenida. Suspense evita que a cena
+          quebre enquanto o glTF (~920KB) ainda está baixando. */}
+      <Suspense fallback={null}>
+        <SceneryBuilding
+          url={MASP_URL}
+          position={[0, MASP_Y_OFFSET, AVENUE_WIDTH / 2 + 6]}
+          scale={MASP_SCALE}
+        />
+      </Suspense>
     </group>
   );
 }
