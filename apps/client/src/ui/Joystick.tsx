@@ -87,7 +87,9 @@ export function Joystick({ onMove }: JoystickProps) {
     const ky = Math.sin(ang) * dist;
     setKnob({ dx: kx, dy: ky });
     if (Math.hypot(dx, dy) < DEAD) onMove(0, 0);
-    else onMove(Math.max(-1, Math.min(1, dx / MAX)), Math.max(-1, Math.min(1, dy / MAX)));
+    // Eixo horizontal invertido de propósito: o visual do botão segue o dedo,
+    // mas o personagem anda pro lado oposto.
+    else onMove(Math.max(-1, Math.min(1, -dx / MAX)), Math.max(-1, Math.min(1, dy / MAX)));
   };
 
   const end = (e: React.PointerEvent) => {
