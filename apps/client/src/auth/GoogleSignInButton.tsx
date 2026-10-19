@@ -181,23 +181,28 @@ export function GoogleSignInButton({ onSignedIn }: GoogleSignInButtonProps) {
 
   return (
     <div>
+      {/* Mesmo tamanho do botão "Entrar na avenida" que ele substitui nesta
+          mesma barra fixa — sem isso, a troca de estado (logado/deslogado)
+          fazia o CTA "encolher" visivelmente (altura, fonte e largura
+          menores). */}
       <button
         type="button"
         onClick={click}
         disabled={busy}
         style={{
-          minHeight: 44,
-          width: 320,
-          maxWidth: "100%",
-          padding: "10px 18px",
-          fontSize: "var(--t-ui)",
+          width: "min(720px, 100%)",
+          display: "block",
+          minHeight: 52,
+          padding: "14px 32px",
+          fontSize: 17,
           fontWeight: 800,
-          borderRadius: 999,
+          borderRadius: "var(--r-lg)",
           border: "none",
           background: "var(--accent)",
           color: "var(--on-accent)",
           cursor: busy ? "default" : "pointer",
           opacity: busy ? 0.6 : 1,
+          transition: "opacity .12s",
         }}
       >
         {busy ? "Entrando…" : "Continuar com o Google"}
