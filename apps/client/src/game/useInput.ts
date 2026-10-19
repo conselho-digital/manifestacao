@@ -50,8 +50,10 @@ export function useInput(enabled = true) {
       const k = pressed.current;
       let x = 0;
       let z = 0;
-      if (k.has("a") || k.has("arrowleft")) x -= 1;
-      if (k.has("d") || k.has("arrowright")) x += 1;
+      // Esquerda/direita invertidas de propósito (testado: o mapeamento
+      // anterior andava pro lado errado) — vale pra A/D e setas.
+      if (k.has("a") || k.has("arrowleft")) x += 1;
+      if (k.has("d") || k.has("arrowright")) x -= 1;
       if (k.has("w") || k.has("arrowup")) z -= 1;
       if (k.has("s") || k.has("arrowdown")) z += 1;
       keyRef.current = { x, z };
