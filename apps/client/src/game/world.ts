@@ -14,9 +14,16 @@ export const CAMERA_DISTANCE = 14;
 export const CAMERA_PIVOT_HEIGHT = 1.5;
 /** Inclinação inicial (radianos) — mantém o enquadramento parecido com o antigo offset fixo. */
 export const CAMERA_PITCH_DEFAULT = 0.62; // ~35.5°
-/** Limites de inclinação: evita a câmera virar de baixo pra cima ou cair no topo. */
-export const CAMERA_PITCH_MIN = -0.3; // ~-17°, olhar de baixo pra cima
-export const CAMERA_PITCH_MAX = 1.3; // ~74°, quase de cima
+/**
+ * Limites de inclinação — câmera livre de verdade, quase o círculo todo.
+ * Só não vai a ±90° exatos (reto pra cima/baixo): nesse ponto o vetor
+ * "forward" da câmera fica paralelo ao eixo Y, e o `camera.lookAt` perde a
+ * referência de "pra cima" (gimbal lock) — a câmera giraria de forma
+ * instável bem na borda. Parar um pouco antes evita esse artefato mantendo
+ * a sensação de liberdade total.
+ */
+export const CAMERA_PITCH_MIN = -1.5; // ~-86°, quase reto de baixo pra cima
+export const CAMERA_PITCH_MAX = 1.5; // ~86°, quase reto de cima pra baixo
 
 export function clampPitch(p: number): number {
   return Math.max(CAMERA_PITCH_MIN, Math.min(CAMERA_PITCH_MAX, p));
