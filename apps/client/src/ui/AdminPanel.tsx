@@ -579,15 +579,17 @@ function SuperchatsTab({ busy, run }: TabProps) {
       {rows.map((r) => (
         <div key={r.id} style={{ border: "1px solid var(--line)", borderRadius: "var(--r-md)", padding: 10, display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontWeight: 700, fontSize: "var(--t-ui)" }}>
-            <span style={{ overflowWrap: "anywhere" }}>{r.name}</span>
+            <span style={{ overflowWrap: "anywhere" }}>
+              {r.name} <span style={{ ...hint, fontWeight: 400 }}>· {new Date(r.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}</span>
+            </span>
             <span>R$ {(r.amount_cents / 100).toFixed(2).replace(".", ",")}</span>
           </div>
           <span style={{ fontSize: "var(--t-body)", overflowWrap: "anywhere" }}>{r.message}</span>
           <div style={row}>
-            <button type="button" disabled={busy} onClick={() => void decide(r, true)} style={primaryBtn}>
+            <button type="button" disabled={busy} onClick={() => void decide(r, true)} style={{ ...primaryBtn, flex: 1, padding: "10px 20px" }}>
               Aprovar
             </button>
-            <button type="button" disabled={busy} onClick={() => void decide(r, false)} style={ghostBtn}>
+            <button type="button" disabled={busy} onClick={() => void decide(r, false)} style={{ ...ghostBtn, flex: 1, color: "var(--danger)", borderColor: "var(--danger)" }}>
               Recusar
             </button>
           </div>

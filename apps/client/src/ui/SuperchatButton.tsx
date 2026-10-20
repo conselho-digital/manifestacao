@@ -10,14 +10,14 @@ export function SuperchatButton({ onClick }: SuperchatButtonProps) {
       onClick={onClick}
       style={{
         minHeight: 44,
-        minWidth: 44,
-        padding: "10px 18px",
+        minWidth: 112,
+        padding: "8px 16px",
         fontSize: "var(--t-ui)",
         fontWeight: 700,
         borderRadius: "var(--r-sm)",
-        border: "1px solid var(--accent)",
+        border: "1px solid var(--line)",
         background: "var(--scrim)",
-        color: "var(--accent)",
+        color: "var(--ink)",
         cursor: "pointer",
       }}
     >

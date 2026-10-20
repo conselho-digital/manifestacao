@@ -101,7 +101,7 @@ export function SuperchatModal({ defaultName, onClose }: SuperchatModalProps) {
         tabIndex={-1}
         style={{ width: "min(480px, 100%)", maxHeight: "calc(100dvh - 32px)", overflowY: "auto", outline: "none", background: "var(--surface)", border: "1px solid var(--line)", borderRadius: "var(--r-lg)", padding: 20, display: "flex", flexDirection: "column", gap: 14 }}
       >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8 }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, position: "sticky", top: -20, background: "var(--surface)", zIndex: 1, padding: "20px 0 6px", margin: "-20px 0 -6px" }}>
           <h2 id="superchat-title" style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: 28, fontWeight: 400, textTransform: "uppercase" }}>
             Superchat
           </h2>
@@ -137,7 +137,7 @@ export function SuperchatModal({ defaultName, onClose }: SuperchatModalProps) {
                   rows={3}
                   style={{ ...field, resize: "vertical", fontFamily: "inherit" }}
                 />
-                <span style={hint}>{message.length}/{SUPERCHAT_MAX_MESSAGE}</span>
+                <span style={{ ...hint, alignSelf: "flex-end" }}>{message.length}/{SUPERCHAT_MAX_MESSAGE}</span>
               </label>
               <label style={label}>
                 Valor (R$ 5 a R$ 200)
@@ -148,23 +148,24 @@ export function SuperchatModal({ defaultName, onClose }: SuperchatModalProps) {
                   {error}
                 </p>
               )}
-              <button type="submit" disabled={busy} style={primaryBtn}>
+              <button type="submit" disabled={busy} style={{ ...primaryBtn, opacity: busy ? 0.6 : 1 }}>
                 {busy ? "Enviando…" : "Enviar para análise"}
               </button>
             </form>
 
+            <p style={hint}>Reembolso do Pix: pedido em até 6 horas após o pagamento.</p>
             {mine.length > 0 && (
-              <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <section style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 260, overflowY: "auto" }}>
                 <h3 style={{ margin: 0, fontSize: "var(--t-body)" }}>Seus superchats</h3>
                 {mine.map((m) => (
-                  <div key={m.id} style={{ border: "1px solid var(--line)", borderRadius: "var(--r-md)", padding: 10, display: "flex", flexDirection: "column", gap: 6 }}>
+                  <div key={m.id} style={{ background: "var(--surface-2)", borderRadius: "var(--r-md)", padding: 10, display: "flex", flexDirection: "column", gap: 6 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: "var(--t-ui)", fontWeight: 700 }}>
                       <span>{brl(m.amount_cents)}</span>
-                      <span style={{ color: m.status === "rejected" || m.status === "refunded" ? "var(--danger)" : m.status === "paid" ? "var(--accent)" : "var(--ink-dim)" }}>
+                      <span style={{ color: m.status === "rejected" || m.status === "refunded" ? "var(--danger)" : m.status === "awaiting_payment" ? "var(--accent)" : m.status === "paid" ? "var(--ink)" : "var(--ink-dim)" }}>
                         {STATUS_LABEL[m.status]}
                       </span>
                     </div>
-                    <span style={{ fontSize: "var(--t-ui)", overflowWrap: "anywhere" }}>{m.message}</span>
+                    <span style={{ fontSize: "var(--t-body)", overflowWrap: "anywhere" }}>{m.message}</span>
                     {m.status === "awaiting_payment" && (
                       <button type="button" disabled={busy} onClick={() => void pay(m.id)} style={primaryBtn}>
                         Pagar {brl(m.amount_cents)} com Pix
@@ -174,7 +175,6 @@ export function SuperchatModal({ defaultName, onClose }: SuperchatModalProps) {
                 ))}
               </section>
             )}
-            <p style={hint}>Reembolso do Pix: pedido em até 6 horas após o pagamento.</p>
           </>
         )}
       </div>
