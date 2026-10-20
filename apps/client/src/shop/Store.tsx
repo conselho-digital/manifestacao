@@ -258,6 +258,12 @@ export function Store({ onClose, session, authLoading, owned, refresh }: StorePr
             })}
           </ul>
         )}
+
+        {isOnlineEnabled && (
+          <p style={{ margin: 0, fontSize: "var(--t-ui)", color: "var(--ink-dim)" }}>
+            Reembolso do Pix: pedido em até 6 horas após a compra.
+          </p>
+        )}
       </div>
     </div>
   );
