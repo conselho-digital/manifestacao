@@ -92,7 +92,7 @@ export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin, gra
           gap: 16,
         }}
       >
-        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: 8 }}>
           <h2
             id="options-title"
             style={{
@@ -105,16 +105,17 @@ export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin, gra
           >
             Opções
           </h2>
-          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
             <select
               aria-label="Gráficos"
+              title="Gráficos"
               value={graphics}
               onChange={(e) => onGraphics(Number(e.target.value) as GraphicsLevel)}
-              style={{ ...ghostBtn, background: "var(--surface-2)", fontSize: 16 }}
+              style={{ ...ghostBtn, minWidth: 0, fontSize: 16 }}
             >
               {GRAPHICS_LEVELS.map((l) => (
                 <option key={l} value={l}>
-                  Gráficos {l}%
+                  Gráf. {l}%
                 </option>
               ))}
             </select>

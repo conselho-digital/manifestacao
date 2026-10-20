@@ -283,7 +283,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
       <Crosshair />
       <TopRightPanel>
         <div style={{ display: "flex", gap: 8 }}>
-          <ChatButton onClick={() => setChatOpen((o) => !o)} />
+          <ChatButton open={chatOpen} onClick={() => setChatOpen((o) => !o)} />
           <OptionsButton onClick={() => setOptionsOpen(true)} />
           <StoreButton onClick={onOpenStore} />
         </div>

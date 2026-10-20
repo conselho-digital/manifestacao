@@ -93,12 +93,17 @@ Deno.serve(async (req) => {
         .eq("status", "paid")
         .select("user_id, item_id");
       for (const o of paidOrder ?? []) {
-        await adminRefund
+        const { error: delErr } = await adminRefund
           .from("entitlements")
           .delete()
           .eq("user_id", o.user_id)
           .eq("item_id", o.item_id)
           .eq("source", "purchase");
+        // 500 faz o Mercado Pago reenviar; o pedido já está 'refunded', então o reenvio só repete o delete.
+        if (delErr) {
+          console.error("refund_revoke_failed", delErr.message);
+          return new Response("revoke_failed", { status: 500 });
+        }
       }
       return new Response("refunded", { status: 200 });
     }

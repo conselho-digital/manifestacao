@@ -31,6 +31,7 @@ export function Hud({ online, scores, chatLog, onChat, chatOpen, onChatOpenChang
   const [text, setText] = useState("");
   const isTouch = useIsTouch();
   const logRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [kbOffset, setKbOffset] = useState(0);
 
   // Enter abre o chat (PC). Ignora se já está digitando ou se o foco está num
@@ -43,6 +44,8 @@ export function Hud({ online, scores, chatLog, onChat, chatOpen, onChatOpenChang
       if (t instanceof HTMLElement && (t.isContentEditable || ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "A"].includes(t.tagName))) return;
       e.preventDefault();
       onChatOpenChange(true);
+      // Já aberto mas sem foco (ex.: clicou no log): devolve o foco ao campo.
+      inputRef.current?.focus();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
@@ -65,15 +68,32 @@ export function Hud({ online, scores, chatLog, onChat, chatOpen, onChatOpenChang
     };
   }, [chatOpen, isTouch]);
 
-  // Aberto no PC: acompanha a mensagem mais recente.
+  // Sempre mostra a mensagem mais recente (aberto ou fechado).
   useEffect(() => {
     const el = logRef.current;
-    if (chatOpen && el) el.scrollTop = el.scrollHeight;
+    if (el) el.scrollTop = el.scrollHeight;
   }, [chatOpen, chatLog]);
+
+  // Foca ao abrir (no mesmo ciclo do toque, pro teclado do celular subir).
+  useEffect(() => {
+    if (chatOpen) inputRef.current?.focus();
+  }, [chatOpen, isTouch]);
+
+  // Esc fecha o chat mesmo sem foco no campo; modal aberto por cima também fecha.
+  useEffect(() => {
+    if (!chatOpen) return;
+    const onEsc = (e: KeyboardEvent) => e.key === "Escape" && onChatOpenChange(false);
+    window.addEventListener("keydown", onEsc);
+    return () => window.removeEventListener("keydown", onEsc);
+  }, [chatOpen, onChatOpenChange]);
+  useEffect(() => {
+    if (!enterFocusesChat && chatOpen) onChatOpenChange(false);
+  }, [enterFocusesChat, chatOpen, onChatOpenChange]);
 
   // Elemento (não componente): um componente interno remontaria a cada tecla e perderia o foco.
   const chatForm = (
     <form
+      style={{ display: "flex", gap: 6 }}
       onSubmit={(e) => {
         e.preventDefault();
         onChat(text);
@@ -82,13 +102,9 @@ export function Hud({ online, scores, chatLog, onChat, chatOpen, onChatOpenChang
       }}
     >
       <input
-        autoFocus
+        ref={inputRef}
         value={text}
         onChange={(e) => setText(e.target.value)}
-        onKeyDown={(e) => {
-          // Esc devolve o teclado ao jogo.
-          if (e.key === "Escape") onChatOpenChange(false);
-        }}
         onBlur={() => {
           if (isTouch) onChatOpenChange(false);
         }}
@@ -96,7 +112,8 @@ export function Hud({ online, scores, chatLog, onChat, chatOpen, onChatOpenChang
         placeholder="Conversar…"
         aria-label="Mensagem de chat"
         style={{
-          width: "100%",
+          flex: 1,
+          minWidth: 0,
           minHeight: 44,
           padding: "11px 12px",
           fontSize: 16,
@@ -106,6 +123,26 @@ export function Hud({ online, scores, chatLog, onChat, chatOpen, onChatOpenChang
           color: "var(--ink)",
         }}
       />
+      {isTouch && (
+        <button
+          type="submit"
+          // Não deixa o toque tirar o foco do campo (fecharia o chat antes de enviar).
+          onPointerDown={(e) => e.preventDefault()}
+          style={{
+            minHeight: 44,
+            minWidth: 44,
+            padding: "0 14px",
+            fontSize: "var(--t-ui)",
+            fontWeight: 700,
+            borderRadius: "var(--r-sm)",
+            border: "1px solid var(--line)",
+            background: "var(--surface-2)",
+            color: "var(--ink)",
+          }}
+        >
+          Enviar
+        </button>
+      )}
     </form>
   );
 
@@ -185,7 +222,8 @@ export function Hud({ online, scores, chatLog, onChat, chatOpen, onChatOpenChang
             overflowY: chatOpen && !isTouch ? "auto" : "hidden",
             marginBottom: 6,
             pointerEvents: chatOpen && !isTouch ? "auto" : "none",
-            background: chatOpen && !isTouch ? "var(--scrim)" : undefined,
+            background: chatOpen && !isTouch ? "var(--surface)" : undefined,
+            padding: chatOpen && !isTouch ? "6px 8px" : undefined,
             borderRadius: "var(--r-sm)",
           }}
         >

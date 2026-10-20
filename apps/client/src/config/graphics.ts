@@ -23,7 +23,8 @@ export function saveGraphics(level: GraphicsLevel): void {
 
 /** Escala de pixels do canvas: densidade do aparelho (máx. 2) × nível. Pode ficar < 1. */
 export function graphicsDpr(level: GraphicsLevel): number {
-  return Math.min(window.devicePixelRatio || 1, 2) * (level / 100);
+  // Piso 0.5: abaixo disso a imagem fica ilegível em telas de densidade 1.
+  return Math.max(0.5, Math.min(window.devicePixelRatio || 1, 2) * (level / 100));
 }
 
 /** Antisserrilhado só nos níveis altos (trocar exige recriar o canvas). */
