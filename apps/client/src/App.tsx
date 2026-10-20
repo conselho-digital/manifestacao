@@ -87,6 +87,7 @@ export function App() {
           onAvatarChange={changeAvatar}
           onExit={exitPlatform}
           isAdmin={isAdmin}
+          signedIn={session !== null}
           onConfigChanged={reloadConfig}
         />
       ) : (

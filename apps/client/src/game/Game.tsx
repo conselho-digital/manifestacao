@@ -44,6 +44,8 @@ interface GameProps {
   onExit: () => void;
   /** Conta admin: mostra o painel de admin em Opções. */
   isAdmin: boolean;
+  /** Há sessão logada — sem ela o Realtime não conecta. */
+  signedIn: boolean;
   /** Recarrega a config do jogo depois de o admin salvar algo. */
   onConfigChanged: () => Promise<void>;
 }
@@ -53,7 +55,7 @@ interface GameProps {
  * HUD (placar + chat), seletor de veículo, spray e joystick de toque.
  * Sessão/loja não vivem aqui — ver App.tsx.
  */
-export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, onAvatarChange, onExit, isAdmin, onConfigChanged }: GameProps) {
+export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, onAvatarChange, onExit, isAdmin, signedIn, onConfigChanged }: GameProps) {
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [vehicle, setVehicle] = useState<VehicleId>("nenhum");
@@ -61,7 +63,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
   // em App.tsx) está aberta. O joystick já fica coberto pelo overlay da
   // loja (zIndex maior), então só o teclado precisa dessa trava explícita.
   const { inputRef, setJoystick } = useInput(!paused && !optionsOpen && !adminOpen);
-  const net = useAvenueRealtime(avatar);
+  const net = useAvenueRealtime(avatar, signedIn);
   const isTouch = useIsTouch();
 
   // Ângulo/inclinação da câmera (controlados pelo arrasto na metade direita

@@ -99,7 +99,7 @@ function sanitizePresence(id: string, p: unknown): PresenceState {
  * time) + broadcast (movimento e chat). Não autoritativo (CLAUDE.md §4).
  * Em modo offline (sem credenciais) vira no-op e o jogo roda só local.
  */
-export function useAvenueRealtime(self: AvatarConfig) {
+export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean) {
   const selfId = useMemo(
     () => (crypto.randomUUID ? crypto.randomUUID() : String(Math.random())),
     [],
@@ -146,7 +146,9 @@ export function useAvenueRealtime(self: AvatarConfig) {
 
   useEffect(() => {
     const supabase = getSupabase();
-    if (!supabase) return;
+    // Conta obrigatória: sem sessão o cliente nem tenta entrar no canal (o
+    // banco também recusa — canal privado, policies em realtime.messages).
+    if (!supabase || !signedIn) return;
 
     const presence: PresenceState = {
       id: selfId,
@@ -282,7 +284,7 @@ export function useAvenueRealtime(self: AvatarConfig) {
       void supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [selfId, self.nickname, self.team, self.shirt, self.character, self.flag]);
+  }, [selfId, signedIn, self.nickname, self.team, self.shirt, self.character, self.flag]);
 
   const sendMove = useCallback(
     (x: number, z: number, facing: Facing, vehicle: VehicleId, flag: FlagId) => {
