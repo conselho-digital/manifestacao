@@ -18,7 +18,7 @@ export const BILLBOARDS: readonly BillboardSpot[] = [
 ];
 
 export const BID_MIN_CENTS = 2000;
-export const BID_MAX_CENTS = 100000;
+export const BID_MAX_CENTS = 1000000;
 export const BID_MAX_TEXT = 60;
 
 export type BidStatus = "review" | "awaiting_payment" | "active" | "outbid" | "rejected" | "refunded";

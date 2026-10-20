@@ -12,7 +12,7 @@ const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
 const MAX_TEXT = 60;
 const BOARDS = ["tela-1", "tela-2", "tela-3"];
 const MIN_CENTS = 2000;
-const MAX_CENTS = 100000;
+const MAX_CENTS = 1000000;
 const COLORS = ["#f8f9fa", "#ffd43b", "#51cf66", "#4dabf7", "#ff6b6b", "#b197fc"];
 
 Deno.serve(async (req) => {
@@ -64,6 +64,7 @@ Deno.serve(async (req) => {
       const msg = error?.message ?? "";
       const low = msg.match(/bid_too_low:(\d+)/);
       if (low) return json({ error: "bid_too_low", minCents: Number(low[1]) }, 409);
+      if (msg.includes("credit_debt")) return json({ error: "credit_debt" }, 402);
       if (msg.includes("too_many_open") || msg.includes("too_many_daily")) return json({ error: "too_many_open" }, 429);
       console.error("bid_create_failed", msg);
       return json({ error: "insert_failed" }, 500);

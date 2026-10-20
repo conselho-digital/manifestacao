@@ -1,4 +1,5 @@
 import { FunctionsHttpError } from "@supabase/supabase-js";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { SIGN_ID_RE, type CustomSign } from "@manifestacao/shared";
 import { getSupabase } from "./supabase.js";
 import type { PixCharge } from "./payments.js";
@@ -53,6 +54,22 @@ export async function fetchActiveSigns(ids: string[]): Promise<Pick<CustomSign, 
   const supabase = getSupabase();
   const valid = ids.filter((id) => SIGN_ID_RE.test(id));
   if (!supabase || valid.length === 0) return [];
-  const { data } = await supabase.from("custom_signs").select("id, text, color").in("id", valid.slice(0, 50));
+  const { data } = await supabase.from("custom_signs").select("id, text, color").eq("status", "active").in("id", valid.slice(0, 50));
   return (data as Pick<CustomSign, "id" | "text" | "color">[] | null) ?? [];
+}
+
+/** Realtime: cartaz que vira 'refunded' (Pix estornado) — a cena o retira. */
+export function subscribeSignRefunds(onRefunded: (id: string) => void): () => void {
+  const supabase = getSupabase();
+  if (!supabase) return () => {};
+  const channel: RealtimeChannel = supabase
+    .channel("signs-live")
+    .on("postgres_changes", { event: "UPDATE", schema: "public", table: "custom_signs" }, (p) => {
+      const r = p.new as { id?: unknown; status?: unknown } | null;
+      if (r && r.status === "refunded" && typeof r.id === "string") onRefunded(r.id);
+    })
+    .subscribe();
+  return () => {
+    void supabase.removeChannel(channel);
+  };
 }

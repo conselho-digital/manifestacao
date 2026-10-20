@@ -112,6 +112,9 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
   // Posições dos outros jogadores: ref lido a cada frame pela cena (sem re-render).
   const playersRef = useRef<Map<string, RemotePlayer>>(new Map());
   const channelRef = useRef<RealtimeChannel | null>(null);
+  const presenceRef = useRef<PresenceState | null>(null);
+  const signIdRef = useRef(signId);
+  signIdRef.current = signId;
 
   const [online, setOnline] = useState(false);
   const [scores, setScores] = useState<Record<TeamId, number>>(emptyScores);
@@ -164,8 +167,9 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
       shirt: self.shirt,
       character: self.character,
       flag: self.flag,
-      signId: signId && SIGN_ID_RE.test(signId) ? signId : undefined,
+      signId: signIdRef.current && SIGN_ID_RE.test(signIdRef.current) ? signIdRef.current : undefined,
     };
+    presenceRef.current = presence;
 
     // Canal PRIVADO: só quem está logado entra (policies em realtime.messages,
     // migration 0009). A chave de presence é o nosso id de sessão.
@@ -296,7 +300,7 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
         const subscribed = status === "SUBSCRIBED";
         setOnline(subscribed);
         if (subscribed) {
-          void channel.track(presence);
+          void channel.track(presenceRef.current ?? presence);
           // Canal refeito (ex.: troca de equipe): reenvia onde estamos.
           if (lastMoveRef.current) {
             void channel.send({ type: "broadcast", event: BROADCAST.move, payload: lastMoveRef.current });
@@ -310,7 +314,17 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
       void supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [selfId, signedIn, self.nickname, self.team, self.shirt, self.character, self.flag, signId]);
+  }, [selfId, signedIn, self.nickname, self.team, self.shirt, self.character, self.flag]);
+
+  // Trocar de cartaz só atualiza o presence (não derruba o canal).
+  useEffect(() => {
+    const channel = channelRef.current;
+    const base = presenceRef.current;
+    if (!channel || !base || channel.state !== "joined") return;
+    const next: PresenceState = { ...base, signId: signId && SIGN_ID_RE.test(signId) ? signId : undefined };
+    presenceRef.current = next;
+    void channel.track(next);
+  }, [signId]);
 
   const sendMove = useCallback(
     (x: number, z: number, facing: Facing, vehicle: VehicleId, flag: FlagId) => {

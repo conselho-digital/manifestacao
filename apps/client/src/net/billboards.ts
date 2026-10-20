@@ -8,7 +8,8 @@ const brl = (cents: number) => `R$ ${(cents / 100).toFixed(2).replace(".", ",")}
 
 const ERRORS: Record<string, string> = {
   board_invalid: "Telão inválido.",
-  amount_invalid: "Valor entre R$ 20,00 e R$ 1.000,00.",
+  amount_invalid: "Valor entre R$ 20,00 e R$ 10.000,00.",
+  credit_debt: "Há um estorno pendente na sua conta. Fale com o suporte para voltar a dar lances.",
   text_invalid: "Texto inválido (1 a 60 caracteres).",
   color_invalid: "Escolha uma das cores.",
   content_blocked: "Texto não permitido: sem links, telefones, @ de contato ou palavras ofensivas.",
@@ -85,7 +86,11 @@ export async function fetchActiveBids(): Promise<BillboardAd[]> {
 }
 
 /** Realtime: novo ativo entra; superado/estornado sai. */
-export function subscribeBids(onActive: (ad: BillboardAd) => void, onGone: (id: string) => void): () => void {
+export function subscribeBids(
+  onActive: (ad: BillboardAd) => void,
+  onGone: (id: string) => void,
+  onReady: () => void,
+): () => void {
   const supabase = getSupabase();
   if (!supabase) return () => {};
   const channel: RealtimeChannel = supabase
@@ -102,6 +107,8 @@ export function subscribeBids(onActive: (ad: BillboardAd) => void, onGone: (id: 
       }
     })
     .subscribe((status) => {
+      // A cada (re)conexão, quem usa recarrega o estado: eventos perdidos não deixam a tela desatualizada.
+      if (status === "SUBSCRIBED") onReady();
       if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") console.warn("billboards realtime:", status);
     });
   return () => {

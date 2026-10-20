@@ -93,6 +93,8 @@ async function findAttempt(
       .select(`${kind.fk}, settled, amount_cents`)
       .eq("external_reference", externalReference)
       .maybeSingle();
+    // Tabela ainda não criada (migration pendente): ignora esse tipo, não derruba o webhook dos outros.
+    if (error && (error.code === "42P01" || error.code === "PGRST205")) continue;
     if (error) return "error";
     if (data) {
       const row = data as unknown as Record<string, unknown>;
@@ -119,6 +121,7 @@ async function settleContent(admin: ReturnType<typeof createClient>, kind: Kind,
     (parent.status === "awaiting_payment" && paidCents === amountCents && payment.payment_method_id === "pix");
 
   if (eligible) {
+    let newlySettled = false;
     if (!attempt.settled) {
       // Índice único parcial: só UMA tentativa por item pode quitar.
       const { error: lockErr } = await admin.from(kind.pay).update({ settled: true }).eq("id", attempt.id);
@@ -126,12 +129,18 @@ async function settleContent(admin: ReturnType<typeof createClient>, kind: Kind,
         if (lockErr.code !== "23505") return new Response("db_error", { status: 500 });
         return await refundUnsettled(admin, kind, parent.id, payment, "outra tentativa já quitou");
       }
+      newlySettled = true;
     }
     // Transição atômica awaiting_payment -> ativo (idempotente).
     if (kind.settleRpc) {
       // Telão: a função do banco decide (ativo, ou superado na hora com valor devolvido em crédito).
-      const { error: rpcErr } = await admin.rpc(kind.settleRpc, { p_bid: parent.id });
+      const { data: result, error: rpcErr } = await admin.rpc(kind.settleRpc, { p_bid: parent.id });
       if (rpcErr) return new Response("db_error", { status: 500 });
+      // 'skip' numa quitação NOVA = o lance foi pago por outro meio (crédito) no meio do caminho:
+      // este Pix é duplicado, estorna. Em reenvio (já quitada) 'skip' é normal.
+      if (result === "skip" && newlySettled) {
+        return await refundUnsettled(admin, kind, parent.id, payment, "lance já quitado por outro meio");
+      }
       return new Response("ok", { status: 200 });
     }
     const { error: upErr } = await admin

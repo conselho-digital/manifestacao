@@ -43,9 +43,10 @@ alter table custom_signs enable row level security;
 alter table sign_private enable row level security;
 alter table sign_payments enable row level security;
 
--- Público: só cartazes ATIVOS (pagos). É contra isso que os outros jogadores validam o que veem.
+-- Público: cartazes ATIVOS (pagos) — é contra isso que os outros jogadores validam o que veem — e os
+-- estornados (o Realtime avisa para retirar da cena).
 create policy "cartazes ativos públicos" on custom_signs
-  for select to anon, authenticated using (status = 'active');
+  for select to anon, authenticated using (status in ('active', 'refunded'));
 revoke all on custom_signs, sign_private, sign_payments from anon, authenticated;
 grant select on custom_signs to anon, authenticated;
 
@@ -107,3 +108,9 @@ end $$;
 
 revoke all on function my_signs(), sign_queue(), moderate_sign(uuid, boolean, text) from public, anon;
 grant execute on function my_signs(), sign_queue(), moderate_sign(uuid, boolean, text) to authenticated;
+
+do $$ begin
+  if not exists (select 1 from pg_publication_tables where pubname = 'supabase_realtime' and tablename = 'custom_signs') then
+    alter publication supabase_realtime add table custom_signs;
+  end if;
+end $$;

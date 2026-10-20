@@ -11,7 +11,7 @@ create table billboard_bids (
   billboard_id text not null check (billboard_id in ('tela-1', 'tela-2', 'tela-3')),
   text text not null check (char_length(text) between 1 and 60),
   color text not null check (color in ('#f8f9fa', '#ffd43b', '#51cf66', '#4dabf7', '#ff6b6b', '#b197fc')),
-  amount_cents integer not null check (amount_cents between 2000 and 100000),
+  amount_cents integer not null check (amount_cents between 2000 and 1000000),
   status text not null default 'review'
     check (status in ('review', 'awaiting_payment', 'active', 'outbid', 'rejected', 'refunded')),
   created_at timestamptz not null default now(),
@@ -54,6 +54,10 @@ create policy "lances públicos" on billboard_bids
 revoke all on billboard_bids, billboard_private, billboard_payments from anon, authenticated;
 grant select on billboard_bids to anon, authenticated;
 
+-- O saldo pode ficar NEGATIVO (dívida): estorno/contestação de um Pix cujo crédito já foi gasto.
+-- Quem está devendo não dá lance nem paga com crédito até quitar (bid_create / bid_pay_with_credit).
+alter table user_credits drop constraint if exists user_credits_balance_cents_check;
+
 -- Menor lance aceito agora: piso R$ 20 ou o ativo + max(R$ 5, 10%).
 create or replace function bid_minimum(p_board text)
 returns integer language sql security definer set search_path = '' stable as $$
@@ -70,6 +74,9 @@ returns uuid language plpgsql security definer set search_path = '' as $$
 declare v_id uuid; v_open int; v_day int; v_min int;
 begin
   perform pg_advisory_xact_lock(hashtext('bid:' || p_user::text));
+  if coalesce((select balance_cents from public.user_credits where user_id = p_user), 0) < 0 then
+    raise exception 'credit_debt';
+  end if;
   v_min := public.bid_minimum(p_board);
   if p_amount < v_min then raise exception 'bid_too_low:%', v_min; end if;
   select count(*) into v_open from public.billboard_private p
@@ -95,15 +102,20 @@ returns void language sql security definer set search_path = '' as $$
 $$;
 revoke all on function credit_add(uuid, integer) from public, anon, authenticated;
 
+-- Obs.: se dois lances correm, vence o de maior valor; o incremento mínimo (bid_minimum) é exigido no envio e
+-- no pagamento — numa corrida, um lance entre o atual e o atual + incremento ainda pode vencer (aceito).
 -- Quita um lance (Pix confirmado ou crédito): vira o ativo e o anterior é superado e vira crédito.
 -- Se outro lance maior entrou antes, ESTE é superado na hora e o valor volta como crédito.
 create or replace function bid_settle(p_bid uuid)
 returns text language plpgsql security definer set search_path = '' as $$
-declare v_bid public.billboard_bids; v_cur public.billboard_bids; v_user uuid;
+declare v_bid public.billboard_bids; v_cur public.billboard_bids; v_user uuid; v_board text;
 begin
+  -- Ordem de travas SEMPRE: telão (advisory) → lance → crédito. Evita deadlock entre Pix e crédito.
+  select billboard_id into v_board from public.billboard_bids where id = p_bid;
+  if v_board is null then return 'skip'; end if;
+  perform pg_advisory_xact_lock(hashtext('bb:' || v_board));
   select * into v_bid from public.billboard_bids where id = p_bid for update;
   if not found or v_bid.status <> 'awaiting_payment' then return 'skip'; end if;
-  perform pg_advisory_xact_lock(hashtext('bb:' || v_bid.billboard_id));
   select * into v_cur from public.billboard_bids
     where billboard_id = v_bid.billboard_id and status = 'active' for update;
   select user_id into v_user from public.billboard_private where bid_id = p_bid;
@@ -126,14 +138,24 @@ grant execute on function bid_settle(uuid) to service_role;
 -- Estorno do Pix de um lance quitado: sai do ar e, se já tinha virado crédito, o crédito é retirado.
 create or replace function bid_refund(p_bid uuid)
 returns void language plpgsql security definer set search_path = '' as $$
-declare v_bid public.billboard_bids; v_user uuid;
+declare v_bid public.billboard_bids; v_user uuid; v_bal integer; v_board text;
 begin
+  select billboard_id into v_board from public.billboard_bids where id = p_bid;
+  if v_board is null then return; end if;
+  perform pg_advisory_xact_lock(hashtext('bb:' || v_board));
   select * into v_bid from public.billboard_bids where id = p_bid for update;
   if not found or v_bid.status not in ('active', 'outbid') then return; end if;
   update public.billboard_bids set status = 'refunded' where id = p_bid;
   if v_bid.status = 'outbid' then
     select user_id into v_user from public.billboard_private where bid_id = p_bid;
-    update public.user_credits set balance_cents = greatest(0, balance_cents - v_bid.amount_cents) where user_id = v_user;
+    select balance_cents into v_bal from public.user_credits where user_id = v_user for update;
+    v_bal := coalesce(v_bal, 0);
+    update public.user_credits set balance_cents = v_bal - v_bid.amount_cents where user_id = v_user;
+    -- Crédito já gasto: o saldo fica negativo (dívida) e o valor é registrado (auditoria).
+    if v_bal < v_bid.amount_cents then
+      insert into public.moderation_log (actor, target, action, reason)
+        values (null, 'bid:' || p_bid, 'credit_shortfall', (v_bid.amount_cents - v_bal)::text);
+    end if;
   end if;
 end $$;
 revoke all on function bid_refund(uuid) from public, anon, authenticated;
@@ -142,9 +164,14 @@ grant execute on function bid_refund(uuid) to service_role;
 -- Pagar com crédito (saldo cobre o lance inteiro; sem Pix).
 create or replace function bid_pay_with_credit(p_bid uuid)
 returns text language plpgsql security definer set search_path = '' as $$
-declare v_bid public.billboard_bids; v_bal integer;
+declare v_bid public.billboard_bids; v_bal integer; v_board text;
 begin
   if auth.uid() is null then raise exception 'unauthorized'; end if;
+  -- Mesma ordem de travas do bid_settle: telão primeiro.
+  select b.billboard_id into v_board from public.billboard_bids b
+    join public.billboard_private p on p.bid_id = b.id where b.id = p_bid and p.user_id = auth.uid();
+  if v_board is null then raise exception 'not_found'; end if;
+  perform pg_advisory_xact_lock(hashtext('bb:' || v_board));
   select b.* into v_bid from public.billboard_bids b
     join public.billboard_private p on p.bid_id = b.id
     where b.id = p_bid and p.user_id = auth.uid() for update of b;

@@ -154,7 +154,7 @@ export function BillboardModal({ ads, onClose }: BillboardModalProps) {
           <PixPanel
             charge={charge}
             onCancel={() => setCharge(null)}
-            hint="Aguardando o Pix… assim que for confirmado, seu anúncio entra no ar."
+            hint="Aguardando o Pix… assim que for confirmado, seu anúncio entra no ar. Se alguém cobrir o seu lance antes disso, o valor pago vira crédito."
           />
         ) : (
           <>

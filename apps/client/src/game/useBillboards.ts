@@ -8,15 +8,9 @@ export function useBillboards(enabled: boolean): Map<string, BillboardAd> {
 
   useEffect(() => {
     if (!enabled) return;
-    let cancelled = false;
-    void fetchActiveBids().then((rows) => {
-      if (cancelled) return;
-      setAds((prev) => {
-        const next = new Map(prev);
-        for (const r of rows) next.set(r.billboard_id, r);
-        return next;
-      });
-    });
+    let alive = true;
+    // Assina primeiro e carrega no SUBSCRIBED (e a cada reconexão): o carregamento SUBSTITUI o mapa,
+    // então um lance superado não reaparece e eventos perdidos são recuperados.
     const unsubscribe = subscribeBids(
       (ad) => setAds((prev) => new Map(prev).set(ad.billboard_id, ad)),
       (id) =>
@@ -27,9 +21,14 @@ export function useBillboards(enabled: boolean): Map<string, BillboardAd> {
           next.delete(entry[0]);
           return next;
         }),
+      () => {
+        void fetchActiveBids().then((rows) => {
+          if (alive) setAds(new Map(rows.map((r) => [r.billboard_id, r])));
+        });
+      },
     );
     return () => {
-      cancelled = true;
+      alive = false;
       unsubscribe();
       setAds(new Map());
     };
