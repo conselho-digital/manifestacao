@@ -82,6 +82,7 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
           occlude
           // O padrão do drei é um z-index enorme, que passava por cima de loja/opções.
           zIndexRange={[3, 0]}
+          className="avatar-name"
           style={{
             pointerEvents: "none",
             whiteSpace: "nowrap",

@@ -78,6 +78,11 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
   // Pausa o movimento por teclado enquanto a loja (renderizada por cima,
   // em App.tsx) está aberta. O joystick já fica coberto pelo overlay da
   // loja (zIndex maior), então só o teclado precisa dessa trava explícita.
+  const modalOpen = paused || optionsOpen || adminOpen;
+  useEffect(() => {
+    document.body.toggleAttribute("data-modal-open", modalOpen);
+    return () => document.body.removeAttribute("data-modal-open");
+  }, [modalOpen]);
   const { inputRef, setJoystick } = useInput(!paused && !optionsOpen && !adminOpen);
   const net = useAvenueRealtime(avatar, signedIn);
   const isTouch = useIsTouch();
@@ -198,6 +203,8 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
       <Canvas
         // Recria o canvas ao ligar/desligar o antisserrilhado (só vale na criação do contexto).
         key={graphicsAntialias(graphics) ? "aa" : "noaa"}
+        // Contexto de empilhamento próprio: nada de dentro do canvas (nomes) passa por cima de menus.
+        style={{ zIndex: 0 }}
         shadows
         dpr={graphicsDpr(graphics)}
         gl={{ antialias: graphicsAntialias(graphics) }}
