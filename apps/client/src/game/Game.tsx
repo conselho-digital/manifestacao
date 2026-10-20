@@ -18,6 +18,13 @@ import { VehiclePicker } from "../ui/VehiclePicker.js";
 import { StoreButton } from "../ui/StoreButton.js";
 import { OptionsButton } from "../ui/OptionsButton.js";
 import { ChatButton } from "../ui/ChatButton.js";
+import {
+  graphicsAntialias,
+  graphicsDpr,
+  loadGraphics,
+  saveGraphics,
+  type GraphicsLevel,
+} from "../config/graphics.js";
 import { OptionsModal } from "../ui/OptionsModal.js";
 import { AdminPanel } from "../ui/AdminPanel.js";
 import { sprayOptionById, sprayUnlocked } from "../config/sprays.js";
@@ -61,6 +68,11 @@ interface GameProps {
 export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, onAvatarChange, onExit, isAdmin, signedIn, onConfigChanged }: GameProps) {
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
+  const [graphics, setGraphics] = useState<GraphicsLevel>(loadGraphics);
+  const chooseGraphics = (l: GraphicsLevel) => {
+    setGraphics(l);
+    saveGraphics(l);
+  };
   const [adminOpen, setAdminOpen] = useState(false);
   const [vehicle, setVehicle] = useState<VehicleId>("nenhum");
   // Pausa o movimento por teclado enquanto a loja (renderizada por cima,
@@ -184,7 +196,11 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           usa pra orbitar a câmera — evita um salto/giro perceptível da
           câmera logo na entrada, antes do primeiro frame recalcular. */}
       <Canvas
+        // Recria o canvas ao ligar/desligar o antisserrilhado (só vale na criação do contexto).
+        key={graphicsAntialias(graphics) ? "aa" : "noaa"}
         shadows
+        dpr={graphicsDpr(graphics)}
+        gl={{ antialias: graphicsAntialias(graphics) }}
         camera={{
           position: [
             -cameraDistance * CAMERA_SHOULDER_RATIO,
@@ -289,6 +305,8 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           }}
           onClose={() => setOptionsOpen(false)}
           onExit={onExit}
+          graphics={graphics}
+          onGraphics={chooseGraphics}
           owned={owned}
           sprayStyle={activeSpray.id}
           onSprayStyle={chooseSpray}

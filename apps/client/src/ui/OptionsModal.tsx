@@ -12,6 +12,7 @@ import {
   type CharacterId,
   type TeamId,
 } from "@manifestacao/shared";
+import { GRAPHICS_LEVELS, type GraphicsLevel } from "../config/graphics.js";
 import { AvatarGlyph } from "./AvatarGlyph.js";
 import { TeamFlagIcon } from "./TeamFlagIcon.js";
 
@@ -30,6 +31,9 @@ interface OptionsModalProps {
   onOpenStore: () => void;
   /** Só passado para contas admin: abre o painel de admin. */
   onOpenAdmin?: () => void;
+  /** Qualidade gráfica (% da resolução); vale na hora. */
+  graphics: GraphicsLevel;
+  onGraphics: (l: GraphicsLevel) => void;
 }
 
 /**
@@ -37,7 +41,7 @@ interface OptionsModalProps {
  * ou sair da plataforma. As mudanças só valem ao clicar em "Salvar" (evita
  * reentrar no canal em tempo real a cada tecla digitada no apelido).
  */
-export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin, owned, sprayStyle, onSprayStyle, onOpenStore }: OptionsModalProps) {
+export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin, graphics, onGraphics, owned, sprayStyle, onSprayStyle, onOpenStore }: OptionsModalProps) {
   const [team, setTeam] = useState<TeamId>(avatar.team);
   const [nickname, setNickname] = useState(avatar.nickname);
   const [character, setCharacter] = useState<CharacterId>(avatar.character);
@@ -101,9 +105,23 @@ export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin, own
           >
             Opções
           </h2>
-          <button type="button" onClick={onClose} style={ghostBtn}>
-            Fechar
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <select
+              aria-label="Gráficos"
+              value={graphics}
+              onChange={(e) => onGraphics(Number(e.target.value) as GraphicsLevel)}
+              style={{ ...ghostBtn, background: "var(--surface-2)", fontSize: 16 }}
+            >
+              {GRAPHICS_LEVELS.map((l) => (
+                <option key={l} value={l}>
+                  Gráficos {l}%
+                </option>
+              ))}
+            </select>
+            <button type="button" onClick={onClose} style={ghostBtn}>
+              Fechar
+            </button>
+          </div>
         </div>
 
         <section>
