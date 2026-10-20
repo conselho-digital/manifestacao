@@ -214,3 +214,25 @@ export async function moderateSign(id: string, approve: boolean, reason?: string
   const { error } = await db().rpc("moderate_sign", { p_id: id, p_approve: approve, p_reason: reason ?? null });
   if (error) throw new Error(error.message.includes("already_moderated") ? "Este cartaz já foi moderado." : error.message);
 }
+
+// ── Telões (fila de moderação dos lances) ─────────────────────────────────
+export interface AdminBid {
+  id: string;
+  billboard_id: string;
+  text: string;
+  color: string;
+  amount_cents: number;
+  status: string;
+  created_at: string;
+}
+
+export async function fetchBidQueue(): Promise<AdminBid[]> {
+  const { data, error } = await db().rpc("bid_queue");
+  if (error) throw new Error(error.message);
+  return (data as AdminBid[]) ?? [];
+}
+
+export async function moderateBid(id: string, approve: boolean, reason?: string): Promise<void> {
+  const { error } = await db().rpc("moderate_bid", { p_id: id, p_approve: approve, p_reason: reason ?? null });
+  if (error) throw new Error(error.message.includes("already_moderated") ? "Este lance já foi moderado." : error.message);
+}

@@ -24,6 +24,10 @@ import { SuperchatModal } from "../ui/SuperchatModal.js";
 import { SignButton } from "../ui/SignButton.js";
 import { SignModal } from "../ui/SignModal.js";
 import { useSigns } from "./useSigns.js";
+import { BillboardButton } from "../ui/BillboardButton.js";
+import { BillboardModal } from "../ui/BillboardModal.js";
+import { Billboards } from "./Billboards.js";
+import { useBillboards } from "./useBillboards.js";
 import {
   graphicsDpr,
   loadGraphics,
@@ -82,6 +86,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
   const [adminOpen, setAdminOpen] = useState(false);
   const [superchatOpen, setSuperchatOpen] = useState(false);
   const [signOpen, setSignOpen] = useState(false);
+  const [billboardOpen, setBillboardOpen] = useState(false);
   // Cartaz que o jogador carrega (id salvo no aparelho; o texto vem do banco, só se estiver ativo).
   const [signId, setSignId] = useState<string | null>(() => {
     try {
@@ -103,15 +108,16 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
   // Pausa o movimento por teclado enquanto a loja (renderizada por cima,
   // em App.tsx) está aberta. O joystick já fica coberto pelo overlay da
   // loja (zIndex maior), então só o teclado precisa dessa trava explícita.
-  const modalOpen = paused || optionsOpen || adminOpen || superchatOpen || signOpen;
+  const modalOpen = paused || optionsOpen || adminOpen || superchatOpen || signOpen || billboardOpen;
   useEffect(() => {
     document.body.toggleAttribute("data-modal-open", modalOpen);
     return () => document.body.removeAttribute("data-modal-open");
   }, [modalOpen]);
-  const { inputRef, setJoystick } = useInput(!paused && !optionsOpen && !adminOpen && !superchatOpen && !signOpen);
+  const { inputRef, setJoystick } = useInput(!paused && !optionsOpen && !adminOpen && !superchatOpen && !signOpen && !billboardOpen);
   const net = useAvenueRealtime(avatar, signedIn, signId);
   const isTouch = useIsTouch();
   const signs = useSigns(net.remoteIds, net.playersRef, signId);
+  const billboardAds = useBillboards(signedIn);
 
   // Ângulo/inclinação da câmera (controlados pelo arrasto na metade direita
   // da tela) e estado do botão de correr — lidos a cada frame pelo Player,
@@ -283,6 +289,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           transformReadyRef={transformReadyRef}
         />
         <RemotePlayers ids={net.remoteIds} playersRef={net.playersRef} signs={signs} />
+        <Billboards ads={billboardAds} />
       </Canvas>
 
       {isTouch && <Joystick onMove={setJoystick} />}
@@ -319,7 +326,8 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           <StoreButton onClick={onOpenStore} />
         </div>
         {signedIn && (
-          <div style={{ display: "flex", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <BillboardButton onClick={() => setBillboardOpen(true)} />
             <SignButton onClick={() => setSignOpen(true)} />
             <SuperchatButton onClick={() => setSuperchatOpen(true)} />
           </div>
@@ -352,11 +360,12 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
         />
       )}
       {superchatOpen && signedIn && <SuperchatModal defaultName={avatar.nickname} onClose={() => setSuperchatOpen(false)} />}
+      {billboardOpen && signedIn && <BillboardModal ads={billboardAds} onClose={() => setBillboardOpen(false)} />}
       {signOpen && signedIn && <SignModal equippedId={signId} onEquip={equipSign} onClose={() => setSignOpen(false)} />}
       <SuperchatBanner enabled={signedIn} />
       {adminOpen && isAdmin && <AdminPanel onClose={() => setAdminOpen(false)} onChanged={onConfigChanged} />}
       <Hud
-        enterFocusesChat={!paused && !optionsOpen && !adminOpen && !superchatOpen && !signOpen}
+        enterFocusesChat={!paused && !optionsOpen && !adminOpen && !superchatOpen && !signOpen && !billboardOpen}
         online={net.online}
         scores={net.scores}
         chatLog={net.chatLog}

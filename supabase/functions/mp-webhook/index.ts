@@ -57,11 +57,30 @@ async function signatureValid(req: Request, dataId: string): Promise<boolean> {
 }
 
 /** Conteúdos pagos que seguem o mesmo fluxo (moderação → Pix → ativo). */
-const KINDS = {
+interface Kind {
+  table: string;
+  pay: string;
+  fk: string;
+  /** Status final quando quitado. */
+  done: string;
+  log: string;
+  /** RPC que quita (em vez do update direto) e RPC que estorna — usadas pelos lances de telão (crédito). */
+  settleRpc?: string;
+  refundRpc?: string;
+}
+const KINDS: Record<string, Kind> = {
   superchat: { table: "superchats", pay: "superchat_payments", fk: "superchat_id", done: "paid", log: "superchat" },
   sign: { table: "custom_signs", pay: "sign_payments", fk: "sign_id", done: "active", log: "sign" },
-} as const;
-type Kind = (typeof KINDS)[keyof typeof KINDS];
+  bid: {
+    table: "billboard_bids",
+    pay: "billboard_payments",
+    fk: "bid_id",
+    done: "active",
+    log: "bid",
+    settleRpc: "bid_settle",
+    refundRpc: "bid_refund",
+  },
+};
 
 /** Acha a tentativa de pagamento (superchat ou cartaz) pela external_reference. */
 async function findAttempt(
@@ -109,6 +128,12 @@ async function settleContent(admin: ReturnType<typeof createClient>, kind: Kind,
       }
     }
     // Transição atômica awaiting_payment -> ativo (idempotente).
+    if (kind.settleRpc) {
+      // Telão: a função do banco decide (ativo, ou superado na hora com valor devolvido em crédito).
+      const { error: rpcErr } = await admin.rpc(kind.settleRpc, { p_bid: parent.id });
+      if (rpcErr) return new Response("db_error", { status: 500 });
+      return new Response("ok", { status: 200 });
+    }
     const { error: upErr } = await admin
       .from(kind.table)
       .update({ status: kind.done, paid_at: new Date().toISOString() })
@@ -175,6 +200,11 @@ Deno.serve(async (req) => {
       if (attempt === "error") return new Response("db_error", { status: 500 });
       if (attempt) {
         if (!attempt.settled) return new Response("ignored", { status: 200 });
+        if (attempt.kind.refundRpc) {
+          const { error: rpcErr } = await adminRefund.rpc(attempt.kind.refundRpc, { p_bid: attempt.parentId });
+          if (rpcErr) return new Response("db_error", { status: 500 });
+          return new Response("refunded", { status: 200 });
+        }
         const { error: upErr } = await adminRefund
           .from(attempt.kind.table)
           .update({ status: "refunded" })
