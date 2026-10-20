@@ -39,6 +39,7 @@ create table superchat_payments (
   id uuid primary key default gen_random_uuid(),
   superchat_id uuid not null references superchats (id) on delete cascade,
   external_reference text not null unique,
+  amount_cents integer not null check (amount_cents > 0),
   mp_payment_id text,
   state text not null default 'creating' check (state in ('creating', 'pending', 'dead')),
   -- Tentativa que de fato quitou o superchat (no máximo uma; as demais pagas viram estorno).
@@ -54,9 +55,9 @@ alter table superchats enable row level security;
 alter table superchat_private enable row level security;
 alter table superchat_payments enable row level security;
 
--- Público: só superchats JÁ PAGOS (e só as colunas acima, que são todas públicas).
+-- Público: só superchats pagos — e os estornados, pra o Realtime avisar e o banner retirar.
 create policy "superchats pagos públicos" on superchats
-  for select to anon, authenticated using (status = 'paid');
+  for select to anon, authenticated using (status in ('paid', 'refunded'));
 -- superchat_private / superchat_payments: sem policy = só service_role e RPCs.
 revoke all on superchats, superchat_private, superchat_payments from anon, authenticated;
 grant select on superchats to anon, authenticated;

@@ -10,3 +10,4 @@ export * from "./world.js";
 export * from "./realtime.js";
 export * from "./catalog.js";
 export * from "./superchat.js";
+export * from "./signs.js";

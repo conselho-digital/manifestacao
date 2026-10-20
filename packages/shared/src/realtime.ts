@@ -20,6 +20,8 @@ export interface PresenceState {
   shirt: number;
   character: CharacterId;
   flag: FlagId;
+  /** Cartaz ativo que o jogador carrega (só o ID; o texto vem do banco). */
+  signId?: string;
 }
 
 /** Evento de broadcast: movimento + estado dinâmico de um jogador. */

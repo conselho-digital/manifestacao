@@ -53,25 +53,25 @@ export async function fetchMySuperchats(): Promise<Superchat[] | null> {
 }
 
 /**
- * Escuta superchats que viram 'paid' (INSERT ou UPDATE) via Realtime e entrega
- * cada um uma vez. Só linhas pagas passam pelo RLS público.
+ * Escuta o Realtime: superchats que viram 'paid' (entrega uma vez cada) e os que
+ * viram 'refunded' (para retirar da tela). Só essas linhas passam pelo RLS público.
  */
-export function subscribePaidSuperchats(onPaid: (s: Superchat) => void): () => void {
+export function subscribeSuperchats(onPaid: (s: Superchat) => void, onRefunded: (id: string) => void): () => void {
   const supabase = getSupabase();
   if (!supabase) return () => {};
   const seen = new Set<string>();
   const handle = (row: unknown) => {
     const s = row as Partial<Superchat> | null;
-    if (!s || s.status !== "paid" || typeof s.id !== "string" || seen.has(s.id)) return;
+    if (!s || typeof s.id !== "string") return;
+    if (s.status === "refunded") return onRefunded(s.id);
+    if (s.status !== "paid" || seen.has(s.id)) return;
     if (typeof s.name !== "string" || typeof s.message !== "string" || typeof s.amount_cents !== "number") return;
     seen.add(s.id);
     onPaid(s as Superchat);
   };
   const channel: RealtimeChannel = supabase
-    .channel("superchats-paid")
-    .on("postgres_changes", { event: "*", schema: "public", table: "superchats", filter: "status=eq.paid" }, (p) =>
-      handle(p.new),
-    )
+    .channel("superchats-live")
+    .on("postgres_changes", { event: "*", schema: "public", table: "superchats" }, (p) => handle(p.new))
     .subscribe((status) => {
       if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") console.warn("superchat realtime:", status);
     });

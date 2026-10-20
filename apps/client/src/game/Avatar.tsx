@@ -4,6 +4,8 @@ import { Html } from "@react-three/drei";
 import { flagColor, type FlagId, type VehicleId } from "@manifestacao/shared";
 import { Flag3D, Vehicle3D, GlbModel } from "./props3d.js";
 import { flagModelUrl } from "./models.js";
+import { SignProp } from "./SignProp.js";
+import type { SignData } from "./useSigns.js";
 
 interface AvatarProps {
   /** Cor da camisa/time (0xrrggbb). */
@@ -11,6 +13,8 @@ interface AvatarProps {
   name?: string;
   flag?: FlagId;
   vehicle?: VehicleId;
+  /** Cartaz personalizado ativo (texto vem do banco, nunca direto da rede). */
+  sign?: SignData | null;
   /** URL de um modelo glTF; se ausente, usa o avatar geométrico. */
   modelUrl?: string | null;
 }
@@ -58,7 +62,7 @@ function FlagProp({ flag, color }: { flag: FlagId; color: number }) {
  * opcional e etiqueta de apelido. Usado pelo jogador local e pelos remotos.
  */
 export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
-  { color, name, flag = "nenhuma", vehicle = "nenhum", modelUrl = null },
+  { color, name, flag = "nenhuma", vehicle = "nenhum", sign = null, modelUrl = null },
   ref,
 ) {
   return (
@@ -72,6 +76,7 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
       )}
 
       {flag !== "nenhuma" && <FlagProp flag={flag} color={color} />}
+      {sign && <SignProp sign={sign} />}
       <Vehicle3D vehicle={vehicle} />
 
       {name && (

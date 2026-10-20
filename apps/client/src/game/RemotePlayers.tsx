@@ -4,17 +4,19 @@ import { useFrame } from "@react-three/fiber";
 import { Avatar } from "./Avatar.js";
 import { modelUrlFor } from "./models.js";
 import type { RemotePlayer } from "../net/useAvenueRealtime.js";
+import type { SignData } from "./useSigns.js";
 
 interface RemotePlayersProps {
   ids: string[];
   playersRef: { current: Map<string, RemotePlayer> };
+  signs: Map<string, SignData>;
 }
 
 /**
  * Renderiza os outros jogadores (corpo + bandeira + veículo) e interpola suas
  * posições a cada frame em direção ao último valor recebido via broadcast.
  */
-export function RemotePlayers({ ids, playersRef }: RemotePlayersProps) {
+export function RemotePlayers({ ids, playersRef, signs }: RemotePlayersProps) {
   const groups = useRef<Map<string, Group>>(new Map());
   // Callback ref estável por id: evita recriar a função (e desmontar/remontar
   // a referência no Three.js) a cada render de RemotePlayers.
@@ -56,6 +58,7 @@ export function RemotePlayers({ ids, playersRef }: RemotePlayersProps) {
             name={p.nickname}
             flag={p.flag}
             vehicle={p.vehicle}
+            sign={p.signId ? signs.get(p.signId) ?? null : null}
             modelUrl={modelUrlFor(p.character, p.team)}
           />
         );

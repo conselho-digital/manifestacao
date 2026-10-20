@@ -56,52 +56,75 @@ async function signatureValid(req: Request, dataId: string): Promise<boolean> {
   return diff === 0;
 }
 
+/** Conteúdos pagos que seguem o mesmo fluxo (moderação → Pix → ativo). */
+const KINDS = {
+  superchat: { table: "superchats", pay: "superchat_payments", fk: "superchat_id", done: "paid", log: "superchat" },
+  sign: { table: "custom_signs", pay: "sign_payments", fk: "sign_id", done: "active", log: "sign" },
+} as const;
+type Kind = (typeof KINDS)[keyof typeof KINDS];
+
+/** Acha a tentativa de pagamento (superchat ou cartaz) pela external_reference. */
+async function findAttempt(
+  admin: ReturnType<typeof createClient>,
+  externalReference: string,
+): Promise<{ kind: Kind; parentId: string; settled: boolean; amountCents: number } | "error" | null> {
+  for (const kind of Object.values(KINDS)) {
+    const { data, error } = await admin
+      .from(kind.pay)
+      .select(`${kind.fk}, settled, amount_cents`)
+      .eq("external_reference", externalReference)
+      .maybeSingle();
+    if (error) return "error";
+    if (data) {
+      const row = data as unknown as Record<string, unknown>;
+      return { kind, parentId: String(row[kind.fk]), settled: Boolean(row.settled), amountCents: Number(row.amount_cents) };
+    }
+  }
+  return null;
+}
+
 // deno-lint-ignore no-explicit-any
-async function settleSuperchat(admin: ReturnType<typeof createClient>, superchatId: string, externalReference: string, payment: any): Promise<Response> {
-  const { data: sc, error } = await admin
-    .from("superchats")
-    .select("id, amount_cents, status")
-    .eq("id", superchatId)
-    .single();
+async function settleContent(admin: ReturnType<typeof createClient>, kind: Kind, parentId: string, externalReference: string, amountCents: number, payment: any): Promise<Response> {
+  const { data: parent, error } = await admin.from(kind.table).select("id, status").eq("id", parentId).single();
   const { data: attempt, error: attErr } = await admin
-    .from("superchat_payments")
+    .from(kind.pay)
     .select("id, settled")
     .eq("external_reference", externalReference)
     .single();
-  if (error || !sc || attErr || !attempt) return new Response("db_error", { status: 500 });
+  if (error || !parent || attErr || !attempt) return new Response("db_error", { status: 500 });
 
   // Reenvio do webhook de uma tentativa que já quitou: só garante o estado final.
   const paidCents = Math.round((payment.transaction_amount ?? 0) * 100);
   const eligible =
     attempt.settled ||
-    (sc.status === "awaiting_payment" && paidCents === sc.amount_cents && payment.payment_method_id === "pix");
+    (parent.status === "awaiting_payment" && paidCents === amountCents && payment.payment_method_id === "pix");
 
   if (eligible) {
     if (!attempt.settled) {
-      // Índice único parcial: só UMA tentativa por superchat pode quitar.
-      const { error: lockErr } = await admin.from("superchat_payments").update({ settled: true }).eq("id", attempt.id);
+      // Índice único parcial: só UMA tentativa por item pode quitar.
+      const { error: lockErr } = await admin.from(kind.pay).update({ settled: true }).eq("id", attempt.id);
       if (lockErr) {
         if (lockErr.code !== "23505") return new Response("db_error", { status: 500 });
-        return await refundUnsettled(admin, sc.id, payment, "outra tentativa já quitou");
+        return await refundUnsettled(admin, kind, parent.id, payment, "outra tentativa já quitou");
       }
     }
-    // Transição atômica awaiting_payment -> paid (idempotente).
+    // Transição atômica awaiting_payment -> ativo (idempotente).
     const { error: upErr } = await admin
-      .from("superchats")
-      .update({ status: "paid", paid_at: new Date().toISOString() })
-      .eq("id", sc.id)
+      .from(kind.table)
+      .update({ status: kind.done, paid_at: new Date().toISOString() })
+      .eq("id", parent.id)
       .eq("status", "awaiting_payment");
     if (upErr) return new Response("db_error", { status: 500 });
     return new Response("ok", { status: 200 });
   }
 
-  return await refundUnsettled(admin, sc.id, payment, `status=${sc.status} pago=${paidCents}`);
+  return await refundUnsettled(admin, kind, parent.id, payment, `status=${parent.status} pago=${paidCents}`);
 }
 
 /** Dinheiro entrou mas não dá para exibir (já pago por outra tentativa, status mudou, valor divergente): estorna e registra. */
 // deno-lint-ignore no-explicit-any
-async function refundUnsettled(admin: ReturnType<typeof createClient>, superchatId: string, payment: any, why: string): Promise<Response> {
-  console.error("superchat_unsettled_refund", { id: superchatId, why });
+async function refundUnsettled(admin: ReturnType<typeof createClient>, kind: Kind, parentId: string, payment: any, why: string): Promise<Response> {
+  console.error("unsettled_refund", { kind: kind.log, id: parentId, why });
   const refund = await fetch(`https://api.mercadopago.com/v1/payments/${payment.id}/refunds`, {
     method: "POST",
     headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}`, "X-Idempotency-Key": `refund-${payment.id}`, "Content-Type": "application/json" },
@@ -109,8 +132,8 @@ async function refundUnsettled(admin: ReturnType<typeof createClient>, superchat
   });
   await admin.from("moderation_log").insert({
     actor: null,
-    target: `superchat:${superchatId}`,
-    action: refund.ok ? "superchat_auto_refunded" : "superchat_refund_failed",
+    target: `${kind.log}:${parentId}`,
+    action: refund.ok ? `${kind.log}_auto_refunded` : `${kind.log}_refund_failed`,
     reason: why,
   });
   // Estorno falhou: 500 faz o MP reenviar e tentamos de novo.
@@ -147,22 +170,17 @@ Deno.serve(async (req) => {
     if (["refunded", "charged_back", "cancelled"].includes(payment.status)) {
       if (!externalReference) return new Response("no_reference", { status: 200 });
       const adminRefund = createClient(SUPABASE_URL, SERVICE_ROLE);
-      // Superchat pago e estornado: sai do ar (some da lista pública).
-      const { data: scPay, error: scPayErr } = await adminRefund
-        .from("superchat_payments")
-        .select("superchat_id, settled")
-        .eq("external_reference", externalReference)
-        .maybeSingle();
-      if (scPayErr) return new Response("db_error", { status: 500 });
-      if (scPay) {
-        // Estorno de tentativa que NÃO quitou (ex.: nosso estorno automático) não tira o superchat do ar.
-        if (!scPay.settled) return new Response("ignored", { status: 200 });
-        const { error: scErr } = await adminRefund
-          .from("superchats")
+      // Superchat/cartaz pago e estornado: sai do ar (só se a tentativa estornada foi a que quitou).
+      const attempt = await findAttempt(adminRefund, externalReference);
+      if (attempt === "error") return new Response("db_error", { status: 500 });
+      if (attempt) {
+        if (!attempt.settled) return new Response("ignored", { status: 200 });
+        const { error: upErr } = await adminRefund
+          .from(attempt.kind.table)
           .update({ status: "refunded" })
-          .eq("id", scPay.superchat_id)
-          .eq("status", "paid");
-        if (scErr) return new Response("db_error", { status: 500 });
+          .eq("id", attempt.parentId)
+          .eq("status", attempt.kind.done);
+        if (upErr) return new Response("db_error", { status: 500 });
         return new Response("refunded", { status: 200 });
       }
       const { data: paidOrder } = await adminRefund
@@ -193,14 +211,10 @@ Deno.serve(async (req) => {
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
-    // Superchat: a referência está em superchat_payments (várias tentativas por superchat).
-    const { data: scPay, error: scPayErr } = await admin
-      .from("superchat_payments")
-      .select("superchat_id")
-      .eq("external_reference", externalReference)
-      .maybeSingle();
-    if (scPayErr) return new Response("db_error", { status: 500 }); // MP reenvia
-    if (scPay) return await settleSuperchat(admin, scPay.superchat_id, externalReference, payment);
+    // Superchat/cartaz: a referência está na tabela de tentativas de cada um.
+    const attempt = await findAttempt(admin, externalReference);
+    if (attempt === "error") return new Response("db_error", { status: 500 }); // MP reenvia
+    if (attempt) return await settleContent(admin, attempt.kind, attempt.parentId, externalReference, attempt.amountCents, payment);
 
     const { data: order } = await admin
       .from("orders")

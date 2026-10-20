@@ -11,6 +11,7 @@ import {
   isTeamId,
   isVehicleId,
   type AvatarConfig,
+  SIGN_ID_RE,
   type ChatBroadcast,
   type Facing,
   type FlagId,
@@ -94,6 +95,7 @@ function sanitizePresence(id: string, p: unknown): PresenceState {
     shirt: typeof raw.shirt === "number" && Number.isFinite(raw.shirt) ? raw.shirt : 0x8b97a3,
     character: isCharacterId(raw.character) ? raw.character : "comum",
     flag: isFlagId(raw.flag) ? raw.flag : "nenhuma",
+    signId: typeof raw.signId === "string" && SIGN_ID_RE.test(raw.signId) ? raw.signId : undefined,
   };
 }
 
@@ -102,7 +104,7 @@ function sanitizePresence(id: string, p: unknown): PresenceState {
  * time) + broadcast (movimento e chat). Não autoritativo (CLAUDE.md §4).
  * Em modo offline (sem credenciais) vira no-op e o jogo roda só local.
  */
-export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean) {
+export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId: string | null = null) {
   const selfId = useMemo(
     () => (crypto.randomUUID ? crypto.randomUUID() : String(Math.random())),
     [],
@@ -162,6 +164,7 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean) {
       shirt: self.shirt,
       character: self.character,
       flag: self.flag,
+      signId: signId && SIGN_ID_RE.test(signId) ? signId : undefined,
     };
 
     // Canal PRIVADO: só quem está logado entra (policies em realtime.messages,
@@ -307,7 +310,7 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean) {
       void supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [selfId, signedIn, self.nickname, self.team, self.shirt, self.character, self.flag]);
+  }, [selfId, signedIn, self.nickname, self.team, self.shirt, self.character, self.flag, signId]);
 
   const sendMove = useCallback(
     (x: number, z: number, facing: Facing, vehicle: VehicleId, flag: FlagId) => {

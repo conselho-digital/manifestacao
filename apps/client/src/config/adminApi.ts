@@ -194,3 +194,23 @@ export async function moderateSuperchat(id: string, approve: boolean, reason?: s
   const { error } = await db().rpc("moderate_superchat", { p_id: id, p_approve: approve, p_reason: reason ?? null });
   if (error) throw new Error(error.message.includes("already_moderated") ? "Este superchat já foi moderado." : error.message);
 }
+
+// ── Cartazes (fila de moderação) ──────────────────────────────────────────
+export interface AdminSign {
+  id: string;
+  text: string;
+  color: string;
+  status: string;
+  created_at: string;
+}
+
+export async function fetchSignQueue(): Promise<AdminSign[]> {
+  const { data, error } = await db().rpc("sign_queue");
+  if (error) throw new Error(error.message);
+  return (data as AdminSign[]) ?? [];
+}
+
+export async function moderateSign(id: string, approve: boolean, reason?: string): Promise<void> {
+  const { error } = await db().rpc("moderate_sign", { p_id: id, p_approve: approve, p_reason: reason ?? null });
+  if (error) throw new Error(error.message.includes("already_moderated") ? "Este cartaz já foi moderado." : error.message);
+}

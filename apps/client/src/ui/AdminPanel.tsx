@@ -27,6 +27,9 @@ import {
   fetchAdminCatalog,
   fetchSuperchatQueue,
   moderateSuperchat,
+  fetchSignQueue,
+  moderateSign,
+  type AdminSign,
   type AdminSuperchat,
   saveCatalogItem,
   saveConfigKey,
@@ -40,7 +43,7 @@ interface AdminPanelProps {
   onChanged: () => Promise<void>;
 }
 
-type Tab = "equipes" | "bandeiras" | "produtos" | "sprays" | "modelos" | "superchats";
+type Tab = "equipes" | "bandeiras" | "produtos" | "sprays" | "modelos" | "superchats" | "cartazes";
 const TABS: { id: Tab; label: string }[] = [
   { id: "equipes", label: "Equipes" },
   { id: "bandeiras", label: "Bandeiras" },
@@ -48,6 +51,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "sprays", label: "Sprays" },
   { id: "modelos", label: "Modelos 3D" },
   { id: "superchats", label: "Superchats" },
+  { id: "cartazes", label: "Cartazes" },
 ];
 
 function toColorNumber(hex: string): number {
@@ -127,6 +131,7 @@ export function AdminPanel({ onClose, onChanged }: AdminPanelProps) {
         {tab === "sprays" && <SpraysTab busy={busy} run={run} />}
         {tab === "modelos" && <ModelsTab busy={busy} run={run} />}
         {tab === "superchats" && <SuperchatsTab busy={busy} run={run} />}
+        {tab === "cartazes" && <SignsTab busy={busy} run={run} />}
       </div>
     </div>
   );
@@ -585,6 +590,59 @@ function SuperchatsTab({ busy, run }: TabProps) {
             <span>R$ {(r.amount_cents / 100).toFixed(2).replace(".", ",")}</span>
           </div>
           <span style={{ fontSize: "var(--t-body)", overflowWrap: "anywhere" }}>{r.message}</span>
+          <div style={row}>
+            <button type="button" disabled={busy} onClick={() => void decide(r, true)} style={{ ...primaryBtn, flex: 1, padding: "10px 20px" }}>
+              Aprovar
+            </button>
+            <button type="button" disabled={busy} onClick={() => void decide(r, false)} style={{ ...ghostBtn, flex: 1, color: "var(--danger)", borderColor: "var(--danger)" }}>
+              Recusar
+            </button>
+          </div>
+        </div>
+      ))}
+      <button type="button" disabled={busy} onClick={() => void load()} style={ghostBtn}>
+        Atualizar fila
+      </button>
+    </>
+  );
+}
+
+function SignsTab({ busy, run }: TabProps) {
+  const [rows, setRows] = useState<AdminSign[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const load = () =>
+    fetchSignQueue()
+      .then(setRows)
+      .catch((e: unknown) => setLoadError(e instanceof Error ? e.message : "Erro ao carregar a fila."));
+  useEffect(() => {
+    void load();
+  }, []);
+
+  if (loadError) return <p style={{ ...hint, color: "var(--danger)" }}>{loadError}</p>;
+  if (!rows) return <p style={hint}>Carregando…</p>;
+
+  const decide = (r: AdminSign, approve: boolean) =>
+    run(async () => {
+      await moderateSign(r.id, approve);
+      await load();
+    }, approve ? "Aprovado: o autor já pode pagar." : "Recusado.");
+
+  return (
+    <>
+      <p style={hint}>
+        Fila de cartazes. Aprovar libera a cobrança do Pix para o autor; o cartaz só aparece no jogo depois do pagamento
+        confirmado.
+      </p>
+      {rows.length === 0 && <p style={hint}>Nenhum cartaz aguardando.</p>}
+      {rows.map((r) => (
+        <div key={r.id} style={{ border: "1px solid var(--line)", borderRadius: "var(--r-md)", padding: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ background: r.color, color: "#1a1d21", borderRadius: 4, padding: "8px 10px", fontWeight: 800, fontSize: "var(--t-body)", overflowWrap: "anywhere" }}>
+            {r.text}
+          </div>
+          <span style={{ ...hint }}>
+            Enviado às {new Date(r.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+          </span>
           <div style={row}>
             <button type="button" disabled={busy} onClick={() => void decide(r, true)} style={{ ...primaryBtn, flex: 1, padding: "10px 20px" }}>
               Aprovar

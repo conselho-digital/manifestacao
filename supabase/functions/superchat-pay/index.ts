@@ -71,7 +71,7 @@ Deno.serve(async (req) => {
     const externalReference = crypto.randomUUID();
     const { data: attempt, error: attemptErr } = await admin
       .from("superchat_payments")
-      .insert({ superchat_id: sc.id, external_reference: externalReference, state: "creating" })
+      .insert({ superchat_id: sc.id, external_reference: externalReference, amount_cents: sc.amount_cents, state: "creating" })
       .select("id")
       .single();
     if (attemptErr || !attempt) return json({ error: "busy" }, 409);

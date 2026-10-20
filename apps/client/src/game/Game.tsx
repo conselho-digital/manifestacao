@@ -21,6 +21,9 @@ import { ChatButton } from "../ui/ChatButton.js";
 import { SuperchatButton } from "../ui/SuperchatButton.js";
 import { SuperchatBanner } from "../ui/SuperchatBanner.js";
 import { SuperchatModal } from "../ui/SuperchatModal.js";
+import { SignButton } from "../ui/SignButton.js";
+import { SignModal } from "../ui/SignModal.js";
+import { useSigns } from "./useSigns.js";
 import {
   graphicsDpr,
   loadGraphics,
@@ -37,6 +40,7 @@ import { useIsTouch } from "../ui/useIsTouch.js";
 import { hasVehicleViaPremium, vehicleRequiresEntitlement } from "@manifestacao/shared";
 
 const SPRAY_STYLE_KEY = "manifestacao.sprayStyle";
+const SIGN_KEY = "manifestacao.sign";
 const SKY_COLOR = "#8fc4f0";
 const SUN_POSITION: [number, number, number] = [60, 110, -80];
 
@@ -77,18 +81,37 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
   };
   const [adminOpen, setAdminOpen] = useState(false);
   const [superchatOpen, setSuperchatOpen] = useState(false);
+  const [signOpen, setSignOpen] = useState(false);
+  // Cartaz que o jogador carrega (id salvo no aparelho; o texto vem do banco, só se estiver ativo).
+  const [signId, setSignId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem(SIGN_KEY);
+    } catch {
+      return null;
+    }
+  });
+  const equipSign = (id: string | null) => {
+    setSignId(id);
+    try {
+      if (id) localStorage.setItem(SIGN_KEY, id);
+      else localStorage.removeItem(SIGN_KEY);
+    } catch {
+      /* sem armazenamento: vale só nesta sessão */
+    }
+  };
   const [vehicle, setVehicle] = useState<VehicleId>("nenhum");
   // Pausa o movimento por teclado enquanto a loja (renderizada por cima,
   // em App.tsx) está aberta. O joystick já fica coberto pelo overlay da
   // loja (zIndex maior), então só o teclado precisa dessa trava explícita.
-  const modalOpen = paused || optionsOpen || adminOpen || superchatOpen;
+  const modalOpen = paused || optionsOpen || adminOpen || superchatOpen || signOpen;
   useEffect(() => {
     document.body.toggleAttribute("data-modal-open", modalOpen);
     return () => document.body.removeAttribute("data-modal-open");
   }, [modalOpen]);
-  const { inputRef, setJoystick } = useInput(!paused && !optionsOpen && !adminOpen && !superchatOpen);
-  const net = useAvenueRealtime(avatar, signedIn);
+  const { inputRef, setJoystick } = useInput(!paused && !optionsOpen && !adminOpen && !superchatOpen && !signOpen);
+  const net = useAvenueRealtime(avatar, signedIn, signId);
   const isTouch = useIsTouch();
+  const signs = useSigns(net.remoteIds, net.playersRef, signId);
 
   // Ângulo/inclinação da câmera (controlados pelo arrasto na metade direita
   // da tela) e estado do botão de correr — lidos a cada frame pelo Player,
@@ -246,6 +269,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           color={avatar.shirt}
           name={avatar.nickname}
           flag={avatar.flag}
+          sign={signId ? signs.get(signId) ?? null : null}
           vehicle={vehicle}
           modelUrl={modelUrlFor(avatar.character, avatar.team)}
           inputRef={inputRef}
@@ -258,7 +282,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           transformRef={transformRef}
           transformReadyRef={transformReadyRef}
         />
-        <RemotePlayers ids={net.remoteIds} playersRef={net.playersRef} />
+        <RemotePlayers ids={net.remoteIds} playersRef={net.playersRef} signs={signs} />
       </Canvas>
 
       {isTouch && <Joystick onMove={setJoystick} />}
@@ -294,7 +318,12 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           <OptionsButton onClick={() => setOptionsOpen(true)} />
           <StoreButton onClick={onOpenStore} />
         </div>
-        {signedIn && <SuperchatButton onClick={() => setSuperchatOpen(true)} />}
+        {signedIn && (
+          <div style={{ display: "flex", gap: 8 }}>
+            <SignButton onClick={() => setSignOpen(true)} />
+            <SuperchatButton onClick={() => setSuperchatOpen(true)} />
+          </div>
+        )}
         <SprayButton charges={sprayCharges} maxCharges={SPRAY_CARTRIDGE_SIZE} onSpray={handleSpray} />
         <VehiclePicker
           value={vehicle}
@@ -323,10 +352,11 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
         />
       )}
       {superchatOpen && signedIn && <SuperchatModal defaultName={avatar.nickname} onClose={() => setSuperchatOpen(false)} />}
+      {signOpen && signedIn && <SignModal equippedId={signId} onEquip={equipSign} onClose={() => setSignOpen(false)} />}
       <SuperchatBanner enabled={signedIn} />
       {adminOpen && isAdmin && <AdminPanel onClose={() => setAdminOpen(false)} onChanged={onConfigChanged} />}
       <Hud
-        enterFocusesChat={!paused && !optionsOpen && !adminOpen && !superchatOpen}
+        enterFocusesChat={!paused && !optionsOpen && !adminOpen && !superchatOpen && !signOpen}
         online={net.online}
         scores={net.scores}
         chatLog={net.chatLog}

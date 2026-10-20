@@ -8,6 +8,7 @@ import {
   type VehicleId,
 } from "@manifestacao/shared";
 import { Avatar } from "./Avatar.js";
+import type { SignData } from "./useSigns.js";
 import {
   CAMERA_LOOK_AHEAD_RATIO,
   CAMERA_SHOULDER_RATIO,
@@ -32,6 +33,8 @@ interface PlayerProps {
   color: number;
   name: string;
   flag: FlagId;
+  /** Cartaz personalizado que o jogador carrega. */
+  sign?: SignData | null;
   vehicle: VehicleId;
   modelUrl: string | null;
   inputRef: { current: InputVector };
@@ -68,6 +71,7 @@ export function Player({
   color,
   name,
   flag,
+  sign = null,
   vehicle,
   modelUrl,
   inputRef,
@@ -219,6 +223,6 @@ export function Player({
   });
 
   return (
-    <Avatar ref={ref} color={color} name={name} flag={flag} vehicle={vehicle} modelUrl={modelUrl} />
+    <Avatar ref={ref} color={color} name={name} flag={flag} vehicle={vehicle} sign={sign} modelUrl={modelUrl} />
   );
 }

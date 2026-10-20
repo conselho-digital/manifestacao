@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { superchatDisplayMs, superchatTier, type Superchat } from "@manifestacao/shared";
-import { subscribePaidSuperchats } from "../net/superchat.js";
+import { subscribeSuperchats } from "../net/superchat.js";
 
 /** Fundo e texto por faixa de valor (contraste ≥ 4,5:1). */
 const TIERS = [
@@ -31,7 +31,8 @@ export function SuperchatBanner({ enabled }: { enabled: boolean }) {
       if (timerRef.current) clearTimeout(timerRef.current);
       if (s) timerRef.current = setTimeout(next, superchatDisplayMs(s.amount_cents));
     };
-    const unsubscribe = subscribePaidSuperchats((s) => {
+    const unsubscribe = subscribeSuperchats(
+      (s) => {
       const q = queueRef.current;
       q.push(s);
       if (q.length > MAX_QUEUE) {
@@ -43,7 +44,13 @@ export function SuperchatBanner({ enabled }: { enabled: boolean }) {
         q.splice(min, 1);
       }
       if (!currentRef.current) next();
-    });
+      },
+      (id) => {
+        // Estornado: sai da fila e, se está no ar, cede a vez ao próximo.
+        queueRef.current = queueRef.current.filter((x) => x.id !== id);
+        if (currentRef.current?.id === id) next();
+      },
+    );
     return () => {
       unsubscribe();
       if (timerRef.current) clearTimeout(timerRef.current);
