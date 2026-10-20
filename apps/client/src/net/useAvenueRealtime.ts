@@ -65,6 +65,11 @@ export interface ChatEntry extends ChatBroadcast {
 }
 
 const MAX_CHAT = 30;
+/** Limites de recepção (anti-flood): jogadores na cena, intervalo mínimo por remetente. */
+const MAX_REMOTE_PLAYERS = 200;
+const MOVE_MIN_INTERVAL_MS = 40;
+const CHAT_MIN_INTERVAL_MS = 500;
+const FACINGS: ReadonlySet<unknown> = new Set(["up", "down", "left", "right"]);
 
 function emptyScores(): Record<TeamId, number> {
   return Object.fromEntries(TEAM_IDS.map((t) => [t, 0])) as Record<TeamId, number>;
@@ -119,6 +124,13 @@ export function useAvenueRealtime(self: AvatarConfig) {
   // por ignorar o próprio cooldown de envio.
   const lastSprayBySenderRef = useRef<Map<string, number>>(new Map());
   const lastOwnSprayAtRef = useRef(0);
+  // Limites de recepção por remetente (chat/movimento) e último movimento
+  // próprio — reenviado quando alguém entra, pra não aparecermos parados na
+  // origem (0,0) pra quem acabou de chegar.
+  const lastMoveBySenderRef = useRef<Map<string, number>>(new Map());
+  const lastChatBySenderRef = useRef<Map<string, number>>(new Map());
+  const lastMoveRef = useRef<MoveBroadcast | null>(null);
+  const lastAnnounceAtRef = useRef(0);
 
   // Acrescenta uma mensagem ao log, validando o campo `team` vindo da rede.
   const pushChat = useCallback((c: ChatBroadcast) => {
@@ -145,8 +157,10 @@ export function useAvenueRealtime(self: AvatarConfig) {
       flag: self.flag,
     };
 
+    // Canal PRIVADO: só quem está logado entra (policies em realtime.messages,
+    // migration 0009). A chave de presence é o nosso id de sessão.
     const channel = supabase.channel(AVENUE_CHANNEL, {
-      config: { presence: { key: selfId } },
+      config: { private: true, presence: { key: selfId } },
     });
     channelRef.current = channel;
 
@@ -166,6 +180,9 @@ export function useAvenueRealtime(self: AvatarConfig) {
           if (safe.team in next) next[safe.team] += 1;
           if (presenceKey === selfId) continue;
           const existing = playersRef.current.get(presenceKey);
+          // Teto de jogadores: presence com chave inventada por um cliente
+          // malicioso não pode inflar a cena de todo mundo.
+          if (!existing && playersRef.current.size >= MAX_REMOTE_PLAYERS) continue;
           if (existing) {
             // Já conhecido: atualiza o visual (nickname/time/personagem/
             // bandeira podem ter mudado) mantendo posição/facing/veículo
@@ -182,22 +199,41 @@ export function useAvenueRealtime(self: AvatarConfig) {
         setScores(next);
         setRemoteIds([...playersRef.current.keys()]);
       })
+      .on("presence", { event: "join" }, ({ key }) => {
+        // Alguém entrou: reenvia a nossa posição (no máx. 1x/s) pra ele nos
+        // ver onde estamos, e não na origem.
+        if (key === selfId) return;
+        const now = Date.now();
+        const last = lastMoveRef.current;
+        if (!last || now - lastAnnounceAtRef.current < 1000) return;
+        lastAnnounceAtRef.current = now;
+        void channel.send({ type: "broadcast", event: BROADCAST.move, payload: last });
+      })
       .on("broadcast", { event: BROADCAST.move }, ({ payload }) => {
         const m = payload as MoveBroadcast;
         if (m?.id === selfId) return;
         if (!isFiniteNumber(m?.x) || !isFiniteNumber(m?.z)) return; // NaN/Infinity: ignora
+        if (typeof m.id !== "string" || m.id.length > 64) return;
+        const nowMove = Date.now();
+        if (nowMove - (lastMoveBySenderRef.current.get(m.id) ?? 0) < MOVE_MIN_INTERVAL_MS) return;
+        lastMoveBySenderRef.current.set(m.id, nowMove);
         const existing = playersRef.current.get(m.id);
         if (existing) {
           const safePos = clampToAvenue(m.x, m.z);
           existing.x = safePos.x;
           existing.z = safePos.z;
-          existing.facing = m.facing;
+          if (FACINGS.has(m.facing)) existing.facing = m.facing;
           if (isVehicleId(m.vehicle)) existing.vehicle = m.vehicle;
           if (isFlagId(m.flag)) existing.flag = m.flag;
         }
       })
       .on("broadcast", { event: BROADCAST.chat }, ({ payload }) => {
-        if (payload?.id !== selfId) pushChat(payload as ChatBroadcast);
+        const c = payload as ChatBroadcast;
+        if (typeof c?.id !== "string" || c.id === selfId || c.id.length > 64) return;
+        const nowChat = Date.now();
+        if (nowChat - (lastChatBySenderRef.current.get(c.id) ?? 0) < CHAT_MIN_INTERVAL_MS) return;
+        lastChatBySenderRef.current.set(c.id, nowChat);
+        pushChat(c);
       })
       .on("broadcast", { event: BROADCAST.spray }, ({ payload }) => {
         const s = payload as SprayBroadcast;
@@ -231,7 +267,13 @@ export function useAvenueRealtime(self: AvatarConfig) {
       .subscribe((status) => {
         const subscribed = status === "SUBSCRIBED";
         setOnline(subscribed);
-        if (subscribed) void channel.track(presence);
+        if (subscribed) {
+          void channel.track(presence);
+          // Canal refeito (ex.: troca de equipe): reenvia onde estamos.
+          if (lastMoveRef.current) {
+            void channel.send({ type: "broadcast", event: BROADCAST.move, payload: lastMoveRef.current });
+          }
+        }
       });
 
     return () => {
@@ -245,6 +287,7 @@ export function useAvenueRealtime(self: AvatarConfig) {
   const sendMove = useCallback(
     (x: number, z: number, facing: Facing, vehicle: VehicleId, flag: FlagId) => {
       const channel = channelRef.current;
+      lastMoveRef.current = { id: selfId, x, z, facing, vehicle, flag };
       // "joined" = handshake do canal concluído (equivalente ao status
       // SUBSCRIBED do callback de .subscribe()); antes disso o Realtime
       // descarta o send silenciosamente — evita mandar para o vazio logo

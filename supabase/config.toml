@@ -19,3 +19,11 @@ secret = "env(SUPABASE_AUTH_GOOGLE_SECRET)"
 
 [realtime]
 enabled = true
+
+# O Mercado Pago chama o webhook sem JWT do Supabase; a função valida a
+# assinatura (x-signature) por conta própria e recusa chamadas sem ela.
+[functions.mp-webhook]
+verify_jwt = false
+
+[functions.mp-create-payment]
+verify_jwt = true

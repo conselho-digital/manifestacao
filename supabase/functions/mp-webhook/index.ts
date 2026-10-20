@@ -79,9 +79,32 @@ Deno.serve(async (req) => {
     });
     if (!mpRes.ok) return new Response("mp_lookup_failed", { status: 502 });
     const payment = await mpRes.json();
+    const externalReference = payment.external_reference as string | undefined;
+
+    // Devolução/estorno (CDC: direito de arrependimento): o pedido vira
+    // 'refunded' e o item comprado é retirado do usuário.
+    if (["refunded", "charged_back", "cancelled"].includes(payment.status)) {
+      if (!externalReference) return new Response("no_reference", { status: 200 });
+      const adminRefund = createClient(SUPABASE_URL, SERVICE_ROLE);
+      const { data: paidOrder } = await adminRefund
+        .from("orders")
+        .update({ status: "refunded" })
+        .eq("external_reference", externalReference)
+        .eq("status", "paid")
+        .select("user_id, item_id");
+      for (const o of paidOrder ?? []) {
+        await adminRefund
+          .from("entitlements")
+          .delete()
+          .eq("user_id", o.user_id)
+          .eq("item_id", o.item_id)
+          .eq("source", "purchase");
+      }
+      return new Response("refunded", { status: 200 });
+    }
+
     if (payment.status !== "approved") return new Response("not_approved", { status: 200 });
 
-    const externalReference = payment.external_reference as string | undefined;
     if (!externalReference) return new Response("no_reference", { status: 200 });
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
