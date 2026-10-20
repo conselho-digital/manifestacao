@@ -124,18 +124,25 @@ function checkSpray(s: AdminSpray): string {
   return label;
 }
 
-/** Cria um spray novo: item do catálogo (compra via Pix) + dados de jogo. */
+/**
+ * Cria um spray novo. Ordem importa: primeiro os dados de jogo (órfão em
+ * spray_options é inofensivo), só depois o item de catálogo (que é o que a loja
+ * vende). Se o catálogo falhar, desfaz a opção — nunca fica item à venda sem spray.
+ */
 export async function createSpray(s: AdminSpray): Promise<void> {
   const label = checkSpray(s);
   const supabase = db();
+  const { error: e1 } = await supabase
+    .from("spray_options")
+    .insert({ slug: s.slug, color: s.color, sort_order: s.sort_order });
+  if (e1) throw new Error(e1.message);
   const { error } = await supabase
     .from("catalog_items")
     .insert({ id: `spray:${s.slug}`, kind: "spray", label, price_cents: s.price_cents, active: s.active });
-  if (error) throw new Error(error.message);
-  const { error: e2 } = await supabase
-    .from("spray_options")
-    .insert({ slug: s.slug, color: s.color, sort_order: s.sort_order });
-  if (e2) throw new Error(e2.message);
+  if (error) {
+    await supabase.from("spray_options").delete().eq("slug", s.slug);
+    throw new Error(error.message);
+  }
 }
 
 export async function updateSpray(s: AdminSpray): Promise<void> {

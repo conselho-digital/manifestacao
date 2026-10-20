@@ -337,9 +337,15 @@ function SpraysTab({ busy, run }: TabProps) {
   const save = (r: AdminSpray & { price: string; isNew?: boolean }) =>
     run(async () => {
       const spray: AdminSpray = { ...r, price_cents: toCents(r.price) };
-      if (r.isNew) await createSpray({ ...spray, slug: newSprayId(r.label) });
+      const slug = r.isNew ? newSprayId(r.label) : r.slug;
+      if (r.isNew) await createSpray({ ...spray, slug });
       else await updateSpray(spray);
-      await load();
+      // Só a linha salva é atualizada: edições não salvas das outras linhas ficam.
+      setRows((cur) =>
+        (cur ?? []).map((x) =>
+          x.slug === r.slug ? { ...x, slug, price_cents: spray.price_cents, price: (spray.price_cents / 100).toFixed(2), isNew: false } : x,
+        ),
+      );
     }, `"${r.label}" salvo.`);
 
   const remove = (r: AdminSpray & { isNew?: boolean }) => {
@@ -350,7 +356,10 @@ function SpraysTab({ busy, run }: TabProps) {
     if (!window.confirm(`Remover o spray "${r.label}"? Ele some do jogo e da loja (quem já comprou não perde o registro).`)) return;
     void run(async () => {
       await removeSpray(r.slug);
-      await load();
+      // Tira também o modelo 3D do spray (senão fica um override órfão na config).
+      const next = { ...currentModelOverrides() };
+      if (delete next[`spray:${r.slug}`]) await saveConfigKey("models", next);
+      setRows((cur) => (cur ?? []).filter((x) => x.slug !== r.slug));
     }, "Spray removido.");
   };
 

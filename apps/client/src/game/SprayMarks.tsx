@@ -3,6 +3,9 @@ import { GlbModel } from "./props3d.js";
 import { sprayModelUrl } from "./models.js";
 import type { SprayMark } from "./spray.js";
 
+/** Quantas marcas (as mais novas) podem usar o modelo 3D. */
+const MAX_MODEL_MARKS = 30;
+
 interface SprayMarksProps {
   marksRef: { current: Map<string, SprayMark> };
   /** Muda a cada marca criada/removida — é o gatilho de re-render daqui. */
@@ -21,11 +24,15 @@ interface SprayMarksProps {
 export function SprayMarks({ marksRef, version }: SprayMarksProps) {
   // `version` força o recálculo da lista quando o mapa muda.
   const marks = useMemo(() => [...marksRef.current.values()], [marksRef, version]);
+  // Modelos 3D só nas marcas mais recentes (cada uma é um clone do .glb);
+  // as mais antigas viram a mancha simples — evita 400 clones pesados.
+  const firstModelIndex = Math.max(0, marks.length - MAX_MODEL_MARKS);
+
   return (
     <>
-      {marks.map((m) => {
+      {marks.map((m, i) => {
         // Modelo .glb da opção de spray (ou o geral), se o admin enviou.
-        const modelUrl = sprayModelUrl(m.style);
+        const modelUrl = i >= firstModelIndex ? sprayModelUrl(m.style) : null;
         const circle = (
           <mesh position={[m.x, 0.015, m.z]} rotation={[-Math.PI / 2, 0, 0]}>
             <circleGeometry args={[0.35, 16]} />

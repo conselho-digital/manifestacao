@@ -78,11 +78,24 @@ export function isModelSlot(slot: string): boolean {
   return false;
 }
 
-/** Só aceita arquivos do nosso bucket público — nunca uma URL qualquer. */
+/** Só aceita .glb do nosso bucket público — nunca uma URL qualquer (nem com `%2e%2e`, query ou hash). */
 export function isTrustedModelUrl(url: unknown): url is string {
   if (typeof url !== "string" || !supabaseConfig) return false;
-  const prefix = `${supabaseConfig.url.replace(/\/$/, "")}/storage/v1/object/public/${ASSET_BUCKET}/`;
-  return url.startsWith(prefix) && !url.includes("..") && /\.glb$/i.test(url);
+  try {
+    const u = new URL(url);
+    const base = new URL(supabaseConfig.url);
+    const prefix = `/storage/v1/object/public/${ASSET_BUCKET}/`;
+    return (
+      u.origin === base.origin &&
+      !u.search &&
+      !u.hash &&
+      u.pathname.startsWith(prefix) &&
+      /^[A-Za-z0-9_.-]+\.glb$/i.test(u.pathname.slice(prefix.length)) &&
+      !u.pathname.includes("..")
+    );
+  } catch {
+    return false;
+  }
 }
 
 export function sanitizeConfig(raw: { teams?: unknown; flags?: unknown; models?: unknown }): GameConfig {
@@ -172,7 +185,6 @@ export async function loadAndApplyGameConfig(): Promise<GameConfig> {
   // customizações já carregadas e voltaria tudo ao padrão).
   if (cfgRes.error) throw new Error(cfgRes.error.message);
   if (catRes.error) throw new Error(catRes.error.message);
-  if (sprayRes.error) throw new Error(sprayRes.error.message);
   const raw: Record<string, unknown> = {};
   for (const row of cfgRes.data ?? []) raw[row.key as string] = row.value;
   const cfg = sanitizeConfig(raw);
@@ -181,7 +193,8 @@ export async function loadAndApplyGameConfig(): Promise<GameConfig> {
 
   // Sprays do admin: opção só existe se está em spray_options E ativa no catálogo.
   const sprays: SprayOption[] = [];
-  for (const row of (sprayRes.data as { slug: string; color: number | null }[] | null) ?? []) {
+  for (const row of // Falha ao ler sprays NÃO derruba o resto da config (equipes, bandeiras, modelos).
+    (sprayRes.error ? [] : (sprayRes.data as { slug: string; color: number | null }[] | null)) ?? []) {
     if (!SPRAY_SLUG_RE.test(row.slug)) continue;
     const item = catalog.find((c) => c.id === `spray:${row.slug}`);
     if (!item) continue;

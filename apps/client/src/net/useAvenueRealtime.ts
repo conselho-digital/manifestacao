@@ -30,7 +30,7 @@ import {
   type SprayMark,
 } from "../game/spray.js";
 import { clampToAvenue } from "../game/world.js";
-import { DEFAULT_SPRAY_ID, SPRAY_SLUG_RE } from "../config/sprays.js";
+import { DEFAULT_SPRAY_ID, SPRAY_SLUG_RE, sprayOptions } from "../config/sprays.js";
 
 /** `typeof === "number"` deixa passar NaN/Infinity; isto não. */
 function isFiniteNumber(v: unknown): v is number {
@@ -70,6 +70,8 @@ const MAX_CHAT = 30;
 const MAX_REMOTE_PLAYERS = 200;
 const MOVE_MIN_INTERVAL_MS = 40;
 const CHAT_MIN_INTERVAL_MS = 500;
+/** Teto global de marcas de spray recebidas por segundo (todos os remetentes somados). */
+const MAX_SPRAYS_PER_SECOND = 5;
 const FACINGS: ReadonlySet<unknown> = new Set(["up", "down", "left", "right"]);
 
 function emptyScores(): Record<TeamId, number> {
@@ -125,6 +127,8 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean) {
   // por ignorar o próprio cooldown de envio.
   const lastSprayBySenderRef = useRef<Map<string, number>>(new Map());
   const lastOwnSprayAtRef = useRef(0);
+  // Teto GLOBAL de recepção de spray (o senderId vem do payload e pode ser forjado).
+  const sprayBucketRef = useRef({ t: 0, n: 0 });
   // Limites de recepção por remetente (chat/movimento) e último movimento
   // próprio — reenviado quando alguém entra, pra não aparecermos parados na
   // origem (0,0) pra quem acabou de chegar.
@@ -258,14 +262,30 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean) {
         // ainda não consegue inundar o canal — todo cliente descarta o
         // excesso da mesma forma.
         const now = Date.now();
+        const bucket = sprayBucketRef.current;
+        if (now - bucket.t > 1000) {
+          bucket.t = now;
+          bucket.n = 0;
+        }
+        if (++bucket.n > MAX_SPRAYS_PER_SECOND) return;
         const last = lastSprayBySenderRef.current.get(s.senderId) ?? 0;
         if (now - last < SPRAY_MIN_INTERVAL_MS) return;
-        lastSprayBySenderRef.current.set(s.senderId, now);
+        const bySender = lastSprayBySenderRef.current;
+        bySender.set(s.senderId, now);
+        // Limita o mapa de remetentes (ids forjados não podem crescê-lo sem fim).
+        while (bySender.size > 500) {
+          const oldest = bySender.keys().next().value;
+          if (oldest === undefined) break;
+          bySender.delete(oldest);
+        }
 
         const pos = clampToAvenue(s.x, s.z);
         const color = Math.max(0, Math.min(0xffffff, Math.trunc(s.color)));
         // Estilo vindo da rede: só aceita slug conhecido, senão cai no clássico.
-        const style = typeof s.style === "string" && SPRAY_SLUG_RE.test(s.style) ? s.style : DEFAULT_SPRAY_ID;
+        const style =
+          typeof s.style === "string" && SPRAY_SLUG_RE.test(s.style) && sprayOptions().some((o) => o.id === s.style)
+            ? s.style
+            : DEFAULT_SPRAY_ID;
         addSprayMark(sprayMarksRef.current, { id: s.id, x: pos.x, z: pos.z, color, style, createdAt: now });
         setSprayVersion((v) => v + 1);
       })
