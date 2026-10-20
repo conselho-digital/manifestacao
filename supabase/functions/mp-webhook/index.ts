@@ -21,11 +21,15 @@ const WEBHOOK_SECRET = Deno.env.get("MP_WEBHOOK_SECRET") ?? "";
  * Valida a assinatura do Mercado Pago.
  * Manifest: `id:<data.id>;request-id:<x-request-id>;ts:<ts>;`
  * HMAC-SHA256(manifest, MP_WEBHOOK_SECRET) == v1 (hex).
- * Falha fechada quando o segredo está configurado; sem segredo, não valida
- * (apenas para desenvolvimento).
+ * Falha FECHADA: sem MP_WEBHOOK_SECRET configurado, toda chamada é recusada.
+ * (Só para desenvolvimento local: ALLOW_UNSIGNED_WEBHOOK=1 libera.)
  */
 async function signatureValid(req: Request, dataId: string): Promise<boolean> {
-  if (!WEBHOOK_SECRET) return true; // dev: sem segredo configurado
+  if (!WEBHOOK_SECRET) {
+    if (Deno.env.get("ALLOW_UNSIGNED_WEBHOOK") === "1") return true;
+    console.error("MP_WEBHOOK_SECRET ausente: webhook recusado");
+    return false;
+  }
   const sig = req.headers.get("x-signature") ?? "";
   const requestId = req.headers.get("x-request-id") ?? "";
   const parts = Object.fromEntries(
@@ -58,8 +62,12 @@ Deno.serve(async (req) => {
   try {
     const url = new URL(req.url);
     const body = await req.json().catch(() => null);
+    // Só notificações de pagamento (merchant_order etc. têm outro formato de id).
+    const type = url.searchParams.get("type") ?? body?.type;
+    if (type && type !== "payment") return new Response("ignored", { status: 200 });
     const dataId = url.searchParams.get("data.id") ?? body?.data?.id ?? body?.id;
-    if (!dataId) return new Response("ignored", { status: 200 });
+    // ID numérico: nunca monta a URL da API do Mercado Pago com texto livre.
+    if (!dataId || !/^\d{1,20}$/.test(String(dataId))) return new Response("ignored", { status: 200 });
 
     if (!(await signatureValid(req, String(dataId)))) {
       return new Response("invalid_signature", { status: 401 });
@@ -87,6 +95,7 @@ Deno.serve(async (req) => {
 
     // Defesa em profundidade: confere o valor pago contra o esperado.
     if (Math.round((payment.transaction_amount ?? 0) * 100) !== order.amount_cents) {
+      console.error("amount_mismatch", { orderId: order.id });
       return new Response("amount_mismatch", { status: 200 });
     }
 

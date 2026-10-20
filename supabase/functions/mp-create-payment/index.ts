@@ -53,12 +53,23 @@ Deno.serve(async (req) => {
       .eq("id", itemId)
       .single();
     if (itemErr || !item || !item.active) return json({ error: "item_invalid" }, 400);
+    // Item de preço zero não é vendido (evita pedidos/cobranças inválidas).
+    if (!Number.isInteger(item.price_cents) || item.price_cents <= 0) return json({ error: "item_not_for_sale" }, 400);
+
+    // Já possui: não cobra de novo.
+    const { data: owned } = await admin
+      .from("entitlements")
+      .select("id")
+      .eq("user_id", userId)
+      .eq("item_id", item.id)
+      .maybeSingle();
+    if (owned) return json({ error: "already_owned" }, 409);
 
     // Reaproveita um pedido pendente recente do mesmo usuário+item em vez de
     // criar outra cobrança a cada clique.
     const { data: pending } = await admin
       .from("orders")
-      .select("id, mp_payment_id, external_reference, status")
+      .select("id, mp_payment_id, external_reference, status, amount_cents")
       .eq("user_id", userId)
       .eq("item_id", item.id)
       .eq("status", "pending")
@@ -88,7 +99,7 @@ Deno.serve(async (req) => {
           // Já foi pago — provavelmente o webhook ainda não processou. Concede
           // aqui mesmo, com a mesma idempotência do webhook (nunca duas vezes,
           // nunca sem conferir o valor), em vez de criar uma SEGUNDA cobrança.
-          await grantPaidOrder(admin, pending.id, userId, item.id, Number(ep.transaction_amount), item.price_cents);
+          await grantPaidOrder(admin, pending.id, userId, item.id, Number(ep.transaction_amount), pending.amount_cents);
           return json({ orderRef: pending.external_reference, qrCode: null, qrCodeBase64: null, ticketUrl: null, paid: true });
         }
 

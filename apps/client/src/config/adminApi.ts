@@ -8,6 +8,8 @@ import { getSupabase } from "../net/supabase.js";
  */
 
 const MAX_MODEL_BYTES = 15 * 1024 * 1024;
+/** Teto de preço (R$ 10.000) — barra erro de digitação no painel. */
+const MAX_PRICE_CENTS = 1_000_000;
 
 function db() {
   const supabase = getSupabase();
@@ -37,7 +39,9 @@ export async function fetchAdminCatalog(): Promise<AdminCatalogRow[]> {
 export async function saveCatalogItem(row: AdminCatalogRow): Promise<void> {
   const label = row.label.trim().slice(0, MAX_LABEL_LENGTH);
   if (!label) throw new Error("O nome não pode ficar vazio.");
-  if (!Number.isInteger(row.price_cents) || row.price_cents < 0) throw new Error("Preço inválido.");
+  if (!Number.isInteger(row.price_cents) || row.price_cents < 0 || row.price_cents > MAX_PRICE_CENTS) {
+    throw new Error("Preço inválido (máximo R$ 10.000,00).");
+  }
   const { error } = await db()
     .from("catalog_items")
     .update({ label, price_cents: row.price_cents, active: row.active })
