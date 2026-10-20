@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useModal } from "./useModal.js";
 import {
   CHARACTERS,
   CHARACTER_IDS,
@@ -52,13 +53,7 @@ export function AdminPanel({ onClose, onChanged }: AdminPanelProps) {
   const [msg, setMsg] = useState<{ kind: "ok" | "err"; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  const dialogRef = useModal<HTMLDivElement>(onClose);
 
   /** Roda uma escrita, recarrega a config e mostra o resultado. */
   const run = async (what: () => Promise<void>, okText: string) => {
@@ -76,10 +71,10 @@ export function AdminPanel({ onClose, onChanged }: AdminPanelProps) {
   };
 
   return (
-    <div role="dialog" aria-label="Painel de admin" style={overlay}>
-      <div style={card}>
+    <div style={overlay} onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
+      <div ref={dialogRef} role="dialog" aria-modal="true" aria-labelledby="admin-title" tabIndex={-1} style={{ ...card, outline: "none" }}>
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <h2 style={title}>Painel de admin</h2>
+          <h2 id="admin-title" style={title}>Painel de admin</h2>
           <button type="button" onClick={onClose} style={ghostBtn}>
             Fechar
           </button>
@@ -110,8 +105,8 @@ export function AdminPanel({ onClose, onChanged }: AdminPanelProps) {
         </div>
 
         {msg && (
-          <p role="status" style={{ margin: 0, fontSize: "var(--t-ui)", color: msg.kind === "ok" ? "var(--accent)" : "var(--danger)" }}>
-            {msg.text}
+          <p role={msg.kind === "err" ? "alert" : "status"} style={{ margin: 0, fontSize: "var(--t-ui)", color: msg.kind === "ok" ? "var(--accent)" : "var(--danger)" }}>
+            {msg.kind === "ok" ? "Salvo: " : "Erro: "}{msg.text}
           </p>
         )}
 
@@ -270,8 +265,8 @@ function ProductsTab({ busy, run }: TabProps) {
             onChange={(e) => update(r.id, { price: e.target.value })}
             style={{ ...input, width: 90 }}
           />
-          <label style={{ display: "flex", alignItems: "center", gap: 4, fontSize: "var(--t-ui)" }}>
-            <input type="checkbox" checked={r.active} onChange={(e) => update(r.id, { active: e.target.checked })} />
+          <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--t-ui)", minHeight: 44 }}>
+            <input type="checkbox" style={{ width: 22, height: 22 }} checked={r.active} onChange={(e) => update(r.id, { active: e.target.checked })} />
             Ativo
           </label>
           <button type="button" disabled={busy} onClick={() => void save(r)} style={ghostBtn}>
@@ -306,7 +301,7 @@ function ModelsTab({ busy, run }: TabProps) {
     if (!isModelSlot(slot)) return null;
     const has = Boolean(models[slot]);
     return (
-      <div style={{ ...row, justifyContent: "space-between" }}>
+      <div style={{ ...row, justifyContent: "space-between", flexWrap: "wrap" }}>
         <span style={{ fontSize: "var(--t-ui)", flex: 1, minWidth: 0 }}>
           {label}
           <span style={{ color: has ? "var(--accent)" : "var(--ink-dim)", marginLeft: 6 }}>{has ? "• enviado" : "• padrão"}</span>
@@ -379,8 +374,8 @@ const overlay: React.CSSProperties = {
   padding: 16,
 };
 const card: React.CSSProperties = {
-  width: "min(600px, 96vw)",
-  maxHeight: "90vh",
+  width: "min(600px, 100%)",
+  maxHeight: "calc(100dvh - 32px)",
   overflowY: "auto",
   background: "var(--surface)",
   border: "1px solid var(--line)",
@@ -407,9 +402,9 @@ const sectionTitle: React.CSSProperties = {
 const hint: React.CSSProperties = { margin: 0, fontSize: "var(--t-ui)", color: "var(--ink-dim)" };
 const row: React.CSSProperties = { display: "flex", alignItems: "center", gap: 8 };
 const input: React.CSSProperties = {
-  minHeight: 40,
+  minHeight: 44,
   padding: "8px 12px",
-  fontSize: 16,
+  fontSize: "var(--t-body)",
   borderRadius: "var(--r-md)",
   border: "1px solid var(--line)",
   background: "var(--surface-2)",
@@ -417,7 +412,7 @@ const input: React.CSSProperties = {
 };
 const colorInput: React.CSSProperties = {
   width: 48,
-  height: 40,
+  height: 44,
   padding: 2,
   border: "1px solid var(--line)",
   borderRadius: "var(--r-md)",
@@ -425,7 +420,7 @@ const colorInput: React.CSSProperties = {
   cursor: "pointer",
 };
 const ghostBtn: React.CSSProperties = {
-  minHeight: 36,
+  minHeight: 44,
   padding: "6px 14px",
   borderRadius: "var(--r-sm)",
   border: "1px solid var(--line)",
@@ -435,12 +430,12 @@ const ghostBtn: React.CSSProperties = {
   cursor: "pointer",
 };
 const primaryBtn: React.CSSProperties = {
-  minHeight: 46,
+  minHeight: 48,
   borderRadius: "var(--r-lg)",
   border: "none",
   background: "var(--accent)",
   color: "var(--on-accent)",
-  fontSize: 16,
+  fontSize: "var(--t-body)",
   fontWeight: 800,
   cursor: "pointer",
 };

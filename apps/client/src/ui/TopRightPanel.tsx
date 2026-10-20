@@ -16,6 +16,9 @@ export function TopRightPanel({ children }: { children: React.ReactNode }) {
         flexDirection: "column",
         alignItems: "flex-end",
         gap: 10,
+        // Em celular deitado a coluna não desce até o botão Correr.
+        maxHeight: "calc(100dvh - 140px)",
+        overflowY: "auto",
       }}
     >
       {children}

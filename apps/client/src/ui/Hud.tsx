@@ -58,8 +58,11 @@ export function Hud({ online, scores, chatLog, onChat, enterFocusesChat = true }
           top: "calc(env(safe-area-inset-top, 0px) + 10px)",
           left: "calc(env(safe-area-inset-left, 0px) + 10px)",
           display: "flex",
+          flexWrap: "wrap",
           alignItems: "center",
-          gap: 8,
+          gap: 6,
+          // Não invade a coluna de botões da direita em telas estreitas.
+          maxWidth: "calc(100vw - 230px)",
           zIndex: 6,
         }}
       >
@@ -86,6 +89,7 @@ export function Hud({ online, scores, chatLog, onChat, enterFocusesChat = true }
             gap: 5,
             fontSize: "var(--t-ui)",
             color: "var(--ink-dim)",
+            textShadow: "0 1px 2px #000",
           }}
         >
           <span
@@ -93,7 +97,7 @@ export function Hud({ online, scores, chatLog, onChat, enterFocusesChat = true }
               width: 8,
               height: 8,
               borderRadius: "50%",
-              background: online ? "var(--accent)" : "var(--line)",
+              background: online ? "var(--accent)" : "var(--danger)",
             }}
           />
           {online ? "online" : "offline"}
@@ -108,11 +112,12 @@ export function Hud({ online, scores, chatLog, onChat, enterFocusesChat = true }
           position: "fixed",
           left: "calc(env(safe-area-inset-left, 0px) + 10px)",
           top: "calc(env(safe-area-inset-top, 0px) + 54px)",
-          width: "min(360px, 80vw)",
+          // Termina antes da coluna de botões da direita (Spray/Veículo), pra não roubar o toque deles.
+          width: "min(360px, calc(100vw - 150px))",
           zIndex: 6,
         }}
       >
-        <div style={{ maxHeight: 140, overflow: "hidden", marginBottom: 6 }}>
+        <div style={{ maxHeight: 140, overflow: "hidden", marginBottom: 6, pointerEvents: "none" }}>
           {chatLog.map((c) => (
             <div key={c.key} style={{ fontSize: "var(--t-ui)", lineHeight: 1.4, textShadow: "0 1px 2px #000" }}>
               <strong style={{ color: teamColor(c.team) }}>{c.nickname}</strong>:{" "}

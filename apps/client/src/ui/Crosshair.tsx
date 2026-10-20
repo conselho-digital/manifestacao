@@ -10,13 +10,13 @@ export function Crosshair() {
         position: "fixed",
         top: "50%",
         left: "50%",
-        width: 6,
-        height: 6,
+        width: 8,
+        height: 8,
         transform: "translate(-50%, -50%)",
         borderRadius: "50%",
         background: "#fff",
         // contorno fino escuro só pra o ponto não sumir em fundo claro
-        boxShadow: "0 0 0 1px rgba(0,0,0,0.55)",
+        boxShadow: "0 0 0 1.5px rgba(0,0,0,0.7), 0 0 4px rgba(0,0,0,0.5)",
         zIndex: 5,
         pointerEvents: "none",
       }}

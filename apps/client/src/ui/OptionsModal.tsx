@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import { useModal } from "./useModal.js";
 import {
   CHARACTERS,
   CHARACTER_IDS,
@@ -33,13 +34,7 @@ export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin }: O
   const [nickname, setNickname] = useState(avatar.nickname);
   const [character, setCharacter] = useState<CharacterId>(avatar.character);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
+  const dialogRef = useModal<HTMLFormElement>(onClose);
 
   const save = (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,8 +46,7 @@ export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin }: O
 
   return (
     <div
-      role="dialog"
-      aria-label="Opções do perfil"
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
       style={{
         position: "fixed",
         inset: 0,
@@ -66,10 +60,16 @@ export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin }: O
       }}
     >
       <form
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="options-title"
+        tabIndex={-1}
         onSubmit={save}
         style={{
-          width: "min(480px, 94vw)",
-          maxHeight: "86vh",
+          width: "min(480px, 100%)",
+          maxHeight: "calc(100dvh - 32px)",
+          outline: "none",
           overflowY: "auto",
           background: "var(--surface)",
           border: "1px solid var(--line)",
@@ -82,6 +82,7 @@ export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin }: O
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <h2
+            id="options-title"
             style={{
               margin: 0,
               fontFamily: "var(--font-display)",
@@ -123,7 +124,7 @@ export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin }: O
                     background: selected ? "var(--surface-2)" : "var(--surface)",
                     color: "var(--ink)",
                     fontWeight: 700,
-                    fontSize: 13,
+                    fontSize: "var(--t-ui)",
                     cursor: "pointer",
                   }}
                 >
@@ -148,7 +149,7 @@ export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin }: O
               width: "100%",
               minHeight: 44,
               padding: "12px 14px",
-              fontSize: 16,
+              fontSize: "var(--t-body)",
               borderRadius: "var(--r-md)",
               border: "1px solid var(--line)",
               background: "var(--surface)",
@@ -205,7 +206,7 @@ export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin }: O
             border: "none",
             background: "var(--accent)",
             color: "var(--on-accent)",
-            fontSize: 16,
+            fontSize: "var(--t-body)",
             fontWeight: 800,
             cursor: "pointer",
           }}
@@ -271,7 +272,7 @@ function Label({ children, htmlFor }: { children: React.ReactNode; htmlFor?: str
 }
 
 const ghostBtn: React.CSSProperties = {
-  minHeight: 36,
+  minHeight: 44,
   padding: "6px 14px",
   borderRadius: "var(--r-sm)",
   border: "1px solid var(--line)",

@@ -6,6 +6,7 @@ import { useCatalog, type CatalogItem } from "./useCatalog.js";
 import { createPixCharge, type PixCharge } from "../net/payments.js";
 import { isOnlineEnabled } from "../config/env.js";
 import { ProductThumb } from "./ProductThumb.js";
+import { useModal } from "../ui/useModal.js";
 
 function formatBRL(cents: number): string {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -89,10 +90,11 @@ export function Store({ onClose, session, authLoading, owned, refresh }: StorePr
     }
   }
 
+  const dialogRef = useModal<HTMLDivElement>(onClose);
+
   return (
     <div
-      role="dialog"
-      aria-label="Loja"
+      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
       style={{
         position: "fixed",
         inset: 0,
@@ -106,9 +108,15 @@ export function Store({ onClose, session, authLoading, owned, refresh }: StorePr
       }}
     >
       <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="store-title"
+        tabIndex={-1}
         style={{
-          width: "min(480px, 94vw)",
-          maxHeight: "86vh",
+          outline: "none",
+          width: "min(480px, 100%)",
+          maxHeight: "calc(100dvh - 32px)",
           overflowY: "auto",
           background: "var(--surface)",
           border: "1px solid var(--line)",
@@ -121,6 +129,7 @@ export function Store({ onClose, session, authLoading, owned, refresh }: StorePr
       >
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <h2
+            id="store-title"
             style={{
               margin: 0,
               fontFamily: "var(--font-display)",
@@ -157,7 +166,7 @@ export function Store({ onClose, session, authLoading, owned, refresh }: StorePr
           </div>
         )}
 
-        {error && <p style={{ color: "var(--danger)", fontSize: "var(--t-ui)" }}>{error}</p>}
+        {error && <p role="alert" style={{ color: "var(--danger)", fontSize: "var(--t-ui)" }}>{error}</p>}
 
         {charge && (
           <PixPanel charge={charge} onCancel={() => { setCharge(null); setPendingItem(null); }} />
@@ -187,9 +196,7 @@ export function Store({ onClose, session, authLoading, owned, refresh }: StorePr
                 <span style={{ fontSize: "var(--t-ui)", color: "var(--accent)", fontWeight: 700 }}>
                   Adquirido
                 </span>
-              ) : free ? (
-                <span style={{ fontSize: "var(--t-ui)", color: "var(--ink-dim)" }}>Já disponível</span>
-              ) : (
+              ) : free ? null : (
                 <button
                   type="button"
                   disabled={!session || pendingItem !== null}
@@ -313,7 +320,7 @@ const closeBtnStyle: React.CSSProperties = {
 const primaryBtnStyle: React.CSSProperties = {
   minHeight: 44,
   padding: "12px 20px",
-  fontSize: 15,
+  fontSize: "var(--t-body)",
   fontWeight: 700,
   borderRadius: "var(--r-md)",
   border: "none",

@@ -11,14 +11,13 @@ export function OptionsButton({ onClick }: OptionsButtonProps) {
     <button
       type="button"
       onClick={onClick}
-      aria-label="Abrir opções do perfil"
       style={{
         minHeight: 44,
         minWidth: 44,
         padding: "10px 18px",
         fontSize: "var(--t-ui)",
         fontWeight: 700,
-        borderRadius: "var(--r-lg)",
+        borderRadius: "var(--r-sm)",
         border: "1px solid var(--line)",
         background: "var(--scrim)",
         color: "var(--ink)",

@@ -74,10 +74,20 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
   const aimRef = useRef({ x: 0, z: 0 });
   const cameraDistance = isTouch ? CAMERA_DISTANCE_MOBILE : CAMERA_DISTANCE_DESKTOP;
 
+  // Dica do Shift: some ao usar Shift ou depois de alguns segundos.
+  const [showRunHint, setShowRunHint] = useState(true);
+  useEffect(() => {
+    const t = setTimeout(() => setShowRunHint(false), 12_000);
+    return () => clearTimeout(t);
+  }, []);
+
   // PC: Shift (segurado) corre. No celular o botão "Correr" faz o mesmo.
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
-      if (e.key === "Shift" && !isTypingTarget(e.target)) runRef.current = true;
+      if (e.key === "Shift" && !isTypingTarget(e.target)) {
+        runRef.current = true;
+        setShowRunHint(false);
+      }
     };
     const up = (e: KeyboardEvent) => {
       if (e.key === "Shift") runRef.current = false;
@@ -201,11 +211,12 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
       {isTouch ? (
         <RunButton runRef={runRef} />
       ) : (
+        showRunHint && (
         <div
           style={{
             position: "fixed",
-            right: 16,
-            bottom: 16,
+            right: "calc(env(safe-area-inset-right, 0px) + 16px)",
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)",
             zIndex: 5,
             padding: "8px 12px",
             borderRadius: "var(--r-sm)",
@@ -219,6 +230,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
         >
           Segure <strong>Shift</strong> para correr
         </div>
+        )
       )}
       <Crosshair />
       <TopRightPanel>
