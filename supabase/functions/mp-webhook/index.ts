@@ -86,6 +86,12 @@ Deno.serve(async (req) => {
     if (["refunded", "charged_back", "cancelled"].includes(payment.status)) {
       if (!externalReference) return new Response("no_reference", { status: 200 });
       const adminRefund = createClient(SUPABASE_URL, SERVICE_ROLE);
+      // Superchat pago e estornado: sai do ar (some do realtime/lista pública).
+      await adminRefund
+        .from("superchats")
+        .update({ status: "refunded" })
+        .eq("external_reference", externalReference)
+        .eq("status", "paid");
       const { data: paidOrder } = await adminRefund
         .from("orders")
         .update({ status: "refunded" })
@@ -113,6 +119,26 @@ Deno.serve(async (req) => {
     if (!externalReference) return new Response("no_reference", { status: 200 });
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
+
+    // Superchat: referência própria (não está em `orders`).
+    const { data: superchat } = await admin
+      .from("superchats")
+      .select("id, amount_cents, status")
+      .eq("external_reference", externalReference)
+      .maybeSingle();
+    if (superchat) {
+      if (Math.round((payment.transaction_amount ?? 0) * 100) !== superchat.amount_cents) {
+        console.error("superchat_amount_mismatch", { id: superchat.id });
+        return new Response("amount_mismatch", { status: 200 });
+      }
+      // Transição atômica awaiting_payment -> paid (reenvio do webhook não duplica).
+      await admin
+        .from("superchats")
+        .update({ status: "paid", paid_at: new Date().toISOString() })
+        .eq("id", superchat.id)
+        .eq("status", "awaiting_payment");
+      return new Response("ok", { status: 200 });
+    }
 
     const { data: order } = await admin
       .from("orders")

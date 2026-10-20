@@ -269,7 +269,7 @@ export function Store({ onClose, session, authLoading, owned, refresh }: StorePr
   );
 }
 
-function PixPanel({ charge, onCancel }: { charge: PixCharge; onCancel: () => void }) {
+export function PixPanel({ charge, onCancel, hint }: { charge: PixCharge; onCancel: () => void; hint?: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}>
@@ -300,10 +300,8 @@ function PixPanel({ charge, onCancel }: { charge: PixCharge; onCancel: () => voi
         </button>
       )}
       <p style={{ margin: 0, fontSize: "var(--t-ui)", color: "var(--ink-dim)", textAlign: "center" }}>
-        Aguardando confirmação do pagamento… a liberação do item costuma levar
-        alguns segundos após o Pix ser pago. Pode fechar a loja: a confirmação
-        acontece em segundo plano e o item aparece aqui na próxima vez que
-        você abrir.
+        {hint ??
+          "Aguardando confirmação do pagamento… a liberação do item costuma levar alguns segundos após o Pix ser pago. Pode fechar a loja: a confirmação acontece em segundo plano e o item aparece aqui na próxima vez que você abrir."}
       </p>
       <button type="button" onClick={onCancel} style={linkBtnStyle}>
         Cancelar

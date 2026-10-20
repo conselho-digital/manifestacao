@@ -18,6 +18,9 @@ import { VehiclePicker } from "../ui/VehiclePicker.js";
 import { StoreButton } from "../ui/StoreButton.js";
 import { OptionsButton } from "../ui/OptionsButton.js";
 import { ChatButton } from "../ui/ChatButton.js";
+import { SuperchatButton } from "../ui/SuperchatButton.js";
+import { SuperchatBanner } from "../ui/SuperchatBanner.js";
+import { SuperchatModal } from "../ui/SuperchatModal.js";
 import {
   graphicsDpr,
   loadGraphics,
@@ -73,16 +76,17 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     saveGraphics(l);
   };
   const [adminOpen, setAdminOpen] = useState(false);
+  const [superchatOpen, setSuperchatOpen] = useState(false);
   const [vehicle, setVehicle] = useState<VehicleId>("nenhum");
   // Pausa o movimento por teclado enquanto a loja (renderizada por cima,
   // em App.tsx) está aberta. O joystick já fica coberto pelo overlay da
   // loja (zIndex maior), então só o teclado precisa dessa trava explícita.
-  const modalOpen = paused || optionsOpen || adminOpen;
+  const modalOpen = paused || optionsOpen || adminOpen || superchatOpen;
   useEffect(() => {
     document.body.toggleAttribute("data-modal-open", modalOpen);
     return () => document.body.removeAttribute("data-modal-open");
   }, [modalOpen]);
-  const { inputRef, setJoystick } = useInput(!paused && !optionsOpen && !adminOpen);
+  const { inputRef, setJoystick } = useInput(!paused && !optionsOpen && !adminOpen && !superchatOpen);
   const net = useAvenueRealtime(avatar, signedIn);
   const isTouch = useIsTouch();
 
@@ -290,6 +294,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           <OptionsButton onClick={() => setOptionsOpen(true)} />
           <StoreButton onClick={onOpenStore} />
         </div>
+        {signedIn && <SuperchatButton onClick={() => setSuperchatOpen(true)} />}
         <SprayButton charges={sprayCharges} maxCharges={SPRAY_CARTRIDGE_SIZE} onSpray={handleSpray} />
         <VehiclePicker
           value={vehicle}
@@ -317,9 +322,11 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           onOpenAdmin={isAdmin ? () => setAdminOpen(true) : undefined}
         />
       )}
+      {superchatOpen && signedIn && <SuperchatModal defaultName={avatar.nickname} onClose={() => setSuperchatOpen(false)} />}
+      <SuperchatBanner enabled={signedIn} />
       {adminOpen && isAdmin && <AdminPanel onClose={() => setAdminOpen(false)} onChanged={onConfigChanged} />}
       <Hud
-        enterFocusesChat={!paused && !optionsOpen && !adminOpen}
+        enterFocusesChat={!paused && !optionsOpen && !adminOpen && !superchatOpen}
         online={net.online}
         scores={net.scores}
         chatLog={net.chatLog}

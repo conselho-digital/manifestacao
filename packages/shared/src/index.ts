@@ -9,3 +9,4 @@ export * from "./protocol.js";
 export * from "./world.js";
 export * from "./realtime.js";
 export * from "./catalog.js";
+export * from "./superchat.js";

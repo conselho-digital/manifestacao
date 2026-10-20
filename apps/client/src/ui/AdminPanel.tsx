@@ -25,6 +25,9 @@ import {
   updateSpray,
   type AdminSpray,
   fetchAdminCatalog,
+  fetchSuperchatQueue,
+  moderateSuperchat,
+  type AdminSuperchat,
   saveCatalogItem,
   saveConfigKey,
   uploadModel,
@@ -37,13 +40,14 @@ interface AdminPanelProps {
   onChanged: () => Promise<void>;
 }
 
-type Tab = "equipes" | "bandeiras" | "produtos" | "sprays" | "modelos";
+type Tab = "equipes" | "bandeiras" | "produtos" | "sprays" | "modelos" | "superchats";
 const TABS: { id: Tab; label: string }[] = [
   { id: "equipes", label: "Equipes" },
   { id: "bandeiras", label: "Bandeiras" },
   { id: "produtos", label: "Produtos" },
   { id: "sprays", label: "Sprays" },
   { id: "modelos", label: "Modelos 3D" },
+  { id: "superchats", label: "Superchats" },
 ];
 
 function toColorNumber(hex: string): number {
@@ -122,6 +126,7 @@ export function AdminPanel({ onClose, onChanged }: AdminPanelProps) {
         {tab === "produtos" && <ProductsTab busy={busy} run={run} />}
         {tab === "sprays" && <SpraysTab busy={busy} run={run} />}
         {tab === "modelos" && <ModelsTab busy={busy} run={run} />}
+        {tab === "superchats" && <SuperchatsTab busy={busy} run={run} />}
       </div>
     </div>
   );
@@ -539,6 +544,58 @@ function ModelsTab({ busy, run }: TabProps) {
 
       <h3 style={sectionTitle}>Spray</h3>
       {renderSlot("spray", "Marca do spray (usada no lugar da mancha)")}
+    </>
+  );
+}
+
+function SuperchatsTab({ busy, run }: TabProps) {
+  const [rows, setRows] = useState<AdminSuperchat[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const load = () =>
+    fetchSuperchatQueue()
+      .then(setRows)
+      .catch((e: unknown) => setLoadError(e instanceof Error ? e.message : "Erro ao carregar a fila."));
+  useEffect(() => {
+    void load();
+  }, []);
+
+  if (loadError) return <p style={{ ...hint, color: "var(--danger)" }}>{loadError}</p>;
+  if (!rows) return <p style={hint}>Carregando…</p>;
+
+  const decide = (r: AdminSuperchat, approve: boolean) =>
+    run(async () => {
+      await moderateSuperchat(r.id, approve);
+      await load();
+    }, approve ? "Aprovado: o autor já pode pagar." : "Recusado.");
+
+  return (
+    <>
+      <p style={hint}>
+        Fila de análise. Aprovar libera a cobrança do Pix para o autor; a mensagem só aparece no jogo depois do
+        pagamento confirmado.
+      </p>
+      {rows.length === 0 && <p style={hint}>Nenhum superchat aguardando.</p>}
+      {rows.map((r) => (
+        <div key={r.id} style={{ border: "1px solid var(--line)", borderRadius: "var(--r-md)", padding: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontWeight: 700, fontSize: "var(--t-ui)" }}>
+            <span style={{ overflowWrap: "anywhere" }}>{r.name}</span>
+            <span>R$ {(r.amount_cents / 100).toFixed(2).replace(".", ",")}</span>
+          </div>
+          <span style={{ fontSize: "var(--t-body)", overflowWrap: "anywhere" }}>{r.message}</span>
+          <div style={row}>
+            <button type="button" disabled={busy} onClick={() => void decide(r, true)} style={primaryBtn}>
+              Aprovar
+            </button>
+            <button type="button" disabled={busy} onClick={() => void decide(r, false)} style={ghostBtn}>
+              Recusar
+            </button>
+          </div>
+        </div>
+      ))}
+      <button type="button" disabled={busy} onClick={() => void load()} style={ghostBtn}>
+        Atualizar fila
+      </button>
     </>
   );
 }

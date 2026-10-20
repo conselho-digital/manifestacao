@@ -171,3 +171,51 @@ export async function removeSpray(slug: string): Promise<void> {
   const { error: e2 } = await supabase.from("spray_options").delete().eq("slug", slug);
   if (e2) throw new Error(e2.message);
 }
+
+// ── Superchats (fila de moderação) ────────────────────────────────────────
+export interface AdminSuperchat {
+  id: string;
+  name: string;
+  message: string;
+  amount_cents: number;
+  status: string;
+  created_at: string;
+}
+
+/** Fila: superchats aguardando análise, mais antigos primeiro. */
+export async function fetchSuperchatQueue(): Promise<AdminSuperchat[]> {
+  const { data, error } = await db()
+    .from("superchats")
+    .select("id, name, message, amount_cents, status, created_at")
+    .eq("status", "review")
+    .order("created_at", { ascending: true })
+    .limit(50);
+  if (error) throw new Error(error.message);
+  return (data as AdminSuperchat[]) ?? [];
+}
+
+/** Aprova (libera a cobrança do Pix) ou recusa. Só vale se ainda estiver em 'review'. */
+export async function moderateSuperchat(id: string, approve: boolean, reason?: string): Promise<void> {
+  const supabase = db();
+  const { data: auth } = await supabase.auth.getUser();
+  const actor = auth.user?.id;
+  if (!actor) throw new Error("Sessão expirada.");
+  const { data, error } = await supabase
+    .from("superchats")
+    .update({
+      status: approve ? "awaiting_payment" : "rejected",
+      reviewed_by: actor,
+      reviewed_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .eq("status", "review")
+    .select("id");
+  if (error) throw new Error(error.message);
+  if (!data || data.length === 0) throw new Error("Este superchat já foi moderado.");
+  await supabase.from("moderation_log").insert({
+    actor,
+    target: `superchat:${id}`,
+    action: approve ? "superchat_approved" : "superchat_rejected",
+    reason: reason ?? null,
+  });
+}
