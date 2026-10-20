@@ -1,5 +1,5 @@
 import { useEffect, useMemo } from "react";
-import { CanvasTexture, DoubleSide, SRGBColorSpace } from "three";
+import { CanvasTexture, SRGBColorSpace } from "three";
 import { SIGN_INK } from "@manifestacao/shared";
 import type { SignData } from "./useSigns.js";
 
@@ -21,7 +21,7 @@ function drawSign(sign: SignData): CanvasTexture {
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
 
-  const size = sign.text.length > 24 ? 44 : sign.text.length > 12 ? 58 : 76;
+  const size = sign.text.length > 24 ? 56 : sign.text.length > 12 ? 70 : 88;
   ctx.font = `800 ${size}px system-ui, sans-serif`;
   const lines: string[] = [];
   let line = "";
@@ -41,6 +41,7 @@ function drawSign(sign: SignData): CanvasTexture {
 
   const tex = new CanvasTexture(canvas);
   tex.colorSpace = SRGBColorSpace;
+  tex.anisotropy = 4;
   return tex;
 }
 
@@ -49,14 +50,19 @@ export function SignProp({ sign }: { sign: SignData }) {
   const texture = useMemo(() => drawSign(sign), [sign.text, sign.color]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => texture.dispose(), [texture]);
   return (
-    <group position={[-0.55, 0, 0]}>
-      <mesh position={[0, 1.15, 0]} castShadow>
-        <cylinderGeometry args={[0.025, 0.025, 2.3, 8]} />
+    <group position={[-1.1, 0, 0]}>
+      <mesh position={[0, 1.3, 0]} castShadow>
+        <cylinderGeometry args={[0.03, 0.03, 2.6, 8]} />
         <meshStandardMaterial color="#7a5a3a" />
       </mesh>
-      <mesh position={[0, 2.3, 0]}>
-        <planeGeometry args={[1.3, 0.65]} />
-        <meshBasicMaterial map={texture} side={DoubleSide} toneMapped={false} />
+      {/* Frente (para quem olha de frente) e verso (para o dono, que vê por trás): ambos lêem certo. */}
+      <mesh position={[0, 2.55, 0.01]}>
+        <planeGeometry args={[1.8, 0.9]} />
+        <meshBasicMaterial map={texture} toneMapped={false} />
+      </mesh>
+      <mesh position={[0, 2.55, -0.01]} rotation={[0, Math.PI, 0]}>
+        <planeGeometry args={[1.8, 0.9]} />
+        <meshBasicMaterial map={texture} toneMapped={false} />
       </mesh>
     </group>
   );

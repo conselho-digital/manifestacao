@@ -27,6 +27,7 @@ const STATUS_LABEL: Record<SignStatus, string> = {
   refunded: "Estornado",
 };
 
+const COLOR_NAMES: Record<string, string> = { "#f8f9fa": "branco", "#ffd43b": "amarelo", "#51cf66": "verde", "#4dabf7": "azul", "#ff6b6b": "vermelho", "#b197fc": "roxo" };
 const brl = (cents: number) => `R$ ${(cents / 100).toFixed(2).replace(".", ",")}`;
 
 /**
@@ -137,7 +138,7 @@ export function SignModal({ equippedId, onEquip, onClose }: SignModalProps) {
                     type="button"
                     role="radio"
                     aria-checked={color === c}
-                    aria-label={`Cor ${c}`}
+                    aria-label={`Cor ${COLOR_NAMES[c] ?? c}`}
                     onClick={() => setColor(c)}
                     style={{ width: 44, height: 44, borderRadius: "var(--r-sm)", background: c, border: color === c ? "3px solid var(--accent)" : "1px solid var(--line)", cursor: "pointer" }}
                   />
@@ -158,7 +159,7 @@ export function SignModal({ equippedId, onEquip, onClose }: SignModalProps) {
 
             <p style={hint}>Reembolso do Pix: pedido em até 6 horas após o pagamento.</p>
             {mine.length > 0 && (
-              <section style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 260, overflowY: "auto" }}>
+              <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <h3 style={{ margin: 0, fontSize: "var(--t-body)" }}>Seus cartazes</h3>
                 {mine.map((m) => (
                   <div key={m.id} style={{ background: "var(--surface-2)", borderRadius: "var(--r-md)", padding: 10, display: "flex", flexDirection: "column", gap: 6 }}>

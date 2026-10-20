@@ -165,7 +165,7 @@ export function SuperchatModal({ defaultName, onClose }: SuperchatModalProps) {
 
             <p style={hint}>Reembolso do Pix: pedido em até 6 horas após o pagamento.</p>
             {mine.length > 0 && (
-              <section style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 260, overflowY: "auto" }}>
+              <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <h3 style={{ margin: 0, fontSize: "var(--t-body)" }}>Seus superchats</h3>
                 {mine.map((m) => (
                   <div key={m.id} style={{ background: "var(--surface-2)", borderRadius: "var(--r-md)", padding: 10, display: "flex", flexDirection: "column", gap: 6 }}>

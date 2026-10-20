@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BID_MAX_CENTS,
   BID_MAX_TEXT,
@@ -30,6 +30,7 @@ const STATUS_LABEL: Record<BidStatus, string> = {
   refunded: "Estornado",
 };
 
+const COLOR_NAMES: Record<string, string> = { "#f8f9fa": "branco", "#ffd43b": "amarelo", "#51cf66": "verde", "#4dabf7": "azul", "#ff6b6b": "vermelho", "#b197fc": "roxo" };
 const brl = (cents: number) => `R$ ${(cents / 100).toFixed(2).replace(".", ",")}`;
 const boardLabel = (id: string) => BILLBOARDS.find((b) => b.id === id)?.label ?? id;
 
@@ -64,8 +65,12 @@ export function BillboardModal({ ads, onClose }: BillboardModalProps) {
   }, [reload]);
 
   // Sugere o lance mínimo ao trocar de telão (ou quando o lance no ar muda).
+  // Só troca o valor se o campo ainda estava no mínimo anterior (não apaga o que a pessoa digitou).
+  const lastMinRef = useRef<number | null>(null);
   useEffect(() => {
-    setAmount((minCents / 100).toFixed(2).replace(".", ","));
+    const prevMin = lastMinRef.current == null ? null : (lastMinRef.current / 100).toFixed(2).replace(".", ",");
+    lastMinRef.current = minCents;
+    setAmount((cur) => (cur === "" || cur === prevMin ? (minCents / 100).toFixed(2).replace(".", ",") : cur));
   }, [board, minCents]);
 
   useEffect(() => {
@@ -192,7 +197,7 @@ export function BillboardModal({ ads, onClose }: BillboardModalProps) {
                     type="button"
                     role="radio"
                     aria-checked={color === c}
-                    aria-label={`Cor ${c}`}
+                    aria-label={`Cor ${COLOR_NAMES[c] ?? c}`}
                     onClick={() => setColor(c)}
                     style={{ width: 44, height: 44, borderRadius: "var(--r-sm)", background: c, border: color === c ? "3px solid var(--accent)" : "1px solid var(--line)", cursor: "pointer" }}
                   />
@@ -217,7 +222,7 @@ export function BillboardModal({ ads, onClose }: BillboardModalProps) {
 
             <p style={hint}>Reembolso do Pix: pedido em até 6 horas após o pagamento.</p>
             {mine.length > 0 && (
-              <section style={{ display: "flex", flexDirection: "column", gap: 8, maxHeight: 260, overflowY: "auto" }}>
+              <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
                 <h3 style={{ margin: 0, fontSize: "var(--t-body)" }}>Seus lances</h3>
                 {mine.map((m) => (
                   <div key={m.id} style={{ background: "var(--surface-2)", borderRadius: "var(--r-md)", padding: 10, display: "flex", flexDirection: "column", gap: 6 }}>

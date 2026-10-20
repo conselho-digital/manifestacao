@@ -81,7 +81,7 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
 
       {name && (
         <Html
-          position={[0, 2.2, 0]}
+          position={[0, sign ? 3.2 : 2.2, 0]}
           center
           distanceFactor={14}
           occlude

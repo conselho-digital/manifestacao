@@ -19,12 +19,17 @@ function drawBoard(ad: BillboardAd | undefined): CanvasTexture {
   if (!ad) {
     ctx.fillStyle = "#1a1d21";
     ctx.fillRect(0, 0, W, H);
+    ctx.strokeStyle = "#ffd43b";
+    ctx.lineWidth = 16;
+    ctx.strokeRect(8, 8, W - 16, H - 16);
     ctx.fillStyle = "#ffd43b";
     ctx.font = "800 84px system-ui, sans-serif";
     ctx.fillText("TELÃO LIVRE", W / 2, H / 2 - 40);
     ctx.fillStyle = "#c9ced4";
-    ctx.font = "600 44px system-ui, sans-serif";
-    ctx.fillText("Dê o seu lance pelo botão Telões", W / 2, H / 2 + 60);
+    ctx.font = "700 52px system-ui, sans-serif";
+    ctx.fillText("A partir de R$ 20,00", W / 2, H / 2 + 50);
+    ctx.font = "600 42px system-ui, sans-serif";
+    ctx.fillText("Dê seu lance pelo botão Telões", W / 2, H / 2 + 120);
   } else {
     ctx.fillStyle = ad.color;
     ctx.fillRect(0, 0, W, H);
@@ -45,10 +50,13 @@ function drawBoard(ad: BillboardAd | undefined): CanvasTexture {
     }
     lines.push(line);
     const lh = size * 1.12;
-    const top = H / 2 - 30 - ((lines.length - 1) * lh) / 2;
+    const top = H / 2 - 50 - ((lines.length - 1) * lh) / 2;
     lines.forEach((l, i) => ctx.fillText(l, W / 2, top + i * lh, W - 80));
-    ctx.font = "600 34px system-ui, sans-serif";
-    ctx.fillText(`Lance no ar: ${brl(ad.amount_cents)}`, W / 2, H - 46);
+    ctx.fillStyle = SIGN_INK;
+    ctx.fillRect(8, H - 92, W - 16, 84);
+    ctx.fillStyle = ad.color;
+    ctx.font = "700 56px system-ui, sans-serif";
+    ctx.fillText(`Lance no ar: ${brl(ad.amount_cents)}`, W / 2, H - 50);
   }
   const tex = new CanvasTexture(canvas);
   tex.colorSpace = SRGBColorSpace;

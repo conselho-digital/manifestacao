@@ -14,7 +14,7 @@ export interface BillboardSpot {
 export const BILLBOARDS: readonly BillboardSpot[] = [
   { id: "tela-1", label: "Telão Oeste", x: -60, z: 23, rotationY: Math.PI },
   { id: "tela-2", label: "Telão Leste", x: 60, z: 23, rotationY: Math.PI },
-  { id: "tela-3", label: "Telão do Parque", x: -30, z: -23, rotationY: 0 },
+  { id: "tela-3", label: "Telão do Parque", x: -30, z: -22, rotationY: 0 },
 ];
 
 export const BID_MIN_CENTS = 2000;

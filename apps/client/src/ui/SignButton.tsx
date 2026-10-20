@@ -10,7 +10,7 @@ export function SignButton({ onClick }: SignButtonProps) {
       onClick={onClick}
       style={{
         minHeight: 44,
-        minWidth: 0,
+        minWidth: 88,
         padding: "8px 16px",
         fontSize: "var(--t-ui)",
         fontWeight: 700,

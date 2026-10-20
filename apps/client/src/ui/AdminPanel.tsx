@@ -3,6 +3,7 @@ import { useModal } from "./useModal.js";
 import {
   CHARACTERS,
   CHARACTER_IDS,
+  BILLBOARDS,
   FLAGS,
   FLAG_IDS,
   TEAMS,
@@ -696,7 +697,7 @@ function BidsTab({ busy, run }: TabProps) {
       {rows.map((r) => (
         <div key={r.id} style={{ border: "1px solid var(--line)", borderRadius: "var(--r-md)", padding: 10, display: "flex", flexDirection: "column", gap: 8 }}>
           <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontWeight: 700, fontSize: "var(--t-ui)" }}>
-            <span>{r.billboard_id}</span>
+            <span>{BILLBOARDS.find((b) => b.id === r.billboard_id)?.label ?? r.billboard_id}</span>
             <span>R$ {(r.amount_cents / 100).toFixed(2).replace(".", ",")}</span>
           </div>
           <div style={{ background: r.color, color: "#1a1d21", borderRadius: 4, padding: "8px 10px", fontWeight: 800, fontSize: "var(--t-body)", overflowWrap: "anywhere" }}>
