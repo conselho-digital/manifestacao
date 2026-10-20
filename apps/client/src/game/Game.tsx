@@ -19,7 +19,6 @@ import { StoreButton } from "../ui/StoreButton.js";
 import { OptionsButton } from "../ui/OptionsButton.js";
 import { ChatButton } from "../ui/ChatButton.js";
 import {
-  graphicsAntialias,
   graphicsDpr,
   loadGraphics,
   saveGraphics,
@@ -201,13 +200,10 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           usa pra orbitar a câmera — evita um salto/giro perceptível da
           câmera logo na entrada, antes do primeiro frame recalcular. */}
       <Canvas
-        // Recria o canvas ao ligar/desligar o antisserrilhado (só vale na criação do contexto).
-        key={graphicsAntialias(graphics) ? "aa" : "noaa"}
         // Contexto de empilhamento próprio: nada de dentro do canvas (nomes) passa por cima de menus.
         style={{ zIndex: 0 }}
         shadows
         dpr={graphicsDpr(graphics)}
-        gl={{ antialias: graphicsAntialias(graphics) }}
         camera={{
           position: [
             -cameraDistance * CAMERA_SHOULDER_RATIO,

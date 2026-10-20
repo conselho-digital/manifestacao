@@ -1,4 +1,4 @@
-/** Qualidade gráfica (% da resolução nativa). Vale na hora e fica salva no aparelho. */
+/** Qualidade gráfica = % da resolução de renderização. Vale na hora e fica salva no aparelho. */
 export const GRAPHICS_LEVELS = [100, 75, 50, 25] as const;
 export type GraphicsLevel = (typeof GRAPHICS_LEVELS)[number];
 
@@ -25,9 +25,4 @@ export function saveGraphics(level: GraphicsLevel): void {
 export function graphicsDpr(level: GraphicsLevel): number {
   // Piso 0.5: abaixo disso a imagem fica ilegível em telas de densidade 1.
   return Math.max(0.5, Math.min(window.devicePixelRatio || 1, 2) * (level / 100));
-}
-
-/** Antisserrilhado só nos níveis altos (trocar exige recriar o canvas). */
-export function graphicsAntialias(level: GraphicsLevel): boolean {
-  return level >= 75;
 }
