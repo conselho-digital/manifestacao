@@ -17,6 +17,7 @@ import { Hud } from "../ui/Hud.js";
 import { VehiclePicker } from "../ui/VehiclePicker.js";
 import { StoreButton } from "../ui/StoreButton.js";
 import { OptionsButton } from "../ui/OptionsButton.js";
+import { ChatButton } from "../ui/ChatButton.js";
 import { OptionsModal } from "../ui/OptionsModal.js";
 import { AdminPanel } from "../ui/AdminPanel.js";
 import { sprayOptionById, sprayUnlocked } from "../config/sprays.js";
@@ -59,6 +60,7 @@ interface GameProps {
  */
 export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, onAvatarChange, onExit, isAdmin, signedIn, onConfigChanged }: GameProps) {
   const [optionsOpen, setOptionsOpen] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const [adminOpen, setAdminOpen] = useState(false);
   const [vehicle, setVehicle] = useState<VehicleId>("nenhum");
   // Pausa o movimento por teclado enquanto a loja (renderizada por cima,
@@ -265,6 +267,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
       <Crosshair />
       <TopRightPanel>
         <div style={{ display: "flex", gap: 8 }}>
+          <ChatButton onClick={() => setChatOpen((o) => !o)} />
           <OptionsButton onClick={() => setOptionsOpen(true)} />
           <StoreButton onClick={onOpenStore} />
         </div>
@@ -300,6 +303,8 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
         scores={net.scores}
         chatLog={net.chatLog}
         onChat={net.sendChat}
+        chatOpen={chatOpen}
+        onChatOpenChange={setChatOpen}
       />
     </>
   );
