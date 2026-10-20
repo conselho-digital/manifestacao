@@ -7,7 +7,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { corsHeaders } from "../_shared/cors.ts";
-import { checkContent } from "../_shared/moderation.ts";
+import { checkContent, sanitize } from "../_shared/moderation.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -17,7 +17,6 @@ const MIN_CENTS = 500;
 const MAX_CENTS = 20000;
 const MAX_NAME = 40;
 const MAX_MESSAGE = 200;
-const MAX_OPEN = 3;
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -31,8 +30,8 @@ Deno.serve(async (req) => {
     const userId = userData.user.id;
 
     const body = await req.json().catch(() => null);
-    const name = typeof body?.name === "string" ? body.name.trim().replace(/\s+/g, " ") : "";
-    const message = typeof body?.message === "string" ? body.message.trim().replace(/\s+/g, " ") : "";
+    const name = typeof body?.name === "string" ? sanitize(body.name) : "";
+    const message = typeof body?.message === "string" ? sanitize(body.message) : "";
     const amountCents = body?.amountCents;
 
     if (!name || name.length > MAX_NAME) return json({ error: "name_invalid" }, 400);
@@ -43,33 +42,34 @@ Deno.serve(async (req) => {
 
     const verdict = checkContent(name, message);
     if (!verdict.ok) {
-      await admin.from("moderation_log").insert({
-        actor: null,
-        target: `user:${userId}`,
-        action: "superchat_auto_blocked",
-        reason: verdict.reason,
-      });
+      // Log limitado por usuário (spam de bloqueios não enche a tabela).
+      const target = `user:${userId}`;
+      const { count: blocked } = await admin
+        .from("moderation_log")
+        .select("id", { count: "exact", head: true })
+        .eq("target", target)
+        .eq("action", "superchat_auto_blocked")
+        .gt("created_at", new Date(Date.now() - 24 * 3600_000).toISOString());
+      if ((blocked ?? 0) < 5) {
+        await admin.from("moderation_log").insert({ actor: null, target, action: "superchat_auto_blocked", reason: verdict.reason });
+      }
       return json({ error: "content_blocked", reason: verdict.reason }, 422);
     }
 
-    // Limite de pedidos em aberto por conta.
-    const { count } = await admin
-      .from("superchats")
-      .select("id", { count: "exact", head: true })
-      .eq("user_id", userId)
-      .in("status", ["review", "awaiting_payment"]);
-    if ((count ?? 0) >= MAX_OPEN) return json({ error: "too_many_open" }, 429);
-
-    const { data: row, error } = await admin
-      .from("superchats")
-      .insert({ user_id: userId, name, message, amount_cents: amountCents, status: "review" })
-      .select("id")
-      .single();
-    if (error || !row) {
-      console.error("superchat_insert_failed", error?.message);
+    // Limites (3 em aberto, 10 por dia) checados de forma atômica no banco.
+    const { data: id, error } = await admin.rpc("superchat_create", {
+      p_user: userId,
+      p_name: name,
+      p_message: message,
+      p_amount: amountCents,
+    });
+    if (error || !id) {
+      const msg = error?.message ?? "";
+      if (msg.includes("too_many_open") || msg.includes("too_many_daily")) return json({ error: "too_many_open" }, 429);
+      console.error("superchat_create_failed", msg);
       return json({ error: "insert_failed" }, 500);
     }
-    return json({ id: row.id, status: "review" });
+    return json({ id, status: "review" });
   } catch (e) {
     console.error("superchat-submit internal", e);
     return json({ error: "internal" }, 500);

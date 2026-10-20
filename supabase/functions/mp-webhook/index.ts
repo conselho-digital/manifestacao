@@ -56,6 +56,67 @@ async function signatureValid(req: Request, dataId: string): Promise<boolean> {
   return diff === 0;
 }
 
+// deno-lint-ignore no-explicit-any
+async function settleSuperchat(admin: ReturnType<typeof createClient>, superchatId: string, externalReference: string, payment: any): Promise<Response> {
+  const { data: sc, error } = await admin
+    .from("superchats")
+    .select("id, amount_cents, status")
+    .eq("id", superchatId)
+    .single();
+  const { data: attempt, error: attErr } = await admin
+    .from("superchat_payments")
+    .select("id, settled")
+    .eq("external_reference", externalReference)
+    .single();
+  if (error || !sc || attErr || !attempt) return new Response("db_error", { status: 500 });
+
+  // Reenvio do webhook de uma tentativa que já quitou: só garante o estado final.
+  const paidCents = Math.round((payment.transaction_amount ?? 0) * 100);
+  const eligible =
+    attempt.settled ||
+    (sc.status === "awaiting_payment" && paidCents === sc.amount_cents && payment.payment_method_id === "pix");
+
+  if (eligible) {
+    if (!attempt.settled) {
+      // Índice único parcial: só UMA tentativa por superchat pode quitar.
+      const { error: lockErr } = await admin.from("superchat_payments").update({ settled: true }).eq("id", attempt.id);
+      if (lockErr) {
+        if (lockErr.code !== "23505") return new Response("db_error", { status: 500 });
+        return await refundUnsettled(admin, sc.id, payment, "outra tentativa já quitou");
+      }
+    }
+    // Transição atômica awaiting_payment -> paid (idempotente).
+    const { error: upErr } = await admin
+      .from("superchats")
+      .update({ status: "paid", paid_at: new Date().toISOString() })
+      .eq("id", sc.id)
+      .eq("status", "awaiting_payment");
+    if (upErr) return new Response("db_error", { status: 500 });
+    return new Response("ok", { status: 200 });
+  }
+
+  return await refundUnsettled(admin, sc.id, payment, `status=${sc.status} pago=${paidCents}`);
+}
+
+/** Dinheiro entrou mas não dá para exibir (já pago por outra tentativa, status mudou, valor divergente): estorna e registra. */
+// deno-lint-ignore no-explicit-any
+async function refundUnsettled(admin: ReturnType<typeof createClient>, superchatId: string, payment: any, why: string): Promise<Response> {
+  console.error("superchat_unsettled_refund", { id: superchatId, why });
+  const refund = await fetch(`https://api.mercadopago.com/v1/payments/${payment.id}/refunds`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}`, "X-Idempotency-Key": `refund-${payment.id}`, "Content-Type": "application/json" },
+    body: "{}",
+  });
+  await admin.from("moderation_log").insert({
+    actor: null,
+    target: `superchat:${superchatId}`,
+    action: refund.ok ? "superchat_auto_refunded" : "superchat_refund_failed",
+    reason: why,
+  });
+  // Estorno falhou: 500 faz o MP reenviar e tentamos de novo.
+  return new Response(refund.ok ? "refunded" : "refund_failed", { status: refund.ok ? 200 : 500 });
+}
+
 Deno.serve(async (req) => {
   if (req.method !== "POST") return new Response("method_not_allowed", { status: 405 });
 
@@ -86,12 +147,24 @@ Deno.serve(async (req) => {
     if (["refunded", "charged_back", "cancelled"].includes(payment.status)) {
       if (!externalReference) return new Response("no_reference", { status: 200 });
       const adminRefund = createClient(SUPABASE_URL, SERVICE_ROLE);
-      // Superchat pago e estornado: sai do ar (some do realtime/lista pública).
-      await adminRefund
-        .from("superchats")
-        .update({ status: "refunded" })
+      // Superchat pago e estornado: sai do ar (some da lista pública).
+      const { data: scPay, error: scPayErr } = await adminRefund
+        .from("superchat_payments")
+        .select("superchat_id, settled")
         .eq("external_reference", externalReference)
-        .eq("status", "paid");
+        .maybeSingle();
+      if (scPayErr) return new Response("db_error", { status: 500 });
+      if (scPay) {
+        // Estorno de tentativa que NÃO quitou (ex.: nosso estorno automático) não tira o superchat do ar.
+        if (!scPay.settled) return new Response("ignored", { status: 200 });
+        const { error: scErr } = await adminRefund
+          .from("superchats")
+          .update({ status: "refunded" })
+          .eq("id", scPay.superchat_id)
+          .eq("status", "paid");
+        if (scErr) return new Response("db_error", { status: 500 });
+        return new Response("refunded", { status: 200 });
+      }
       const { data: paidOrder } = await adminRefund
         .from("orders")
         .update({ status: "refunded" })
@@ -120,25 +193,14 @@ Deno.serve(async (req) => {
 
     const admin = createClient(SUPABASE_URL, SERVICE_ROLE);
 
-    // Superchat: referência própria (não está em `orders`).
-    const { data: superchat } = await admin
-      .from("superchats")
-      .select("id, amount_cents, status")
+    // Superchat: a referência está em superchat_payments (várias tentativas por superchat).
+    const { data: scPay, error: scPayErr } = await admin
+      .from("superchat_payments")
+      .select("superchat_id")
       .eq("external_reference", externalReference)
       .maybeSingle();
-    if (superchat) {
-      if (Math.round((payment.transaction_amount ?? 0) * 100) !== superchat.amount_cents) {
-        console.error("superchat_amount_mismatch", { id: superchat.id });
-        return new Response("amount_mismatch", { status: 200 });
-      }
-      // Transição atômica awaiting_payment -> paid (reenvio do webhook não duplica).
-      await admin
-        .from("superchats")
-        .update({ status: "paid", paid_at: new Date().toISOString() })
-        .eq("id", superchat.id)
-        .eq("status", "awaiting_payment");
-      return new Response("ok", { status: 200 });
-    }
+    if (scPayErr) return new Response("db_error", { status: 500 }); // MP reenvia
+    if (scPay) return await settleSuperchat(admin, scPay.superchat_id, externalReference, payment);
 
     const { data: order } = await admin
       .from("orders")

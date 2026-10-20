@@ -182,40 +182,15 @@ export interface AdminSuperchat {
   created_at: string;
 }
 
-/** Fila: superchats aguardando análise, mais antigos primeiro. */
+/** Fila: superchats aguardando análise, mais antigos primeiro (RPC só para admin). */
 export async function fetchSuperchatQueue(): Promise<AdminSuperchat[]> {
-  const { data, error } = await db()
-    .from("superchats")
-    .select("id, name, message, amount_cents, status, created_at")
-    .eq("status", "review")
-    .order("created_at", { ascending: true })
-    .limit(50);
+  const { data, error } = await db().rpc("superchat_queue");
   if (error) throw new Error(error.message);
   return (data as AdminSuperchat[]) ?? [];
 }
 
-/** Aprova (libera a cobrança do Pix) ou recusa. Só vale se ainda estiver em 'review'. */
+/** Aprova (libera a cobrança do Pix) ou recusa. Revisor e log gravados na mesma transação do banco. */
 export async function moderateSuperchat(id: string, approve: boolean, reason?: string): Promise<void> {
-  const supabase = db();
-  const { data: auth } = await supabase.auth.getUser();
-  const actor = auth.user?.id;
-  if (!actor) throw new Error("Sessão expirada.");
-  const { data, error } = await supabase
-    .from("superchats")
-    .update({
-      status: approve ? "awaiting_payment" : "rejected",
-      reviewed_by: actor,
-      reviewed_at: new Date().toISOString(),
-    })
-    .eq("id", id)
-    .eq("status", "review")
-    .select("id");
-  if (error) throw new Error(error.message);
-  if (!data || data.length === 0) throw new Error("Este superchat já foi moderado.");
-  await supabase.from("moderation_log").insert({
-    actor,
-    target: `superchat:${id}`,
-    action: approve ? "superchat_approved" : "superchat_rejected",
-    reason: reason ?? null,
-  });
+  const { error } = await db().rpc("moderate_superchat", { p_id: id, p_approve: approve, p_reason: reason ?? null });
+  if (error) throw new Error(error.message.includes("already_moderated") ? "Este superchat já foi moderado." : error.message);
 }

@@ -4,14 +4,16 @@ import type { Superchat } from "@manifestacao/shared";
 import { getSupabase } from "./supabase.js";
 import type { PixCharge } from "./payments.js";
 
-const COLUMNS = "id, name, message, amount_cents, status, created_at";
-
 const ERRORS: Record<string, string> = {
   name_invalid: "Nome inválido (1 a 40 letras).",
   message_invalid: "Mensagem inválida (1 a 200 caracteres).",
   amount_invalid: "Valor entre R$ 5,00 e R$ 200,00.",
-  content_blocked: "Mensagem não permitida: sem links, telefones ou palavras ofensivas.",
+  content_blocked: "Mensagem não permitida: sem links, telefones, @ de contato ou palavras ofensivas.",
   too_many_open: "Você já tem 3 superchats em análise ou aguardando pagamento.",
+  busy: "Gerando o Pix… tente de novo em alguns segundos.",
+  payment_provider_error: "O Mercado Pago não respondeu. Tente de novo em instantes.",
+  not_found: "Superchat não encontrado.",
+  insert_failed: "Não foi possível enviar agora. Tente de novo.",
   not_approved: "Este superchat ainda não foi aprovado.",
   already_paid: "Este superchat já foi pago.",
   unauthorized: "Entre com sua conta para enviar.",
@@ -41,16 +43,13 @@ export function paySuperchat(id: string) {
   return call<PixCharge>("superchat-pay", { id });
 }
 
-/** Superchats do usuário logado (RLS: só os próprios), mais recentes primeiro. */
-export async function fetchMySuperchats(): Promise<Superchat[]> {
+/** Superchats do usuário logado, mais recentes primeiro. `null` = falha (mantém a lista anterior). */
+export async function fetchMySuperchats(): Promise<Superchat[] | null> {
   const supabase = getSupabase();
-  if (!supabase) return [];
-  const { data } = await supabase
-    .from("superchats")
-    .select(COLUMNS)
-    .order("created_at", { ascending: false })
-    .limit(10);
-  return (data as Superchat[] | null) ?? [];
+  if (!supabase) return null;
+  // RPC: autor e pagamentos ficam em tabelas privadas; a tabela pública só tem o que é de todos.
+  const { data, error } = await supabase.rpc("my_superchats");
+  return error ? null : ((data as Superchat[] | null) ?? []);
 }
 
 /**
@@ -73,7 +72,9 @@ export function subscribePaidSuperchats(onPaid: (s: Superchat) => void): () => v
     .on("postgres_changes", { event: "*", schema: "public", table: "superchats", filter: "status=eq.paid" }, (p) =>
       handle(p.new),
     )
-    .subscribe();
+    .subscribe((status) => {
+      if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") console.warn("superchat realtime:", status);
+    });
   return () => {
     void supabase.removeChannel(channel);
   };

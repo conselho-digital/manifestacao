@@ -25,42 +25,56 @@ Deno.serve(async (req) => {
     const { id } = await req.json().catch(() => ({ id: null }));
     if (typeof id !== "string" || !/^[0-9a-f-]{36}$/i.test(id)) return json({ error: "id_required" }, 400);
 
+    // Autor = superchat_private.user_id (nunca confiar no cliente).
     const { data: sc } = await admin
       .from("superchats")
-      .select("id, user_id, status, amount_cents, name, external_reference, mp_payment_id")
+      .select("id, status, amount_cents, superchat_private!inner(user_id)")
       .eq("id", id)
+      .eq("superchat_private.user_id", userId)
       .maybeSingle();
-    if (!sc || sc.user_id !== userId) return json({ error: "not_found" }, 404);
+    if (!sc) return json({ error: "not_found" }, 404);
     if (sc.status === "paid") return json({ error: "already_paid" }, 409);
     if (sc.status !== "awaiting_payment") return json({ error: "not_approved" }, 409);
 
-    // Reaproveita a cobrança Pix pendente (evita uma nova a cada clique).
-    if (sc.mp_payment_id) {
-      const existing = await fetch(`https://api.mercadopago.com/v1/payments/${sc.mp_payment_id}`, {
-        headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` },
-      });
-      if (existing.ok) {
+    // Tentativa de cobrança aberta? (no máximo UMA por superchat — índice parcial no banco.)
+    const { data: open } = await admin
+      .from("superchat_payments")
+      .select("id, external_reference, mp_payment_id, state, created_at")
+      .eq("superchat_id", sc.id)
+      .in("state", ["creating", "pending"])
+      .maybeSingle();
+
+    if (open) {
+      if (!open.mp_payment_id) {
+        // Outra chamada está criando agora; se travou há mais de 60 s, descarta e recria.
+        if (Date.now() - new Date(open.created_at).getTime() < 60_000) return json({ error: "busy" }, 409);
+        await admin.from("superchat_payments").update({ state: "dead" }).eq("id", open.id);
+      } else {
+        const existing = await fetch(`https://api.mercadopago.com/v1/payments/${open.mp_payment_id}`, {
+          headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}` },
+        });
+        // Sem resposta do MP: NÃO cria outra cobrança por cima (evitaria pagamento órfão).
+        if (!existing.ok) return json({ error: "payment_provider_error" }, 502);
         const ep = await existing.json();
-        if (ep.status === "pending") return json(charge(sc.external_reference, ep));
+        if (ep.status === "pending") return json(charge(open.external_reference, ep));
         if (ep.status === "approved") {
-          // Pago, webhook ainda não processou: o webhook conclui (idempotente).
-          return json({ orderRef: sc.external_reference, qrCode: null, qrCodeBase64: null, ticketUrl: null, paid: true });
+          // Pago; o webhook conclui (idempotente). O cliente mostra "pagamento recebido".
+          return json({ orderRef: open.external_reference, qrCode: null, qrCodeBase64: null, ticketUrl: null, paid: true });
         }
-        // rejected/cancelled/expired: cria cobrança nova abaixo.
+        // rejected/cancelled/expired: encerra e cria uma nova abaixo.
+        await admin.from("superchat_payments").update({ state: "dead" }).eq("id", open.id);
       }
     }
 
-    // Referência nova ANTES de chamar o Mercado Pago (nunca cobrar sem registro).
+    // Reserva a tentativa ANTES de chamar o MP (nunca cobrar sem registro). Se duas
+    // chamadas correrem juntas, o índice único barra a segunda.
     const externalReference = crypto.randomUUID();
-    const { error: refErr } = await admin
-      .from("superchats")
-      .update({ external_reference: externalReference, mp_payment_id: null })
-      .eq("id", sc.id)
-      .eq("status", "awaiting_payment");
-    if (refErr) {
-      console.error("superchat_ref_failed", refErr.message);
-      return json({ error: "order_failed" }, 500);
-    }
+    const { data: attempt, error: attemptErr } = await admin
+      .from("superchat_payments")
+      .insert({ superchat_id: sc.id, external_reference: externalReference, state: "creating" })
+      .select("id")
+      .single();
+    if (attemptErr || !attempt) return json({ error: "busy" }, 409);
 
     const mpRes = await fetch("https://api.mercadopago.com/v1/payments", {
       method: "POST",
@@ -80,9 +94,15 @@ Deno.serve(async (req) => {
     const mp = await mpRes.json();
     if (!mpRes.ok) {
       console.error("mp_error", mp);
+      await admin.from("superchat_payments").update({ state: "dead" }).eq("id", attempt.id);
       return json({ error: "payment_provider_error" }, 502);
     }
-    await admin.from("superchats").update({ mp_payment_id: String(mp.id) }).eq("id", sc.id);
+    // Se isto falhar, a linha 'creating' fica e o webhook ainda casa pela referência.
+    const { error: saveErr } = await admin
+      .from("superchat_payments")
+      .update({ mp_payment_id: String(mp.id), state: "pending" })
+      .eq("id", attempt.id);
+    if (saveErr) console.error("superchat_payment_save_failed", saveErr.message);
     return json(charge(externalReference, mp));
   } catch (e) {
     console.error("superchat-pay internal", e);

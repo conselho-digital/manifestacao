@@ -35,8 +35,12 @@ export function SuperchatBanner({ enabled }: { enabled: boolean }) {
       const q = queueRef.current;
       q.push(s);
       if (q.length > MAX_QUEUE) {
-        q.sort((a, b) => b.amount_cents - a.amount_cents);
-        q.length = MAX_QUEUE;
+        // Descarta o de menor valor, preservando a ordem de chegada dos demais.
+        let min = 0;
+        q.forEach((x, i) => {
+          if (x.amount_cents < q[min]!.amount_cents) min = i;
+        });
+        q.splice(min, 1);
       }
       if (!currentRef.current) next();
     });

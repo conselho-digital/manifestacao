@@ -40,12 +40,16 @@ export function SuperchatModal({ defaultName, onClose }: SuperchatModalProps) {
   const [error, setError] = useState<string | null>(null);
   const [mine, setMine] = useState<Superchat[]>([]);
   const [charge, setCharge] = useState<PixCharge | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
-  const reload = useCallback(() => void fetchMySuperchats().then(setMine).catch(() => {}), []);
+  const reload = useCallback(
+    () => void fetchMySuperchats().then((list) => list && setMine(list)).catch(() => {}),
+    [],
+  );
   useEffect(() => {
     reload();
-    // Atualiza o status enquanto o modal está aberto (aprovação/pagamento).
-    const t = setInterval(reload, 4000);
+    // Atualiza o status enquanto o modal está aberto (aprovação/pagamento); pausa com a aba oculta.
+    const t = setInterval(() => document.visibilityState === "visible" && reload(), 4000);
     return () => clearInterval(t);
   }, [reload]);
 
@@ -74,7 +78,8 @@ export function SuperchatModal({ defaultName, onClose }: SuperchatModalProps) {
     setError(null);
     try {
       const c = await paySuperchat(id);
-      setCharge(c);
+      if (c.paid) setNotice("Pagamento recebido! Sua mensagem aparece em instantes.");
+      else setCharge(c);
       reload();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro ao gerar o Pix.");
@@ -143,6 +148,11 @@ export function SuperchatModal({ defaultName, onClose }: SuperchatModalProps) {
                 Valor (R$ 5 a R$ 200)
                 <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} required style={field} />
               </label>
+              {notice && (
+                <p role="status" style={{ margin: 0, fontSize: "var(--t-ui)", color: "var(--accent)" }}>
+                  {notice}
+                </p>
+              )}
               {error && (
                 <p role="alert" style={{ margin: 0, fontSize: "var(--t-ui)", color: "var(--danger)" }}>
                   {error}
