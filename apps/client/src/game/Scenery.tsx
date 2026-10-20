@@ -1,5 +1,6 @@
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { Box3, Color, InstancedMesh, Matrix4, Mesh, Quaternion, Sphere, Vector3 } from "three";
+import { ModelBoundary } from "./ModelBoundary.js";
 import { clearCameraColliders, setCameraColliders } from "./colliders.js";
 import { useGLTF } from "@react-three/drei";
 import { AVENUE_LENGTH, AVENUE_WIDTH, PARK_GAP, PARK_SIZE } from "./world.js";
@@ -39,7 +40,11 @@ function SceneryBuilding({
     });
     // Caixa envolvente do prédio: a câmera de terceira pessoa não o atravessa.
     scene.updateMatrixWorld(true);
-    setCameraColliders(`building:${url}`, [], [new Box3().setFromObject(scene)]);
+    // Recorta o que invade a avenida: o jogador anda até a borda dela, e a
+    // câmera dele não pode "nascer" dentro da caixa.
+    const box = new Box3().setFromObject(scene);
+    box.min.z = Math.max(box.min.z, AVENUE_WIDTH / 2 + 1);
+    setCameraColliders(`building:${url}`, [], [box]);
     return () => clearCameraColliders(`building:${url}`);
   }, [scene, url]);
 
@@ -209,6 +214,7 @@ export function Scenery() {
 
       {/* Marco visual: MASP ao lado da avenida. Suspense evita que a cena
           quebre enquanto o glTF (~920KB) ainda está baixando. */}
+      <ModelBoundary>
       <Suspense fallback={null}>
         <SceneryBuilding
           url={MASP_URL}
@@ -216,6 +222,7 @@ export function Scenery() {
           scale={MASP_SCALE}
         />
       </Suspense>
+      </ModelBoundary>
     </group>
   );
 }

@@ -37,7 +37,7 @@ export function SprayMarks({ marksRef, version }: SprayMarksProps) {
         return (
           <Suspense key={m.id} fallback={circle}>
             <group position={[m.x, 0.015, m.z]}>
-              <GlbModel url={modelUrl} />
+              <GlbModel url={modelUrl} fallback={circle} />
             </group>
           </Suspense>
         );

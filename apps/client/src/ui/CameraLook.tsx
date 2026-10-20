@@ -46,6 +46,8 @@ export function CameraLook({ yawRef, pitchRef, fullScreen = false }: CameraLookP
 
   const start = (e: React.PointerEvent) => {
     if (pointer.current !== null) return;
+    // Mouse: só o botão principal (o menu de contexto do botão direito pode engolir o pointerup).
+    if (e.pointerType === "mouse" && e.button !== 0) return;
     pointer.current = e.pointerId;
     (e.target as Element).setPointerCapture(e.pointerId);
     lastX.current = e.clientX;

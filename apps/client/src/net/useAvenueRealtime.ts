@@ -277,14 +277,14 @@ export function useAvenueRealtime(self: AvatarConfig) {
   );
 
   const sendSpray = useCallback(
-    (x: number, z: number, color: number) => {
+    (x: number, z: number, color: number): boolean => {
       // Cooldown próprio: defesa adicional (o cartucho em Game.tsx já limita
       // o uso pela UI, mas isso é chamável direto, ex. via DevTools — o
       // cooldown de recepção no handler acima é quem garante o limite de
       // verdade para os outros clientes; este aqui evita gastar cartucho
       // mandando mensagens que serão descartadas do outro lado mesmo assim).
       const now = Date.now();
-      if (now - lastOwnSprayAtRef.current < SPRAY_MIN_INTERVAL_MS) return;
+      if (now - lastOwnSprayAtRef.current < SPRAY_MIN_INTERVAL_MS) return false;
       lastOwnSprayAtRef.current = now;
 
       const id = crypto.randomUUID ? crypto.randomUUID() : String(Math.random());
@@ -298,6 +298,7 @@ export function useAvenueRealtime(self: AvatarConfig) {
         const payload: SprayBroadcast = { id, senderId: selfId, x: pos.x, z: pos.z, color };
         void channel.send({ type: "broadcast", event: BROADCAST.spray, payload });
       }
+      return true;
     },
     [selfId],
   );

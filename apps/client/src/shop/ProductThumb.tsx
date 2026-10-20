@@ -73,7 +73,7 @@ function Snapshot({ onShot }: { onShot: (dataUrl: string) => void }) {
   const frames = useRef(0);
   useFrame(() => {
     frames.current += 1;
-    if (frames.current === 6) onShot(gl.domElement.toDataURL("image/png"));
+    if (frames.current === 10) onShot(gl.domElement.toDataURL("image/png"));
   });
   return null;
 }
@@ -101,6 +101,7 @@ export function ProductThumb({ itemId }: { itemId: string }) {
   const [src, setSrc] = useState<string | null>(cache.get(itemId) ?? null);
   const [active, setActive] = useState(false);
   const releaseRef = useRef<(() => void) | null>(null);
+  const finishRef = useRef<(() => void) | null>(null);
 
   useEffect(() => {
     if (!hasObject || src) return;
@@ -111,8 +112,9 @@ export function ProductThumb({ itemId }: { itemId: string }) {
       if (cancelled) return finish();
       setActive(true);
       // Se o modelo não carregar, não trava a fila.
-      timer = setTimeout(finish, 8000);
+      timer = setTimeout(finish, 15000);
     });
+    finishRef.current = finish;
     function finish() {
       clearTimeout(timer);
       setActive(false);
@@ -148,9 +150,9 @@ export function ProductThumb({ itemId }: { itemId: string }) {
         >
           <ambientLight intensity={0.9} />
           <directionalLight position={[4, 6, 5]} intensity={1.4} />
-          <Boundary onError={() => setActive(false)}>
+          <Boundary onError={() => finishRef.current?.()}>
             <Suspense fallback={null}>
-              <Bounds fit clip observe margin={1.25}>
+              <Bounds fit clip observe margin={1.25} maxDuration={0.001}>
                 <ProductModel itemId={itemId} />
               </Bounds>
               <Snapshot

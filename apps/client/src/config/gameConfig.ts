@@ -132,6 +132,16 @@ export function applyGameConfig(cfg: GameConfig, catalog: CatalogRow[] = []): vo
     FLAGS[id].label = o?.label ?? DEFAULTS.flags[id].label;
     FLAGS[id].color = o?.color ?? DEFAULTS.flags[id].color;
   }
+  // Volta personagens/veículos ao padrão antes: um item que o admin renomeou e
+  // depois desativou sai do catálogo ativo e não pode ficar com o nome antigo.
+  for (const id of CHARACTER_IDS) {
+    CHARACTERS[id].label = DEFAULTS.characters[id].label;
+    CHARACTERS[id].priceCents = DEFAULTS.characters[id].price;
+  }
+  for (const id of VEHICLE_IDS) {
+    VEHICLES[id].label = DEFAULTS.vehicles[id].label;
+    VEHICLES[id].priceCents = DEFAULTS.vehicles[id].price;
+  }
   for (const row of catalog) {
     const [kind, id] = row.id.split(":");
     const label = cleanLabel(row.label);
@@ -155,6 +165,10 @@ export async function loadAndApplyGameConfig(): Promise<GameConfig> {
     supabase.from("game_config").select("key, value"),
     supabase.from("catalog_items").select("id, label, price_cents").eq("active", true),
   ]);
+  // Se a leitura falhou, NÃO aplica (senão uma falha de rede apagaria as
+  // customizações já carregadas e voltaria tudo ao padrão).
+  if (cfgRes.error) throw new Error(cfgRes.error.message);
+  if (catRes.error) throw new Error(catRes.error.message);
   const raw: Record<string, unknown> = {};
   for (const row of cfgRes.data ?? []) raw[row.key as string] = row.value;
   const cfg = sanitizeConfig(raw);

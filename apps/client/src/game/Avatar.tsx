@@ -47,7 +47,7 @@ function FlagProp({ flag, color }: { flag: FlagId; color: number }) {
   return (
     <Suspense fallback={cloth}>
       <group position={[0.45, 0, 0]}>
-        <GlbModel url={url} />
+        <GlbModel url={url} fallback={cloth} />
       </group>
     </Suspense>
   );
@@ -65,7 +65,7 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
     <group ref={ref}>
       {modelUrl ? (
         <Suspense fallback={<ProceduralBody color={color} />}>
-          <GlbModel url={modelUrl} />
+          <GlbModel url={modelUrl} fallback={<ProceduralBody color={color} />} />
         </Suspense>
       ) : (
         <ProceduralBody color={color} />

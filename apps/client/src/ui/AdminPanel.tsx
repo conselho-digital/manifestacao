@@ -234,14 +234,18 @@ function ProductsTab({ busy, run }: TabProps) {
 
   const save = (r: ProductDraft) =>
     run(
-      () =>
-        saveCatalogItem({
+      async () => {
+        if (r.price.trim() === "" || Number.isNaN(Number(r.price.replace(",", ".")))) {
+          throw new Error("Informe um preço válido (ex.: 29,90).");
+        }
+        await saveCatalogItem({
           id: r.id,
           kind: "",
           label: r.label,
           price_cents: Math.round(Number(r.price.replace(",", ".")) * 100),
           active: r.active,
-        }),
+        });
+      },
       `"${r.label}" salvo.`,
     );
 
@@ -297,11 +301,11 @@ function ModelsTab({ busy, run }: TabProps) {
       setModels(next);
     }, "Modelo removido (volta ao padrão).");
 
-  const Slot = ({ slot, label }: { slot: string; label: string }) => {
+  const renderSlot = (slot: string, label: string) => {
     if (!isModelSlot(slot)) return null;
     const has = Boolean(models[slot]);
     return (
-      <div style={{ ...row, justifyContent: "space-between", flexWrap: "wrap" }}>
+      <div key={slot} style={{ ...row, justifyContent: "space-between", flexWrap: "wrap" }}>
         <span style={{ fontSize: "var(--t-ui)", flex: 1, minWidth: 0 }}>
           {label}
           <span style={{ color: has ? "var(--accent)" : "var(--ink-dim)", marginLeft: 6 }}>{has ? "• enviado" : "• padrão"}</span>
@@ -339,25 +343,25 @@ function ModelsTab({ busy, run }: TabProps) {
       {CHARACTER_IDS.map((c) => (
         <div key={c} style={{ display: "flex", flexDirection: "column", gap: 4, padding: "8px 0" }}>
           <strong style={{ fontSize: "var(--t-ui)" }}>{CHARACTERS[c].label}</strong>
-          <Slot slot={`character:${c}`} label="Geral (todas as equipes)" />
+          {renderSlot(`character:${c}`, "Geral (todas as equipes)")}
           {TEAM_IDS.map((t) => (
-            <Slot key={t} slot={`character:${c}:${t}`} label={`Equipe ${TEAMS[t].label}`} />
+            renderSlot(`character:${c}:${t}`, `Equipe ${TEAMS[t].label}`)
           ))}
         </div>
       ))}
 
       <h3 style={sectionTitle}>Veículos</h3>
       {VEHICLE_IDS.filter((v) => v !== "nenhum").map((v) => (
-        <Slot key={v} slot={`vehicle:${v}`} label={VEHICLES[v].label} />
+        renderSlot(`vehicle:${v}`, VEHICLES[v].label)
       ))}
 
       <h3 style={sectionTitle}>Bandeiras</h3>
       {FLAG_IDS.filter((f) => f !== "nenhuma").map((f) => (
-        <Slot key={f} slot={`flag:${f}`} label={FLAGS[f].label} />
+        renderSlot(`flag:${f}`, FLAGS[f].label)
       ))}
 
       <h3 style={sectionTitle}>Spray</h3>
-      <Slot slot="spray" label="Marca do spray (usada no lugar da mancha)" />
+      {renderSlot("spray", "Marca do spray (usada no lugar da mancha)")}
     </>
   );
 }

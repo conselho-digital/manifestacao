@@ -1,4 +1,4 @@
-import { Suspense, useMemo } from "react";
+import { Suspense, useMemo, type ReactNode } from "react";
 import { Shape } from "three";
 import { useGLTF } from "@react-three/drei";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
@@ -6,6 +6,7 @@ import type { VehicleId } from "@manifestacao/shared";
 import { useProximitySound } from "./ProximitySound.js";
 import { useUserGestureUnlocked } from "./useUserGesture.js";
 import { vehicleModelUrl } from "./models.js";
+import { ModelBoundary } from "./ModelBoundary.js";
 
 export type FlagEmblem = "star-burst" | "ring" | "stripe";
 
@@ -93,7 +94,7 @@ export function Vehicle3D({ vehicle }: { vehicle: VehicleId }) {
   if (!url) return <ProceduralVehicle vehicle={vehicle} />;
   return (
     <Suspense fallback={<ProceduralVehicle vehicle={vehicle} />}>
-      <GlbModel url={url} />
+      <GlbModel url={url} fallback={<ProceduralVehicle vehicle={vehicle} />} />
     </Suspense>
   );
 }
@@ -151,7 +152,15 @@ export function ProceduralVehicle({ vehicle }: { vehicle: VehicleId }) {
 }
 
 /** Modelo glTF do personagem (usado quando há URL registrada). */
-export function GlbModel({ url }: { url: string }) {
+export function GlbModel({ url, fallback = null }: { url: string; fallback?: ReactNode }) {
+  return (
+    <ModelBoundary key={url} fallback={fallback}>
+      <GlbModelInner url={url} />
+    </ModelBoundary>
+  );
+}
+
+function GlbModelInner({ url }: { url: string }) {
   const { scene } = useGLTF(url);
   // Clone por uso: o cache do useGLTF devolve a MESMA cena; sem clonar, o
   // mesmo modelo em dois jogadores brigaria pelo mesmo pai (só um aparece).

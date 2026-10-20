@@ -97,7 +97,9 @@ export function Player({
   const pivot = useRef(new Vector3());
   const offset = useRef(new Vector3());
 
-  useFrame((_, delta) => {
+  useFrame((_, rawDelta) => {
+    // Limita o delta: ao voltar de aba oculta ele pode ser de segundos.
+    const delta = Math.min(rawDelta, 0.1);
     const g = ref.current;
     if (!g) return;
 
@@ -118,7 +120,7 @@ export function Player({
       const worldX = input.x * cos - input.z * sin;
       const worldZ = -input.x * sin - input.z * cos;
       const step = (speed * delta) / len;
-      const next = clampToAvenue(g.position.x + worldX * step, g.position.z + worldZ * step);
+      const next = clampToAvenue(g.position.x + worldX * step, g.position.z + worldZ * step, g.position);
       g.position.x = next.x;
       g.position.z = next.z;
       g.rotation.y = Math.atan2(worldX, worldZ);

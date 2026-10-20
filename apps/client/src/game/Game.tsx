@@ -135,15 +135,17 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     return () => clearInterval(t);
   }, []);
 
+  const chargesRef = useRef(sprayCharges);
+  chargesRef.current = sprayCharges;
+
   const handleSpray = useCallback(() => {
-    if (!transformReadyRef.current) return;
-    setSprayCharges((c) => {
-      if (c <= 0) return c;
-      // Onde a mira (centro da tela) cruza o chão — ver Player.tsx.
-      const target = aimRef.current;
-      net.sendSpray(target.x, target.z, avatar.shirt);
-      return c - 1;
-    });
+    if (!transformReadyRef.current || chargesRef.current <= 0) return;
+    // Onde a mira (centro da tela) cruza o chão — ver Player.tsx. O cartucho
+    // só gasta se o envio foi aceito (o cooldown pode descartá-lo).
+    const target = aimRef.current;
+    if (net.sendSpray(target.x, target.z, avatar.shirt)) {
+      setSprayCharges((c) => Math.max(0, c - 1));
+    }
   }, [net, avatar.shirt]);
 
   return (

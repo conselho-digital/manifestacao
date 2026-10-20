@@ -23,8 +23,14 @@ export function useEntitlements(session: Session | null) {
       }
       return;
     }
-    const { data } = await supabase.from("entitlements").select("item_id").eq("user_id", session.user.id);
+    const { data, error } = await supabase.from("entitlements").select("item_id").eq("user_id", session.user.id);
     if (myRequest !== requestId.current) return; // resposta obsoleta, ignora
+    if (error) {
+      // Erro transitório (rede/sessão): mantém as posses já conhecidas em vez
+      // de zerar — senão quem comprou perderia o veículo até a próxima leitura.
+      setLoading(false);
+      return;
+    }
     setOwned(new Set((data ?? []).map((r) => r.item_id as string)));
     setLoading(false);
   }, [session]);
