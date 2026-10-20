@@ -21,12 +21,11 @@ interface SprayMarksProps {
 export function SprayMarks({ marksRef, version }: SprayMarksProps) {
   // `version` força o recálculo da lista quando o mapa muda.
   const marks = useMemo(() => [...marksRef.current.values()], [marksRef, version]);
-  // Modelo .glb de spray enviado pelo admin (se houver) no lugar da mancha.
-  const modelUrl = sprayModelUrl();
-
   return (
     <>
       {marks.map((m) => {
+        // Modelo .glb da opção de spray (ou o geral), se o admin enviou.
+        const modelUrl = sprayModelUrl(m.style);
         const circle = (
           <mesh position={[m.x, 0.015, m.z]} rotation={[-Math.PI / 2, 0, 0]}>
             <circleGeometry args={[0.35, 16]} />

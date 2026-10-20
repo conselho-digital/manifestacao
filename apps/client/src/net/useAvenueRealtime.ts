@@ -30,6 +30,7 @@ import {
   type SprayMark,
 } from "../game/spray.js";
 import { clampToAvenue } from "../game/world.js";
+import { DEFAULT_SPRAY_ID, SPRAY_SLUG_RE } from "../config/sprays.js";
 
 /** `typeof === "number"` deixa passar NaN/Infinity; isto não. */
 function isFiniteNumber(v: unknown): v is number {
@@ -263,7 +264,9 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean) {
 
         const pos = clampToAvenue(s.x, s.z);
         const color = Math.max(0, Math.min(0xffffff, Math.trunc(s.color)));
-        addSprayMark(sprayMarksRef.current, { id: s.id, x: pos.x, z: pos.z, color, createdAt: now });
+        // Estilo vindo da rede: só aceita slug conhecido, senão cai no clássico.
+        const style = typeof s.style === "string" && SPRAY_SLUG_RE.test(s.style) ? s.style : DEFAULT_SPRAY_ID;
+        addSprayMark(sprayMarksRef.current, { id: s.id, x: pos.x, z: pos.z, color, style, createdAt: now });
         setSprayVersion((v) => v + 1);
       })
       .subscribe((status) => {
@@ -322,7 +325,7 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean) {
   );
 
   const sendSpray = useCallback(
-    (x: number, z: number, color: number): boolean => {
+    (x: number, z: number, color: number, style: string): boolean => {
       // Cooldown próprio: defesa adicional (o cartucho em Game.tsx já limita
       // o uso pela UI, mas isso é chamável direto, ex. via DevTools — o
       // cooldown de recepção no handler acima é quem garante o limite de
@@ -336,11 +339,11 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean) {
       const pos = clampToAvenue(x, z);
       // Mostra a própria marca localmente (broadcast não ecoa pro remetente);
       // também passa pelo limite de SPRAY_MAX_MARKS, igual às recebidas.
-      addSprayMark(sprayMarksRef.current, { id, x: pos.x, z: pos.z, color, createdAt: now });
+      addSprayMark(sprayMarksRef.current, { id, x: pos.x, z: pos.z, color, style, createdAt: now });
       setSprayVersion((v) => v + 1);
       const channel = channelRef.current;
       if (channel && channel.state === "joined") {
-        const payload: SprayBroadcast = { id, senderId: selfId, x: pos.x, z: pos.z, color };
+        const payload: SprayBroadcast = { id, senderId: selfId, x: pos.x, z: pos.z, color, style };
         void channel.send({ type: "broadcast", event: BROADCAST.spray, payload });
       }
       return true;

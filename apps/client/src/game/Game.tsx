@@ -19,12 +19,14 @@ import { StoreButton } from "../ui/StoreButton.js";
 import { OptionsButton } from "../ui/OptionsButton.js";
 import { OptionsModal } from "../ui/OptionsModal.js";
 import { AdminPanel } from "../ui/AdminPanel.js";
+import { sprayOptionById, sprayUnlocked } from "../config/sprays.js";
 import { SprayButton } from "../ui/SprayButton.js";
 import { TopRightPanel } from "../ui/TopRightPanel.js";
 import { Crosshair } from "../ui/Crosshair.js";
 import { useIsTouch } from "../ui/useIsTouch.js";
 import { hasVehicleViaPremium, vehicleRequiresEntitlement } from "@manifestacao/shared";
 
+const SPRAY_STYLE_KEY = "manifestacao.sprayStyle";
 const SKY_COLOR = "#8fc4f0";
 const SUN_POSITION: [number, number, number] = [60, 110, -80];
 
@@ -137,6 +139,29 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     return () => clearInterval(t);
   }, []);
 
+  // Opção de spray escolhida (salva no aparelho). Se foi removida pelo admin ou
+  // ainda não é do jogador, volta pro clássico.
+  const [sprayStyle, setSprayStyle] = useState(() => {
+    try {
+      return localStorage.getItem(SPRAY_STYLE_KEY) ?? "classico";
+    } catch {
+      return "classico";
+    }
+  });
+  const chooseSpray = (id: string) => {
+    setSprayStyle(id);
+    try {
+      localStorage.setItem(SPRAY_STYLE_KEY, id);
+    } catch {
+      /* modo privado: vale só nesta sessão */
+    }
+  };
+  const sprayOption = sprayOptionById(sprayStyle);
+  const sprayUsable = sprayUnlocked(sprayOption, owned) || entitlementsLoading;
+  const activeSpray = sprayUsable ? sprayOption : sprayOptionById(null);
+  const activeSprayRef = useRef(activeSpray);
+  activeSprayRef.current = activeSpray;
+
   const chargesRef = useRef(sprayCharges);
   chargesRef.current = sprayCharges;
 
@@ -145,7 +170,8 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     // Onde a mira (centro da tela) cruza o chão — ver Player.tsx. O cartucho
     // só gasta se o envio foi aceito (o cooldown pode descartá-lo).
     const target = aimRef.current;
-    if (net.sendSpray(target.x, target.z, avatar.shirt)) {
+    const spray = activeSprayRef.current;
+    if (net.sendSpray(target.x, target.z, spray.color ?? avatar.shirt, spray.id)) {
       setSprayCharges((c) => Math.max(0, c - 1));
     }
   }, [net, avatar.shirt]);
@@ -260,6 +286,10 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           }}
           onClose={() => setOptionsOpen(false)}
           onExit={onExit}
+          owned={owned}
+          sprayStyle={activeSpray.id}
+          onSprayStyle={chooseSpray}
+          onOpenStore={onOpenStore}
           onOpenAdmin={isAdmin ? () => setAdminOpen(true) : undefined}
         />
       )}

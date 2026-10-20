@@ -18,6 +18,7 @@ import {
 } from "@manifestacao/shared";
 import { getSupabase } from "../net/supabase.js";
 import { supabaseConfig } from "./env.js";
+import { SPRAY_SLUG_RE, setSprayOptions, type SprayOption } from "./sprays.js";
 
 /**
  * Configuração do jogo editável pelo admin (tabela `game_config` + catálogo).
@@ -69,6 +70,7 @@ function cleanColor(v: unknown): number | undefined {
 export function isModelSlot(slot: string): boolean {
   if (slot === "spray") return true;
   const [kind, id, team, extra] = slot.split(":");
+  if (kind === "spray") return id !== undefined && team === undefined && extra === undefined && SPRAY_SLUG_RE.test(id);
   if (extra !== undefined) return false;
   if (kind === "character") return isCharacterId(id) && (team === undefined || isTeamId(team));
   if (kind === "vehicle") return isVehicleId(id) && team === undefined && id !== "nenhum";
@@ -161,18 +163,32 @@ export function applyGameConfig(cfg: GameConfig, catalog: CatalogRow[] = []): vo
 export async function loadAndApplyGameConfig(): Promise<GameConfig> {
   const supabase = getSupabase();
   if (!supabase) return EMPTY_CONFIG;
-  const [cfgRes, catRes] = await Promise.all([
+  const [cfgRes, catRes, sprayRes] = await Promise.all([
     supabase.from("game_config").select("key, value"),
     supabase.from("catalog_items").select("id, label, price_cents").eq("active", true),
+    supabase.from("spray_options").select("slug, color, sort_order").order("sort_order"),
   ]);
   // Se a leitura falhou, NÃO aplica (senão uma falha de rede apagaria as
   // customizações já carregadas e voltaria tudo ao padrão).
   if (cfgRes.error) throw new Error(cfgRes.error.message);
   if (catRes.error) throw new Error(catRes.error.message);
+  if (sprayRes.error) throw new Error(sprayRes.error.message);
   const raw: Record<string, unknown> = {};
   for (const row of cfgRes.data ?? []) raw[row.key as string] = row.value;
   const cfg = sanitizeConfig(raw);
-  applyGameConfig(cfg, (catRes.data as CatalogRow[] | null) ?? []);
+  const catalog = (catRes.data as CatalogRow[] | null) ?? [];
+  applyGameConfig(cfg, catalog);
+
+  // Sprays do admin: opção só existe se está em spray_options E ativa no catálogo.
+  const sprays: SprayOption[] = [];
+  for (const row of (sprayRes.data as { slug: string; color: number | null }[] | null) ?? []) {
+    if (!SPRAY_SLUG_RE.test(row.slug)) continue;
+    const item = catalog.find((c) => c.id === `spray:${row.slug}`);
+    if (!item) continue;
+    const price = Number.isInteger(item.price_cents) && item.price_cents >= 0 ? item.price_cents : 0;
+    sprays.push({ id: row.slug, label: cleanLabel(item.label) ?? row.slug, priceCents: price, color: cleanColor(row.color) ?? null });
+  }
+  setSprayOptions(sprays);
   return cfg;
 }
 

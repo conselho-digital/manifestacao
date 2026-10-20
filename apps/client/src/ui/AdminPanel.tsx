@@ -18,6 +18,12 @@ import {
   isModelSlot,
 } from "../config/gameConfig.js";
 import {
+  createSpray,
+  fetchAdminSprays,
+  newSprayId,
+  removeSpray,
+  updateSpray,
+  type AdminSpray,
   fetchAdminCatalog,
   saveCatalogItem,
   saveConfigKey,
@@ -31,11 +37,12 @@ interface AdminPanelProps {
   onChanged: () => Promise<void>;
 }
 
-type Tab = "equipes" | "bandeiras" | "produtos" | "modelos";
+type Tab = "equipes" | "bandeiras" | "produtos" | "sprays" | "modelos";
 const TABS: { id: Tab; label: string }[] = [
   { id: "equipes", label: "Equipes" },
   { id: "bandeiras", label: "Bandeiras" },
   { id: "produtos", label: "Produtos" },
+  { id: "sprays", label: "Sprays" },
   { id: "modelos", label: "Modelos 3D" },
 ];
 
@@ -113,6 +120,7 @@ export function AdminPanel({ onClose, onChanged }: AdminPanelProps) {
         {tab === "equipes" && <TeamsTab busy={busy} run={run} />}
         {tab === "bandeiras" && <FlagsTab busy={busy} run={run} />}
         {tab === "produtos" && <ProductsTab busy={busy} run={run} />}
+        {tab === "sprays" && <SpraysTab busy={busy} run={run} />}
         {tab === "modelos" && <ModelsTab busy={busy} run={run} />}
       </div>
     </div>
@@ -221,7 +229,9 @@ function ProductsTab({ busy, run }: TabProps) {
   useEffect(() => {
     fetchAdminCatalog()
       .then((list: AdminCatalogRow[]) =>
-        setRows(list.map((r) => ({ id: r.id, label: r.label, price: (r.price_cents / 100).toFixed(2), active: r.active }))),
+        setRows(list
+          .filter((r) => !r.id.startsWith("spray:"))
+          .map((r) => ({ id: r.id, label: r.label, price: (r.price_cents / 100).toFixed(2), active: r.active }))),
       )
       .catch((e: unknown) => setLoadError(e instanceof Error ? e.message : "Erro ao carregar produtos."));
   }, []);
@@ -278,6 +288,164 @@ function ProductsTab({ busy, run }: TabProps) {
           </button>
         </div>
       ))}
+    </>
+  );
+}
+
+function SpraysTab({ busy, run }: TabProps) {
+  const [rows, setRows] = useState<(AdminSpray & { price: string; isNew?: boolean })[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [models, setModels] = useState<Record<string, string>>(() => currentModelOverrides());
+
+  const load = () =>
+    fetchAdminSprays()
+      .then((list) => setRows(list.map((r) => ({ ...r, price: (r.price_cents / 100).toFixed(2) }))))
+      .catch((e: unknown) => setLoadError(e instanceof Error ? e.message : "Erro ao carregar sprays."));
+
+  useEffect(() => {
+    void load();
+  }, []);
+
+  if (loadError) return <p style={{ ...hint, color: "var(--danger)" }}>{loadError}</p>;
+  if (!rows) return <p style={hint}>Carregando…</p>;
+
+  const update = (slug: string, patch: Partial<AdminSpray & { price: string }>) =>
+    setRows(rows.map((r) => (r.slug === slug ? { ...r, ...patch } : r)));
+
+  const toCents = (price: string): number => {
+    if (price.trim() === "" || Number.isNaN(Number(price.replace(",", ".")))) {
+      throw new Error("Informe um preço válido (ex.: 9,90).");
+    }
+    return Math.round(Number(price.replace(",", ".")) * 100);
+  };
+
+  const add = () =>
+    setRows([
+      ...rows,
+      {
+        slug: newSprayId("spray"),
+        label: "Novo spray",
+        price_cents: 0,
+        price: "0.00",
+        active: true,
+        color: null,
+        sort_order: rows.length + 1,
+        isNew: true,
+      },
+    ]);
+
+  const save = (r: AdminSpray & { price: string; isNew?: boolean }) =>
+    run(async () => {
+      const spray: AdminSpray = { ...r, price_cents: toCents(r.price) };
+      if (r.isNew) await createSpray({ ...spray, slug: newSprayId(r.label) });
+      else await updateSpray(spray);
+      await load();
+    }, `"${r.label}" salvo.`);
+
+  const remove = (r: AdminSpray & { isNew?: boolean }) => {
+    if (r.isNew) {
+      setRows(rows.filter((x) => x.slug !== r.slug));
+      return;
+    }
+    if (!window.confirm(`Remover o spray "${r.label}"? Ele some do jogo e da loja (quem já comprou não perde o registro).`)) return;
+    void run(async () => {
+      await removeSpray(r.slug);
+      await load();
+    }, "Spray removido.");
+  };
+
+  const upload = (r: AdminSpray, file: File) =>
+    run(async () => {
+      const slot = `spray:${r.slug}`;
+      const url = await uploadModel(slot, file);
+      const next = { ...currentModelOverrides(), [slot]: url };
+      await saveConfigKey("models", next);
+      setModels(next);
+    }, "Modelo 3D do spray enviado.");
+
+  const clearModel = (r: AdminSpray) =>
+    run(async () => {
+      const next = { ...currentModelOverrides() };
+      delete next[`spray:${r.slug}`];
+      await saveConfigKey("models", next);
+      setModels(next);
+    }, "Modelo removido (volta ao padrão).");
+
+  return (
+    <>
+      <p style={hint}>
+        Opções de spray da loja: nome, preço, cor da marca e arquivo 3D (.glb). Preço 0 = livre pra todos. Sem cor, usa
+        a cor da equipe. Salve cada spray novo antes de enviar o arquivo 3D.
+      </p>
+      {rows.length === 0 && <p style={hint}>Nenhum spray extra ainda — só o Clássico (padrão).</p>}
+      {rows.map((r) => {
+        const has = Boolean(models[`spray:${r.slug}`]);
+        return (
+          <div key={r.slug} style={{ ...row, flexWrap: "wrap", padding: "8px 0" }}>
+            <input
+              aria-label="Nome do spray"
+              value={r.label}
+              maxLength={MAX_LABEL_LENGTH}
+              onChange={(e) => update(r.slug, { label: e.target.value })}
+              style={{ ...input, flex: 1, minWidth: 140 }}
+            />
+            <input
+              aria-label="Preço do spray em reais"
+              inputMode="decimal"
+              value={r.price}
+              onChange={(e) => update(r.slug, { price: e.target.value })}
+              style={{ ...input, width: 90 }}
+            />
+            <input
+              type="color"
+              aria-label="Cor da marca"
+              value={hexColor(r.color ?? 0x2ecc71)}
+              onChange={(e) => update(r.slug, { color: toColorNumber(e.target.value) })}
+              style={colorInput}
+            />
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--t-ui)", minHeight: 44 }}>
+              <input type="checkbox" style={{ width: 22, height: 22 }} checked={r.color === null} onChange={(e) => update(r.slug, { color: e.target.checked ? null : 0x2ecc71 })} />
+              Cor da equipe
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--t-ui)", minHeight: 44 }}>
+              <input type="checkbox" style={{ width: 22, height: 22 }} checked={r.active} onChange={(e) => update(r.slug, { active: e.target.checked })} />
+              Ativo
+            </label>
+            <button type="button" disabled={busy} onClick={() => void save(r)} style={ghostBtn}>
+              Salvar
+            </button>
+            {!r.isNew && (
+              <>
+                <label style={{ ...ghostBtn, display: "inline-flex", alignItems: "center", opacity: busy ? 0.5 : 1 }}>
+                  {has ? "Trocar 3D" : "Enviar 3D (.glb)"}
+                  <input
+                    type="file"
+                    accept=".glb,model/gltf-binary"
+                    disabled={busy}
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      e.target.value = "";
+                      if (f) void upload(r, f);
+                    }}
+                  />
+                </label>
+                {has && (
+                  <button type="button" disabled={busy} onClick={() => void clearModel(r)} style={ghostBtn}>
+                    Tirar 3D
+                  </button>
+                )}
+              </>
+            )}
+            <button type="button" disabled={busy} onClick={() => remove(r)} style={{ ...ghostBtn, color: "var(--danger)" }}>
+              Remover
+            </button>
+          </div>
+        );
+      })}
+      <button type="button" disabled={busy} onClick={add} style={primaryBtn}>
+        Adicionar spray
+      </button>
     </>
   );
 }

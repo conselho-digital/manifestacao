@@ -12,7 +12,8 @@ import {
   type VehicleId,
 } from "@manifestacao/shared";
 import { Flag3D, GlbModel, ProceduralVehicle } from "../game/props3d.js";
-import { flagModelUrl, modelUrlFor, vehicleModelUrl } from "../game/models.js";
+import { flagModelUrl, modelUrlFor, sprayModelUrl, vehicleModelUrl } from "../game/models.js";
+import { sprayOptionById } from "../config/sprays.js";
 
 const SIZE = 64;
 
@@ -59,6 +60,18 @@ function ProductModel({ itemId }: { itemId: string }) {
       </group>
     );
   }
+  if (kind === "spray" && slug) {
+    const url = sprayModelUrl(slug);
+    if (url) return <GlbModel url={url} />;
+    // Sem modelo: uma bola da cor do spray (ou da equipe, se a opção não tem cor).
+    const color = sprayOptionById(slug).color ?? TEAMS[TEAM_IDS[0]!].color;
+    return (
+      <mesh position={[0, 0.5, 0]}>
+        <sphereGeometry args={[0.5, 24, 16]} />
+        <meshStandardMaterial color={color} />
+      </mesh>
+    );
+  }
   if (kind === "flag" && isFlagId(slug) && slug !== "nenhuma") {
     const url = flagModelUrl(slug as FlagId);
     if (url) return <GlbModel url={url} />;
@@ -97,7 +110,7 @@ class Boundary extends Component<{ onError: () => void; children: ReactNode }, {
  */
 export function ProductThumb({ itemId }: { itemId: string }) {
   const [kind] = itemId.split(":");
-  const hasObject = kind === "vehicle" || kind === "character" || kind === "flag";
+  const hasObject = kind === "vehicle" || kind === "character" || kind === "flag" || kind === "spray";
   const [src, setSrc] = useState<string | null>(cache.get(itemId) ?? null);
   const [active, setActive] = useState(false);
   const releaseRef = useRef<(() => void) | null>(null);

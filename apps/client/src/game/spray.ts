@@ -46,5 +46,7 @@ export interface SprayMark {
   x: number;
   z: number;
   color: number;
+  /** Opção de spray (slug) — define o modelo 3D da marca. */
+  style: string;
   createdAt: number;
 }

@@ -37,6 +37,7 @@ export function flagModelUrl(flag: FlagId): string | null {
   return flag === "nenhuma" ? null : modelOverride(`flag:${flag}`);
 }
 
-export function sprayModelUrl(): string | null {
-  return modelOverride("spray");
+/** Modelo 3D do spray: o da opção (spray:<slug>), senão o geral ("spray"), senão nenhum (mancha). */
+export function sprayModelUrl(style?: string): string | null {
+  return (style ? modelOverride(`spray:${style}`) : null) ?? modelOverride("spray");
 }

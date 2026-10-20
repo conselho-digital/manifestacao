@@ -54,6 +54,8 @@ export interface SprayBroadcast {
   x: number;
   z: number;
   color: number;
+  /** Opção de spray usada (slug); ausente/ inválida = clássico. */
+  style?: string;
 }
 
 /** Nomes dos eventos de broadcast. */

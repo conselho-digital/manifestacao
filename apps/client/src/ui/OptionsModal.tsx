@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useModal } from "./useModal.js";
+import { sprayOptions, sprayUnlocked } from "../config/sprays.js";
 import {
   CHARACTERS,
   CHARACTER_IDS,
@@ -20,6 +21,13 @@ interface OptionsModalProps {
   onClose: () => void;
   /** Sai da conta e volta pra tela inicial. */
   onExit: () => void;
+  /** Posses (ids "spray:<slug>"...) — define quais sprays estão liberados. */
+  owned: ReadonlySet<string>;
+  /** Spray escolhido (slug) e como trocá-lo (vale na hora, sem "Salvar"). */
+  sprayStyle: string;
+  onSprayStyle: (id: string) => void;
+  /** Abre a loja (clique num spray bloqueado). */
+  onOpenStore: () => void;
   /** Só passado para contas admin: abre o painel de admin. */
   onOpenAdmin?: () => void;
 }
@@ -29,7 +37,7 @@ interface OptionsModalProps {
  * ou sair da plataforma. As mudanças só valem ao clicar em "Salvar" (evita
  * reentrar no canal em tempo real a cada tecla digitada no apelido).
  */
-export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin }: OptionsModalProps) {
+export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin, owned, sprayStyle, onSprayStyle, onOpenStore }: OptionsModalProps) {
   const [team, setTeam] = useState<TeamId>(avatar.team);
   const [nickname, setNickname] = useState(avatar.nickname);
   const [character, setCharacter] = useState<CharacterId>(avatar.character);
@@ -192,6 +200,38 @@ export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin }: O
                   <span style={{ fontSize: "var(--t-ui)", fontWeight: 700, color: "var(--ink)", textAlign: "center" }}>
                     {CHARACTERS[id].label}
                   </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+        <section>
+          <Label>Spray</Label>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 8, marginTop: 6 }}>
+            {sprayOptions().map((o) => {
+              const unlocked = sprayUnlocked(o, owned);
+              const selected = o.id === sprayStyle;
+              return (
+                <button
+                  key={o.id}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => (unlocked ? onSprayStyle(o.id) : onOpenStore())}
+                  style={{
+                    minHeight: 44,
+                    padding: "8px 14px",
+                    borderRadius: "var(--r-md)",
+                    border: `2px solid ${selected ? "var(--accent)" : "var(--line)"}`,
+                    background: selected ? "var(--surface-2)" : "var(--surface)",
+                    color: unlocked ? "var(--ink)" : "var(--ink-dim)",
+                    fontSize: "var(--t-ui)",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  {o.label}
+                  {!unlocked && ` · ${(o.priceCents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}`}
                 </button>
               );
             })}

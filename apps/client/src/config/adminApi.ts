@@ -65,3 +65,102 @@ export async function uploadModel(slot: string, file: File): Promise<string> {
   if (error) throw new Error(error.message);
   return supabase.storage.from(ASSET_BUCKET).getPublicUrl(path).data.publicUrl;
 }
+
+// ── Sprays (opções gerenciadas pelo admin) ────────────────────────────────
+export interface AdminSpray {
+  slug: string;
+  label: string;
+  price_cents: number;
+  active: boolean;
+  /** 0xrrggbb ou null (cor da equipe). */
+  color: number | null;
+  sort_order: number;
+}
+
+export async function fetchAdminSprays(): Promise<AdminSpray[]> {
+  const supabase = db();
+  const [items, opts] = await Promise.all([
+    supabase.from("catalog_items").select("id, label, price_cents, active").like("id", "spray:%"),
+    supabase.from("spray_options").select("slug, color, sort_order").order("sort_order"),
+  ]);
+  if (items.error) throw new Error(items.error.message);
+  if (opts.error) throw new Error(opts.error.message);
+  const byId = new Map((items.data ?? []).map((i) => [i.id as string, i]));
+  const out: AdminSpray[] = [];
+  for (const o of opts.data ?? []) {
+    const item = byId.get(`spray:${o.slug}`);
+    if (!item) continue;
+    out.push({
+      slug: o.slug as string,
+      label: item.label as string,
+      price_cents: item.price_cents as number,
+      active: item.active as boolean,
+      color: (o.color as number | null) ?? null,
+      sort_order: (o.sort_order as number) ?? 0,
+    });
+  }
+  return out;
+}
+
+/** Slug a partir do nome + sufixo curto (único, só [a-z0-9-], até 32). */
+export function newSprayId(label: string): string {
+  const base =
+    label
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 22) || "spray";
+  return `${base}-${Date.now().toString(36).slice(-5)}`;
+}
+
+function checkSpray(s: AdminSpray): string {
+  const label = s.label.trim().slice(0, MAX_LABEL_LENGTH);
+  if (!label) throw new Error("O nome do spray não pode ficar vazio.");
+  if (!Number.isInteger(s.price_cents) || s.price_cents < 0 || s.price_cents > 1_000_000) {
+    throw new Error("Preço inválido (máximo R$ 10.000,00).");
+  }
+  return label;
+}
+
+/** Cria um spray novo: item do catálogo (compra via Pix) + dados de jogo. */
+export async function createSpray(s: AdminSpray): Promise<void> {
+  const label = checkSpray(s);
+  const supabase = db();
+  const { error } = await supabase
+    .from("catalog_items")
+    .insert({ id: `spray:${s.slug}`, kind: "spray", label, price_cents: s.price_cents, active: s.active });
+  if (error) throw new Error(error.message);
+  const { error: e2 } = await supabase
+    .from("spray_options")
+    .insert({ slug: s.slug, color: s.color, sort_order: s.sort_order });
+  if (e2) throw new Error(e2.message);
+}
+
+export async function updateSpray(s: AdminSpray): Promise<void> {
+  const label = checkSpray(s);
+  const supabase = db();
+  const { error } = await supabase
+    .from("catalog_items")
+    .update({ label, price_cents: s.price_cents, active: s.active })
+    .eq("id", `spray:${s.slug}`);
+  if (error) throw new Error(error.message);
+  const { error: e2 } = await supabase
+    .from("spray_options")
+    .update({ color: s.color, sort_order: s.sort_order })
+    .eq("slug", s.slug);
+  if (e2) throw new Error(e2.message);
+}
+
+/**
+ * Remove a opção do jogo. O item do catálogo só é DESATIVADO (não apagado):
+ * pedidos e posses antigos continuam apontando pra ele.
+ */
+export async function removeSpray(slug: string): Promise<void> {
+  const supabase = db();
+  const { error } = await supabase.from("catalog_items").update({ active: false }).eq("id", `spray:${slug}`);
+  if (error) throw new Error(error.message);
+  const { error: e2 } = await supabase.from("spray_options").delete().eq("slug", slug);
+  if (e2) throw new Error(e2.message);
+}
