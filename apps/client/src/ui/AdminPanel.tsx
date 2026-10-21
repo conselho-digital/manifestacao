@@ -26,6 +26,10 @@ import {
   updateSpray,
   type AdminSpray,
   fetchAdminCatalog,
+  createCatalogItem,
+  deleteCatalogItem,
+  newProductId,
+  NEW_PRODUCT_KINDS,
   fetchSuperchatQueue,
   moderateSuperchat,
   fetchBidQueue,
@@ -279,6 +283,9 @@ interface ProductDraft {
   label: string;
   price: string;
   active: boolean;
+  /** Produto ainda não salvo no banco. */
+  isNew?: boolean;
+  kind?: string;
 }
 
 function ProductsTab({ busy, run }: TabProps) {
@@ -301,29 +308,58 @@ function ProductsTab({ busy, run }: TabProps) {
   const update = (id: string, patch: Partial<ProductDraft>) =>
     setRows(rows.map((r) => (r.id === id ? { ...r, ...patch } : r)));
 
+  const toCents = (price: string): number => {
+    if (price.trim() === "" || Number.isNaN(Number(price.replace(",", ".")))) {
+      throw new Error("Informe um preço válido (ex.: 29,90).");
+    }
+    return Math.round(Number(price.replace(",", ".")) * 100);
+  };
+
+  const add = () =>
+    setRows([
+      { id: newProductId("novo produto"), label: "Novo produto", price: "0.00", active: true, isNew: true, kind: "object" },
+      ...rows,
+    ]);
+
   const save = (r: ProductDraft) =>
-    run(
-      async () => {
-        if (r.price.trim() === "" || Number.isNaN(Number(r.price.replace(",", ".")))) {
-          throw new Error("Informe um preço válido (ex.: 29,90).");
-        }
-        await saveCatalogItem({
-          id: r.id,
-          kind: "",
-          label: r.label,
-          price_cents: Math.round(Number(r.price.replace(",", ".")) * 100),
-          active: r.active,
-        });
-      },
-      `"${r.label}" salvo.`,
-    );
+    run(async () => {
+      const row = { id: r.id, kind: r.kind ?? "", label: r.label, price_cents: toCents(r.price), active: r.active };
+      if (r.isNew) {
+        // O id nasce do nome ao salvar (o nome inicial é só um rascunho).
+        const id = newProductId(r.label);
+        await createCatalogItem({ ...row, id });
+        setRows((cur) => (cur ?? []).map((x) => (x.id === r.id ? { ...x, id, isNew: false } : x)));
+      } else {
+        await saveCatalogItem({ ...row, kind: "" });
+      }
+    }, `"${r.label}" salvo.`);
+
+  const remove = (r: ProductDraft) => {
+    if (r.isNew) {
+      setRows(rows.filter((x) => x.id !== r.id));
+      return;
+    }
+    if (!window.confirm(`Apagar o produto "${r.label}"? Se já foi comprado, ele só é desativado (some da loja) para não perder o histórico.`)) return;
+    void run(async () => {
+      const result = await deleteCatalogItem(r.id);
+      if (result === "deleted") setRows((cur) => (cur ?? []).filter((x) => x.id !== r.id));
+      else setRows((cur) => (cur ?? []).map((x) => (x.id === r.id ? { ...x, active: false } : x)));
+      if (result === "deactivated") throw new Error(`"${r.label}" já tem compras: foi desativado em vez de apagado.`);
+    }, `"${r.label}" apagado.`);
+  };
 
   return (
     <>
-      <p style={hint}>Nome, preço (R$) e disponibilidade na loja. O preço cobrado no Pix é o daqui.</p>
+      <p style={hint}>
+        Nome, preço (R$) e disponibilidade na loja. O preço cobrado no Pix é o daqui. Produto novo entra na loja como
+        item avulso (a posse fica registrada; efeito no jogo depende de o jogo usar esse item).
+      </p>
+      <button type="button" disabled={busy} onClick={add} style={primaryBtn}>
+        Adicionar produto
+      </button>
       {rows.map((r) => (
         <div key={r.id} style={{ ...row, flexWrap: "wrap" }}>
-          <span style={{ ...hint, width: "100%" }}>{r.id}</span>
+          <span style={{ ...hint, width: "100%" }}>{r.isNew ? "Novo produto (ainda não salvo)" : r.id}</span>
           <input
             aria-label={`Nome de ${r.id}`}
             value={r.label}
@@ -338,12 +374,29 @@ function ProductsTab({ busy, run }: TabProps) {
             onChange={(e) => update(r.id, { price: e.target.value })}
             style={{ ...input, width: 90 }}
           />
+          {r.isNew && (
+            <select
+              aria-label="Tipo do produto"
+              value={r.kind}
+              onChange={(e) => update(r.id, { kind: e.target.value })}
+              style={{ ...input, width: 110 }}
+            >
+              {NEW_PRODUCT_KINDS.map((k) => (
+                <option key={k.id} value={k.id}>
+                  {k.label}
+                </option>
+              ))}
+            </select>
+          )}
           <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--t-ui)", minHeight: 44 }}>
             <input type="checkbox" style={{ width: 22, height: 22 }} checked={r.active} onChange={(e) => update(r.id, { active: e.target.checked })} />
             Ativo
           </label>
           <button type="button" disabled={busy} onClick={() => void save(r)} style={ghostBtn}>
             Salvar
+          </button>
+          <button type="button" disabled={busy} onClick={() => remove(r)} style={{ ...ghostBtn, color: "var(--danger)" }}>
+            Apagar
           </button>
         </div>
       ))}

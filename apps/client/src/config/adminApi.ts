@@ -61,6 +61,52 @@ function sniffImage(b: Uint8Array): { ext: "png" | "jpg" | "webp"; type: string 
   return null;
 }
 
+/** Tipos que um produto novo pode ter (o enum do banco). */
+export const NEW_PRODUCT_KINDS = [
+  { id: "object", label: "Objeto" },
+  { id: "sound", label: "Som" },
+  { id: "pass", label: "Passe" },
+] as const;
+
+/** Id único e legível para produto novo: `produto:<nome>-<sufixo>` (só [a-z0-9-]). */
+export function newProductId(label: string): string {
+  const base =
+    label
+      .normalize("NFD")
+      .replace(/\p{M}/gu, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 24) || "item";
+  return `produto:${base}-${Date.now().toString(36).slice(-5)}`;
+}
+
+export async function createCatalogItem(row: AdminCatalogRow): Promise<void> {
+  const label = row.label.trim().slice(0, MAX_LABEL_LENGTH);
+  if (!label) throw new Error("O nome não pode ficar vazio.");
+  if (!Number.isInteger(row.price_cents) || row.price_cents < 0 || row.price_cents > MAX_PRICE_CENTS) {
+    throw new Error("Preço inválido (máximo R$ 10.000,00).");
+  }
+  const { error } = await db()
+    .from("catalog_items")
+    .insert({ id: row.id, kind: row.kind, label, price_cents: row.price_cents, active: row.active });
+  if (error) throw new Error(error.message);
+}
+
+/**
+ * Apaga o produto. Se já existem pedidos/posses ligados a ele (FK), não dá pra apagar sem perder
+ * o histórico de compras: nesse caso o produto só é DESATIVADO (some da loja) e a função avisa.
+ */
+export async function deleteCatalogItem(id: string): Promise<"deleted" | "deactivated"> {
+  const supabase = db();
+  const { error } = await supabase.from("catalog_items").delete().eq("id", id);
+  if (!error) return "deleted";
+  if (error.code !== "23503") throw new Error(error.message);
+  const { error: e2 } = await supabase.from("catalog_items").update({ active: false }).eq("id", id);
+  if (e2) throw new Error(e2.message);
+  return "deactivated";
+}
+
 /** Envia a imagem da bandeira (PNG/JPG/WebP até 2 MB) para o bucket e devolve a URL pública. */
 async function uploadImage(slot: string, file: File): Promise<string> {
   if (file.size > MAX_IMAGE_BYTES) throw new Error("Imagem maior que 2 MB.");
