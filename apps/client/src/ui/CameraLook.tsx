@@ -6,7 +6,7 @@ interface CameraLookProps {
   yawRef: { current: number };
   /** Inclinação vertical (radianos) — arrastar na vertical olha pra cima/baixo. */
   pitchRef: { current: number };
-  /** PC: a zona cobre a tela toda (qualquer clique fora da UI gira a câmera). */
+  /** A zona cobre a tela toda (qualquer toque fora da UI gira a câmera); o joystick e os botões ficam por cima. */
   fullScreen?: boolean;
 }
 
@@ -18,7 +18,7 @@ function wrapAngle(a: number): number {
 }
 
 /**
- * Zona de arrasto invisível (metade direita no celular; tela toda no PC): controla a câmera de
+ * Zona de arrasto invisível (tela toda): controla a câmera de
  * terceira pessoa livre (gira E inclina em torno do personagem, como em
  * jogos de terceira pessoa), sem joystick visual — só o movimento vindo do
  * dedo. Fica embaixo do TopRightPanel (zIndex menor), então os botões de

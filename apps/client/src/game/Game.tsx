@@ -293,7 +293,8 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
       </Canvas>
 
       {isTouch && <Joystick onMove={setJoystick} />}
-      <CameraLook yawRef={cameraYawRef} pitchRef={cameraPitchRef} fullScreen={!isTouch} />
+      {/* Tela toda gira a câmera; o Joystick (z-index maior) só captura o toque dentro da própria área. */}
+      <CameraLook yawRef={cameraYawRef} pitchRef={cameraPitchRef} fullScreen />
       {isTouch ? (
         <RunButton runRef={runRef} />
       ) : (
