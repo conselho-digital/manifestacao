@@ -113,6 +113,8 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
   const playersRef = useRef<Map<string, RemotePlayer>>(new Map());
   const channelRef = useRef<RealtimeChannel | null>(null);
   const presenceRef = useRef<PresenceState | null>(null);
+  const selfFlagRef = useRef(self.flag);
+  selfFlagRef.current = self.flag;
   const signIdRef = useRef(signId);
   signIdRef.current = signId;
 
@@ -293,7 +295,16 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
           typeof s.style === "string" && SPRAY_SLUG_RE.test(s.style) && sprayOptions().some((o) => o.id === s.style)
             ? s.style
             : DEFAULT_SPRAY_ID;
-        addSprayMark(sprayMarksRef.current, { id: s.id, x: pos.x, z: pos.z, color, style, createdAt: now });
+        addSprayMark(sprayMarksRef.current, {
+          id: s.id,
+          x: pos.x,
+          z: pos.z,
+          color,
+          style,
+          // Bandeira do remetente vem da presence dele (não do payload do spray).
+          flag: playersRef.current.get(s.senderId)?.flag,
+          createdAt: now,
+        });
         setSprayVersion((v) => v + 1);
       })
       .subscribe((status) => {
@@ -376,7 +387,7 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
       const pos = clampToAvenue(x, z);
       // Mostra a própria marca localmente (broadcast não ecoa pro remetente);
       // também passa pelo limite de SPRAY_MAX_MARKS, igual às recebidas.
-      addSprayMark(sprayMarksRef.current, { id, x: pos.x, z: pos.z, color, style, createdAt: now });
+      addSprayMark(sprayMarksRef.current, { id, x: pos.x, z: pos.z, color, style, flag: selfFlagRef.current, createdAt: now });
       setSprayVersion((v) => v + 1);
       const channel = channelRef.current;
       if (channel && channel.state === "joined") {

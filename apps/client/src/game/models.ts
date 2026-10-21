@@ -41,3 +41,13 @@ export function flagModelUrl(flag: FlagId): string | null {
 export function sprayModelUrl(style?: string): string | null {
   return (style ? modelOverride(`spray:${style}`) : null) ?? modelOverride("spray");
 }
+
+/** Imagem da bandeira (enviada pelo admin): vira o tecido da bandeira carregada e a marca do spray. */
+export function flagImageUrl(flag: FlagId | undefined): string | null {
+  return !flag || flag === "nenhuma" || flag === "time" ? null : modelOverride(`flagimg:${flag}`);
+}
+
+/** Imagem do spray: a da opção (sprayimg:<slug>); senão, a bandeira de quem pichou; senão nenhuma (mancha). */
+export function sprayImageUrl(style: string | undefined, senderFlag: FlagId | undefined): string | null {
+  return (style ? modelOverride(`sprayimg:${style}`) : null) ?? flagImageUrl(senderFlag);
+}

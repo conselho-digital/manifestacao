@@ -1,4 +1,4 @@
-import { ASSET_BUCKET, MAX_LABEL_LENGTH, isModelSlot } from "./gameConfig.js";
+import { ASSET_BUCKET, MAX_LABEL_LENGTH, isImageSlot, isModelSlot } from "./gameConfig.js";
 import { getSupabase } from "../net/supabase.js";
 
 /**
@@ -49,9 +49,34 @@ export async function saveCatalogItem(row: AdminCatalogRow): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
-/** Envia um .glb para o bucket e devolve a URL pública. */
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024;
+
+/** Tipo da imagem pelos primeiros bytes (não confia na extensão nem no tipo do navegador). */
+function sniffImage(b: Uint8Array): { ext: "png" | "jpg" | "webp"; type: string } | null {
+  if (b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return { ext: "png", type: "image/png" };
+  if (b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return { ext: "jpg", type: "image/jpeg" };
+  if (b[0] === 0x52 && b[1] === 0x49 && b[2] === 0x46 && b[3] === 0x46 && b[8] === 0x57 && b[9] === 0x45 && b[10] === 0x42 && b[11] === 0x50) {
+    return { ext: "webp", type: "image/webp" };
+  }
+  return null;
+}
+
+/** Envia a imagem da bandeira (PNG/JPG/WebP até 2 MB) para o bucket e devolve a URL pública. */
+async function uploadImage(slot: string, file: File): Promise<string> {
+  if (file.size > MAX_IMAGE_BYTES) throw new Error("Imagem maior que 2 MB.");
+  const kind = sniffImage(new Uint8Array(await file.slice(0, 12).arrayBuffer()));
+  if (!kind) throw new Error("Envie uma imagem PNG, JPG ou WebP.");
+  const supabase = db();
+  const path = `${slot.replace(/:/g, "_")}-${Date.now()}.${kind.ext}`;
+  const { error } = await supabase.storage.from(ASSET_BUCKET).upload(path, file, { contentType: kind.type, upsert: false });
+  if (error) throw new Error(error.message);
+  return supabase.storage.from(ASSET_BUCKET).getPublicUrl(path).data.publicUrl;
+}
+
+/** Envia um .glb (ou, nos slots de bandeira, uma imagem) para o bucket e devolve a URL pública. */
 export async function uploadModel(slot: string, file: File): Promise<string> {
   if (!isModelSlot(slot)) throw new Error("Slot inválido.");
+  if (isImageSlot(slot)) return uploadImage(slot, file);
   if (!/\.glb$/i.test(file.name)) throw new Error("Envie um arquivo .glb (glTF binário).");
   if (file.size > MAX_MODEL_BYTES) throw new Error("Arquivo maior que 15 MB.");
   const magic = new TextDecoder().decode(await file.slice(0, 4).arrayBuffer());

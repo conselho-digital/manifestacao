@@ -3,7 +3,7 @@ import { Group } from "three";
 import { Html } from "@react-three/drei";
 import { flagColor, type FlagId, type VehicleId } from "@manifestacao/shared";
 import { Flag3D, Vehicle3D, GlbModel } from "./props3d.js";
-import { flagModelUrl } from "./models.js";
+import { flagImageUrl, flagModelUrl } from "./models.js";
 import { SignProp } from "./SignProp.js";
 import type { SignData } from "./useSigns.js";
 
@@ -40,6 +40,7 @@ function FlagProp({ flag, color }: { flag: FlagId; color: number }) {
   const cloth = (
     <Flag3D
       color={flagColor(flag, color)}
+      imageUrl={flagImageUrl(flag)}
       // Vermelha: emblema "star-burst" (6 pontas) — não um emblema real de
       // partido. Verde: faixa amarela sobre o verde (cores nacionais
       // genéricas, sem brasão nem layout de bandeira real nenhuma).

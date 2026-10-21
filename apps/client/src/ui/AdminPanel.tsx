@@ -194,6 +194,7 @@ function FlagsTab({ busy, run }: TabProps) {
   const [draft, setDraft] = useState(() =>
     Object.fromEntries(ids.map((id) => [id, { label: FLAGS[id].label, color: hexColor(FLAGS[id].color ?? 0xffffff) }])) as Record<string, { label: string; color: string }>,
   );
+  const [models, setModels] = useState<Record<string, string>>(() => currentModelOverrides());
   const save = () =>
     run(
       () =>
@@ -203,27 +204,69 @@ function FlagsTab({ busy, run }: TabProps) {
         ),
       "Bandeiras salvas.",
     );
+  const sendImage = (id: string, file: File) =>
+    run(async () => {
+      const slot = `flagimg:${id}`;
+      const url = await uploadModel(slot, file);
+      const next = { ...currentModelOverrides(), [slot]: url };
+      await saveConfigKey("models", next);
+      setModels(next);
+    }, "Imagem da bandeira enviada.");
+  const clearImage = (id: string) =>
+    run(async () => {
+      const next = { ...currentModelOverrides() };
+      delete next[`flagimg:${id}`];
+      await saveConfigKey("models", next);
+      setModels(next);
+    }, "Imagem removida (volta à cor).");
   return (
     <>
-      <p style={hint}>Nome e cor das bandeiras. A bandeira "Do meu time" usa a cor da equipe (aba Equipes).</p>
-      {ids.map((id) => (
-        <div key={id} style={row}>
-          <input
-            aria-label={`Nome da bandeira ${id}`}
-            value={draft[id]!.label}
-            maxLength={MAX_LABEL_LENGTH}
-            onChange={(e) => setDraft({ ...draft, [id]: { ...draft[id]!, label: e.target.value } })}
-            style={{ ...input, flex: 1 }}
-          />
-          <input
-            type="color"
-            aria-label={`Cor da bandeira ${id}`}
-            value={draft[id]!.color}
-            onChange={(e) => setDraft({ ...draft, [id]: { ...draft[id]!, color: e.target.value } })}
-            style={colorInput}
-          />
-        </div>
-      ))}
+      <p style={hint}>
+        Nome, cor e IMAGEM das bandeiras (PNG, JPG ou WebP, até 2 MB; proporção 5:3 fica melhor). Com imagem, ela vira o
+        tecido da bandeira carregada e a marca do spray de quem usa essa bandeira. A bandeira "Do meu time" usa a cor da
+        equipe (aba Equipes).
+      </p>
+      {ids.map((id) => {
+        const url = models[`flagimg:${id}`];
+        return (
+          <div key={id} style={{ ...row, flexWrap: "wrap" }}>
+            {url && <img src={url} alt={`Imagem da bandeira ${id}`} style={{ width: 60, height: 36, objectFit: "cover", borderRadius: 4, border: "1px solid var(--line)" }} />}
+            <input
+              aria-label={`Nome da bandeira ${id}`}
+              value={draft[id]!.label}
+              maxLength={MAX_LABEL_LENGTH}
+              onChange={(e) => setDraft({ ...draft, [id]: { ...draft[id]!, label: e.target.value } })}
+              style={{ ...input, flex: 1, minWidth: 120 }}
+            />
+            <input
+              type="color"
+              aria-label={`Cor da bandeira ${id}`}
+              value={draft[id]!.color}
+              onChange={(e) => setDraft({ ...draft, [id]: { ...draft[id]!, color: e.target.value } })}
+              style={colorInput}
+            />
+            <label style={{ ...ghostBtn, display: "inline-flex", alignItems: "center", opacity: busy ? 0.5 : 1 }}>
+              {url ? "Trocar imagem" : "Enviar imagem"}
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                disabled={busy}
+                style={{ display: "none" }}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (f) void sendImage(id, f);
+                }}
+              />
+            </label>
+            {url && (
+              <button type="button" disabled={busy} onClick={() => void clearImage(id)} style={ghostBtn}>
+                Tirar imagem
+              </button>
+            )}
+          </div>
+        );
+      })}
       <button type="button" disabled={busy} onClick={() => void save()} style={primaryBtn}>
         Salvar bandeiras
       </button>
@@ -374,7 +417,9 @@ function SpraysTab({ busy, run }: TabProps) {
       await removeSpray(r.slug);
       // Tira também o modelo 3D do spray (senão fica um override órfão na config).
       const next = { ...currentModelOverrides() };
-      if (delete next[`spray:${r.slug}`]) await saveConfigKey("models", next);
+      const hadModel = delete next[`spray:${r.slug}`];
+      const hadImage = delete next[`sprayimg:${r.slug}`];
+      if (hadModel || hadImage) await saveConfigKey("models", next);
       setRows((cur) => (cur ?? []).filter((x) => x.slug !== r.slug));
     }, "Spray removido.");
   };
@@ -388,6 +433,23 @@ function SpraysTab({ busy, run }: TabProps) {
       setModels(next);
     }, "Modelo 3D do spray enviado.");
 
+  const uploadImg = (r: AdminSpray, file: File) =>
+    run(async () => {
+      const slot = `sprayimg:${r.slug}`;
+      const url = await uploadModel(slot, file);
+      const next = { ...currentModelOverrides(), [slot]: url };
+      await saveConfigKey("models", next);
+      setModels(next);
+    }, "Imagem do spray enviada.");
+
+  const clearImg = (r: AdminSpray) =>
+    run(async () => {
+      const next = { ...currentModelOverrides() };
+      delete next[`sprayimg:${r.slug}`];
+      await saveConfigKey("models", next);
+      setModels(next);
+    }, "Imagem removida.");
+
   const clearModel = (r: AdminSpray) =>
     run(async () => {
       const next = { ...currentModelOverrides() };
@@ -399,8 +461,9 @@ function SpraysTab({ busy, run }: TabProps) {
   return (
     <>
       <p style={hint}>
-        Opções de spray da loja: nome, preço, cor da marca e arquivo 3D (.glb). Preço 0 = livre pra todos. Sem cor, usa
-        a cor da equipe. Salve cada spray novo antes de enviar o arquivo 3D.
+        Opções de spray da loja: nome, preço, cor da marca, IMAGEM da bandeira (PNG/JPG/WebP) e arquivo 3D (.glb).
+        Preço 0 = livre pra todos. O spray Clássico pinta a bandeira de quem pichou (imagem da aba Bandeiras). Sem
+        imagem, usa a cor (ou a da equipe). Salve cada spray novo antes de enviar arquivos.
       </p>
       {rows.length === 0 && <p style={hint}>Nenhum spray extra ainda — só o Clássico (padrão).</p>}
       {rows.map((r) => {
@@ -458,6 +521,25 @@ function SpraysTab({ busy, run }: TabProps) {
                 {has && (
                   <button type="button" disabled={busy} onClick={() => void clearModel(r)} style={ghostBtn}>
                     Tirar 3D
+                  </button>
+                )}
+                <label style={{ ...ghostBtn, display: "inline-flex", alignItems: "center", opacity: busy ? 0.5 : 1 }}>
+                  {models[`sprayimg:${r.slug}`] ? "Trocar imagem" : "Enviar imagem (bandeira)"}
+                  <input
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp"
+                    disabled={busy}
+                    style={{ display: "none" }}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      e.target.value = "";
+                      if (f) void uploadImg(r, f);
+                    }}
+                  />
+                </label>
+                {models[`sprayimg:${r.slug}`] && (
+                  <button type="button" disabled={busy} onClick={() => void clearImg(r)} style={ghostBtn}>
+                    Tirar imagem
                   </button>
                 )}
               </>

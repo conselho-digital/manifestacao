@@ -66,10 +66,20 @@ function cleanColor(v: unknown): number | undefined {
   return typeof v === "number" && Number.isInteger(v) && v >= 0 && v <= 0xffffff ? v : undefined;
 }
 
-/** Slots de modelo válidos: character:<c>, character:<c>:<team>, vehicle:<v>, flag:<f>, spray. */
+/** Slots de IMAGEM (bandeira/spray): o valor é a URL de um .png/.jpg/.webp, não de um .glb. */
+export function isImageSlot(slot: string): boolean {
+  return slot.startsWith("flagimg:") || slot.startsWith("sprayimg:");
+}
+
+/**
+ * Slots válidos: character:<c>, character:<c>:<team>, vehicle:<v>, flag:<f>, spray (.glb)
+ * e flagimg:<f> / sprayimg:<slug> (imagens da bandeira).
+ */
 export function isModelSlot(slot: string): boolean {
   if (slot === "spray") return true;
   const [kind, id, team, extra] = slot.split(":");
+  if (kind === "flagimg") return isFlagId(id) && id !== "nenhuma" && id !== "time" && team === undefined && extra === undefined;
+  if (kind === "sprayimg") return id !== undefined && team === undefined && extra === undefined && SPRAY_SLUG_RE.test(id);
   if (kind === "spray") return id !== undefined && team === undefined && extra === undefined && SPRAY_SLUG_RE.test(id);
   if (extra !== undefined) return false;
   if (kind === "character") return isCharacterId(id) && (team === undefined || isTeamId(team));
@@ -78,8 +88,8 @@ export function isModelSlot(slot: string): boolean {
   return false;
 }
 
-/** Só aceita .glb do nosso bucket público — nunca uma URL qualquer (nem com `%2e%2e`, query ou hash). */
-export function isTrustedModelUrl(url: unknown): url is string {
+/** Só aceita arquivo do nosso bucket público (.glb, ou imagem nos slots de imagem) — nunca uma URL qualquer (nem com `%2e%2e`, query ou hash). */
+export function isTrustedModelUrl(url: unknown, image = false): url is string {
   if (typeof url !== "string" || !supabaseConfig) return false;
   try {
     const u = new URL(url);
@@ -90,7 +100,7 @@ export function isTrustedModelUrl(url: unknown): url is string {
       !u.search &&
       !u.hash &&
       u.pathname.startsWith(prefix) &&
-      /^[A-Za-z0-9_.-]+\.glb$/i.test(u.pathname.slice(prefix.length)) &&
+      (image ? /^[A-Za-z0-9_.-]+\.(png|jpe?g|webp)$/i : /^[A-Za-z0-9_.-]+\.glb$/i).test(u.pathname.slice(prefix.length)) &&
       !u.pathname.includes("..")
     );
   } catch {
@@ -116,7 +126,7 @@ export function sanitizeConfig(raw: { teams?: unknown; flags?: unknown; models?:
   }
   if (raw.models && typeof raw.models === "object") {
     for (const [slot, url] of Object.entries(raw.models)) {
-      if (isModelSlot(slot) && isTrustedModelUrl(url)) out.models[slot] = url;
+      if (isModelSlot(slot) && isTrustedModelUrl(url, isImageSlot(slot))) out.models[slot] = url;
     }
   }
   return out;

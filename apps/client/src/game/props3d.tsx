@@ -1,6 +1,6 @@
 import { Suspense, useMemo, type ReactNode } from "react";
 import { Shape } from "three";
-import { useGLTF } from "@react-three/drei";
+import { useGLTF, useTexture } from "@react-three/drei";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import type { VehicleId } from "@manifestacao/shared";
 import { useProximitySound } from "./ProximitySound.js";
@@ -67,7 +67,23 @@ function StripeBand({ color = 0xffd12e, height = 0.2 }: { color?: number; height
 }
 
 /** Bandeira carregada ao lado do avatar: mastro, tecido colorido e emblema opcional. */
-export function Flag3D({ color, emblem }: { color: number; emblem?: FlagEmblem }) {
+function FlagClothImage({ url }: { url: string }) {
+  const tex = useTexture(url);
+  return (
+    <mesh>
+      <planeGeometry args={[1, 0.6]} />
+      <meshStandardMaterial map={tex} side={2} />
+    </mesh>
+  );
+}
+
+export function Flag3D({ color, emblem, imageUrl }: { color: number; emblem?: FlagEmblem; imageUrl?: string | null }) {
+  const plain = (
+    <mesh>
+      <planeGeometry args={[1, 0.6]} />
+      <meshStandardMaterial color={color} side={2} />
+    </mesh>
+  );
   return (
     <group position={[0.45, 0, 0]}>
       <mesh position={[0, 1.4, 0]}>
@@ -75,13 +91,20 @@ export function Flag3D({ color, emblem }: { color: number; emblem?: FlagEmblem }
         <meshStandardMaterial color={0x8a8f98} />
       </mesh>
       <group position={[0.5, 2.3, 0]}>
-        <mesh>
-          <planeGeometry args={[1, 0.6]} />
-          <meshStandardMaterial color={color} side={2} />
-        </mesh>
-        {emblem === "star-burst" && <StarBurst />}
-        {emblem === "ring" && <RingEmblem />}
-        {emblem === "stripe" && <StripeBand />}
+        {imageUrl ? (
+          <ModelBoundary key={imageUrl} fallback={plain}>
+            <Suspense fallback={plain}>
+              <FlagClothImage url={imageUrl} />
+            </Suspense>
+          </ModelBoundary>
+        ) : (
+          <>
+            {plain}
+            {emblem === "star-burst" && <StarBurst />}
+            {emblem === "ring" && <RingEmblem />}
+            {emblem === "stripe" && <StripeBand />}
+          </>
+        )}
       </group>
     </group>
   );
