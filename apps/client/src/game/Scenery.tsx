@@ -60,8 +60,15 @@ useGLTF.preload(MASP_URL);
 // calçada (d=0 encosta na avenida, cresce afastando-se dela).
 const PARK_Z0 = -(AVENUE_WIDTH / 2 + PARK_GAP); // z do lado do parque que encosta na calçada
 const PATH_W = 3;
-/** Árvores 25% mais altas (só no eixo Y — a largura não muda). */
-const TREE_HEIGHT_SCALE = 1.25;
+/**
+ * Árvores com o DOBRO da altura anterior (~13 × escala, antes ~6,5). Tronco alto e mais grosso, copa mais larga
+ * e levemente alongada, sentada no topo do tronco (em vez de esticar a copa toda no eixo Y).
+ */
+const TRUNK_HEIGHT = 4.6; // multiplicador da altura do tronco (cilindro base de 2 de altura)
+const TRUNK_WIDTH = 1.7;
+const CROWN_WIDTH = 1.4;
+const CROWN_STRETCH = 1.15;
+const CROWN_RADIUS = 1.8; // raio da icosfera da copa
 
 interface PathRect {
   x: number; // centro lateral
@@ -132,13 +139,17 @@ function Park() {
     const color = new Color();
     const colliders: Sphere[] = [];
     trees.forEach((t, i) => {
-      const h = t.scale * TREE_HEIGHT_SCALE;
-      const size = new Vector3(t.scale, h, t.scale);
-      m.compose(new Vector3(t.x, 1 * h, t.z), q, size);
+      const h = t.scale * TRUNK_HEIGHT;
+      const trunkW = t.scale * TRUNK_WIDTH;
+      m.compose(new Vector3(t.x, h, t.z), q, new Vector3(trunkW, h, trunkW));
       trunks.current!.setMatrixAt(i, m);
-      m.compose(new Vector3(t.x, 3.4 * h, t.z), q, size);
+      const cw = t.scale * CROWN_WIDTH;
+      const radius = CROWN_RADIUS * cw;
+      // Topo do tronco = 2h; a copa afunda um pouco no tronco.
+      const crownY = 2 * h + radius * 0.35;
+      m.compose(new Vector3(t.x, crownY, t.z), q, new Vector3(cw, cw * CROWN_STRETCH, cw));
       crowns.current!.setMatrixAt(i, m);
-      colliders.push(new Sphere(new Vector3(t.x, 3.4 * h, t.z), 1.6 * t.scale));
+      colliders.push(new Sphere(new Vector3(t.x, crownY, t.z), radius));
       crowns.current!.setColorAt(i, color.setHSL(0.3 + t.hue * 0.06, 0.55, 0.2 + t.hue * 0.12));
     });
     trunks.current.instanceMatrix.needsUpdate = true;
