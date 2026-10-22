@@ -39,6 +39,14 @@ import {
   saveConfigKey,
   uploadModel,
   type AdminCatalogRow,
+  findUsers,
+  sanctionUser,
+  liftSanction,
+  fetchSanctions,
+  fetchModerationLog,
+  type AdminUserHit,
+  type AdminSanction,
+  type AdminModLogRow,
 } from "../config/adminApi.js";
 
 interface AdminPanelProps {
@@ -47,7 +55,7 @@ interface AdminPanelProps {
   onChanged: () => Promise<void>;
 }
 
-type Tab = "equipes" | "bandeiras" | "produtos" | "modelos" | "superchats" | "cartazes" | "telões" | "testes";
+type Tab = "equipes" | "bandeiras" | "produtos" | "modelos" | "superchats" | "cartazes" | "telões" | "moderação" | "testes";
 const TABS: { id: Tab; label: string }[] = [
   { id: "equipes", label: "Equipes" },
   { id: "bandeiras", label: "Bandeiras" },
@@ -56,6 +64,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "superchats", label: "Superchats" },
   { id: "cartazes", label: "Cartazes" },
   { id: "telões", label: "Telões" },
+  { id: "moderação", label: "Moderação" },
   { id: "testes", label: "Testes" },
 ];
 
@@ -137,6 +146,7 @@ export function AdminPanel({ onClose, onChanged }: AdminPanelProps) {
         {tab === "superchats" && <SuperchatsTab busy={busy} run={run} />}
         {tab === "cartazes" && <SignsTab busy={busy} run={run} />}
         {tab === "telões" && <BidsTab busy={busy} run={run} />}
+        {tab === "moderação" && <ModerationTab busy={busy} run={run} />}
         {tab === "testes" && <TestsTab busy={busy} run={run} />}
       </div>
     </div>
@@ -566,6 +576,133 @@ function SuperchatsTab({ busy, run }: TabProps) {
       <button type="button" disabled={busy} onClick={() => void load()} style={ghostBtn}>
         Atualizar fila
       </button>
+    </>
+  );
+}
+
+const MUTE_OPTIONS: { label: string; minutes: number }[] = [
+  { label: "15 min", minutes: 15 },
+  { label: "1 hora", minutes: 60 },
+  { label: "24 horas", minutes: 1440 },
+  { label: "7 dias", minutes: 10080 },
+];
+
+function fmtDate(iso: string | null): string {
+  return iso ? new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" }) : "permanente";
+}
+
+const MOD_ACTION_LABEL: Record<string, string> = {
+  mute: "silenciou",
+  ban: "baniu",
+  lift_mute: "tirou o silêncio de",
+  lift_ban: "tirou o banimento de",
+};
+
+/** Silenciar/banir contas: busca por apelido ou e-mail, sanções ativas e histórico de ações. */
+function ModerationTab({ busy, run }: TabProps) {
+  const [q, setQ] = useState("");
+  const [hits, setHits] = useState<AdminUserHit[] | null>(null);
+  const [reason, setReason] = useState("");
+  const [active, setActive] = useState<AdminSanction[] | null>(null);
+  const [log, setLog] = useState<AdminModLogRow[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+
+  const load = () =>
+    Promise.all([fetchSanctions(), fetchModerationLog()])
+      .then(([a, l]) => {
+        setActive(a);
+        setLog(l);
+      })
+      .catch((e: unknown) => setLoadError(e instanceof Error ? e.message : "Erro ao carregar."));
+  useEffect(() => {
+    void load();
+  }, []);
+
+  const search = () =>
+    run(async () => {
+      setHits(await findUsers(q));
+    }, "Busca feita.");
+
+  const apply = (u: AdminUserHit, kind: "mute" | "ban", minutes: number | null) =>
+    run(async () => {
+      await sanctionUser(u.id, kind, minutes, reason);
+      setHits(await findUsers(q));
+      await load();
+    }, kind === "mute" ? "Conta silenciada." : "Conta banida.");
+
+  const lift = (s: AdminSanction) =>
+    run(async () => {
+      await liftSanction(s.id);
+      if (hits) setHits(await findUsers(q));
+      await load();
+    }, "Sanção removida.");
+
+  if (loadError) return <p style={{ ...hint, color: "var(--danger)" }}>{loadError}</p>;
+
+  return (
+    <>
+      <p style={hint}>
+        Silenciar bloqueia o chat e o envio de conteúdo; banir impede de entrar na avenida e de comprar. Vale por conta
+        Google (não guardamos IP). Contas de admin não podem ser sancionadas.
+      </p>
+      <form
+        style={row}
+        onSubmit={(e) => {
+          e.preventDefault();
+          void search();
+        }}
+      >
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Apelido ou e-mail (2+ letras)" aria-label="Buscar conta" style={{ ...input, flex: 1, minWidth: 0 }} />
+        <button type="submit" disabled={busy || q.trim().length < 2} style={ghostBtn}>
+          Buscar
+        </button>
+      </form>
+      <input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={200} placeholder="Motivo (opcional, aparece para a conta)" aria-label="Motivo" style={input} />
+
+      {hits?.length === 0 && <p style={hint}>Nenhuma conta encontrada.</p>}
+      {hits?.map((u) => (
+        <div key={u.id} style={{ border: "1px solid var(--line)", borderRadius: "var(--r-md)", padding: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ fontWeight: 700, fontSize: "var(--t-ui)", overflowWrap: "anywhere" }}>
+            {u.nickname} <span style={{ ...hint, fontWeight: 400 }}>{u.email}</span>
+            {u.muted && <span style={{ color: "var(--danger)" }}> · silenciado</span>}
+            {u.banned && <span style={{ color: "var(--danger)" }}> · banido</span>}
+          </div>
+          <div style={{ ...row, flexWrap: "wrap" }}>
+            {MUTE_OPTIONS.map((o) => (
+              <button key={o.minutes} type="button" disabled={busy} onClick={() => void apply(u, "mute", o.minutes)} style={ghostBtn}>
+                Silenciar {o.label}
+              </button>
+            ))}
+            <button type="button" disabled={busy} onClick={() => void apply(u, "ban", null)} style={{ ...ghostBtn, color: "var(--danger)", borderColor: "var(--danger)" }}>
+              Banir
+            </button>
+          </div>
+        </div>
+      ))}
+
+      <h3 style={sectionTitle}>Sanções ativas</h3>
+      {!active && <p style={hint}>Carregando…</p>}
+      {active?.length === 0 && <p style={hint}>Nenhuma sanção ativa.</p>}
+      {active?.map((s) => (
+        <div key={s.id} style={{ ...row, justifyContent: "space-between", border: "1px solid var(--line)", borderRadius: "var(--r-md)", padding: 10 }}>
+          <span style={{ fontSize: "var(--t-ui)", overflowWrap: "anywhere" }}>
+            <strong>{s.nickname ?? "?"}</strong> · {s.kind === "ban" ? "banido" : "silenciado"} · até {fmtDate(s.expires_at)}
+            {s.reason ? ` · ${s.reason}` : ""}
+          </span>
+          <button type="button" disabled={busy} onClick={() => void lift(s)} style={ghostBtn}>
+            Remover
+          </button>
+        </div>
+      ))}
+
+      <h3 style={sectionTitle}>Histórico</h3>
+      {log?.length === 0 && <p style={hint}>Sem ações registradas.</p>}
+      {log?.map((l, i) => (
+        <p key={i} style={{ ...hint, overflowWrap: "anywhere" }}>
+          {fmtDate(l.created_at)} · {l.actor_nickname ?? "sistema"} {MOD_ACTION_LABEL[l.action] ?? l.action} {l.target ?? ""}
+          {l.reason ? ` (${l.reason})` : ""}
+        </p>
+      ))}
     </>
   );
 }

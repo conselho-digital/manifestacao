@@ -6,6 +6,7 @@
 //  3. grava com status 'review'; o admin aprova → 'awaiting_payment' → o usuário paga (superchat-pay)
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import { isSanctioned } from "../_shared/sanctions.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { checkContent, sanitize } from "../_shared/moderation.ts";
 
@@ -28,6 +29,7 @@ Deno.serve(async (req) => {
     const { data: userData, error: userErr } = await admin.auth.getUser(token);
     if (userErr || !userData.user) return json({ error: "unauthorized" }, 401);
     const userId = userData.user.id;
+    if (await isSanctioned(admin, userId, ["mute", "ban"])) return json({ error: "sanctioned" }, 403);
 
     const body = await req.json().catch(() => null);
     const name = typeof body?.name === "string" ? sanitize(body.name) : "";

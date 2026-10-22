@@ -357,3 +357,74 @@ export async function testActivate(kind: "superchat" | "sign" | "bid", id: strin
   if (error) throw new Error(error.message);
   return String(data ?? "");
 }
+
+// ── Moderação de contas (silenciar / banir) ───────────────────────────────
+export interface AdminUserHit {
+  id: string;
+  nickname: string;
+  email: string | null;
+  muted: boolean;
+  banned: boolean;
+}
+
+export interface AdminSanction {
+  id: string;
+  user_id: string;
+  nickname: string | null;
+  email: string | null;
+  kind: "mute" | "ban";
+  reason: string | null;
+  expires_at: string | null;
+  created_at: string;
+}
+
+export interface AdminModLogRow {
+  created_at: string;
+  actor_nickname: string | null;
+  target: string | null;
+  action: string;
+  reason: string | null;
+}
+
+const MOD_ERRORS: Record<string, string> = {
+  self_not_allowed: "Você não pode sancionar a própria conta.",
+  target_is_admin: "Contas de admin não podem ser sancionadas.",
+  not_found: "Conta não encontrada.",
+  minutes_required: "Informe por quanto tempo silenciar.",
+  minutes_invalid: "Duração inválida (1 minuto a 30 dias).",
+  forbidden: "Sem permissão.",
+};
+
+function modError(message: string): Error {
+  const known = Object.keys(MOD_ERRORS).find((k) => message.includes(k));
+  return new Error(known ? MOD_ERRORS[known]! : message);
+}
+
+export async function findUsers(q: string): Promise<AdminUserHit[]> {
+  const { data, error } = await db().rpc("admin_find_users", { p_q: q });
+  if (error) throw modError(error.message);
+  return (data as AdminUserHit[]) ?? [];
+}
+
+/** `minutes` nulo = permanente (só para banimento). */
+export async function sanctionUser(userId: string, kind: "mute" | "ban", minutes: number | null, reason: string): Promise<void> {
+  const { error } = await db().rpc("admin_sanction", { p_user: userId, p_kind: kind, p_minutes: minutes, p_reason: reason });
+  if (error) throw modError(error.message);
+}
+
+export async function liftSanction(id: string): Promise<void> {
+  const { error } = await db().rpc("admin_lift_sanction", { p_id: id });
+  if (error) throw modError(error.message);
+}
+
+export async function fetchSanctions(): Promise<AdminSanction[]> {
+  const { data, error } = await db().rpc("admin_list_sanctions");
+  if (error) throw modError(error.message);
+  return (data as AdminSanction[]) ?? [];
+}
+
+export async function fetchModerationLog(): Promise<AdminModLogRow[]> {
+  const { data, error } = await db().rpc("admin_moderation_log");
+  if (error) throw modError(error.message);
+  return (data as AdminModLogRow[]) ?? [];
+}

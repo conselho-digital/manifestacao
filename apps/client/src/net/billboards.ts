@@ -7,6 +7,7 @@ import type { PixCharge } from "./payments.js";
 const brl = (cents: number) => `R$ ${(cents / 100).toFixed(2).replace(".", ",")}`;
 
 const ERRORS: Record<string, string> = {
+  sanctioned: "Sua conta está silenciada ou banida. Veja o aviso no jogo.",
   board_invalid: "Telão inválido.",
   amount_invalid: "Valor entre R$ 20,00 e R$ 10.000,00.",
   credit_debt: "Há um estorno pendente na sua conta. Fale com o suporte para voltar a dar lances.",

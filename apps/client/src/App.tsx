@@ -8,6 +8,7 @@ import { signOut, useAuth } from "./auth/useAuth.js";
 import { useEntitlements } from "./shop/useEntitlements.js";
 import { useCatalog } from "./shop/useCatalog.js";
 import { useIsAdmin } from "./auth/useIsAdmin.js";
+import { useSanctions } from "./auth/useSanctions.js";
 import { loadAndApplyGameConfig } from "./config/gameConfig.js";
 import { clearProductThumbs } from "./shop/ProductThumb.js";
 
@@ -25,6 +26,7 @@ export function App() {
   const { session, loading: authLoading } = useAuth();
   const { owned: ownedByPurchase, refresh, loading: entitlementsLoading } = useEntitlements(session);
   const isAdmin = useIsAdmin(session);
+  const sanctions = useSanctions(session);
   const { items: catalogItems } = useCatalog();
   // Conta admin tem TODOS os itens (inclusive os criados depois) para testar tudo sem comprar.
   const owned = useMemo(() => {
@@ -86,6 +88,57 @@ export function App() {
     setAvatar(null);
   };
 
+  // Aviso do silêncio (chat desativado); o relógio da página reavalia ao mudar o minuto.
+  const mutedNotice =
+    sanctions.mutedUntil && sanctions.mutedUntil > Date.now()
+      ? sanctions.mutedUntil >= Number.MAX_SAFE_INTEGER
+        ? "Você está silenciado."
+        : `Silenciado até ${new Date(sanctions.mutedUntil).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}`
+      : null;
+
+  if (sanctions.banned) {
+    return (
+      <main
+        style={{
+          minHeight: "100dvh",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 16,
+          padding: 24,
+          textAlign: "center",
+          background: "var(--bg)",
+          color: "var(--ink)",
+        }}
+      >
+        <h1 style={{ margin: 0, fontFamily: "var(--font-display)", fontWeight: 400, textTransform: "uppercase", fontSize: 32 }}>
+          Conta banida
+        </h1>
+        <p style={{ margin: 0, maxWidth: 360, color: "var(--ink-dim)", fontSize: "var(--t-body)" }}>
+          Esta conta não pode entrar na avenida.{sanctions.reason ? ` Motivo: ${sanctions.reason}` : ""}
+        </p>
+        <button
+          type="button"
+          onClick={() => void signOut()}
+          style={{
+            minHeight: 44,
+            padding: "0 20px",
+            borderRadius: "var(--r-lg)",
+            border: "1px solid var(--line)",
+            background: "transparent",
+            color: "var(--ink)",
+            fontSize: "var(--t-ui)",
+            fontWeight: 700,
+            cursor: "pointer",
+          }}
+        >
+          Sair da conta
+        </button>
+      </main>
+    );
+  }
+
   return (
     <>
       {liveAvatar ? (
@@ -100,6 +153,7 @@ export function App() {
           isAdmin={isAdmin}
           signedIn={session !== null}
           onConfigChanged={reloadConfig}
+          mutedNotice={mutedNotice}
         />
       ) : (
         <AvatarPicker

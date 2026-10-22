@@ -70,6 +70,8 @@ interface GameProps {
   signedIn: boolean;
   /** Recarrega a config do jogo depois de o admin salvar algo. */
   onConfigChanged: () => Promise<void>;
+  /** Aviso de conta silenciada (chat desativado); null = pode conversar. */
+  mutedNotice?: string | null;
 }
 
 /**
@@ -77,7 +79,7 @@ interface GameProps {
  * HUD (placar + chat), seletor de veículo, spray e joystick de toque.
  * Sessão/loja não vivem aqui — ver App.tsx.
  */
-export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, onAvatarChange, onExit, isAdmin, signedIn, onConfigChanged }: GameProps) {
+export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, onAvatarChange, onExit, isAdmin, signedIn, onConfigChanged, mutedNotice = null }: GameProps) {
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [graphics, setGraphics] = useState<GraphicsLevel>(loadGraphics);
@@ -409,6 +411,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
         scores={net.scores}
         chatLog={net.chatLog}
         onChat={net.sendChat}
+        mutedNotice={mutedNotice}
         chatOpen={chatOpen}
         onChatOpenChange={setChatOpen}
       />

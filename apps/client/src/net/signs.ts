@@ -5,6 +5,7 @@ import { getSupabase } from "./supabase.js";
 import type { PixCharge } from "./payments.js";
 
 const ERRORS: Record<string, string> = {
+  sanctioned: "Sua conta está silenciada ou banida. Veja o aviso no jogo.",
   text_invalid: "Texto inválido (1 a 40 caracteres).",
   color_invalid: "Escolha uma das cores.",
   content_blocked: "Texto não permitido: sem links, telefones, @ de contato ou palavras ofensivas.",

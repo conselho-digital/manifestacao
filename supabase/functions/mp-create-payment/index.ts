@@ -22,6 +22,7 @@
 // é gravado primeiro (sem mp_payment_id ainda) e só então chamamos o MP.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import { isSanctioned } from "../_shared/sanctions.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
 const MP_ACCESS_TOKEN = Deno.env.get("MP_ACCESS_TOKEN") ?? "";
@@ -42,6 +43,7 @@ Deno.serve(async (req) => {
     );
     if (userErr || !userData.user) return json({ error: "unauthorized" }, 401);
     const userId = userData.user.id;
+    if (await isSanctioned(admin, userId, ["ban"])) return json({ error: "sanctioned" }, 403);
 
     const { itemId } = await req.json().catch(() => ({ itemId: null }));
     if (!itemId) return json({ error: "item_required" }, 400);

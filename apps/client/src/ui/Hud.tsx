@@ -19,6 +19,8 @@ interface HudProps {
   onChatOpenChange: (open: boolean) => void;
   /** false enquanto um modal (ex.: loja) está aberto — Enter não foca o chat. */
   enterFocusesChat?: boolean;
+  /** Texto do aviso quando a conta está silenciada (desativa o campo de chat). */
+  mutedNotice?: string | null;
 }
 
 /** Cor de time segura: ignora `team` inválido vindo da rede (defensivo). */
@@ -27,7 +29,7 @@ function teamColor(team: unknown): string {
 }
 
 /** Sobreposição 2D: placar por time, estado da conexão e chat efêmero. */
-export function Hud({ online, scores, chatLog, onChat, chatOpen, onChatOpenChange, enterFocusesChat = true }: HudProps) {
+export function Hud({ online, scores, chatLog, onChat, chatOpen, onChatOpenChange, enterFocusesChat = true, mutedNotice = null }: HudProps) {
   const [text, setText] = useState("");
   const isTouch = useIsTouch();
   const logRef = useRef<HTMLDivElement>(null);
@@ -96,6 +98,7 @@ export function Hud({ online, scores, chatLog, onChat, chatOpen, onChatOpenChang
       style={{ display: "flex", gap: 6 }}
       onSubmit={(e) => {
         e.preventDefault();
+        if (mutedNotice) return;
         onChat(text);
         setText("");
         if (isTouch) onChatOpenChange(false);
@@ -109,7 +112,8 @@ export function Hud({ online, scores, chatLog, onChat, chatOpen, onChatOpenChang
           if (isTouch) onChatOpenChange(false);
         }}
         maxLength={MAX_CHAT_LENGTH}
-        placeholder="Conversar…"
+        disabled={!!mutedNotice}
+        placeholder={mutedNotice ?? "Conversar…"}
         aria-label="Mensagem de chat"
         style={{
           flex: 1,

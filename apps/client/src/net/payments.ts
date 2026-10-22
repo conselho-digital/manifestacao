@@ -24,6 +24,7 @@ export async function createPixCharge(itemId: string): Promise<PixCharge> {
     { body: { itemId } },
   );
   if (error) throw error;
+  if (data?.error === "sanctioned") throw new Error("Sua conta está banida e não pode comprar.");
   if (!data || data.error) throw new Error(data?.error ?? "Falha ao criar cobrança");
   return data;
 }
