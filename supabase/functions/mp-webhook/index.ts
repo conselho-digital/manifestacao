@@ -11,6 +11,7 @@
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { sendReceipt } from "../_shared/resend.ts";
+import { isSanctioned } from "../_shared/sanctions.ts";
 
 const MP_ACCESS_TOKEN = Deno.env.get("MP_ACCESS_TOKEN") ?? "";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -61,6 +62,8 @@ interface Kind {
   table: string;
   pay: string;
   fk: string;
+  /** Tabela privada com o autor (user_id), ligada ao item pela mesma coluna `fk`. */
+  priv: string;
   /** Status final quando quitado. */
   done: string;
   log: string;
@@ -69,12 +72,13 @@ interface Kind {
   refundRpc?: string;
 }
 const KINDS: Record<string, Kind> = {
-  superchat: { table: "superchats", pay: "superchat_payments", fk: "superchat_id", done: "paid", log: "superchat" },
-  sign: { table: "custom_signs", pay: "sign_payments", fk: "sign_id", done: "active", log: "sign" },
+  superchat: { table: "superchats", pay: "superchat_payments", fk: "superchat_id", priv: "superchat_private", done: "paid", log: "superchat" },
+  sign: { table: "custom_signs", pay: "sign_payments", fk: "sign_id", priv: "sign_private", done: "active", log: "sign" },
   bid: {
     table: "billboard_bids",
     pay: "billboard_payments",
     fk: "bid_id",
+    priv: "billboard_private",
     done: "active",
     log: "bid",
     settleRpc: "bid_settle",
@@ -113,6 +117,16 @@ async function settleContent(admin: ReturnType<typeof createClient>, kind: Kind,
     .eq("external_reference", externalReference)
     .single();
   if (error || !parent || attErr || !attempt) return new Response("db_error", { status: 500 });
+
+  // Conta silenciada/banida DEPOIS de enviar o conteúdo: o Pix ainda pode ser pago, mas não vai ao ar — estorna.
+  // (Só na primeira quitação: um reenvio de tentativa já quitada não pode desfazer o que já está no ar.)
+  if (!attempt.settled) {
+    const { data: author } = await admin.from(kind.priv).select("user_id").eq(kind.fk, parentId).maybeSingle();
+    const authorId = (author as { user_id?: string } | null)?.user_id;
+    if (authorId && (await isSanctioned(admin, authorId, ["mute", "ban"]))) {
+      return await refundUnsettled(admin, kind, parentId, payment, "conta sancionada");
+    }
+  }
 
   // Reenvio do webhook de uma tentativa que já quitou: só garante o estado final.
   const paidCents = Math.round((payment.transaction_amount ?? 0) * 100);
@@ -171,6 +185,30 @@ async function refundUnsettled(admin: ReturnType<typeof createClient>, kind: Kin
     reason: why,
   });
   // Estorno falhou: 500 faz o MP reenviar e tentamos de novo.
+  return new Response(refund.ok ? "refunded" : "refund_failed", { status: refund.ok ? 200 : 500 });
+}
+
+/**
+ * Pagamento aprovado cuja referência não existe mais em lugar nenhum (ex.: a conta foi excluída com o Pix aberto):
+ * o dinheiro entrou sem dono. Estorna e registra. Só age em Pix com referência no formato que NÓS geramos (UUID) —
+ * outros pagamentos da mesma conta do Mercado Pago nunca são tocados.
+ */
+// deno-lint-ignore no-explicit-any
+async function refundOrphan(admin: ReturnType<typeof createClient>, payment: any, externalReference: string): Promise<Response> {
+  const ours = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(externalReference);
+  if (!ours || payment.payment_method_id !== "pix") return new Response("order_not_found", { status: 200 });
+  console.error("orphan_payment_refund", { ref: externalReference });
+  const refund = await fetch(`https://api.mercadopago.com/v1/payments/${payment.id}/refunds`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${MP_ACCESS_TOKEN}`, "X-Idempotency-Key": `refund-${payment.id}`, "Content-Type": "application/json" },
+    body: "{}",
+  });
+  await admin.from("moderation_log").insert({
+    actor: null,
+    target: `payment:${payment.id}`,
+    action: refund.ok ? "orphan_payment_auto_refunded" : "orphan_payment_refund_failed",
+    reason: "pagamento sem pedido correspondente",
+  });
   return new Response(refund.ok ? "refunded" : "refund_failed", { status: refund.ok ? 200 : 500 });
 }
 
@@ -255,12 +293,13 @@ Deno.serve(async (req) => {
     if (attempt === "error") return new Response("db_error", { status: 500 }); // MP reenvia
     if (attempt) return await settleContent(admin, attempt.kind, attempt.parentId, externalReference, attempt.amountCents, payment);
 
-    const { data: order } = await admin
+    const { data: order, error: orderErr } = await admin
       .from("orders")
       .select("id, user_id, item_id, amount_cents, status")
       .eq("external_reference", externalReference)
-      .single();
-    if (!order) return new Response("order_not_found", { status: 200 });
+      .maybeSingle();
+    if (orderErr) return new Response("db_error", { status: 500 }); // erro de banco nunca vira estorno
+    if (!order) return await refundOrphan(admin, payment, externalReference);
 
     // Defesa em profundidade: confere o valor pago contra o esperado.
     if (Math.round((payment.transaction_amount ?? 0) * 100) !== order.amount_cents) {

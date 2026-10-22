@@ -69,6 +69,18 @@
       .legal-body h2 { font-size: 18px; margin: 28px 0 8px; }
       .legal-body p, .legal-body li { color: var(--ink); margin: 0 0 12px; }
       .legal-body ul { padding-left: 20px; margin: 0 0 12px; }
+      /* Celular deitado: pouca altura — botões de direção e de spray menores para a coluna do canto não encostar neles. */
+      @media (max-height: 480px) {
+        :root {
+          --drive-size: 56px;
+          --spray-size: 48px;
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          transition: none !important;
+        }
+      }
       /* Nomes flutuantes (drei Html) somem enquanto um menu está aberto. */
       body[data-modal-open] .avatar-name {
         display: none !important;

@@ -29,8 +29,8 @@ export function SprayButton({ charges, maxCharges, onSpray, imageUrl, color }: S
       onPointerLeave={() => setPressed(false)}
       style={{
         position: "relative",
-        width: 64,
-        height: 64,
+        width: "var(--spray-size, 64px)",
+        height: "var(--spray-size, 64px)",
         padding: 0,
         overflow: "hidden",
         borderRadius: "50%",

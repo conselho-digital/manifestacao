@@ -11,7 +11,8 @@ interface DriveControlsProps {
 
 type Key = keyof DriveInput;
 
-const SIZE = 76;
+/** Tamanho dos botões: vem do CSS (index.html) — menor em celular deitado, onde falta altura. */
+const SIZE = "var(--drive-size, 76px)";
 /** Botões da cruz da moto: do mesmo tamanho dos de acelerar/frear, bem juntos. */
 const CROSS_SIZE = SIZE;
 const CROSS_GAP = 0;
@@ -133,8 +134,8 @@ export function DriveControls({ kind, driveRef }: DriveControlsProps) {
             bottom: inset.bottom,
             zIndex: 5,
             display: "grid",
-            gridTemplateColumns: `repeat(3, ${CROSS_SIZE}px)`,
-            gridTemplateRows: `repeat(3, ${CROSS_SIZE}px)`,
+            gridTemplateColumns: `repeat(3, ${CROSS_SIZE})`,
+            gridTemplateRows: `repeat(3, ${CROSS_SIZE})`,
             gap: CROSS_GAP,
           }}
         >
