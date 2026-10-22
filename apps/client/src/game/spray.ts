@@ -5,7 +5,7 @@ import type { FlagId, TeamId } from "@manifestacao/shared";
  *
  * Efêmero por design: as marcas vivem só na memória de cada cliente
  * (sincronizadas por broadcast do Supabase Realtime), nunca em banco — e
- * desaparecem sozinhas depois de algumas horas, como o CLAUDE.md pede.
+ * desaparecem sozinhas depois de 30 minutos.
  *
  * Cartucho: hoje é só um contador local (client-trust, como o resto do MVP
  * não autoritativo — CLAUDE.md §4). A venda de cartuchos extras (catálogo
@@ -13,7 +13,7 @@ import type { FlagId, TeamId } from "@manifestacao/shared";
  */
 
 /** Tempo até uma marca de spray sumir sozinha. */
-export const SPRAY_LIFETIME_MS = 2 * 60 * 60 * 1000; // 2 horas
+export const SPRAY_LIFETIME_MS = 30 * 60 * 1000; // 30 minutos
 
 /** Intervalo de limpeza das marcas expiradas. */
 export const SPRAY_CLEANUP_INTERVAL_MS = 30_000;

@@ -1,4 +1,4 @@
-import type { CharacterId, FlagId, TeamId, VehicleId } from "@manifestacao/shared";
+import { isFlagId, type CharacterId, type FlagId, type TeamId, type VehicleId } from "@manifestacao/shared";
 import { modelOverride } from "../config/gameConfig.js";
 
 /**
@@ -50,4 +50,17 @@ export function flagImageUrl(flag: FlagId | undefined): string | null {
 /** Imagem da bandeira da EQUIPE (enviada pelo admin): é a marca do spray de quem joga nessa equipe. */
 export function teamImageUrl(team: TeamId | undefined): string | null {
   return team ? modelOverride(`teamimg:${team}`) : null;
+}
+
+/**
+ * Imagem do spray: a da equipe; senão a da bandeira carregada; senão a bandeira de mesmo nome da equipe
+ * (equipe "verde" ↔ bandeira "verde"). null = sem imagem enviada → o spray usa a bolinha na cor da equipe.
+ */
+export function sprayImageFor(team: TeamId | undefined, flag: FlagId | undefined): string | null {
+  return teamImageUrl(team) ?? flagImageUrl(flag) ?? (isFlagId(team) ? flagImageUrl(team) : null);
+}
+
+/** Imagem para o ícone de bandeira da equipe nas telas de entrada e opções (a da equipe, ou a bandeira de mesmo nome). */
+export function teamIconImageUrl(team: TeamId): string | null {
+  return teamImageUrl(team) ?? (isFlagId(team) ? flagImageUrl(team) : null);
 }

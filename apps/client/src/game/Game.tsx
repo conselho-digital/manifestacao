@@ -1,7 +1,7 @@
 import { deleteMyAccount } from "../net/account.js";
 import { useStageVoice } from "../net/useStageVoice.js";
 import { StageButton } from "../ui/StageButton.js";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { VEHICLES, type AvatarConfig, type VehicleId } from "@manifestacao/shared";
 import { Scenery } from "./Scenery.js";
@@ -50,6 +50,8 @@ import { DriveControls } from "../ui/DriveControls.js";
 import { NO_DRIVE_INPUT, type DriveInput } from "./driving.js";
 
 const SIGN_KEY = "manifestacao.sign";
+/** Quanto tempo quem não comprou bandeira pode carregar a escolhida, contado da conexão. */
+const FREE_FLAG_MS = 30 * 60 * 1000;
 const SKY_COLOR = "#8fc4f0";
 const SUN_POSITION: [number, number, number] = [60, 110, -80];
 
@@ -121,7 +123,19 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     return () => document.body.removeAttribute("data-modal-open");
   }, [modalOpen]);
   const { inputRef, setJoystick } = useInput(!paused && !optionsOpen && !adminOpen && !superchatOpen && !signOpen && !billboardOpen);
-  const net = useAvenueRealtime(avatar, signedIn, signId);
+  // Bandeira: quem não comprou nenhuma pode carregar a escolhida por 30 minutos desde que conectou; depois some.
+  const ownsPaidFlag = useMemo(() => [...owned].some((id) => id.startsWith("flag:")), [owned]);
+  const [freeFlagExpired, setFreeFlagExpired] = useState(false);
+  useEffect(() => {
+    const t = window.setTimeout(() => setFreeFlagExpired(true), FREE_FLAG_MS);
+    return () => window.clearTimeout(t);
+  }, []);
+  const flagAllowed = ownsPaidFlag || !freeFlagExpired;
+  const playAvatar = useMemo(
+    () => (flagAllowed || avatar.flag === "nenhuma" ? avatar : { ...avatar, flag: "nenhuma" as const }),
+    [avatar, flagAllowed],
+  );
+  const net = useAvenueRealtime(playAvatar, signedIn, signId);
   const isTouch = useIsTouch();
   const signs = useSigns(net.remoteIds, net.playersRef, signId);
   const billboardAds = useBillboards(signedIn);
@@ -292,7 +306,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
         <Player
           color={avatar.shirt}
           name={avatar.nickname}
-          flag={avatar.flag}
+          flag={playAvatar.flag}
           team={avatar.team}
           sign={signId ? signs.get(signId) ?? null : null}
           vehicle={vehicle}

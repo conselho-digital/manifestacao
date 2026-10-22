@@ -142,14 +142,48 @@ export async function deleteCatalogItem(id: string): Promise<"deleted" | "deacti
   return "deactivated";
 }
 
-/** Envia a imagem da bandeira (PNG/JPG/WebP até 2 MB) para o bucket e devolve a URL pública. */
+/** Lado máximo da imagem enviada (px): bandeira/spray não precisam de mais, e o WebP fica leve. */
+const MAX_IMAGE_SIDE = 1024;
+const WEBP_QUALITY = 0.9;
+
+/** Converte a imagem para WebP (com transparência, no máx. 1024 px de lado); null se o navegador não souber gerar WebP. */
+export async function toWebp(file: File): Promise<Blob | null> {
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    throw new Error("Não consegui abrir a imagem. Tente outro arquivo.");
+  }
+  try {
+    const scale = Math.min(1, MAX_IMAGE_SIDE / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * scale));
+    const h = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return null;
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, "image/webp", WEBP_QUALITY));
+    return blob && blob.type === "image/webp" ? blob : null;
+  } finally {
+    bitmap.close();
+  }
+}
+
+/** Envia a imagem da bandeira (PNG/JPG/WebP até 2 MB), convertida para WebP, e devolve a URL pública. */
 async function uploadImage(slot: string, file: File): Promise<string> {
   if (file.size > MAX_IMAGE_BYTES) throw new Error("Imagem maior que 2 MB.");
   const kind = sniffImage(new Uint8Array(await file.slice(0, 12).arrayBuffer()));
   if (!kind) throw new Error("Envie uma imagem PNG, JPG ou WebP.");
+  // WebP sempre que o navegador conseguir gerar; senão sobe o arquivo original (já validado pelos bytes).
+  const webp = await toWebp(file);
+  const body: Blob = webp ?? file;
+  const ext = webp ? "webp" : kind.ext;
+  const type = webp ? "image/webp" : kind.type;
   const supabase = db();
-  const path = `${slot.replace(/:/g, "_")}-${Date.now()}.${kind.ext}`;
-  const { error } = await supabase.storage.from(ASSET_BUCKET).upload(path, file, { contentType: kind.type, upsert: false });
+  const path = `${slot.replace(/:/g, "_")}-${Date.now()}.${ext}`;
+  const { error } = await supabase.storage.from(ASSET_BUCKET).upload(path, body, { contentType: type, upsert: false });
   if (error) throw new Error(error.message);
   return supabase.storage.from(ASSET_BUCKET).getPublicUrl(path).data.publicUrl;
 }

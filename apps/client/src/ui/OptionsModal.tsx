@@ -1,3 +1,4 @@
+import { teamIconImageUrl } from "../game/models.js";
 import { useState } from "react";
 import { useModal } from "./useModal.js";
 import {
@@ -153,7 +154,7 @@ export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin, onD
                     cursor: "pointer",
                   }}
                 >
-                  <TeamFlagIcon color={c} />
+                  <TeamFlagIcon color={c} imageUrl={teamIconImageUrl(id)} />
                   {TEAMS[id].label}
                 </button>
               );

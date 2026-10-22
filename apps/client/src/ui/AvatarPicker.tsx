@@ -1,3 +1,4 @@
+import { flagImageUrl, teamIconImageUrl } from "../game/models.js";
 import { LegalLinks } from "./LegalPage.js";
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
@@ -239,7 +240,7 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
                     transition: "transform .08s, border-color .12s",
                   }}
                 >
-                  <TeamFlagIcon color={c} />
+                  <TeamFlagIcon color={c} imageUrl={teamIconImageUrl(id)} />
                   {t.label}
                 </button>
               );
@@ -376,8 +377,9 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
                     type="button"
                     aria-pressed={selected}
                     onClick={() => setFlag(id)}
-                    style={chip(selected, accent)}
+                    style={{ ...chip(selected, accent), display: "inline-flex", alignItems: "center", gap: 6 }}
                   >
+                    {flagImageUrl(id) && <TeamFlagIcon color={accent} size={14} imageUrl={flagImageUrl(id)} />}
                     {FLAGS[id].label}
                   </button>
                 );
