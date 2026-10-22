@@ -18,8 +18,21 @@ function db() {
 }
 
 export async function saveConfigKey(key: "teams" | "flags" | "models", value: unknown): Promise<void> {
-  const { error } = await db().from("game_config").upsert({ key, value, updated_at: new Date().toISOString() });
+  const { data, error } = await db()
+    .from("game_config")
+    .upsert({ key, value, updated_at: new Date().toISOString() })
+    .select("key, value");
   if (error) throw new Error(error.message);
+  // Confirma que o banco gravou mesmo (um bloqueio silencioso de permissão não pode parecer sucesso).
+  if (!data || data.length === 0) throw new Error("O banco não confirmou a gravação (sem permissão?). Tente sair e entrar de novo.");
+  if (JSON.stringify(data[0]!.value) !== JSON.stringify(value)) {
+    // jsonb pode reordenar chaves: compara como objeto.
+    const a = data[0]!.value as Record<string, unknown>;
+    const b = value as Record<string, unknown>;
+    const same = a && b && typeof a === "object" && typeof b === "object" && Object.keys(a).length === Object.keys(b).length &&
+      Object.keys(b).every((k) => JSON.stringify(a[k]) === JSON.stringify(b[k]));
+    if (!same) throw new Error("O banco guardou um valor diferente do enviado. Tente de novo.");
+  }
 }
 
 /**

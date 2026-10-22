@@ -2,10 +2,10 @@ import { forwardRef, Suspense, useRef } from "react";
 import { Group } from "three";
 import { useFrame } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
-import { VEHICLES, flagColor, type FlagId, type VehicleId } from "@manifestacao/shared";
+import { VEHICLES, flagColor, type FlagId, type TeamId, type VehicleId } from "@manifestacao/shared";
 import { WHEELIE_MAX_ANGLE } from "./driving.js";
 import { Flag3D, Vehicle3D, GlbModel } from "./props3d.js";
-import { flagImageUrl, flagModelUrl } from "./models.js";
+import { flagImageUrl, flagModelUrl, teamImageUrl } from "./models.js";
 import { SignProp } from "./SignProp.js";
 import type { SignData } from "./useSigns.js";
 
@@ -14,6 +14,8 @@ interface AvatarProps {
   color: number;
   name?: string;
   flag?: FlagId;
+  /** Equipe: a imagem da bandeira da equipe (enviada no admin) é a bandeira que o personagem carrega a pé. */
+  team?: TeamId;
   vehicle?: VehicleId;
   /** Cartaz personalizado ativo (texto vem do banco, nunca direto da rede). */
   sign?: SignData | null;
@@ -43,11 +45,12 @@ function ProceduralBody({ color }: { color: number }) {
 }
 
 /** Bandeira: modelo .glb do admin quando houver; senão o mastro com tecido. */
-function FlagProp({ flag, color }: { flag: FlagId; color: number }) {
+function FlagProp({ flag, color, team }: { flag: FlagId; color: number; team?: TeamId }) {
   const cloth = (
     <Flag3D
       color={flagColor(flag, color)}
-      imageUrl={flagImageUrl(flag)}
+      // Imagem da equipe tem prioridade; sem ela, a imagem da própria bandeira; sem nenhuma, tecido na cor.
+      imageUrl={teamImageUrl(team) ?? flagImageUrl(flag)}
       // Vermelha: emblema "star-burst" (6 pontas) — não um emblema real de
       // partido. Verde: faixa amarela sobre o verde (cores nacionais
       // genéricas, sem brasão nem layout de bandeira real nenhuma).
@@ -70,7 +73,7 @@ function FlagProp({ flag, color }: { flag: FlagId; color: number }) {
  * opcional e etiqueta de apelido. Usado pelo jogador local e pelos remotos.
  */
 export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
-  { color, name, flag = "nenhuma", vehicle = "nenhum", sign = null, modelUrl = null, wheelieRef },
+  { color, name, flag = "nenhuma", team, vehicle = "nenhum", sign = null, modelUrl = null, wheelieRef },
   ref,
 ) {
   const tiltRef = useRef<Group>(null);
@@ -95,7 +98,7 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
       )}
 
       {/* Bandeira só a pé: em veículo as mãos estão ocupadas. */}
-      {flag !== "nenhuma" && vehicle === "nenhum" && <FlagProp flag={flag} color={color} />}
+      {flag !== "nenhuma" && vehicle === "nenhum" && <FlagProp flag={flag} color={color} team={team} />}
       {sign && <SignProp sign={sign} />}
       <Vehicle3D vehicle={vehicle} />
       </group>

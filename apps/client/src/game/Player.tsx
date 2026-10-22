@@ -5,6 +5,7 @@ import {
   VEHICLES,
   type Facing,
   type FlagId,
+  type TeamId,
   type VehicleId,
 } from "@manifestacao/shared";
 import { Avatar } from "./Avatar.js";
@@ -34,6 +35,7 @@ interface PlayerProps {
   color: number;
   name: string;
   flag: FlagId;
+  team?: TeamId;
   /** Cartaz personalizado que o jogador carrega. */
   sign?: SignData | null;
   vehicle: VehicleId;
@@ -82,6 +84,7 @@ export function Player({
   color,
   name,
   flag,
+  team,
   sign = null,
   vehicle,
   modelUrl,
@@ -291,6 +294,6 @@ export function Player({
   });
 
   return (
-    <Avatar ref={ref} color={color} name={name} flag={flag} vehicle={vehicle} sign={sign} modelUrl={modelUrl} wheelieRef={wheelieRef} />
+    <Avatar ref={ref} color={color} name={name} flag={flag} team={team} vehicle={vehicle} sign={sign} modelUrl={modelUrl} wheelieRef={wheelieRef} />
   );
 }
