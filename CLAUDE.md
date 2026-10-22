@@ -155,7 +155,7 @@ Em cada fase: entregar → rodar agentes de bugs/segurança/visual (§7) → cor
 
 ## 9. Riscos e pontos legais
 
-- **Pessoas reais como personagens**: evitar (direito de imagem + legislação eleitoral/TSE). Usar caricaturas fictícias e times neutros.
+- **Conteúdo é do operador**: nomes de equipes, bandeiras (cor e imagem), produtos e textos são definidos pelo dono do jogo no painel de admin; a plataforma não impõe nomes nem temas. A responsabilidade legal sobre esse conteúdo (direito de imagem, legislação eleitoral/TSE, marcas) é do operador. O código não deve trazer nomes/bandeiras de partidos ou pessoas reais como padrão — o padrão é neutro e o admin sobrescreve.
 - **Marca/arte/código do original**: não reutilizar.
 - **Licença de assets 3D**: só compatível com uso comercial; atribuição em `CREDITS.md`.
 - **LGPD**: controlador/DPO definidos, exclusão de conta, retenção mínima, só dados necessários do Google.
@@ -166,6 +166,8 @@ Em cada fase: entregar → rodar agentes de bugs/segurança/visual (§7) → cor
 ---
 
 ## 10. Regras para o Claude neste projeto
+
+- **A plataforma é nossa, o conteúdo é do operador**: construir ferramentas (admin, upload, moderação) sem decidir nomes de equipe, bandeiras ou temas; não alterar conteúdo já configurado no banco sem pedido.
 
 - TypeScript estrito em tudo; tipos de protocolo em `packages/shared`.
 - Servidor/RLS sempre autoritativos; nunca confiar no cliente.
