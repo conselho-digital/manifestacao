@@ -251,7 +251,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
         }}
       >
         <color attach="background" args={[SKY_COLOR]} />
-        <fog attach="fog" args={[SKY_COLOR, 60, 180]} />
+        <fog attach="fog" args={[SKY_COLOR, 70, 260]} />
         <hemisphereLight args={["#bfdcff", "#4a5a3c", 0.55]} />
         <ambientLight intensity={0.25} />
         {/* Sol: luz direcional quente + disco visível no céu, na mesma direção. */}

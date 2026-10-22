@@ -12,7 +12,7 @@ import {
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { clearCameraColliders, setCameraColliders } from "./colliders.js";
-import { AVENUE_WIDTH, PARK_GAP, PARK_SIZE, PLAZA_HALF_X, PLAZA_MAX_Z } from "./world.js";
+import { AVENUE_LENGTH, AVENUE_WIDTH, PARK_GAP, PARK_SIZE, PLAZA_HALF_X, PLAZA_MAX_Z } from "./world.js";
 
 /**
  * Entorno da avenida (inspirado no layout da Paulista): quarteirões de prédios altos nos dois lados, atrás da
@@ -22,7 +22,7 @@ import { AVENUE_WIDTH, PARK_GAP, PARK_SIZE, PLAZA_HALF_X, PLAZA_MAX_Z } from "./
 
 const WINDOW_W = 3; // largura de uma "janela" (unidades do mundo)
 const FLOOR_H = 3.4; // altura de um andar
-const X_LIMIT = 150; // quanto a cidade se estende para cada lado
+const X_LIMIT = AVENUE_LENGTH / 2 + 30; // a cidade passa um pouco das pontas da avenida
 const SIDEWALK = 6; // largura da calçada junto à avenida
 
 interface Building {

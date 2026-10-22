@@ -2,7 +2,7 @@
  * Dimensões da avenida no espaço 3D (plano XZ, Y para cima).
  * A avenida é longa em X e estreita em Z (como uma rua).
  */
-export const AVENUE_LENGTH = 200; // eixo X
+export const AVENUE_LENGTH = 500; // eixo X (2,5x o tamanho anterior)
 export const AVENUE_WIDTH = 40; // eixo Z
 export const WALK_SPEED = 6; // unidades/segundo
 export const RUN_MULTIPLIER = 1.7;

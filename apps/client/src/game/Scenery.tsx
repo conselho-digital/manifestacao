@@ -210,10 +210,20 @@ function Park() {
  * marco visual num dos lados da avenida.
  */
 export function Scenery() {
-  const laneMarks = useMemo(
-    () => Array.from({ length: Math.floor(AVENUE_LENGTH / 6) }, (_, i) => -AVENUE_LENGTH / 2 + i * 6 + 1),
-    [],
-  );
+  // Faixa central tracejada: um único mesh instanciado (a avenida é longa).
+  const laneCount = Math.floor(AVENUE_LENGTH / 6);
+  const lanes = useRef<InstancedMesh>(null);
+  useLayoutEffect(() => {
+    const mesh = lanes.current;
+    if (!mesh) return;
+    const m = new Matrix4();
+    const q = new Quaternion().setFromAxisAngle(new Vector3(1, 0, 0), -Math.PI / 2);
+    for (let i = 0; i < laneCount; i++) {
+      m.compose(new Vector3(-AVENUE_LENGTH / 2 + i * 6 + 1, 0.01, 0), q, new Vector3(1, 1, 1));
+      mesh.setMatrixAt(i, m);
+    }
+    mesh.instanceMatrix.needsUpdate = true;
+  }, [laneCount]);
 
   return (
     <group>
@@ -224,12 +234,10 @@ export function Scenery() {
       </mesh>
 
       {/* Faixa central tracejada */}
-      {laneMarks.map((x, i) => (
-        <mesh key={i} rotation={[-Math.PI / 2, 0, 0]} position={[x, 0.01, 0]}>
-          <planeGeometry args={[3, 0.3]} />
-          <meshStandardMaterial color={0xffd12e} />
-        </mesh>
-      ))}
+      <instancedMesh ref={lanes} frustumCulled={false} args={[undefined, undefined, laneCount]}>
+        <planeGeometry args={[3, 0.3]} />
+        <meshStandardMaterial color={0xffd12e} />
+      </instancedMesh>
 
       {/* Quarteirões de prédios dos dois lados, atrás da praça e do parque. */}
       <City />
