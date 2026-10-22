@@ -145,13 +145,21 @@ export async function deleteCatalogItem(id: string): Promise<"deleted" | "deacti
 /** Lado máximo da imagem enviada (px): bandeira/spray não precisam de mais, e o WebP fica leve. */
 const MAX_IMAGE_SIDE = 1024;
 const WEBP_QUALITY = 0.9;
+/** Lado máximo aceito do arquivo original (px): barra imagens que decodificam para centenas de MB. */
+const MAX_SOURCE_SIDE = 8000;
 
 /** Converte a imagem para WebP (com transparência, no máx. 1024 px de lado); null se o navegador não souber gerar WebP. */
 export async function toWebp(file: File): Promise<Blob | null> {
   let bitmap: ImageBitmap;
   try {
+    // PNG pequeno em bytes pode declarar dimensões gigantes: confere o cabeçalho antes de decodificar.
+    const head = new DataView(await file.slice(0, 32).arrayBuffer());
+    if (head.byteLength >= 24 && head.getUint32(12) === 0x49484452) {
+      if (head.getUint32(16) > MAX_SOURCE_SIDE || head.getUint32(20) > MAX_SOURCE_SIDE) throw new Error("Imagem grande demais (máx. 8000 px de lado).");
+    }
     bitmap = await createImageBitmap(file);
-  } catch {
+  } catch (e) {
+    if (e instanceof Error && e.message.startsWith("Imagem grande")) throw e;
     throw new Error("Não consegui abrir a imagem. Tente outro arquivo.");
   }
   try {
@@ -176,11 +184,12 @@ async function uploadImage(slot: string, file: File): Promise<string> {
   if (file.size > MAX_IMAGE_BYTES) throw new Error("Imagem maior que 2 MB.");
   const kind = sniffImage(new Uint8Array(await file.slice(0, 12).arrayBuffer()));
   if (!kind) throw new Error("Envie uma imagem PNG, JPG ou WebP.");
-  // WebP sempre que o navegador conseguir gerar; senão sobe o arquivo original (já validado pelos bytes).
+  // Sempre WebP (reencoda: some metadado/EXIF e conteúdo extra). Se o navegador não gera WebP, recusa em vez de subir o original.
   const webp = await toWebp(file);
-  const body: Blob = webp ?? file;
-  const ext = webp ? "webp" : kind.ext;
-  const type = webp ? "image/webp" : kind.type;
+  if (!webp) throw new Error("Este navegador não consegue converter para WebP. Use outro navegador.");
+  const body: Blob = webp;
+  const ext = "webp";
+  const type = "image/webp";
   const supabase = db();
   const path = `${slot.replace(/:/g, "_")}-${Date.now()}.${ext}`;
   const { error } = await supabase.storage.from(ASSET_BUCKET).upload(path, body, { contentType: type, upsert: false });

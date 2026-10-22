@@ -8,49 +8,69 @@ function today(): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
 
-function readUsed(): number {
+function readStored(day: string): number {
   try {
     const raw = JSON.parse(localStorage.getItem(KEY) ?? "null") as { day?: unknown; used?: unknown } | null;
-    if (raw && raw.day === today() && typeof raw.used === "number" && Number.isFinite(raw.used)) {
+    if (raw && raw.day === day && typeof raw.used === "number" && Number.isFinite(raw.used)) {
       return Math.max(0, Math.min(SPRAY_DAILY_LIMIT, Math.floor(raw.used)));
     }
   } catch {
-    /* sem armazenamento: vale só nesta sessão */
+    /* sem armazenamento: vale a contagem em memória */
   }
   return 0;
 }
 
 /**
- * Sprays do dia: 15 por dia (zera à meia-noite, no horário do aparelho). Contagem guardada no aparelho — como o resto
+ * Sprays do dia: 15 por dia (zera à meia-noite, no horário do aparelho). A contagem fica em memória e é gravada no
+ * aparelho; valem o maior dos dois, então mesmo sem armazenamento (aba anônima) o limite vale na sessão. Como o resto
  * do jogo no MVP (não autoritativo, CLAUDE.md §4), limpar os dados do navegador devolve os sprays.
  */
 export function useDailySprays() {
-  const [used, setUsed] = useState(readUsed);
-  const usedRef = useRef(used);
-  usedRef.current = used;
-
-  // Passou da meia-noite com o jogo aberto: renova.
-  useEffect(() => {
-    const t = window.setInterval(() => setUsed(readUsed()), 60_000);
-    return () => window.clearInterval(t);
+  const mem = useRef({ day: today(), used: 0 });
+  const current = useCallback((): number => {
+    const day = today();
+    if (mem.current.day !== day) mem.current = { day, used: 0 };
+    mem.current.used = Math.max(mem.current.used, readStored(day));
+    return mem.current.used;
   }, []);
+  const [used, setUsed] = useState(current);
 
-  /** Gasta um spray; false se já acabaram. */
-  const spend = useCallback((): boolean => {
-    const current = readUsed();
-    if (current >= SPRAY_DAILY_LIMIT) {
-      setUsed(current);
-      return false;
-    }
-    const next = current + 1;
+  // Passou da meia-noite com o jogo aberto, ou outra aba gastou: relê ao voltar e a cada 15 s.
+  useEffect(() => {
+    const sync = () => setUsed(current());
+    const t = window.setInterval(sync, 15_000);
+    window.addEventListener("focus", sync);
+    document.addEventListener("visibilitychange", sync);
+    return () => {
+      window.clearInterval(t);
+      window.removeEventListener("focus", sync);
+      document.removeEventListener("visibilitychange", sync);
+    };
+  }, [current]);
+
+  const write = useCallback((n: number) => {
+    mem.current.used = n;
     try {
-      localStorage.setItem(KEY, JSON.stringify({ day: today(), used: next }));
+      localStorage.setItem(KEY, JSON.stringify({ day: mem.current.day, used: n }));
     } catch {
       /* sem armazenamento */
     }
-    setUsed(next);
-    return true;
+    setUsed(n);
   }, []);
 
-  return { charges: SPRAY_DAILY_LIMIT - used, max: SPRAY_DAILY_LIMIT, spend };
+  /** Gasta um spray; false se já acabaram (relê antes de negar: pode ter virado o dia). */
+  const spend = useCallback((): boolean => {
+    const n = current();
+    if (n >= SPRAY_DAILY_LIMIT) {
+      setUsed(n);
+      return false;
+    }
+    write(n + 1);
+    return true;
+  }, [current, write]);
+
+  /** Devolve um spray (o envio foi descartado depois de gastar). */
+  const refund = useCallback(() => write(Math.max(0, current() - 1)), [current, write]);
+
+  return { charges: SPRAY_DAILY_LIMIT - used, max: SPRAY_DAILY_LIMIT, spend, refund };
 }

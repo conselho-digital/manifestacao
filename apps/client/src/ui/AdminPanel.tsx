@@ -189,7 +189,7 @@ function TeamsTab({ busy, run }: TabProps) {
         const url = models[`teamimg:${id}`];
         return (
           <div key={id} style={{ ...row, flexWrap: "wrap" }}>
-            {url && <img src={url} alt={`Bandeira da equipe ${id}`} style={{ width: 60, height: 36, objectFit: "cover", borderRadius: 4, border: "1px solid var(--line)" }} />}
+            {url && <img src={url} alt={`Bandeira da equipe ${draft[id].label}`} style={{ width: 60, height: 36, objectFit: "cover", borderRadius: 4, border: "1px solid var(--line)" }} />}
             <input
               aria-label={`Nome da equipe ${id}`}
               value={draft[id].label}
@@ -586,8 +586,10 @@ function ModerationTab({ busy, run }: TabProps) {
                 Silenciar {o.label}
               </button>
             ))}
+          </div>
+          <div style={row}>
             <button type="button" disabled={busy} onClick={() => void apply(u, "ban", null)} style={{ ...ghostBtn, color: "var(--danger)", borderColor: "var(--danger)" }}>
-              Banir
+              Banir permanentemente
             </button>
           </div>
         </div>

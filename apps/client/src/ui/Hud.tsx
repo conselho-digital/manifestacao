@@ -163,7 +163,7 @@ export function Hud({ online, scores, chatLog, onChat, chatOpen, onChatOpenChang
           alignItems: "center",
           gap: 6,
           // Não invade a coluna de botões da direita em telas estreitas.
-          maxWidth: "calc(100vw - 230px)",
+          maxWidth: "calc(100vw - 280px)",
           zIndex: 6,
         }}
       >

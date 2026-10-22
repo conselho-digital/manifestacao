@@ -64,8 +64,37 @@ export function ActionsMenu({ signedIn, onBillboards, onSign, onSuperchat, vehic
     };
   }, [open]);
 
+  // Girar a tela com o menu aberto o deixaria fora do lugar (a posição é calculada ao abrir).
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setOpen(false);
+    window.addEventListener("resize", close);
+    window.addEventListener("orientationchange", close);
+    return () => {
+      window.removeEventListener("resize", close);
+      window.removeEventListener("orientationchange", close);
+    };
+  }, [open]);
+
+  // Abriu: foco no primeiro item; setas ↑/↓, Home e End andam pela lista.
+  const menuRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (open) menuRef.current?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
+  }, [open]);
+  const onMenuKey = (e: React.KeyboardEvent) => {
+    const keys = ["ArrowDown", "ArrowUp", "Home", "End"];
+    if (!keys.includes(e.key)) return;
+    const items = [...(menuRef.current?.querySelectorAll<HTMLButtonElement>("button:not(:disabled)") ?? [])];
+    if (items.length === 0) return;
+    e.preventDefault();
+    const i = items.indexOf(document.activeElement as HTMLButtonElement);
+    const next = e.key === "Home" ? 0 : e.key === "End" ? items.length - 1 : (i + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length;
+    items[next]!.focus();
+  };
+
   const choose = (fn: () => void) => () => {
     setOpen(false);
+    btnRef.current?.focus();
     fn();
   };
 
@@ -122,6 +151,8 @@ export function ActionsMenu({ signedIn, onBillboards, onSign, onSuperchat, vehic
 
       {open && pos && (
         <div
+          ref={menuRef}
+          onKeyDown={onMenuKey}
           role="menu"
           aria-label="Menu"
           style={{
@@ -146,7 +177,7 @@ export function ActionsMenu({ signedIn, onBillboards, onSign, onSuperchat, vehic
           {signedIn && (
             <>
               <p style={heading}>Divulgar</p>
-              <div style={{ display: "flex", gap: 6 }}>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                 <button type="button" role="menuitem" onClick={choose(onBillboards)} style={{ ...optionBtn, flex: 1, textAlign: "center" }}>
                   Telões
                 </button>
@@ -171,7 +202,7 @@ export function ActionsMenu({ signedIn, onBillboards, onSign, onSuperchat, vehic
                 role="menuitemradio"
                 aria-checked={selected}
                 disabled={loading}
-                aria-label={!loading && !unlocked ? `${VEHICLES[id].label} — bloqueado, toque para comprar na loja` : undefined}
+                aria-label={!loading && !unlocked ? `${VEHICLES[id].label}, ${formatBRL(VEHICLES[id].priceCents)}, bloqueado: abre a loja` : undefined}
                 onClick={choose(() => (unlocked ? onVehicle(id) : onLocked(id)))}
                 style={{
                   ...optionBtn,

@@ -7,7 +7,7 @@ insert into catalog_items (id, kind, label, price_cents, active) values
   ('character:mulher_alternativa', 'character', 'Mulher alternativa', 2990, true),
   ('character:menina',             'character', 'Menina',             0,    true),
   ('character:policial',           'character', 'Policial',           2990, true)
-on conflict (id) do update set label = excluded.label, active = true;
+on conflict (id) do nothing; -- não sobrescreve nome/preço/estado que o admin já tenha editado
 
 update catalog_items set active = false
 where id in ('character:comum', 'character:jovem', 'character:trabalhador', 'character:tiozao');

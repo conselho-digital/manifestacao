@@ -251,16 +251,15 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
 
   // Sprays do dia (15 por dia): contador no aparelho — client-trust, como o resto do MVP não autoritativo (CLAUDE.md §4).
   const sprays = useDailySprays();
-  const chargesRef = useRef(sprays.charges);
-  chargesRef.current = sprays.charges;
-
   const handleSpray = useCallback(() => {
-    if (!transformReadyRef.current || chargesRef.current <= 0) return;
-    // Onde a mira (centro da tela) cruza o chão — ver Player.tsx. O cartucho
-    // só gasta se o envio foi aceito (o cooldown pode descartá-lo).
+    if (!transformReadyRef.current) return;
+    // Gasta ANTES de enviar (a contagem relê o armazenamento: outra aba pode ter gasto); se o envio for descartado
+    // pelo cooldown, devolve.
+    if (!sprays.spend()) return;
+    // Onde a mira (centro da tela) cruza o chão — ver Player.tsx.
     const target = aimRef.current;
     // A marca é a bandeira da equipe (imagem); a cor da equipe é o reserva sem imagem.
-    if (net.sendSpray(target.x, target.z, avatar.shirt, DEFAULT_SPRAY_ID)) sprays.spend();
+    if (!net.sendSpray(target.x, target.z, avatar.shirt, DEFAULT_SPRAY_ID)) sprays.refund();
   }, [net, avatar.shirt, sprays]);
 
   return (

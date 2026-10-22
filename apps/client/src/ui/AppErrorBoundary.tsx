@@ -37,11 +37,15 @@ export class AppErrorBoundary extends Component<{ children: ReactNode }, { error
         <p style={{ margin: 0, maxWidth: 360, color: "var(--ink-dim)", fontSize: "var(--t-body)" }}>
           O jogo travou. Recarregue para voltar à avenida.
         </p>
-        <code style={{ maxWidth: 360, overflowWrap: "anywhere", color: "var(--ink-dim)", fontSize: "var(--t-ui)" }}>
-          {error.message.slice(0, 200)}
-        </code>
+        {/* O motivo técnico só aparece em desenvolvimento (pode citar tabelas ou endereços internos). */}
+        {import.meta.env.DEV && (
+          <code style={{ maxWidth: 360, overflowWrap: "anywhere", color: "var(--ink-dim)", fontSize: "var(--t-ui)" }}>
+            {error.message.slice(0, 200)}
+          </code>
+        )}
         <button
           type="button"
+          autoFocus
           onClick={() => window.location.reload()}
           style={{
             minHeight: 48,
@@ -56,6 +60,20 @@ export class AppErrorBoundary extends Component<{ children: ReactNode }, { error
           }}
         >
           Recarregar
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            try {
+              localStorage.clear(); // dados locais corrompidos podem repetir o erro
+            } catch {
+              /* sem acesso */
+            }
+            window.location.reload();
+          }}
+          style={{ minHeight: 44, padding: "0 16px", border: "none", background: "transparent", color: "var(--ink-dim)", textDecoration: "underline", cursor: "pointer", fontSize: "var(--t-ui)" }}
+        >
+          Limpar dados locais e recarregar
         </button>
       </main>
     );

@@ -197,7 +197,7 @@ export function LegalPage({ kind }: { kind: LegalKind }) {
           lineHeight: 1.6,
         }}
       >
-        <a href="/" style={{ color: "var(--accent)", fontSize: "var(--t-ui)", fontWeight: 700 }}>
+        <a href="/" style={{ color: "var(--accent)", fontSize: "var(--t-ui)", fontWeight: 700, display: "inline-flex", alignItems: "center", minHeight: 44 }}>
           ← Voltar ao jogo
         </a>
         <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 400, textTransform: "uppercase", fontSize: 34, margin: "16px 0" }}>
@@ -210,7 +210,7 @@ export function LegalPage({ kind }: { kind: LegalKind }) {
           {(Object.keys(TITLES) as LegalKind[])
             .filter((k) => k !== kind)
             .map((k) => (
-              <a key={k} href={`/${k}`} style={{ color: "var(--ink-dim)" }}>
+              <a key={k} href={`/${k}`} style={{ color: "var(--ink-dim)", display: "inline-flex", alignItems: "center", minHeight: 44 }}>
                 {TITLES[k]}
               </a>
             ))}

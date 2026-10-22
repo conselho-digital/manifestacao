@@ -22,7 +22,8 @@ export function StageButton({ voice, blockedNotice }: StageButtonProps) {
         position: "fixed",
         left: "50%",
         transform: "translateX(-50%)",
-        bottom: "calc(env(safe-area-inset-bottom, 0px) + 96px)",
+        // Acima das áreas do joystick e dos botões de direção (que ocupam a parte de baixo, dos dois lados).
+        bottom: "calc(env(safe-area-inset-bottom, 0px) + 230px)",
         zIndex: 5,
         display: "flex",
         flexDirection: "column",
