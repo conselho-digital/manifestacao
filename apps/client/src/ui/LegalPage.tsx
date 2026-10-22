@@ -176,7 +176,18 @@ export function LegalPage({ kind }: { kind: LegalKind }) {
   }, [kind]);
 
   return (
-    <main style={{ minHeight: "100dvh", background: "var(--bg)", color: "var(--ink)", overflowY: "auto" }}>
+    <main
+      style={{
+        height: "100dvh",
+        overflowY: "auto",
+        background: "var(--bg)",
+        color: "var(--ink)",
+        // O app trava rolagem/seleção no body (jogo); aqui é texto para ler e copiar.
+        touchAction: "pan-y",
+        userSelect: "text",
+        WebkitUserSelect: "text",
+      }}
+    >
       <article
         style={{
           width: "min(720px, 100%)",
@@ -214,10 +225,10 @@ export function LegalLinks() {
   return (
     <nav
       aria-label="Páginas legais"
-      style={{ display: "flex", justifyContent: "center", gap: 16, flexWrap: "wrap", marginTop: 8, fontSize: "var(--t-ui)" }}
+      style={{ display: "flex", justifyContent: "center", gap: 16, flexWrap: "wrap", marginTop: 0, fontSize: "var(--t-ui)" }}
     >
       {(Object.keys(TITLES) as LegalKind[]).map((k) => (
-        <a key={k} href={`/${k}`} target="_blank" rel="noopener" style={{ color: "var(--ink-dim)", minHeight: 24 }}>
+        <a key={k} href={`/${k}`} target="_blank" rel="noopener" style={{ color: "var(--ink-dim)", display: "inline-flex", alignItems: "center", minHeight: 44 }}>
           {TITLES[k]}
         </a>
       ))}

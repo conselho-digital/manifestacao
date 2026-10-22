@@ -3,6 +3,7 @@ import { getSupabase } from "./supabase.js";
 const ERRORS: Record<string, string> = {
   admin_not_allowed: "Contas de admin não podem ser excluídas por aqui.",
   pending_payment: "Há um Pix pendente. Pague ou espere expirar antes de excluir a conta.",
+  active_sanction: "Sua conta tem uma sanção ativa e não pode ser excluída agora.",
   unauthorized: "Entre com sua conta para continuar.",
 };
 

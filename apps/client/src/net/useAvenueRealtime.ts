@@ -230,7 +230,10 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
         }
         // Remove quem saiu.
         for (const id of playersRef.current.keys()) {
-          if (!seen.has(id)) playersRef.current.delete(id);
+          if (!seen.has(id)) {
+            playersRef.current.delete(id);
+            lastPosBySenderRef.current.delete(id); // volta em outro ponto sem ser tratado como teleporte
+          }
         }
         setScores(next);
         setRemoteIds([...playersRef.current.keys()]);

@@ -1,5 +1,5 @@
 /* Service worker mínimo (PWA): casca do app e modelos 3D em cache; tempo real, API e pagamentos NUNCA passam por aqui. */
-const VERSION = "v1";
+const VERSION = "v2"; // troque ao mudar a estratégia; o cache antigo é apagado no activate
 const SHELL = `shell-${VERSION}`;
 const MODELS = `models-${VERSION}`;
 
@@ -22,15 +22,20 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return; // Supabase, Google, Mercado Pago: direto na rede
 
-  // Modelos 3D (pesados, raramente mudam): cache primeiro.
+  // Modelos 3D (pesados): mostra o do cache na hora e atualiza em segundo plano (um .glb trocado no mesmo URL chega na visita seguinte).
   if (url.pathname.startsWith("/models/")) {
     e.respondWith(
       caches.open(MODELS).then(async (c) => {
         const hit = await c.match(req);
-        if (hit) return hit;
-        const res = await fetch(req);
-        if (res.ok) c.put(req, res.clone());
-        return res;
+        const net = fetch(req).then((res) => {
+          if (res.ok) c.put(req, res.clone());
+          return res;
+        });
+        if (hit) {
+          net.catch(() => {});
+          return hit;
+        }
+        return net;
       }),
     );
     return;
@@ -38,7 +43,7 @@ self.addEventListener("fetch", (e) => {
 
   // Páginas: rede primeiro; sem rede, volta a casca em cache (o jogo em si exige internet).
   if (req.mode === "navigate") {
-    e.respondWith(fetch(req).catch(() => caches.match("/")));
+    e.respondWith(fetch(req).catch(() => caches.match("/").then((r) => r || Response.error())));
     return;
   }
 

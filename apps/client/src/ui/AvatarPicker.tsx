@@ -197,7 +197,7 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
           // evita o conteúdo ficar preso no topo com um vazio grande embaixo.
           justifyContent: "center",
           gap: 28,
-          padding: "20px max(16px, env(safe-area-inset-right)) 128px max(16px, env(safe-area-inset-left))",
+          padding: "20px max(16px, env(safe-area-inset-right)) 176px max(16px, env(safe-area-inset-left))",
           width: "min(640px, 100%)",
           margin: "0 auto",
         }}

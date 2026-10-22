@@ -42,7 +42,7 @@
   ],
   "rewrites": [
     {
-      "source": "/(sobre|termos|privacidade)",
+      "source": "/(sobre|termos|privacidade)/?",
       "destination": "/index.html"
     }
   ]

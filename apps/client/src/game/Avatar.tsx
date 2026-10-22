@@ -29,11 +29,11 @@ interface AvatarProps {
 const MOTO_REAR_AXLE_Z = -0.7;
 
 /** Corpo geométrico (fallback quando não há modelo glTF). */
-function ProceduralBody({ color }: { color: number }) {
+function ProceduralBody({ color, arms = true }: { color: number; arms?: boolean }) {
   return (
     <>
       {/* Braços: manga na cor da camisa e mão na cor da pele, caindo dos ombros com leve abertura. */}
-      {[-1, 1].map((side) => (
+      {arms && [-1, 1].map((side) => (
         <group key={side} position={[side * 0.46, 1.32, 0]} rotation={[0, 0, side * 0.12]}>
           <mesh position={[0, -0.32, 0]} castShadow>
             <capsuleGeometry args={[0.11, 0.42, 4, 8]} />
@@ -103,11 +103,11 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
       <group ref={tiltRef} position={[0, 0, MOTO_REAR_AXLE_Z]}>
       <group position={[0, 0, -MOTO_REAR_AXLE_Z]}>
       {modelUrl ? (
-        <Suspense fallback={<ProceduralBody color={color} />}>
-          <GlbModel url={modelUrl} fallback={<ProceduralBody color={color} />} />
+        <Suspense fallback={<ProceduralBody color={color} arms={vehicle === "nenhum"} />}>
+          <GlbModel url={modelUrl} fallback={<ProceduralBody color={color} arms={vehicle === "nenhum"} />} />
         </Suspense>
       ) : (
-        <ProceduralBody color={color} />
+        <ProceduralBody color={color} arms={vehicle === "nenhum"} />
       )}
 
       {/* Bandeira só a pé: em veículo as mãos estão ocupadas. */}

@@ -1,3 +1,4 @@
+import { AVATAR_STORAGE_KEY } from "../ui/AvatarPicker.js";
 import { deleteMyAccount } from "../net/account.js";
 import { useStageVoice } from "../net/useStageVoice.js";
 import { StageButton } from "../ui/StageButton.js";
@@ -426,6 +427,11 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
             signedIn
               ? async () => {
                   await deleteMyAccount();
+                  try {
+                    localStorage.removeItem(AVATAR_STORAGE_KEY); // a política promete apagar o perfil, inclusive o salvo no aparelho
+                  } catch {
+                    /* sem acesso ao armazenamento local */
+                  }
                   onExit();
                 }
               : undefined
