@@ -125,6 +125,8 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
   const playersRef = useRef<Map<string, RemotePlayer>>(new Map());
   const channelRef = useRef<RealtimeChannel | null>(null);
   const presenceRef = useRef<PresenceState | null>(null);
+  const selfFlagRef = useRef(self.flag);
+  selfFlagRef.current = self.flag;
   const selfTeamRef = useRef(self.team);
   selfTeamRef.current = self.team;
   const signIdRef = useRef(signId);
@@ -326,6 +328,7 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
           style,
           // Equipe do remetente vem da presence dele (não do payload do spray).
           team: playersRef.current.get(s.senderId)?.team,
+          flag: playersRef.current.get(s.senderId)?.flag,
           createdAt: now,
         });
         setSprayVersion((v) => v + 1);
@@ -410,7 +413,7 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
       const pos = clampToAvenue(x, z);
       // Mostra a própria marca localmente (broadcast não ecoa pro remetente);
       // também passa pelo limite de SPRAY_MAX_MARKS, igual às recebidas.
-      addSprayMark(sprayMarksRef.current, { id, x: pos.x, z: pos.z, color, style, team: selfTeamRef.current, createdAt: now });
+      addSprayMark(sprayMarksRef.current, { id, x: pos.x, z: pos.z, color, style, team: selfTeamRef.current, flag: selfFlagRef.current, createdAt: now });
       setSprayVersion((v) => v + 1);
       const channel = channelRef.current;
       if (channel && channel.state === "joined") {

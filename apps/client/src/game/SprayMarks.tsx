@@ -3,7 +3,7 @@ import { useTexture } from "@react-three/drei";
 import { DoubleSide } from "three";
 import { ModelBoundary } from "./ModelBoundary.js";
 import { GlbModel } from "./props3d.js";
-import { sprayModelUrl, teamImageUrl } from "./models.js";
+import { flagImageUrl, sprayModelUrl, teamImageUrl } from "./models.js";
 import type { SprayMark } from "./spray.js";
 
 /** Quantas marcas (as mais novas) podem usar o modelo 3D. */
@@ -60,8 +60,9 @@ export function SprayMarks({ marksRef, version }: SprayMarksProps) {
             <meshStandardMaterial color={m.color} />
           </mesh>
         );
-        // A marca é a bandeira da equipe de quem pichou (imagem enviada pelo admin).
-        const imageUrl = i >= firstImageIndex ? teamImageUrl(m.team) : null;
+        // A marca é a imagem da bandeira da equipe de quem pichou; sem ela, a imagem da bandeira que a pessoa carrega;
+        // sem nenhuma imagem, a mancha na cor da equipe.
+        const imageUrl = i >= firstImageIndex ? teamImageUrl(m.team) ?? flagImageUrl(m.flag) : null;
         if (imageUrl) {
           return (
             <ModelBoundary key={`${m.id}:${imageUrl}`} fallback={circle}>

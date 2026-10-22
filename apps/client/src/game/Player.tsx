@@ -185,8 +185,13 @@ export function Player({
       const next = clampToAvenue(g.position.x + worldX * step, g.position.z + worldZ * step, g.position);
       g.position.x = next.x;
       g.position.z = next.z;
-      g.rotation.y = Math.atan2(worldX, worldZ);
       facing.current = facingOf(worldX, worldZ, facing.current);
+    }
+    // A pé: o personagem olha para onde a mira aponta (gira junto com a câmera), parado ou andando.
+    // forward(yaw) = (sin yaw, cos yaw), o mesmo da rotação em Y. Em veículo a direção vem do volante.
+    if (!driving) {
+      const diff = wrapAngle(yaw - g.rotation.y);
+      g.rotation.y = wrapAngle(g.rotation.y + diff * Math.min(1, 18 * delta));
     }
 
     // Câmera orbital livre: gira (yaw) e inclina (pitch) em torno de um
