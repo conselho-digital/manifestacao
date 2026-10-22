@@ -4,7 +4,7 @@ import { useStageVoice } from "../net/useStageVoice.js";
 import { StageButton } from "../ui/StageButton.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
-import { VEHICLES, type AvatarConfig, type VehicleId } from "@manifestacao/shared";
+import { TEAMS, VEHICLES, hexColor, type AvatarConfig, type VehicleId } from "@manifestacao/shared";
 import { Scenery } from "./Scenery.js";
 import { Player, type PlayerTransform } from "./Player.js";
 import { RemotePlayers } from "./RemotePlayers.js";
@@ -12,24 +12,21 @@ import { SprayMarks } from "./SprayMarks.js";
 import { isTypingTarget, useInput } from "./useInput.js";
 import { modelUrlFor } from "./models.js";
 import { CAMERA_SHOULDER_RATIO, CAMERA_DISTANCE_MOBILE, CAMERA_DISTANCE_DESKTOP, CAMERA_PITCH_DEFAULT, CAMERA_PIVOT_HEIGHT } from "./world.js";
-import { SPRAY_CARTRIDGE_SIZE, SPRAY_REFILL_INTERVAL_MS } from "./spray.js";
+import { useDailySprays } from "./useDailySprays.js";
+import { sprayImageFor } from "./models.js";
 import { useAvenueRealtime } from "../net/useAvenueRealtime.js";
 import { Joystick } from "../ui/Joystick.js";
 import { CameraLook } from "../ui/CameraLook.js";
 import { RunButton } from "../ui/RunButton.js";
 import { Hud } from "../ui/Hud.js";
-import { VehiclePicker } from "../ui/VehiclePicker.js";
+import { ActionsMenu } from "../ui/ActionsMenu.js";
 import { StoreButton } from "../ui/StoreButton.js";
 import { OptionsButton } from "../ui/OptionsButton.js";
 import { ChatButton } from "../ui/ChatButton.js";
-import { SuperchatButton } from "../ui/SuperchatButton.js";
 import { SuperchatBanner } from "../ui/SuperchatBanner.js";
 import { SuperchatModal } from "../ui/SuperchatModal.js";
-import { SignButton } from "../ui/SignButton.js";
 import { SignModal } from "../ui/SignModal.js";
 import { useSigns } from "./useSigns.js";
-import { PromoteMenu } from "../ui/PromoteMenu.js";
-import { BillboardButton } from "../ui/BillboardButton.js";
 import { BillboardModal } from "../ui/BillboardModal.js";
 import { Billboards } from "./Billboards.js";
 import { useBillboards } from "./useBillboards.js";
@@ -252,18 +249,10 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
   // origem do mundo (0,0) em vez de ignorar o clique.
   const transformReadyRef = useRef(false);
 
-  // Cartucho de spray: contador local (client-trust, como o resto do MVP não
-  // autoritativo — CLAUDE.md §4). Recarrega sozinho até o máximo.
-  const [sprayCharges, setSprayCharges] = useState(SPRAY_CARTRIDGE_SIZE);
-  useEffect(() => {
-    const t = setInterval(() => {
-      setSprayCharges((c) => Math.min(SPRAY_CARTRIDGE_SIZE, c + 1));
-    }, SPRAY_REFILL_INTERVAL_MS);
-    return () => clearInterval(t);
-  }, []);
-
-  const chargesRef = useRef(sprayCharges);
-  chargesRef.current = sprayCharges;
+  // Sprays do dia (15 por dia): contador no aparelho — client-trust, como o resto do MVP não autoritativo (CLAUDE.md §4).
+  const sprays = useDailySprays();
+  const chargesRef = useRef(sprays.charges);
+  chargesRef.current = sprays.charges;
 
   const handleSpray = useCallback(() => {
     if (!transformReadyRef.current || chargesRef.current <= 0) return;
@@ -271,10 +260,8 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     // só gasta se o envio foi aceito (o cooldown pode descartá-lo).
     const target = aimRef.current;
     // A marca é a bandeira da equipe (imagem); a cor da equipe é o reserva sem imagem.
-    if (net.sendSpray(target.x, target.z, avatar.shirt, DEFAULT_SPRAY_ID)) {
-      setSprayCharges((c) => Math.max(0, c - 1));
-    }
-  }, [net, avatar.shirt]);
+    if (net.sendSpray(target.x, target.z, avatar.shirt, DEFAULT_SPRAY_ID)) sprays.spend();
+  }, [net, avatar.shirt, sprays]);
 
   return (
     <>
@@ -425,28 +412,23 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           <OptionsButton onClick={() => setOptionsOpen(true)} />
           <StoreButton onClick={onOpenStore} />
         </div>
-        {signedIn &&
-          (isTouch ? (
-            // Celular: um botão "Divulgar" com a fileira de opções (poupa espaço no canto).
-            <PromoteMenu
-              onBillboards={() => setBillboardOpen(true)}
-              onSign={() => setSignOpen(true)}
-              onSuperchat={() => setSuperchatOpen(true)}
-            />
-          ) : (
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-            <BillboardButton onClick={() => setBillboardOpen(true)} />
-            <SignButton onClick={() => setSignOpen(true)} />
-            <SuperchatButton onClick={() => setSuperchatOpen(true)} />
-          </div>
-          ))}
-        <SprayButton charges={sprayCharges} maxCharges={SPRAY_CARTRIDGE_SIZE} onSpray={handleSpray} />
-        <VehiclePicker
-          value={vehicle}
-          onChange={setVehicle}
+        <ActionsMenu
+          signedIn={signedIn}
+          onBillboards={() => setBillboardOpen(true)}
+          onSign={() => setSignOpen(true)}
+          onSuperchat={() => setSuperchatOpen(true)}
+          vehicle={vehicle}
+          onVehicle={setVehicle}
           owned={owned}
           onLocked={onOpenStore}
           loading={entitlementsLoading}
+        />
+        <SprayButton
+          charges={sprays.charges}
+          maxCharges={sprays.max}
+          onSpray={handleSpray}
+          imageUrl={sprayImageFor(avatar.team)}
+          color={hexColor(TEAMS[avatar.team].color)}
         />
       </TopRightPanel>
       {optionsOpen && !adminOpen && (

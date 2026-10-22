@@ -7,15 +7,19 @@ import {
   type VehicleId,
 } from "@manifestacao/shared";
 
-interface VehiclePickerProps {
-  value: VehicleId;
-  onChange: (v: VehicleId) => void;
+interface ActionsMenuProps {
+  /** Conta logada: só ela divulga (telões, cartaz, superchat). */
+  signedIn: boolean;
+  onBillboards: () => void;
+  onSign: () => void;
+  onSuperchat: () => void;
+  vehicle: VehicleId;
+  onVehicle: (v: VehicleId) => void;
   /** Itens que o usuário possui (ids "vehicle:x" / "pass:premium"). */
   owned: ReadonlySet<string>;
-  /** Chamado ao clicar num veículo bloqueado (abre a loja). */
+  /** Chamado ao escolher um veículo bloqueado (abre a loja). */
   onLocked: (vehicle: VehicleId) => void;
-  /** true enquanto a posse ainda não terminou de carregar: não mostra
-   * cadeado nem preço (pode ser falso-positivo), só desabilita a troca. */
+  /** Posse ainda carregando: não mostra cadeado nem preço (pode ser falso-positivo). */
   loading: boolean;
 }
 
@@ -24,19 +28,15 @@ function formatBRL(cents: number): string {
 }
 
 /**
- * Seletor de veículo em dropdown: um botão principal mostra o veículo atual e abre a lista de opções.
- * Sem posicionamento próprio — fica dentro do
- * TopRightPanel (junto do StoreButton). Veículos com preço (carro de som)
- * exigem posse (entitlement direto ou via passe Premium); sem posse, o
- * clique abre a loja em vez de selecionar. O estado travado é comunicado só
- * por cor/opacidade (sem ícones/emoji, fora do sistema de tokens do app).
+ * Menu do jogo: um único botão com quatro pontos que abre "Divulgar" (Telões, Cartaz, Superchat) e "Veículo".
+ * A lista é `fixed` porque o painel do canto tem rolagem e cortaria uma lista absoluta.
  */
-export function VehiclePicker({ value, onChange, owned, onLocked, loading }: VehiclePickerProps) {
+export function ActionsMenu({ signedIn, onBillboards, onSign, onSuperchat, vehicle, onVehicle, owned, onLocked, loading }: ActionsMenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
-  // A lista é `fixed` (o painel do canto tem rolagem e cortaria uma lista absoluta).
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
+
   const toggle = () => {
     if (!open && btnRef.current) {
       const r = btnRef.current.getBoundingClientRect();
@@ -45,13 +45,17 @@ export function VehiclePicker({ value, onChange, owned, onLocked, loading }: Veh
     setOpen((o) => !o);
   };
 
-  // Fecha ao tocar fora ou apertar Esc.
   useEffect(() => {
     if (!open) return;
     const onDown = (e: PointerEvent) => {
       if (rootRef.current && !rootRef.current.contains(e.target as Node)) setOpen(false);
     };
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && setOpen(false);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setOpen(false);
+        btnRef.current?.focus();
+      }
+    };
     document.addEventListener("pointerdown", onDown);
     document.addEventListener("keydown", onKey);
     return () => {
@@ -60,64 +64,72 @@ export function VehiclePicker({ value, onChange, owned, onLocked, loading }: Veh
     };
   }, [open]);
 
+  const choose = (fn: () => void) => () => {
+    setOpen(false);
+    fn();
+  };
+
   const optionBtn: React.CSSProperties = {
     minHeight: 44,
-    width: "100%",
-    padding: "8px 12px",
+    padding: "8px 14px",
     fontSize: "var(--t-ui)",
     fontWeight: 700,
     textAlign: "left",
     borderRadius: "var(--r-sm)",
     border: "1px solid transparent",
+    background: "var(--surface-2)",
+    color: "var(--ink)",
     cursor: "pointer",
+    whiteSpace: "nowrap",
+  };
+  const heading: React.CSSProperties = {
+    margin: "4px 4px 0",
+    fontSize: "var(--t-ui)",
+    color: "var(--ink-dim)",
+    textTransform: "uppercase",
+    letterSpacing: "0.08em",
   };
 
   return (
-    <div ref={rootRef} style={{ position: "relative", display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+    <div ref={rootRef} style={{ display: "flex", justifyContent: "flex-end" }}>
       <button
-        type="button"
         ref={btnRef}
-        aria-haspopup="listbox"
+        type="button"
+        aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Veículo: ${VEHICLES[value].label}. Toque para trocar`}
-        disabled={loading}
+        aria-label="Menu: divulgar e veículos"
         onClick={toggle}
         style={{
-          minHeight: 44,
-          minWidth: 148,
-          padding: "8px 12px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "space-between",
-          gap: 10,
-          fontSize: "var(--t-ui)",
-          fontWeight: 700,
+          width: 48,
+          height: 48,
+          display: "grid",
+          placeItems: "center",
           borderRadius: "var(--r-sm)",
-          border: `1px solid ${value === "nenhum" ? "var(--line)" : "var(--accent)"}`,
+          border: `1px solid ${open || vehicle !== "nenhum" ? "var(--accent)" : "var(--line)"}`,
           background: "var(--scrim)",
           color: "var(--ink)",
-          opacity: loading ? 0.6 : 1,
-          cursor: loading ? "default" : "pointer",
+          cursor: "pointer",
         }}
       >
-        <span>
-          <span style={{ color: "var(--ink-dim)", fontWeight: 400 }}>Veículo: </span>
-          {VEHICLES[value].label}
-        </span>
-        <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true" style={{ transform: open ? "rotate(180deg)" : undefined }}>
-          <path d="M5 9l7 7 7-7" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+        {/* Quatro pontos (2×2) */}
+        <svg width="22" height="22" viewBox="0 0 24 24" aria-hidden="true" fill="currentColor">
+          <circle cx="7" cy="7" r="2.6" />
+          <circle cx="17" cy="7" r="2.6" />
+          <circle cx="7" cy="17" r="2.6" />
+          <circle cx="17" cy="17" r="2.6" />
         </svg>
       </button>
 
       {open && pos && (
         <div
-          role="listbox"
-          aria-label="Veículo"
+          role="menu"
+          aria-label="Menu"
           style={{
             position: "fixed",
             top: pos.top,
             right: pos.right,
             minWidth: 220,
+            maxWidth: "calc(100vw - 16px)",
             maxHeight: `calc(100dvh - ${pos.top + 16}px)`,
             overflowY: "auto",
             padding: 6,
@@ -131,22 +143,36 @@ export function VehiclePicker({ value, onChange, owned, onLocked, loading }: Veh
             zIndex: 9,
           }}
         >
+          {signedIn && (
+            <>
+              <p style={heading}>Divulgar</p>
+              <div style={{ display: "flex", gap: 6 }}>
+                <button type="button" role="menuitem" onClick={choose(onBillboards)} style={{ ...optionBtn, flex: 1, textAlign: "center" }}>
+                  Telões
+                </button>
+                <button type="button" role="menuitem" onClick={choose(onSign)} style={{ ...optionBtn, flex: 1, textAlign: "center" }}>
+                  Cartaz
+                </button>
+                <button type="button" role="menuitem" onClick={choose(onSuperchat)} style={{ ...optionBtn, flex: 1, textAlign: "center" }}>
+                  Superchat
+                </button>
+              </div>
+            </>
+          )}
+          <p style={heading}>Veículo</p>
           {VEHICLE_IDS.map((id) => {
-            const selected = id === value;
+            const selected = id === vehicle;
             const needsEntitlement = vehicleRequiresEntitlement(id);
             const unlocked = loading || !needsEntitlement || owned.has(`vehicle:${id}`) || hasVehicleViaPremium(id, owned);
             return (
               <button
                 key={id}
                 type="button"
-                role="option"
-                aria-selected={selected}
+                role="menuitemradio"
+                aria-checked={selected}
+                disabled={loading}
                 aria-label={!loading && !unlocked ? `${VEHICLES[id].label} — bloqueado, toque para comprar na loja` : undefined}
-                onClick={() => {
-                  setOpen(false);
-                  if (unlocked) onChange(id);
-                  else onLocked(id);
-                }}
+                onClick={choose(() => (unlocked ? onVehicle(id) : onLocked(id)))}
                 style={{
                   ...optionBtn,
                   background: selected ? "var(--accent)" : "var(--surface-2)",

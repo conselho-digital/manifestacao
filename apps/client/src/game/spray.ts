@@ -21,9 +21,8 @@ export const SPRAY_CLEANUP_INTERVAL_MS = 30_000;
 /** Limite de marcas simultâneas na avenida (evita crescimento sem fim). */
 export const SPRAY_MAX_MARKS = 400;
 
-/** Cartucho: carga inicial, recarga por item e intervalo de recarga. */
-export const SPRAY_CARTRIDGE_SIZE = 15;
-export const SPRAY_REFILL_INTERVAL_MS = 8_000;
+/** Sprays por dia (por aparelho/conta, zera à meia-noite). Ver game/useDailySprays.ts. */
+export const SPRAY_DAILY_LIMIT = 15;
 
 /**
  * Alcance máximo do spray a partir do jogador: a marca vai onde a mira (centro
