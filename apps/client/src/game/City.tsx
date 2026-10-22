@@ -1,10 +1,14 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import {
   BoxGeometry,
   BufferAttribute,
   Box3,
   CanvasTexture,
   Color,
+  CylinderGeometry,
+  InstancedMesh,
+  Matrix4,
+  Quaternion,
   RepeatWrapping,
   SRGBColorSpace,
   Vector3,
@@ -12,7 +16,16 @@ import {
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { clearCameraColliders, setCameraColliders } from "./colliders.js";
-import { AVENUE_LENGTH, AVENUE_WIDTH, PARK_GAP, PARK_SIZE, PLAZA_HALF_X, PLAZA_MAX_Z } from "./world.js";
+import {
+  AVENUE_END_MARGIN,
+  AVENUE_LENGTH,
+  AVENUE_WIDTH,
+  PARK_GAP,
+  PARK_SIZE,
+  PLAZA_HALF_X,
+  PLAZA_MAX_Z,
+  SIDEWALK_WIDTH,
+} from "./world.js";
 
 /**
  * Entorno da avenida (inspirado no layout da Paulista): quarteirões de prédios altos nos dois lados, atrás da
@@ -23,7 +36,7 @@ import { AVENUE_LENGTH, AVENUE_WIDTH, PARK_GAP, PARK_SIZE, PLAZA_HALF_X, PLAZA_M
 const WINDOW_W = 3; // largura de uma "janela" (unidades do mundo)
 const FLOOR_H = 3.4; // altura de um andar
 const X_LIMIT = AVENUE_LENGTH / 2 + 30; // a cidade passa um pouco das pontas da avenida
-const SIDEWALK = 6; // largura da calçada junto à avenida
+const SIDEWALK = SIDEWALK_WIDTH; // largura da calçada junto à avenida
 
 interface Building {
   x: number;
@@ -32,6 +45,8 @@ interface Building {
   d: number;
   h: number;
   color: number;
+  /** Fileira (0 = a da frente, junto à calçada). */
+  row: number;
 }
 
 function mulberry32(seed: number) {
@@ -82,6 +97,7 @@ function buildCity(): Building[] {
           d,
           h,
           color: PALETTE[Math.floor(rand() * PALETTE.length)]!,
+          row,
         });
         // fileiras de trás precisam passar do limite da cidade em z? (a névoa cobre)
         void zFar;
@@ -144,6 +160,174 @@ function makeFacadeTexture(): CanvasTexture {
   return tex;
 }
 
+interface FenceSeg {
+  x0: number;
+  x1: number;
+  side: 1 | -1;
+}
+
+/** Vãos entre os prédios da frente (fora da praça e do parque): é onde não há avenida, então ganham cerca. */
+function fenceSegments(buildings: Building[]): FenceSeg[] {
+  const out: FenceSeg[] = [];
+  const reach = AVENUE_LENGTH / 2 - AVENUE_END_MARGIN; // até onde o jogador chega
+  const open = PLAZA_HALF_X; // praça (+Z) e parque (-Z) têm 2×32 de largura e ficam abertos
+  for (const side of [1, -1] as const) {
+    const row = buildings
+      .filter((b) => b.row === 0 && Math.sign(b.z) === side)
+      .sort((a, b) => a.x - b.x);
+    const edges: [number, number][] = []; // trechos ocupados por prédio
+    for (const b of row) edges.push([b.x - b.w / 2, b.x + b.w / 2]);
+    let cursor = -reach;
+    const gaps: [number, number][] = [];
+    for (const [l, r] of edges) {
+      if (l > cursor) gaps.push([cursor, Math.min(l, reach)]);
+      cursor = Math.max(cursor, r);
+    }
+    if (cursor < reach) gaps.push([cursor, reach]);
+    for (const [g0, g1] of gaps) {
+      // tira a parte que cai na praça/parque (aberta)
+      const parts: [number, number][] = [];
+      if (g0 < -open) parts.push([g0, Math.min(g1, -open)]);
+      if (g1 > open) parts.push([Math.max(g0, open), g1]);
+      for (const [a, b] of parts) if (b - a > 0.3) out.push({ x0: a, x1: b, side });
+    }
+  }
+  return out;
+}
+
+/** Cercas com faixa amarela nos vãos entre prédios: mostram onde a calçada acaba (dois meshes instanciados). */
+function Fences({ buildings }: { buildings: Building[] }) {
+  const segs = useMemo(() => fenceSegments(buildings), [buildings]);
+  const posts = useRef<InstancedMesh>(null);
+  const tapes = useRef<InstancedMesh>(null);
+  const zLine = AVENUE_WIDTH / 2 + SIDEWALK - 0.2;
+
+  const postCount = useMemo(() => segs.reduce((n, s) => n + Math.ceil((s.x1 - s.x0) / 3) + 1, 0), [segs]);
+
+  useLayoutEffect(() => {
+    if (!posts.current || !tapes.current) return;
+    const m = new Matrix4();
+    const q = new Quaternion();
+    let pi = 0;
+    let ti = 0;
+    for (const sg of segs) {
+      const z = sg.side * zLine;
+      const len = sg.x1 - sg.x0;
+      const n = Math.ceil(len / 3);
+      for (let k = 0; k <= n; k++) {
+        m.compose(new Vector3(sg.x0 + (len * k) / n, 0.9, z), q, new Vector3(1, 1, 1));
+        posts.current.setMatrixAt(pi++, m);
+      }
+      for (const y of [0.7, 1.35]) {
+        m.compose(new Vector3((sg.x0 + sg.x1) / 2, y, z), q, new Vector3(len, 1, 1));
+        tapes.current.setMatrixAt(ti++, m);
+      }
+    }
+    posts.current.count = pi;
+    tapes.current.count = ti;
+    posts.current.instanceMatrix.needsUpdate = true;
+    tapes.current.instanceMatrix.needsUpdate = true;
+  }, [segs]);
+
+  return (
+    <group>
+      <instancedMesh ref={posts} frustumCulled={false} args={[undefined, undefined, Math.max(1, postCount)]}>
+        <cylinderGeometry args={[0.06, 0.06, 1.8, 6]} />
+        <meshStandardMaterial color={0x555b62} />
+      </instancedMesh>
+      <instancedMesh ref={tapes} frustumCulled={false} args={[undefined, undefined, Math.max(2, segs.length * 2)]}>
+        <boxGeometry args={[1, 0.16, 0.05]} />
+        <meshStandardMaterial color={0xffd12e} emissive={0x6b5200} />
+      </instancedMesh>
+    </group>
+  );
+}
+
+/** Partes da viatura (comprimento ao longo de Z; frente = +Z), agrupadas por material para instanciar. */
+function policeCarParts(): Record<"white" | "blue" | "black" | "red" | "lightBlue", BufferGeometry> {
+  const box = (w: number, h: number, d: number, x: number, y: number, z: number) => {
+    const g = new BoxGeometry(w, h, d);
+    g.translate(x, y, z);
+    return g;
+  };
+  const wheel = (x: number, z: number) => {
+    const g = new CylinderGeometry(0.38, 0.38, 0.28, 12);
+    g.rotateZ(Math.PI / 2);
+    g.translate(x, 0.38, z);
+    return g;
+  };
+  const merge = (list: BufferGeometry[]) => mergeGeometries(list)!;
+  return {
+    white: merge([box(1.9, 0.75, 4.4, 0, 0.75, 0), box(1.6, 0.55, 2.0, 0, 1.4, -0.2)]),
+    blue: merge([box(1.92, 0.28, 4.42, 0, 0.62, 0), box(1.62, 0.2, 2.02, 0, 1.28, -0.2)]),
+    black: merge([wheel(-0.95, 1.4), wheel(0.95, 1.4), wheel(-0.95, -1.4), wheel(0.95, -1.4), box(1.95, 0.2, 0.2, 0, 0.5, 2.25), box(1.95, 0.2, 0.2, 0, 0.5, -2.25)]),
+    red: merge([box(0.38, 0.16, 1.0, -0.25, 1.78, -0.2)]),
+    lightBlue: merge([box(0.38, 0.16, 1.0, 0.25, 1.78, -0.2)]),
+  };
+}
+
+const CAR_COLORS = { white: 0xf2f4f7, blue: 0x1d4ea0, black: 0x15181c, red: 0xff2b2b, lightBlue: 0x2b6bff } as const;
+
+/**
+ * Bloqueio de viaturas nas duas pontas da avenida: mostra que não dá para passar (o jogador para antes delas,
+ * ver clampToAvenue). Cada tipo de peça é um mesh instanciado.
+ */
+function PoliceBlockade() {
+  const parts = useMemo(policeCarParts, []);
+  const keys = Object.keys(parts) as (keyof typeof parts)[];
+  const refs = useRef<Record<string, InstancedMesh | null>>({});
+
+  // Viaturas lado a lado, atravessadas na avenida e nas calçadas, com leve variação de ângulo.
+  const cars = useMemo(() => {
+    const out: { x: number; z: number; rot: number }[] = [];
+    const half = AVENUE_WIDTH / 2 + SIDEWALK;
+    for (const end of [1, -1] as const) {
+      const x = end * (AVENUE_LENGTH / 2 - AVENUE_END_MARGIN / 2);
+      for (let z = -half + 2.4; z <= half - 2.4 + 0.01; z += 5.2) {
+        const jitter = ((Math.round(z * 10) % 7) - 3) * 0.03;
+        out.push({ x, z, rot: Math.PI / 2 + jitter });
+      }
+    }
+    return out;
+  }, []);
+
+  useLayoutEffect(() => {
+    const m = new Matrix4();
+    const q = new Quaternion();
+    for (const k of keys) {
+      const mesh = refs.current[k];
+      if (!mesh) continue;
+      cars.forEach((c, i) => {
+        q.setFromAxisAngle(new Vector3(0, 1, 0), c.rot);
+        m.compose(new Vector3(c.x, 0, c.z), q, new Vector3(1, 1, 1));
+        mesh.setMatrixAt(i, m);
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+    }
+  }, [cars, keys]);
+
+  return (
+    <group>
+      {keys.map((k) => (
+        <instancedMesh
+          key={k}
+          ref={(el) => {
+            refs.current[k] = el;
+          }}
+          args={[parts[k], undefined, cars.length]}
+          frustumCulled={false}
+        >
+          <meshStandardMaterial
+            color={CAR_COLORS[k]}
+            emissive={k === "red" || k === "lightBlue" ? CAR_COLORS[k] : 0x000000}
+            emissiveIntensity={k === "red" || k === "lightBlue" ? 0.9 : 0}
+          />
+        </instancedMesh>
+      ))}
+    </group>
+  );
+}
+
 export function City() {
   const { buildings, geometry } = useMemo(() => {
     const list = buildCity();
@@ -196,6 +380,8 @@ export function City() {
           );
         }),
       )}
+      <Fences buildings={buildings} />
+      <PoliceBlockade />
       {/* Prédios (um mesh só) */}
       <mesh geometry={geometry}>
         <meshStandardMaterial map={texture} vertexColors />

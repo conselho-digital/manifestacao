@@ -47,6 +47,9 @@ export const PARK_GAP = 4;
  * Praça do MASP (lado +Z): piso livre sob o prédio suspenso e ao redor, ligado à avenida.
  * x de -PLAZA_HALF_X a +PLAZA_HALF_X; z de AVENUE_WIDTH/2 até PLAZA_MAX_Z.
  */
+/** Largura da calçada ao longo da avenida (os prédios começam depois dela) e recuo das viaturas nas pontas. */
+export const SIDEWALK_WIDTH = 6;
+export const AVENUE_END_MARGIN = 6;
 export const PLAZA_HALF_X = 32;
 export const PLAZA_MAX_Z = 44;
 
@@ -60,25 +63,25 @@ export function clampToAvenue(
   z: number,
   prev?: { x: number; z: number },
 ): { x: number; z: number } {
-  const halfL = AVENUE_LENGTH / 2 - AVATAR_RADIUS;
-  const halfW = AVENUE_WIDTH / 2 - AVATAR_RADIUS;
+  // Nas pontas a avenida é fechada por viaturas (ver City.tsx): o jogador para antes delas.
+  const halfL = AVENUE_LENGTH / 2 - AVENUE_END_MARGIN;
+  // Avenida + calçadas dos dois lados (os prédios começam na borda da calçada).
+  const halfSide = AVENUE_WIDTH / 2 + SIDEWALK_WIDTH - AVATAR_RADIUS;
   const parkHalf = PARK_SIZE / 2 - AVATAR_RADIUS;
   const zMin = -(AVENUE_WIDTH / 2 + PARK_GAP + PARK_SIZE) + AVATAR_RADIUS;
   const plazaHalf = PLAZA_HALF_X - AVATAR_RADIUS;
   const cx = Math.max(-halfL, Math.min(halfL, x));
   let cz = Math.max(zMin, Math.min(PLAZA_MAX_Z - AVATAR_RADIUS, z));
   let cx2 = cx;
-  if (cz > halfW && Math.abs(cx) > plazaHalf) {
-    // Fora da largura da praça: vindo da avenida (prev) a borda dela vira parede; já na praça (ou posição da
+  if (cz > halfSide && Math.abs(cx) > plazaHalf) {
+    // Fora da largura da praça: vindo da calçada (prev) a borda dela vira parede; já na praça (ou posição da
     // rede, sem prev) a parede é lateral — só trava x.
-    if (prev && prev.z <= halfW) cz = halfW;
+    if (prev && prev.z <= halfSide) cz = halfSide;
     else cx2 = Math.max(-plazaHalf, Math.min(plazaHalf, cx));
   }
-  if (cz < -halfW && Math.abs(cx) > parkHalf) {
-    // Fora da largura do parque. Vindo da avenida (prev), a borda dela vira
-    // parede; já dentro do parque (ou sem posição anterior, ex.: posição vinda
-    // da rede), a parede é lateral — só trava x, sem teleportar em z.
-    if (prev && prev.z >= -halfW) cz = -halfW;
+  if (cz < -halfSide && Math.abs(cx) > parkHalf) {
+    // Fora da largura do parque: idem (parede na calçada vindo dela; lateral se já dentro do parque).
+    if (prev && prev.z >= -halfSide) cz = -halfSide;
     else cx2 = Math.max(-parkHalf, Math.min(parkHalf, cx));
   }
   return { x: cx2, z: cz };
