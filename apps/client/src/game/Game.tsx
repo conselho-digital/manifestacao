@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
-import type { AvatarConfig, VehicleId } from "@manifestacao/shared";
+import { VEHICLES, type AvatarConfig, type VehicleId } from "@manifestacao/shared";
 import { Scenery } from "./Scenery.js";
 import { Player, type PlayerTransform } from "./Player.js";
 import { RemotePlayers } from "./RemotePlayers.js";
@@ -42,6 +42,8 @@ import { TopRightPanel } from "../ui/TopRightPanel.js";
 import { Crosshair } from "../ui/Crosshair.js";
 import { useIsTouch } from "../ui/useIsTouch.js";
 import { hasVehicleViaPremium, vehicleRequiresEntitlement } from "@manifestacao/shared";
+import { DriveControls } from "../ui/DriveControls.js";
+import { NO_DRIVE_INPUT, type DriveInput } from "./driving.js";
 
 const SPRAY_STYLE_KEY = "manifestacao.sprayStyle";
 const SIGN_KEY = "manifestacao.sign";
@@ -125,6 +127,31 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
   const cameraYawRef = useRef(0);
   const cameraPitchRef = useRef(CAMERA_PITCH_DEFAULT);
   const runRef = useRef(false);
+  // Direção: botões na tela escrevem em driveRef; wheelieRef (moto empinada) é só leitura do desenho.
+  const driveRef = useRef<DriveInput>(NO_DRIVE_INPUT);
+  const wheelieRef = useRef(0);
+  const cameraTouchedAtRef = useRef(0);
+  const vehicleKind = VEHICLES[vehicle]?.kind ?? "foot";
+  const driving = vehicleKind !== "foot";
+  // PC: Q empina e E abaixa a roda da frente da moto (W S A D / setas já vêm do useInput).
+  useEffect(() => {
+    if (vehicleKind !== "moto") return;
+    const key = (down: boolean) => (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target)) return;
+      const k = e.key.toLowerCase();
+      if (k === "q") driveRef.current = { ...driveRef.current, up: down };
+      else if (k === "e") driveRef.current = { ...driveRef.current, down: down };
+    };
+    const onDown = key(true);
+    const onUp = key(false);
+    window.addEventListener("keydown", onDown);
+    window.addEventListener("keyup", onUp);
+    return () => {
+      window.removeEventListener("keydown", onDown);
+      window.removeEventListener("keyup", onUp);
+      driveRef.current = { ...driveRef.current, up: false, down: false };
+    };
+  }, [vehicleKind]);
   // Ponto do chão sob a mira (centro da tela), atualizado a cada frame pelo Player.
   const aimRef = useRef({ x: 0, z: 0 });
   const cameraDistance = isTouch ? CAMERA_DISTANCE_MOBILE : CAMERA_DISTANCE_DESKTOP;
@@ -285,6 +312,9 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           aimRef={aimRef}
           runRef={runRef}
           onMove={net.sendMove}
+          driveRef={driveRef}
+          wheelieRef={wheelieRef}
+          cameraTouchedAtRef={cameraTouchedAtRef}
           transformRef={transformRef}
           transformReadyRef={transformReadyRef}
         />
@@ -292,11 +322,37 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
         <Billboards ads={billboardAds} />
       </Canvas>
 
-      {isTouch && <Joystick onMove={setJoystick} />}
+      {isTouch && !driving && <Joystick onMove={setJoystick} />}
+      {isTouch && vehicleKind !== "foot" && <DriveControls kind={vehicleKind} driveRef={driveRef} />}
       {/* Tela toda gira a câmera; o Joystick (z-index maior) só captura o toque dentro da própria área. */}
-      <CameraLook yawRef={cameraYawRef} pitchRef={cameraPitchRef} fullScreen />
+      <CameraLook yawRef={cameraYawRef} pitchRef={cameraPitchRef} touchedAtRef={cameraTouchedAtRef} fullScreen />
       {isTouch ? (
-        <RunButton runRef={runRef} />
+        !driving && <RunButton runRef={runRef} />
+      ) : driving ? (
+        <div
+          style={{
+            position: "fixed",
+            right: "calc(env(safe-area-inset-right, 0px) + 16px)",
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)",
+            zIndex: 5,
+            padding: "8px 12px",
+            borderRadius: "var(--r-sm)",
+            border: "1px solid var(--line)",
+            background: "var(--scrim)",
+            color: "var(--ink)",
+            fontSize: "var(--t-ui)",
+            pointerEvents: "none",
+            userSelect: "none",
+          }}
+        >
+          <strong>W</strong> acelera · <strong>S</strong> freia · <strong>A</strong>/<strong>D</strong> viram
+          {vehicleKind === "moto" && (
+            <>
+              {" "}
+              · <strong>Q</strong>/<strong>E</strong> empina
+            </>
+          )}
+        </div>
       ) : (
         showRunHint && (
         <div

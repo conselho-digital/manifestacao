@@ -8,6 +8,7 @@ import {
   type VehicleId,
 } from "@manifestacao/shared";
 import { Avatar } from "./Avatar.js";
+import { NO_DRIVE_INPUT, stepDrive, type DriveInput, type DriveState } from "./driving.js";
 import type { SignData } from "./useSigns.js";
 import {
   CAMERA_LOOK_AHEAD_RATIO,
@@ -48,7 +49,13 @@ interface PlayerProps {
   aimRef: { current: { x: number; z: number } };
   /** true enquanto o botão de correr está pressionado. */
   runRef: { current: boolean };
-  onMove: (x: number, z: number, facing: Facing, vehicle: VehicleId, flag: FlagId) => void;
+  onMove: (x: number, z: number, facing: Facing, vehicle: VehicleId, flag: FlagId, heading?: number, wheelie?: number) => void;
+  /** Botões de direção (touch) pressionados; o teclado vem pelo `inputRef`. */
+  driveRef: { current: DriveInput };
+  /** Quanto a moto está empinada (0..1) — lido pelo Avatar para inclinar o desenho. */
+  wheelieRef: { current: number };
+  /** Instante (ms) do último arrasto de câmera — a câmera só se alinha ao veículo sozinha se faz tempo. */
+  cameraTouchedAtRef: { current: number };
   /** Atualizado a cada frame com a posição atual (opcional). */
   transformRef?: { current: PlayerTransform };
   /** Marcado true após o primeiro frame — transformRef só é confiável depois disso. */
@@ -56,6 +63,10 @@ interface PlayerProps {
 }
 
 const SEND_INTERVAL = 1 / 12; // ~12 updates/s
+
+function wrapAngle(a: number): number {
+  return ((((a + Math.PI) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) - Math.PI;
+}
 
 function facingOf(x: number, z: number, prev: Facing): Facing {
   if (x === 0 && z === 0) return prev;
@@ -77,10 +88,13 @@ export function Player({
   inputRef,
   cameraYawRef,
   cameraPitchRef,
-  cameraDistance,
+  cameraDistance: cameraDistanceProp,
   aimRef,
   runRef,
   onMove,
+  driveRef,
+  wheelieRef,
+  cameraTouchedAtRef,
   transformRef,
   transformReadyRef,
 }: PlayerProps) {
@@ -95,6 +109,8 @@ export function Player({
   vehicleRef.current = vehicle;
   const flagRef = useRef(flag);
   flagRef.current = flag;
+  const driveState = useRef<DriveState>({ speed: 0, heading: 0, wheelie: 0 });
+  const prevVehicle = useRef<VehicleId>(vehicle);
   const tmp = useRef(new Vector3());
   const aimDir = useRef(new Vector3());
   const dir = useRef(new Vector3());
@@ -107,13 +123,55 @@ export function Player({
     const g = ref.current;
     if (!g) return;
 
-    const yaw = cameraYawRef.current;
     const input = inputRef.current;
     const len = Math.hypot(input.x, input.z);
-    // Correr não se aplica dirigindo — o veículo já define a velocidade.
-    const runMul = runRef.current && vehicleRef.current === "nenhum" ? RUN_MULTIPLIER : 1;
-    const speed = WALK_SPEED * runMul * (VEHICLES[vehicleRef.current]?.speedMul ?? 1);
-    if (len > 0) {
+    const driving = (VEHICLES[vehicleRef.current]?.kind ?? "foot") !== "foot";
+    // Trocou de veículo (ou desceu): zera a velocidade e herda a direção atual.
+    if (prevVehicle.current !== vehicleRef.current) {
+      prevVehicle.current = vehicleRef.current;
+      driveState.current = { speed: 0, heading: g.rotation.y, wheelie: 0 };
+    }
+    let moving = len > 0;
+
+    if (driving) {
+      // Dirigindo: acelerar / frear / girar (botões na tela ou W S A D) e, na moto, empinar (Q / E).
+      const d = driveRef.current;
+      const di: DriveInput = {
+        accel: d.accel || input.z < -0.3,
+        brake: d.brake || input.z > 0.3,
+        left: d.left || input.x > 0.3,
+        right: d.right || input.x < -0.3,
+        up: d.up,
+        down: d.down,
+      };
+      const st = driveState.current;
+      stepDrive(st, di, vehicleRef.current, delta);
+      const wantX = g.position.x + Math.sin(st.heading) * st.speed * delta;
+      const wantZ = g.position.z + Math.cos(st.heading) * st.speed * delta;
+      const next = clampToAvenue(wantX, wantZ, g.position);
+      // Bateu na borda da avenida: perde velocidade.
+      if (Math.hypot(next.x - wantX, next.z - wantZ) > 1e-3) st.speed *= 0.4;
+      g.position.x = next.x;
+      g.position.z = next.z;
+      g.rotation.y = st.heading;
+      facing.current = facingOf(Math.sin(st.heading), Math.cos(st.heading), facing.current);
+      wheelieRef.current = st.wheelie;
+      moving = Math.abs(st.speed) > 0.05 || st.wheelie > 0.01;
+      // A câmera se alinha atrás do veículo, a menos que o jogador esteja olhando em volta.
+      if (Math.abs(st.speed) > 1 && performance.now() - cameraTouchedAtRef.current > 1500) {
+        const diff = wrapAngle(st.heading - cameraYawRef.current);
+        cameraYawRef.current = wrapAngle(cameraYawRef.current + diff * Math.min(1, 2.2 * delta));
+      }
+    } else {
+      wheelieRef.current = 0;
+      driveRef.current = NO_DRIVE_INPUT;
+    }
+
+    const yaw = cameraYawRef.current;
+    // Correr só a pé (a velocidade do veículo vem da direção).
+    const runMul = runRef.current ? RUN_MULTIPLIER : 1;
+    const speed = WALK_SPEED * runMul;
+    if (!driving && len > 0) {
       // Entrada do joystick é relativa à tela (z negativo = pra frente, ver
       // useInput.ts); giramos pelo ângulo da câmera para mover "pra onde a
       // câmera olha" (terceira pessoa). forward(yaw) = (sin(yaw), cos(yaw)),
@@ -139,6 +197,9 @@ export function Player({
     // não há como confirmar visualmente o lado; ao entrar um modelo glTF com
     // frente definida, revalidar se a câmera fica atrás das costas ou na frente
     // e inverter o sinal aqui se necessário.
+    // Veículos maiores pedem a câmera mais afastada (senão o caminhão tampa a tela).
+    const camMul = vehicleRef.current === "caminhao" ? 1.9 : driving ? (VEHICLES[vehicleRef.current]?.kind === "car" ? 1.5 : 1.2) : 1;
+    const cameraDistance = cameraDistanceProp * camMul;
     const pitch = cameraPitchRef.current;
     const cosPitch = Math.cos(pitch);
     const pivotX = g.position.x;
@@ -206,23 +267,25 @@ export function Player({
       if (transformReadyRef) transformReadyRef.current = true;
     }
 
-    if (len === 0) {
+    const heading = driving ? driveState.current.heading : g.rotation.y;
+    const wheelie = driving ? driveState.current.wheelie : 0;
+    if (!moving) {
       accum.current = 0;
       if (wasMoving.current) {
-        onMove(g.position.x, g.position.z, facing.current, vehicleRef.current, flagRef.current);
+        onMove(g.position.x, g.position.z, facing.current, vehicleRef.current, flagRef.current, heading, wheelie);
         wasMoving.current = false;
       }
     } else {
       accum.current += delta;
       if (accum.current >= SEND_INTERVAL) {
         accum.current = 0;
-        onMove(g.position.x, g.position.z, facing.current, vehicleRef.current, flagRef.current);
+        onMove(g.position.x, g.position.z, facing.current, vehicleRef.current, flagRef.current, heading, wheelie);
         wasMoving.current = true;
       }
     }
   });
 
   return (
-    <Avatar ref={ref} color={color} name={name} flag={flag} vehicle={vehicle} sign={sign} modelUrl={modelUrl} />
+    <Avatar ref={ref} color={color} name={name} flag={flag} vehicle={vehicle} sign={sign} modelUrl={modelUrl} wheelieRef={wheelieRef} />
   );
 }

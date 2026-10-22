@@ -21,6 +21,16 @@ export function RemotePlayers({ ids, playersRef, signs }: RemotePlayersProps) {
   // Callback ref estável por id: evita recriar a função (e desmontar/remontar
   // a referência no Three.js) a cada render de RemotePlayers.
   const refCallbacks = useRef<Map<string, (g: Group | null) => void>>(new Map());
+  // Quanto cada moto está empinada (suavizado), lido pelo Avatar a cada frame.
+  const wheelies = useRef<Map<string, { current: number }>>(new Map());
+  const wheelieRefFor = (id: string) => {
+    let r = wheelies.current.get(id);
+    if (!r) {
+      r = { current: 0 };
+      wheelies.current.set(id, r);
+    }
+    return r;
+  };
 
   function refFor(id: string): (g: Group | null) => void {
     let fn = refCallbacks.current.get(id);
@@ -42,6 +52,13 @@ export function RemotePlayers({ ids, playersRef, signs }: RemotePlayersProps) {
       if (!g || !p) continue;
       g.position.x += (p.x - g.position.x) * t;
       g.position.z += (p.z - g.position.z) * t;
+      // Dirigindo: o veículo gira para a direção que o dono informou (pelo menor ângulo).
+      if (p.vehicle !== "nenhum") {
+        const diff = ((((p.heading - g.rotation.y + Math.PI) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) - Math.PI;
+        g.rotation.y += diff * t;
+      }
+      const w = wheelieRefFor(id);
+      w.current += (p.wheelie - w.current) * t;
     }
   });
 
@@ -58,6 +75,7 @@ export function RemotePlayers({ ids, playersRef, signs }: RemotePlayersProps) {
             name={p.nickname}
             flag={p.flag}
             vehicle={p.vehicle}
+            wheelieRef={wheelieRefFor(id)}
             sign={p.signId ? signs.get(p.signId) ?? null : null}
             modelUrl={modelUrlFor(p.character, p.team)}
           />

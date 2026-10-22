@@ -32,6 +32,10 @@ export interface MoveBroadcast {
   facing: Facing;
   vehicle: VehicleId;
   flag: FlagId;
+  /** Direção do veículo (radianos em torno de Y) — só dirigindo. */
+  heading?: number;
+  /** Quanto a moto está empinada, de 0 a 1 — só moto. */
+  wheelie?: number;
 }
 
 /** Evento de broadcast: mensagem de chat (efêmera). */

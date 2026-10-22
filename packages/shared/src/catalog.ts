@@ -67,12 +67,16 @@ export function flagColor(flag: FlagId, teamColor: number): number {
 }
 
 // ── Veículos ──────────────────────────────────────────────────────────────
-export type VehicleId = "nenhum" | "moto" | "carro" | "carro_som";
+export type VehicleId = "nenhum" | "moto" | "moto2" | "carro" | "carro_som" | "caminhao";
+
+/** Como se dirige: a pé (joystick), carro/caminhão (4 botões) ou moto (6 botões, com empinar). */
+export type VehicleKind = "foot" | "car" | "moto";
 
 export interface Vehicle {
   id: VehicleId;
   label: string;
-  /** Multiplicador de velocidade de caminhada. */
+  kind: VehicleKind;
+  /** Multiplicador de velocidade de caminhada (define a velocidade máxima). */
   speedMul: number;
   /** Toca som ambiente por proximidade (carro de som). */
   playsMusic: boolean;
@@ -83,19 +87,22 @@ export interface Vehicle {
 // também supabase/migrations (nova migration de update em catalog_items): a
 // cobrança lê o preço do banco, e a lista da lateral lê daqui.
 export const VEHICLES: Record<VehicleId, Vehicle> = {
-  nenhum: { id: "nenhum", label: "A pé", speedMul: 1, playsMusic: false, priceCents: 0 },
-  moto: { id: "moto", label: "Moto", speedMul: 2.2, playsMusic: false, priceCents: 2990 },
-  carro: { id: "carro", label: "Carro", speedMul: 2.6, playsMusic: false, priceCents: 4990 },
+  nenhum: { id: "nenhum", label: "A pé", kind: "foot", speedMul: 1, playsMusic: false, priceCents: 0 },
+  moto: { id: "moto", label: "Moto", kind: "moto", speedMul: 2.2, playsMusic: false, priceCents: 2990 },
+  moto2: { id: "moto2", label: "Moto esportiva", kind: "moto", speedMul: 2.8, playsMusic: false, priceCents: 2990 },
+  carro: { id: "carro", label: "Carro", kind: "car", speedMul: 2.6, playsMusic: false, priceCents: 4990 },
   carro_som: {
     id: "carro_som",
     label: "Carro de som",
+    kind: "car",
     speedMul: 2.0,
     playsMusic: true,
     priceCents: 20000,
   },
+  caminhao: { id: "caminhao", label: "Caminhão", kind: "car", speedMul: 1.8, playsMusic: false, priceCents: 9990 },
 };
 
-export const VEHICLE_IDS: VehicleId[] = ["nenhum", "moto", "carro", "carro_som"];
+export const VEHICLE_IDS: VehicleId[] = ["nenhum", "moto", "moto2", "carro", "carro_som", "caminhao"];
 
 export function isVehicleId(v: unknown): v is VehicleId {
   return typeof v === "string" && Object.hasOwn(VEHICLES, v);

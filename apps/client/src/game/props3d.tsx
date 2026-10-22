@@ -124,6 +124,14 @@ export function Vehicle3D({ vehicle }: { vehicle: VehicleId }) {
 
 /** Representação simples do veículo sob/ao redor do avatar. */
 export function ProceduralVehicle({ vehicle }: { vehicle: VehicleId }) {
+  const wheel = (key: string | number, pos: readonly [number, number, number], r = 0.3, w = 0.2, axis: "x" | "z" = "x") => (
+    <mesh key={key} position={pos} rotation={axis === "x" ? [0, 0, Math.PI / 2] : [Math.PI / 2, 0, 0]}>
+      <cylinderGeometry args={[r, r, w, 16]} />
+      <meshStandardMaterial color={0x111418} />
+    </mesh>
+  );
+
+  // Moto "custom": quadro baixo, tanque, guidão alto e farol (rodas ao longo de Z; frente = +Z).
   if (vehicle === "moto") {
     return (
       <group>
@@ -131,14 +139,68 @@ export function ProceduralVehicle({ vehicle }: { vehicle: VehicleId }) {
           <boxGeometry args={[0.5, 0.35, 1.6]} />
           <meshStandardMaterial color={0x2b2f36} />
         </mesh>
-        <mesh position={[0, 0.3, 0.9]} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[0.32, 0.32, 0.18, 16]} />
-          <meshStandardMaterial color={0x111418} />
+        <mesh position={[0, 0.78, 0.35]}>
+          <boxGeometry args={[0.42, 0.22, 0.6]} />
+          <meshStandardMaterial color={0xb3541e} />
         </mesh>
-        <mesh position={[0, 0.3, -0.7]} rotation={[Math.PI / 2, 0, 0]}>
-          <cylinderGeometry args={[0.32, 0.32, 0.18, 16]} />
-          <meshStandardMaterial color={0x111418} />
+        <mesh position={[0, 1.0, 0.8]}>
+          <boxGeometry args={[0.9, 0.06, 0.06]} />
+          <meshStandardMaterial color={0x8a8f98} />
         </mesh>
+        <mesh position={[0, 0.7, 1.0]}>
+          <sphereGeometry args={[0.14, 12, 12]} />
+          <meshStandardMaterial color={0xfff3c0} emissive={0xfff3c0} emissiveIntensity={0.6} />
+        </mesh>
+        {wheel("f", [0, 0.3, 0.9], 0.32, 0.18, "z")}
+        {wheel("r", [0, 0.3, -0.7], 0.32, 0.18, "z")}
+      </group>
+    );
+  }
+  // Moto esportiva: mais baixa e comprida, carenagem colorida, pneus mais largos.
+  if (vehicle === "moto2") {
+    return (
+      <group>
+        <mesh position={[0, 0.5, 0.15]}>
+          <boxGeometry args={[0.45, 0.3, 1.9]} />
+          <meshStandardMaterial color={0xd7263d} />
+        </mesh>
+        <mesh position={[0, 0.8, 0.75]} rotation={[0.5, 0, 0]}>
+          <boxGeometry args={[0.5, 0.45, 0.35]} />
+          <meshStandardMaterial color={0xf2f4f7} />
+        </mesh>
+        <mesh position={[0, 0.75, -0.35]}>
+          <boxGeometry args={[0.38, 0.12, 0.7]} />
+          <meshStandardMaterial color={0x1c1f24} />
+        </mesh>
+        {wheel("f", [0, 0.31, 0.95], 0.33, 0.22, "z")}
+        {wheel("r", [0, 0.31, -0.7], 0.35, 0.3, "z")}
+      </group>
+    );
+  }
+  // Caminhão: cabine na frente (+Z), baú comprido atrás e 6 rodas.
+  if (vehicle === "caminhao") {
+    return (
+      <group>
+        <mesh position={[0, 0.7, 1.7]}>
+          <boxGeometry args={[1.9, 1.4, 1.3]} />
+          <meshStandardMaterial color={0xc0392b} />
+        </mesh>
+        <mesh position={[0, 1.0, 2.3]}>
+          <boxGeometry args={[1.7, 0.6, 0.06]} />
+          <meshStandardMaterial color={0x9ecbe8} />
+        </mesh>
+        <mesh position={[0, 1.2, -0.9]}>
+          <boxGeometry args={[2.1, 1.9, 3.6]} />
+          <meshStandardMaterial color={0xd9dde2} />
+        </mesh>
+        <mesh position={[0, 0.35, 0]}>
+          <boxGeometry args={[1.5, 0.3, 5]} />
+          <meshStandardMaterial color={0x2b2f36} />
+        </mesh>
+        {[2.0, -0.2, -1.6].flatMap((z, i) => [
+          wheel(`l${i}`, [-1.0, 0.4, z], 0.4, 0.28),
+          wheel(`r${i}`, [1.0, 0.4, z], 0.4, 0.28),
+        ])}
       </group>
     );
   }
@@ -164,12 +226,7 @@ export function ProceduralVehicle({ vehicle }: { vehicle: VehicleId }) {
         [0.8, 0.3, 1] as const,
         [-0.8, 0.3, -1] as const,
         [0.8, 0.3, -1] as const,
-      ].map((p, i) => (
-        <mesh key={i} position={p} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.3, 0.3, 0.2, 16]} />
-          <meshStandardMaterial color={0x111418} />
-        </mesh>
-      ))}
+      ].map((p, i) => wheel(i, p))}
     </group>
   );
 }

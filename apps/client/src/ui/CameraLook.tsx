@@ -8,6 +8,8 @@ interface CameraLookProps {
   pitchRef: { current: number };
   /** A zona cobre a tela toda (qualquer toque fora da UI gira a câmera); o joystick e os botões ficam por cima. */
   fullScreen?: boolean;
+  /** Recebe o instante (ms) do último arrasto — o Player só alinha a câmera ao veículo se faz um tempo. */
+  touchedAtRef?: { current: number };
 }
 
 /** Pixels de arrasto para girar 1 radiano (quanto menor, mais sensível). */
@@ -24,7 +26,7 @@ function wrapAngle(a: number): number {
  * dedo. Fica embaixo do TopRightPanel (zIndex menor), então os botões de
  * Loja/Veículo/Correr continuam clicáveis por cima.
  */
-export function CameraLook({ yawRef, pitchRef, fullScreen = false }: CameraLookProps) {
+export function CameraLook({ yawRef, pitchRef, fullScreen = false, touchedAtRef }: CameraLookProps) {
   const pointer = useRef<number | null>(null);
   const lastX = useRef(0);
   const lastY = useRef(0);
@@ -60,6 +62,7 @@ export function CameraLook({ yawRef, pitchRef, fullScreen = false }: CameraLookP
     const dy = e.clientY - lastY.current;
     lastX.current = e.clientX;
     lastY.current = e.clientY;
+    if (touchedAtRef) touchedAtRef.current = performance.now();
     // Sentido invertido: arrastar pra direita gira a câmera pra esquerda.
     yawRef.current = wrapAngle(yawRef.current - dx / PX_PER_RADIAN);
     // Arrastar pra cima (dy negativo) inclina a câmera pra baixo (pitch

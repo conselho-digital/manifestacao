@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { TEAMS, type AvatarConfig } from "@manifestacao/shared";
+import { TEAMS, VEHICLE_IDS, type AvatarConfig } from "@manifestacao/shared";
 import { AVATAR_STORAGE_KEY, AvatarPicker } from "./ui/AvatarPicker.js";
 import { CookieConsent } from "./ui/CookieConsent.js";
 import { Game } from "./game/Game.js";
 import { Store } from "./shop/Store.js";
 import { signOut, useAuth } from "./auth/useAuth.js";
 import { useEntitlements } from "./shop/useEntitlements.js";
+import { useCatalog } from "./shop/useCatalog.js";
 import { useIsAdmin } from "./auth/useIsAdmin.js";
 import { loadAndApplyGameConfig } from "./config/gameConfig.js";
 import { clearProductThumbs } from "./shop/ProductThumb.js";
@@ -22,8 +23,18 @@ export function App() {
   const [avatar, setAvatar] = useState<AvatarConfig | null>(null);
   const [storeOpen, setStoreOpen] = useState(false);
   const { session, loading: authLoading } = useAuth();
-  const { owned, refresh, loading: entitlementsLoading } = useEntitlements(session);
+  const { owned: ownedByPurchase, refresh, loading: entitlementsLoading } = useEntitlements(session);
   const isAdmin = useIsAdmin(session);
+  const { items: catalogItems } = useCatalog();
+  // Conta admin tem TODOS os itens (inclusive os criados depois) para testar tudo sem comprar.
+  const owned = useMemo(() => {
+    if (!isAdmin) return ownedByPurchase;
+    const all = new Set(ownedByPurchase);
+    for (const it of catalogItems) all.add(it.id);
+    for (const v of VEHICLE_IDS) if (v !== "nenhum") all.add(`vehicle:${v}`);
+    all.add("pass:premium");
+    return all;
+  }, [isAdmin, ownedByPurchase, catalogItems]);
 
   // Config editável pelo admin (equipes, bandeiras, nomes/preços, modelos 3D):
   // aplicada por cima dos padrões; `configVersion` força o re-render de quem lê.

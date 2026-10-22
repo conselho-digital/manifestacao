@@ -1,7 +1,9 @@
-import { forwardRef, Suspense } from "react";
+import { forwardRef, Suspense, useRef } from "react";
 import { Group } from "three";
+import { useFrame } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
-import { flagColor, type FlagId, type VehicleId } from "@manifestacao/shared";
+import { VEHICLES, flagColor, type FlagId, type VehicleId } from "@manifestacao/shared";
+import { WHEELIE_MAX_ANGLE } from "./driving.js";
 import { Flag3D, Vehicle3D, GlbModel } from "./props3d.js";
 import { flagImageUrl, flagModelUrl } from "./models.js";
 import { SignProp } from "./SignProp.js";
@@ -17,7 +19,12 @@ interface AvatarProps {
   sign?: SignData | null;
   /** URL de um modelo glTF; se ausente, usa o avatar geométrico. */
   modelUrl?: string | null;
+  /** Quanto a moto está empinada (0..1), lido a cada frame (sem re-render). */
+  wheelieRef?: { current: number };
 }
+
+/** Eixo traseiro da moto: a roda da frente sobe girando em torno daqui. */
+const MOTO_REAR_AXLE_Z = -0.7;
 
 /** Corpo geométrico (fallback quando não há modelo glTF). */
 function ProceduralBody({ color }: { color: number }) {
@@ -63,11 +70,22 @@ function FlagProp({ flag, color }: { flag: FlagId; color: number }) {
  * opcional e etiqueta de apelido. Usado pelo jogador local e pelos remotos.
  */
 export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
-  { color, name, flag = "nenhuma", vehicle = "nenhum", sign = null, modelUrl = null },
+  { color, name, flag = "nenhuma", vehicle = "nenhum", sign = null, modelUrl = null, wheelieRef },
   ref,
 ) {
+  const tiltRef = useRef<Group>(null);
+  const isMoto = VEHICLES[vehicle]?.kind === "moto";
+  // Empinar: inclina corpo + moto em torno do eixo traseiro (frente +Z sobe com rotação negativa em X).
+  useFrame(() => {
+    const g = tiltRef.current;
+    if (!g) return;
+    const target = isMoto ? -(wheelieRef?.current ?? 0) * WHEELIE_MAX_ANGLE : 0;
+    g.rotation.x += (target - g.rotation.x) * 0.35;
+  });
   return (
     <group ref={ref}>
+      <group ref={tiltRef} position={[0, 0, MOTO_REAR_AXLE_Z]}>
+      <group position={[0, 0, -MOTO_REAR_AXLE_Z]}>
       {modelUrl ? (
         <Suspense fallback={<ProceduralBody color={color} />}>
           <GlbModel url={modelUrl} fallback={<ProceduralBody color={color} />} />
@@ -79,6 +97,8 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
       {flag !== "nenhuma" && <FlagProp flag={flag} color={color} />}
       {sign && <SignProp sign={sign} />}
       <Vehicle3D vehicle={vehicle} />
+      </group>
+      </group>
 
       {name && (
         <Html

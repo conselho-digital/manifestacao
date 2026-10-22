@@ -58,6 +58,9 @@ export interface RemotePlayer extends PresenceState {
   x: number;
   z: number;
   facing: Facing;
+  /** Direção do veículo (radianos) e quanto a moto está empinada (0..1), vindos do broadcast de movimento. */
+  heading: number;
+  wheelie: number;
   vehicle: VehicleId;
 }
 
@@ -215,7 +218,7 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
             // atuais, que vêm do broadcast de move, não do presence.
             Object.assign(existing, safe);
           } else {
-            playersRef.current.set(presenceKey, { ...safe, x: 0, z: 0, facing: "down", vehicle: "nenhum" });
+            playersRef.current.set(presenceKey, { ...safe, x: 0, z: 0, facing: "down", vehicle: "nenhum", heading: 0, wheelie: 0 });
           }
         }
         // Remove quem saiu.
@@ -252,6 +255,8 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
           existing.x = safePos.x;
           existing.z = safePos.z;
           if (FACINGS.has(m.facing)) existing.facing = m.facing;
+          if (isFiniteNumber(m.heading)) existing.heading = m.heading;
+          existing.wheelie = isFiniteNumber(m.wheelie) ? Math.max(0, Math.min(1, m.wheelie)) : 0;
           const visualChanged =
             (isVehicleId(m.vehicle) && m.vehicle !== existing.vehicle) || (isFlagId(m.flag) && m.flag !== existing.flag);
           if (isVehicleId(m.vehicle)) existing.vehicle = m.vehicle;
@@ -356,15 +361,15 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
   }, [signId]);
 
   const sendMove = useCallback(
-    (x: number, z: number, facing: Facing, vehicle: VehicleId, flag: FlagId) => {
+    (x: number, z: number, facing: Facing, vehicle: VehicleId, flag: FlagId, heading?: number, wheelie?: number) => {
       const channel = channelRef.current;
-      lastMoveRef.current = { id: selfId, x, z, facing, vehicle, flag };
+      lastMoveRef.current = { id: selfId, x, z, facing, vehicle, flag, heading, wheelie };
       // "joined" = handshake do canal concluído (equivalente ao status
       // SUBSCRIBED do callback de .subscribe()); antes disso o Realtime
       // descarta o send silenciosamente — evita mandar para o vazio logo
       // ao montar a cena.
       if (!channel || channel.state !== "joined") return;
-      const payload: MoveBroadcast = { id: selfId, x, z, facing, vehicle, flag };
+      const payload: MoveBroadcast = { id: selfId, x, z, facing, vehicle, flag, heading, wheelie };
       void channel.send({ type: "broadcast", event: BROADCAST.move, payload });
     },
     [selfId],
