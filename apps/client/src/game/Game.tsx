@@ -24,6 +24,7 @@ import { SuperchatModal } from "../ui/SuperchatModal.js";
 import { SignButton } from "../ui/SignButton.js";
 import { SignModal } from "../ui/SignModal.js";
 import { useSigns } from "./useSigns.js";
+import { PromoteMenu } from "../ui/PromoteMenu.js";
 import { BillboardButton } from "../ui/BillboardButton.js";
 import { BillboardModal } from "../ui/BillboardModal.js";
 import { Billboards } from "./Billboards.js";
@@ -358,13 +359,21 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           <OptionsButton onClick={() => setOptionsOpen(true)} />
           <StoreButton onClick={onOpenStore} />
         </div>
-        {signedIn && (
+        {signedIn &&
+          (isTouch ? (
+            // Celular: um botão "Divulgar" com a fileira de opções (poupa espaço no canto).
+            <PromoteMenu
+              onBillboards={() => setBillboardOpen(true)}
+              onSign={() => setSignOpen(true)}
+              onSuperchat={() => setSuperchatOpen(true)}
+            />
+          ) : (
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
             <BillboardButton onClick={() => setBillboardOpen(true)} />
             <SignButton onClick={() => setSignOpen(true)} />
             <SuperchatButton onClick={() => setSuperchatOpen(true)} />
           </div>
-        )}
+          ))}
         <SprayButton charges={sprayCharges} maxCharges={SPRAY_CARTRIDGE_SIZE} onSpray={handleSpray} />
         <VehiclePicker
           value={vehicle}
