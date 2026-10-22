@@ -100,6 +100,7 @@ function HoldButton({
         WebkitUserSelect: "none",
         cursor: "pointer",
         transform: down ? "scale(.94)" : undefined,
+        transition: "transform .08s, background .12s",
         ...style,
       }}
     >

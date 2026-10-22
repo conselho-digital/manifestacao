@@ -21,7 +21,7 @@ export function SprayButton({ charges, maxCharges, onSpray }: SprayButtonProps) 
       type="button"
       onClick={onSpray}
       disabled={empty}
-      aria-label={empty ? "Spray sem tinta — aguarde recarregar" : "Usar spray"}
+      aria-label={empty ? "Spray sem tinta — aguarde recarregar" : `Usar spray, ${charges} de ${maxCharges} cargas`}
       onPointerDown={() => setPressed(true)}
       onPointerUp={() => setPressed(false)}
       onPointerLeave={() => setPressed(false)}

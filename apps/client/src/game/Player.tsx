@@ -157,7 +157,9 @@ export function Player({
       const wantX = g.position.x + Math.sin(st.heading) * st.speed * delta;
       const wantZ = g.position.z + Math.cos(st.heading) * st.speed * delta;
       const clamped = clampToAvenue(wantX, wantZ, g.position);
-      const next = resolveSolids(clamped.x, clamped.z, VEHICLE_RADIUS);
+      // Re-limita depois dos sólidos: um tronco rente à borda do mapa não pode empurrar ninguém para fora dele.
+      const solid = resolveSolids(clamped.x, clamped.z, VEHICLE_RADIUS);
+      const next = clampToAvenue(solid.x, solid.z, clamped);
       // Bateu na borda da avenida, em prédio ou árvore: perde velocidade.
       if (Math.hypot(next.x - wantX, next.z - wantZ) > 1e-3) st.speed *= 0.4;
       g.position.x = next.x;
@@ -192,7 +194,8 @@ export function Player({
       const worldZ = -input.x * sin - input.z * cos;
       const step = (speed * delta) / len;
       const clamped = clampToAvenue(g.position.x + worldX * step, g.position.z + worldZ * step, g.position);
-      const next = resolveSolids(clamped.x, clamped.z, AVATAR_RADIUS);
+      const solid = resolveSolids(clamped.x, clamped.z, AVATAR_RADIUS);
+      const next = clampToAvenue(solid.x, solid.z, clamped);
       g.position.x = next.x;
       g.position.z = next.z;
       facing.current = facingOf(worldX, worldZ, facing.current);
