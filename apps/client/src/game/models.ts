@@ -47,7 +47,7 @@ export function flagImageUrl(flag: FlagId | undefined): string | null {
   return !flag || flag === "nenhuma" || flag === "time" ? null : modelOverride(`flagimg:${flag}`);
 }
 
-/** Imagem do spray: a da opção (sprayimg:<slug>); senão, a bandeira de quem pichou; senão nenhuma (mancha). */
-export function sprayImageUrl(style: string | undefined, senderFlag: FlagId | undefined): string | null {
-  return (style ? modelOverride(`sprayimg:${style}`) : null) ?? flagImageUrl(senderFlag);
+/** Imagem da bandeira da EQUIPE (enviada pelo admin): é a marca do spray de quem joga nessa equipe. */
+export function teamImageUrl(team: TeamId | undefined): string | null {
+  return team ? modelOverride(`teamimg:${team}`) : null;
 }

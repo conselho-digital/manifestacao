@@ -1,4 +1,4 @@
-import type { FlagId } from "@manifestacao/shared";
+import type { TeamId } from "@manifestacao/shared";
 
 /**
  * Constantes do spray/pichação (Fase 4, CLAUDE.md §3 "Spray / pixação").
@@ -50,7 +50,7 @@ export interface SprayMark {
   color: number;
   /** Opção de spray (slug) — define o modelo 3D da marca. */
   style: string;
-  /** Bandeira de quem pichou (a marca mostra a imagem dela, se o admin enviou). */
-  flag?: FlagId;
+  /** Equipe de quem pichou: a marca é a imagem da bandeira da equipe (se o admin enviou). */
+  team?: TeamId;
   createdAt: number;
 }

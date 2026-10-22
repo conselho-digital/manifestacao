@@ -8,12 +8,16 @@ import {
   type SuperchatStatus,
 } from "@manifestacao/shared";
 import { useModal } from "./useModal.js";
+import { InfoButton, InfoPanel } from "./InfoButton.js";
 import { PixPanel } from "../shop/Store.js";
 import type { PixCharge } from "../net/payments.js";
 import { fetchMySuperchats, paySuperchat, submitSuperchat } from "../net/superchat.js";
+import { testActivate } from "../config/adminApi.js";
 
 interface SuperchatModalProps {
   defaultName: string;
+  /** Conta admin: pode ativar um superchat aprovado sem pagar (teste). */
+  isAdmin?: boolean;
   onClose: () => void;
 }
 
@@ -31,8 +35,9 @@ const brl = (cents: number) => `R$ ${(cents / 100).toFixed(2).replace(".", ",")}
  * Superchat: envia nome + mensagem + valor (R$ 5 a R$ 200). O conteúdo passa por
  * filtro automático e fila de moderação; só depois de aprovado o Pix é gerado.
  */
-export function SuperchatModal({ defaultName, onClose }: SuperchatModalProps) {
+export function SuperchatModal({ defaultName, isAdmin = false, onClose }: SuperchatModalProps) {
   const dialogRef = useModal<HTMLDivElement>(onClose);
+  const [info, setInfo] = useState(false);
   const [name, setName] = useState(defaultName);
   const [message, setMessage] = useState("");
   const [amount, setAmount] = useState("10");
@@ -88,6 +93,20 @@ export function SuperchatModal({ defaultName, onClose }: SuperchatModalProps) {
     }
   };
 
+  const adminActivate = async (id: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await testActivate("superchat", id);
+      setNotice("Ativado sem pagar (teste de admin).");
+      reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao ativar.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   // Nada mais aguardando pagamento (pago ou expirado): sai da tela do Pix.
   useEffect(() => {
     if (charge && mine.length > 0 && !mine.some((m) => m.status === "awaiting_payment")) setCharge(null);
@@ -110,10 +129,14 @@ export function SuperchatModal({ defaultName, onClose }: SuperchatModalProps) {
           <h2 id="superchat-title" style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: 28, fontWeight: 400, textTransform: "uppercase" }}>
             Superchat
           </h2>
-          <button type="button" onClick={onClose} style={ghostBtn}>
-            Fechar
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <InfoButton open={info} onClick={() => setInfo((v) => !v)} label="O que é e onde aparece" />
+            <button type="button" onClick={onClose} style={ghostBtn}>
+              Fechar
+            </button>
+          </div>
         </div>
+        {info && <InfoPanel what="Uma mensagem sua em destaque para todos os jogadores. Você escreve o nome e o texto, escolhe o valor (R$ 5 a R$ 200) e paga por Pix depois que a equipe aprovar." where="Num banner no topo da tela de todos os jogadores online, por alguns segundos (quanto maior o valor, mais tempo fica no ar)." />}
 
         {charge ? (
           <PixPanel
@@ -179,6 +202,16 @@ export function SuperchatModal({ defaultName, onClose }: SuperchatModalProps) {
                     {m.status === "awaiting_payment" && (
                       <button type="button" disabled={busy} onClick={() => void pay(m.id)} style={primaryBtn}>
                         Pagar {brl(m.amount_cents)} com Pix
+                      </button>
+                    )}
+                    {isAdmin && m.status === "awaiting_payment" && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void adminActivate(m.id)}
+                        style={ghostBtn}
+                      >
+                        Ativar sem pagar (teste de admin)
                       </button>
                     )}
                   </div>

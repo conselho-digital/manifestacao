@@ -36,7 +36,7 @@ import {
 } from "../config/graphics.js";
 import { OptionsModal } from "../ui/OptionsModal.js";
 import { AdminPanel } from "../ui/AdminPanel.js";
-import { sprayOptionById, sprayUnlocked } from "../config/sprays.js";
+import { DEFAULT_SPRAY_ID } from "../config/sprays.js";
 import { SprayButton } from "../ui/SprayButton.js";
 import { TopRightPanel } from "../ui/TopRightPanel.js";
 import { Crosshair } from "../ui/Crosshair.js";
@@ -45,7 +45,6 @@ import { hasVehicleViaPremium, vehicleRequiresEntitlement } from "@manifestacao/
 import { DriveControls } from "../ui/DriveControls.js";
 import { NO_DRIVE_INPUT, type DriveInput } from "./driving.js";
 
-const SPRAY_STYLE_KEY = "manifestacao.sprayStyle";
 const SIGN_KEY = "manifestacao.sign";
 const SKY_COLOR = "#8fc4f0";
 const SUN_POSITION: [number, number, number] = [60, 110, -80];
@@ -217,29 +216,6 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     return () => clearInterval(t);
   }, []);
 
-  // Opção de spray escolhida (salva no aparelho). Se foi removida pelo admin ou
-  // ainda não é do jogador, volta pro clássico.
-  const [sprayStyle, setSprayStyle] = useState(() => {
-    try {
-      return localStorage.getItem(SPRAY_STYLE_KEY) ?? "classico";
-    } catch {
-      return "classico";
-    }
-  });
-  const chooseSpray = (id: string) => {
-    setSprayStyle(id);
-    try {
-      localStorage.setItem(SPRAY_STYLE_KEY, id);
-    } catch {
-      /* modo privado: vale só nesta sessão */
-    }
-  };
-  const sprayOption = sprayOptionById(sprayStyle);
-  const sprayUsable = sprayUnlocked(sprayOption, owned) || entitlementsLoading;
-  const activeSpray = sprayUsable ? sprayOption : sprayOptionById(null);
-  const activeSprayRef = useRef(activeSpray);
-  activeSprayRef.current = activeSpray;
-
   const chargesRef = useRef(sprayCharges);
   chargesRef.current = sprayCharges;
 
@@ -248,8 +224,8 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     // Onde a mira (centro da tela) cruza o chão — ver Player.tsx. O cartucho
     // só gasta se o envio foi aceito (o cooldown pode descartá-lo).
     const target = aimRef.current;
-    const spray = activeSprayRef.current;
-    if (net.sendSpray(target.x, target.z, spray.color ?? avatar.shirt, spray.id)) {
+    // A marca é a bandeira da equipe (imagem); a cor da equipe é o reserva sem imagem.
+    if (net.sendSpray(target.x, target.z, avatar.shirt, DEFAULT_SPRAY_ID)) {
       setSprayCharges((c) => Math.max(0, c - 1));
     }
   }, [net, avatar.shirt]);
@@ -409,16 +385,12 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           onExit={onExit}
           graphics={graphics}
           onGraphics={chooseGraphics}
-          owned={owned}
-          sprayStyle={activeSpray.id}
-          onSprayStyle={chooseSpray}
-          onOpenStore={onOpenStore}
           onOpenAdmin={isAdmin ? () => setAdminOpen(true) : undefined}
         />
       )}
-      {superchatOpen && signedIn && <SuperchatModal defaultName={avatar.nickname} onClose={() => setSuperchatOpen(false)} />}
-      {billboardOpen && signedIn && <BillboardModal ads={billboardAds} onClose={() => setBillboardOpen(false)} />}
-      {signOpen && signedIn && <SignModal equippedId={signId} onEquip={equipSign} onClose={() => setSignOpen(false)} />}
+      {superchatOpen && signedIn && <SuperchatModal defaultName={avatar.nickname} isAdmin={isAdmin} onClose={() => setSuperchatOpen(false)} />}
+      {billboardOpen && signedIn && <BillboardModal ads={billboardAds} isAdmin={isAdmin} onClose={() => setBillboardOpen(false)} />}
+      {signOpen && signedIn && <SignModal equippedId={signId} onEquip={equipSign} isAdmin={isAdmin} onClose={() => setSignOpen(false)} />}
       <SuperchatBanner enabled={signedIn} />
       {adminOpen && isAdmin && <AdminPanel onClose={() => setAdminOpen(false)} onChanged={onConfigChanged} />}
       <Hud

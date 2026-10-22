@@ -11,13 +11,17 @@ import {
   type MyBid,
 } from "@manifestacao/shared";
 import { useModal } from "./useModal.js";
+import { InfoButton, InfoPanel } from "./InfoButton.js";
 import { PixPanel } from "../shop/Store.js";
 import type { PixCharge } from "../net/payments.js";
 import { fetchMyBids, fetchMyCredit, payBid, payBidWithCredit, submitBid } from "../net/billboards.js";
+import { testActivate } from "../config/adminApi.js";
 
 interface BillboardModalProps {
   /** Lances no ar por telão (do Realtime). */
   ads: Map<string, BillboardAd>;
+  /** Conta admin: pode ativar um lance aprovado sem pagar (teste). */
+  isAdmin?: boolean;
   onClose: () => void;
 }
 
@@ -38,8 +42,9 @@ const boardLabel = (id: string) => BILLBOARDS.find((b) => b.id === id)?.label ??
  * Leilão dos telões: quem dá o maior lance (e paga) exibe. Antes de cobrar, o texto
  * passa por filtro e aprovação. Se o lance é superado, o valor vira crédito.
  */
-export function BillboardModal({ ads, onClose }: BillboardModalProps) {
+export function BillboardModal({ ads, isAdmin = false, onClose }: BillboardModalProps) {
   const dialogRef = useModal<HTMLDivElement>(onClose);
+  const [info, setInfo] = useState(false);
   const [board, setBoard] = useState<string>(BILLBOARDS[0]!.id);
   const [text, setText] = useState("");
   const [color, setColor] = useState<string>(SIGN_COLORS[1]);
@@ -114,6 +119,20 @@ export function BillboardModal({ ads, onClose }: BillboardModalProps) {
     }
   };
 
+  const adminActivate = async (id: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await testActivate("bid", id);
+      setNotice("Ativado sem pagar (teste de admin).");
+      reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao ativar.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const payCredit = async (id: string) => {
     setBusy(true);
     setError(null);
@@ -145,10 +164,14 @@ export function BillboardModal({ ads, onClose }: BillboardModalProps) {
           <h2 id="bb-title" style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: 28, fontWeight: 400, textTransform: "uppercase" }}>
             Telões
           </h2>
-          <button type="button" onClick={onClose} style={ghostBtn}>
-            Fechar
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <InfoButton open={info} onClick={() => setInfo((v) => !v)} label="O que é e onde aparece" />
+            <button type="button" onClick={onClose} style={ghostBtn}>
+              Fechar
+            </button>
+          </div>
         </div>
+        {info && <InfoPanel what="Um leilão dos painéis grandes da avenida: quem dá o maior lance (e paga) exibe o seu anúncio. Se alguém cobrir o seu lance, o valor volta para você como crédito." where="Nos três telões da avenida (Telão Oeste, Telão Leste e Telão do Parque), visíveis para todos os jogadores que passam por perto, até outro lance maior assumir." />}
 
         {charge ? (
           <PixPanel
@@ -238,6 +261,11 @@ export function BillboardModal({ ads, onClose }: BillboardModalProps) {
                         <button type="button" disabled={busy} onClick={() => void pay(m.id)} style={{ ...primaryBtn, flex: "1 1 160px" }}>
                           Pagar {brl(m.amount_cents)} com Pix
                         </button>
+                        {isAdmin && (
+                          <button type="button" disabled={busy} onClick={() => void adminActivate(m.id)} style={{ ...ghostBtn, flex: "1 1 160px" }}>
+                            Ativar sem pagar (teste de admin)
+                          </button>
+                        )}
                         {credit >= m.amount_cents && (
                           <button type="button" disabled={busy} onClick={() => void payCredit(m.id)} style={{ ...ghostBtn, flex: "1 1 160px" }}>
                             Pagar com crédito

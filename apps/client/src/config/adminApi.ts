@@ -326,3 +326,18 @@ export async function moderateBid(id: string, approve: boolean, reason?: string)
   const { error } = await db().rpc("moderate_bid", { p_id: id, p_approve: approve, p_reason: reason ?? null });
   if (error) throw new Error(error.message.includes("already_moderated") ? "Este lance já foi moderado." : error.message);
 }
+
+// ── Testes de admin ───────────────────────────────────────────────────────
+/** Devolve ao admin todos os itens do catálogo (inclusive os criados depois). Retorna quantos foram concedidos. */
+export async function grantAllItemsToMe(): Promise<number> {
+  const { data, error } = await db().rpc("admin_grant_all_to_me");
+  if (error) throw new Error(error.message);
+  return typeof data === "number" ? data : 0;
+}
+
+/** Ativa um superchat, cartaz ou lance aprovado SEM pagar (teste). Nada é cobrado; a ação fica no log. */
+export async function testActivate(kind: "superchat" | "sign" | "bid", id: string): Promise<string> {
+  const { data, error } = await db().rpc("admin_test_activate", { p_kind: kind, p_id: id });
+  if (error) throw new Error(error.message);
+  return String(data ?? "");
+}

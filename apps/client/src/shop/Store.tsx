@@ -175,7 +175,7 @@ export function Store({ onClose, session, authLoading, owned, refresh }: StorePr
         {!charge && (
           <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
             {catalogLoading && <li style={{ color: "var(--ink-dim)", fontSize: "var(--t-ui)" }}>Carregando…</li>}
-            {items.map((item) => {
+            {items.filter((i) => i.kind !== "spray").map((item) => {
               const has = owned.has(item.id);
               const free = item.price_cents === 0;
               const description = itemDescription(item);

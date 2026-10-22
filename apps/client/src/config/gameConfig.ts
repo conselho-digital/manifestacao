@@ -68,7 +68,7 @@ function cleanColor(v: unknown): number | undefined {
 
 /** Slots de IMAGEM (bandeira/spray): o valor é a URL de um .png/.jpg/.webp, não de um .glb. */
 export function isImageSlot(slot: string): boolean {
-  return slot.startsWith("flagimg:") || slot.startsWith("sprayimg:");
+  return slot.startsWith("flagimg:") || slot.startsWith("sprayimg:") || slot.startsWith("teamimg:");
 }
 
 /**
@@ -79,6 +79,7 @@ export function isModelSlot(slot: string): boolean {
   if (slot === "spray") return true;
   const [kind, id, team, extra] = slot.split(":");
   if (kind === "flagimg") return isFlagId(id) && id !== "nenhuma" && id !== "time" && team === undefined && extra === undefined;
+  if (kind === "teamimg") return isTeamId(id) && team === undefined && extra === undefined;
   if (kind === "sprayimg") return id !== undefined && team === undefined && extra === undefined && SPRAY_SLUG_RE.test(id);
   if (kind === "spray") return id !== undefined && team === undefined && extra === undefined && SPRAY_SLUG_RE.test(id);
   if (extra !== undefined) return false;

@@ -19,12 +19,6 @@ import {
   isModelSlot,
 } from "../config/gameConfig.js";
 import {
-  createSpray,
-  fetchAdminSprays,
-  newSprayId,
-  removeSpray,
-  updateSpray,
-  type AdminSpray,
   fetchAdminCatalog,
   createCatalogItem,
   mergeModels,
@@ -34,6 +28,7 @@ import {
   fetchSuperchatQueue,
   moderateSuperchat,
   fetchBidQueue,
+  grantAllItemsToMe,
   moderateBid,
   type AdminBid,
   fetchSignQueue,
@@ -52,16 +47,16 @@ interface AdminPanelProps {
   onChanged: () => Promise<void>;
 }
 
-type Tab = "equipes" | "bandeiras" | "produtos" | "sprays" | "modelos" | "superchats" | "cartazes" | "telões";
+type Tab = "equipes" | "bandeiras" | "produtos" | "modelos" | "superchats" | "cartazes" | "telões" | "testes";
 const TABS: { id: Tab; label: string }[] = [
   { id: "equipes", label: "Equipes" },
   { id: "bandeiras", label: "Bandeiras" },
   { id: "produtos", label: "Produtos" },
-  { id: "sprays", label: "Sprays" },
   { id: "modelos", label: "Modelos 3D" },
   { id: "superchats", label: "Superchats" },
   { id: "cartazes", label: "Cartazes" },
   { id: "telões", label: "Telões" },
+  { id: "testes", label: "Testes" },
 ];
 
 function toColorNumber(hex: string): number {
@@ -138,11 +133,11 @@ export function AdminPanel({ onClose, onChanged }: AdminPanelProps) {
         {tab === "equipes" && <TeamsTab busy={busy} run={run} />}
         {tab === "bandeiras" && <FlagsTab busy={busy} run={run} />}
         {tab === "produtos" && <ProductsTab busy={busy} run={run} />}
-        {tab === "sprays" && <SpraysTab busy={busy} run={run} />}
         {tab === "modelos" && <ModelsTab busy={busy} run={run} />}
         {tab === "superchats" && <SuperchatsTab busy={busy} run={run} />}
         {tab === "cartazes" && <SignsTab busy={busy} run={run} />}
         {tab === "telões" && <BidsTab busy={busy} run={run} />}
+        {tab === "testes" && <TestsTab busy={busy} run={run} />}
       </div>
     </div>
   );
@@ -157,6 +152,7 @@ function TeamsTab({ busy, run }: TabProps) {
   const [draft, setDraft] = useState(() =>
     Object.fromEntries(TEAM_IDS.map((id) => [id, { label: TEAMS[id].label, color: hexColor(TEAMS[id].color) }])) as Record<TeamId, { label: string; color: string }>,
   );
+  const [models, setModels] = useState<Record<string, string>>(() => currentModelOverrides());
   const save = () =>
     run(
       () =>
@@ -166,27 +162,63 @@ function TeamsTab({ busy, run }: TabProps) {
         ),
       "Equipes salvas.",
     );
+  const sendImage = (id: TeamId, file: File) =>
+    run(async () => {
+      const slot = `teamimg:${id}`;
+      const url = await uploadModel(slot, file);
+      setModels(await mergeModels({ [slot]: url }));
+    }, "Imagem da bandeira da equipe enviada.");
+  const clearImage = (id: TeamId) =>
+    run(async () => {
+      setModels(await mergeModels({ [`teamimg:${id}`]: null }));
+    }, "Imagem removida (o spray volta a usar a cor da equipe).");
   return (
     <>
-      <p style={hint}>Nome e cor de cada equipe (a cor também pinta a camisa e a bandeira "Do meu time").</p>
-      {TEAM_IDS.map((id) => (
-        <div key={id} style={row}>
-          <input
-            aria-label={`Nome da equipe ${id}`}
-            value={draft[id].label}
-            maxLength={MAX_LABEL_LENGTH}
-            onChange={(e) => setDraft({ ...draft, [id]: { ...draft[id], label: e.target.value } })}
-            style={{ ...input, flex: 1 }}
-          />
-          <input
-            type="color"
-            aria-label={`Cor da equipe ${id}`}
-            value={draft[id].color}
-            onChange={(e) => setDraft({ ...draft, [id]: { ...draft[id], color: e.target.value } })}
-            style={colorInput}
-          />
-        </div>
-      ))}
+      <p style={hint}>
+        Nome, cor e IMAGEM DA BANDEIRA de cada equipe (PNG, JPG ou WebP, até 2 MB). A imagem é o que o spray pinta no
+        chão para quem joga nessa equipe; sem imagem, usa a cor. A cor também pinta a camisa e a bandeira "Do meu time".
+      </p>
+      {TEAM_IDS.map((id) => {
+        const url = models[`teamimg:${id}`];
+        return (
+          <div key={id} style={{ ...row, flexWrap: "wrap" }}>
+            {url && <img src={url} alt={`Bandeira da equipe ${id}`} style={{ width: 60, height: 36, objectFit: "cover", borderRadius: 4, border: "1px solid var(--line)" }} />}
+            <input
+              aria-label={`Nome da equipe ${id}`}
+              value={draft[id].label}
+              maxLength={MAX_LABEL_LENGTH}
+              onChange={(e) => setDraft({ ...draft, [id]: { ...draft[id], label: e.target.value } })}
+              style={{ ...input, flex: 1, minWidth: 120 }}
+            />
+            <input
+              type="color"
+              aria-label={`Cor da equipe ${id}`}
+              value={draft[id].color}
+              onChange={(e) => setDraft({ ...draft, [id]: { ...draft[id], color: e.target.value } })}
+              style={colorInput}
+            />
+            <label style={{ ...ghostBtn, display: "inline-flex", alignItems: "center", opacity: busy ? 0.5 : 1 }}>
+              {url ? "Trocar bandeira" : "Enviar bandeira"}
+              <input
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                disabled={busy}
+                style={{ display: "none" }}
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  e.target.value = "";
+                  if (f) void sendImage(id, f);
+                }}
+              />
+            </label>
+            {url && (
+              <button type="button" disabled={busy} onClick={() => void clearImage(id)} style={ghostBtn}>
+                Tirar imagem
+              </button>
+            )}
+          </div>
+        );
+      })}
       <button type="button" disabled={busy} onClick={() => void save()} style={primaryBtn}>
         Salvar equipes
       </button>
@@ -405,203 +437,6 @@ function ProductsTab({ busy, run }: TabProps) {
   );
 }
 
-function SpraysTab({ busy, run }: TabProps) {
-  const [rows, setRows] = useState<(AdminSpray & { price: string; isNew?: boolean })[] | null>(null);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [models, setModels] = useState<Record<string, string>>(() => currentModelOverrides());
-
-  const load = () =>
-    fetchAdminSprays()
-      .then((list) => setRows(list.map((r) => ({ ...r, price: (r.price_cents / 100).toFixed(2) }))))
-      .catch((e: unknown) => setLoadError(e instanceof Error ? e.message : "Erro ao carregar sprays."));
-
-  useEffect(() => {
-    void load();
-  }, []);
-
-  if (loadError) return <p style={{ ...hint, color: "var(--danger)" }}>{loadError}</p>;
-  if (!rows) return <p style={hint}>Carregando…</p>;
-
-  const update = (slug: string, patch: Partial<AdminSpray & { price: string }>) =>
-    setRows(rows.map((r) => (r.slug === slug ? { ...r, ...patch } : r)));
-
-  const toCents = (price: string): number => {
-    if (price.trim() === "" || Number.isNaN(Number(price.replace(",", ".")))) {
-      throw new Error("Informe um preço válido (ex.: 9,90).");
-    }
-    return Math.round(Number(price.replace(",", ".")) * 100);
-  };
-
-  const add = () =>
-    setRows([
-      ...rows,
-      {
-        slug: newSprayId("spray"),
-        label: "Novo spray",
-        price_cents: 0,
-        price: "0.00",
-        active: true,
-        color: null,
-        sort_order: rows.length + 1,
-        isNew: true,
-      },
-    ]);
-
-  const save = (r: AdminSpray & { price: string; isNew?: boolean }) =>
-    run(async () => {
-      const spray: AdminSpray = { ...r, price_cents: toCents(r.price) };
-      const slug = r.isNew ? newSprayId(r.label) : r.slug;
-      if (r.isNew) await createSpray({ ...spray, slug });
-      else await updateSpray(spray);
-      // Só a linha salva é atualizada: edições não salvas das outras linhas ficam.
-      setRows((cur) =>
-        (cur ?? []).map((x) =>
-          x.slug === r.slug ? { ...x, slug, price_cents: spray.price_cents, price: (spray.price_cents / 100).toFixed(2), isNew: false } : x,
-        ),
-      );
-    }, `"${r.label}" salvo.`);
-
-  const remove = (r: AdminSpray & { isNew?: boolean }) => {
-    if (r.isNew) {
-      setRows(rows.filter((x) => x.slug !== r.slug));
-      return;
-    }
-    if (!window.confirm(`Remover o spray "${r.label}"? Ele some do jogo e da loja (quem já comprou não perde o registro).`)) return;
-    void run(async () => {
-      await removeSpray(r.slug);
-      // Tira também o modelo 3D do spray (senão fica um override órfão na config).
-      await mergeModels({ [`spray:${r.slug}`]: null, [`sprayimg:${r.slug}`]: null });
-      setRows((cur) => (cur ?? []).filter((x) => x.slug !== r.slug));
-    }, "Spray removido.");
-  };
-
-  const upload = (r: AdminSpray, file: File) =>
-    run(async () => {
-      const slot = `spray:${r.slug}`;
-      const url = await uploadModel(slot, file);
-      const next = await mergeModels({ [slot]: url });
-      setModels(next);
-    }, "Modelo 3D do spray enviado.");
-
-  const uploadImg = (r: AdminSpray, file: File) =>
-    run(async () => {
-      const slot = `sprayimg:${r.slug}`;
-      const url = await uploadModel(slot, file);
-      const next = await mergeModels({ [slot]: url });
-      setModels(next);
-    }, "Imagem do spray enviada.");
-
-  const clearImg = (r: AdminSpray) =>
-    run(async () => {
-      const next = await mergeModels({ [`sprayimg:${r.slug}`]: null });
-      setModels(next);
-    }, "Imagem removida.");
-
-  const clearModel = (r: AdminSpray) =>
-    run(async () => {
-      const next = await mergeModels({ [`spray:${r.slug}`]: null });
-      setModels(next);
-    }, "Modelo removido (volta ao padrão).");
-
-  return (
-    <>
-      <p style={hint}>
-        Opções de spray da loja: nome, preço, cor da marca, IMAGEM da bandeira (PNG/JPG/WebP) e arquivo 3D (.glb).
-        Preço 0 = livre pra todos. O spray Clássico pinta a bandeira de quem pichou (imagem da aba Bandeiras). Sem
-        imagem, usa a cor (ou a da equipe). Salve cada spray novo antes de enviar arquivos.
-      </p>
-      {rows.length === 0 && <p style={hint}>Nenhum spray extra ainda — só o Clássico (padrão).</p>}
-      {rows.map((r) => {
-        const has = Boolean(models[`spray:${r.slug}`]);
-        return (
-          <div key={r.slug} style={{ ...row, flexWrap: "wrap", padding: "8px 0" }}>
-            <input
-              aria-label="Nome do spray"
-              value={r.label}
-              maxLength={MAX_LABEL_LENGTH}
-              onChange={(e) => update(r.slug, { label: e.target.value })}
-              style={{ ...input, flex: 1, minWidth: 140 }}
-            />
-            <input
-              aria-label="Preço do spray em reais"
-              inputMode="decimal"
-              value={r.price}
-              onChange={(e) => update(r.slug, { price: e.target.value })}
-              style={{ ...input, width: 90 }}
-            />
-            <input
-              type="color"
-              aria-label="Cor da marca"
-              value={hexColor(r.color ?? 0x2ecc71)}
-              onChange={(e) => update(r.slug, { color: toColorNumber(e.target.value) })}
-              style={colorInput}
-            />
-            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--t-ui)", minHeight: 44 }}>
-              <input type="checkbox" style={{ width: 22, height: 22 }} checked={r.color === null} onChange={(e) => update(r.slug, { color: e.target.checked ? null : 0x2ecc71 })} />
-              Cor da equipe
-            </label>
-            <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: "var(--t-ui)", minHeight: 44 }}>
-              <input type="checkbox" style={{ width: 22, height: 22 }} checked={r.active} onChange={(e) => update(r.slug, { active: e.target.checked })} />
-              Ativo
-            </label>
-            <button type="button" disabled={busy} onClick={() => void save(r)} style={ghostBtn}>
-              Salvar
-            </button>
-            {!r.isNew && (
-              <>
-                <label style={{ ...ghostBtn, display: "inline-flex", alignItems: "center", opacity: busy ? 0.5 : 1 }}>
-                  {has ? "Trocar 3D" : "Enviar 3D (.glb)"}
-                  <input
-                    type="file"
-                    accept=".glb,model/gltf-binary"
-                    disabled={busy}
-                    style={{ display: "none" }}
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      e.target.value = "";
-                      if (f) void upload(r, f);
-                    }}
-                  />
-                </label>
-                {has && (
-                  <button type="button" disabled={busy} onClick={() => void clearModel(r)} style={ghostBtn}>
-                    Tirar 3D
-                  </button>
-                )}
-                <label style={{ ...ghostBtn, display: "inline-flex", alignItems: "center", opacity: busy ? 0.5 : 1 }}>
-                  {models[`sprayimg:${r.slug}`] ? "Trocar imagem" : "Enviar imagem (bandeira)"}
-                  <input
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp"
-                    disabled={busy}
-                    style={{ display: "none" }}
-                    onChange={(e) => {
-                      const f = e.target.files?.[0];
-                      e.target.value = "";
-                      if (f) void uploadImg(r, f);
-                    }}
-                  />
-                </label>
-                {models[`sprayimg:${r.slug}`] && (
-                  <button type="button" disabled={busy} onClick={() => void clearImg(r)} style={ghostBtn}>
-                    Tirar imagem
-                  </button>
-                )}
-              </>
-            )}
-            <button type="button" disabled={busy} onClick={() => remove(r)} style={{ ...ghostBtn, color: "var(--danger)" }}>
-              Remover
-            </button>
-          </div>
-        );
-      })}
-      <button type="button" disabled={busy} onClick={add} style={primaryBtn}>
-        Adicionar spray
-      </button>
-    </>
-  );
-}
-
 function ModelsTab({ busy, run }: TabProps) {
   const [models, setModels] = useState<Record<string, string>>(() => currentModelOverrides());
 
@@ -784,6 +619,41 @@ function SignsTab({ busy, run }: TabProps) {
       <button type="button" disabled={busy} onClick={() => void load()} style={ghostBtn}>
         Atualizar fila
       </button>
+    </>
+  );
+}
+
+function TestsTab({ busy, run }: TabProps) {
+  return (
+    <>
+      <p style={hint}>
+        Ferramentas para testar tudo sem pagar. Sua conta admin já usa todos os itens da loja (veículos, personagens,
+        bandeiras, passe Premium e os produtos criados depois).
+      </p>
+      <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <h3 style={sectionTitle}>Itens</h3>
+        <p style={hint}>Grava no banco todos os itens do catálogo na sua conta (útil se você apagou alguma posse).</p>
+        <button
+          type="button"
+          disabled={busy}
+          onClick={() =>
+            void run(async () => {
+              const n = await grantAllItemsToMe();
+              return n > 0 ? `${n} item(ns) novo(s) concedido(s) à sua conta.` : "Sua conta já tinha todos os itens.";
+            }, "Itens concedidos.")
+          }
+          style={primaryBtn}
+        >
+          Dar todos os itens a mim
+        </button>
+      </section>
+      <section style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        <h3 style={sectionTitle}>Superchat, Cartaz e Telões</h3>
+        <p style={hint}>
+          Envie o seu próprio superchat, cartaz ou lance, aprove na aba correspondente e, no próprio menu, use "Ativar sem
+          pagar (teste de admin)". Nada é cobrado e a ação fica no registro de moderação.
+        </p>
+      </section>
     </>
   );
 }

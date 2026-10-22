@@ -8,14 +8,18 @@ import {
   type SignStatus,
 } from "@manifestacao/shared";
 import { useModal } from "./useModal.js";
+import { InfoButton, InfoPanel } from "./InfoButton.js";
 import { PixPanel } from "../shop/Store.js";
 import type { PixCharge } from "../net/payments.js";
 import { fetchMySigns, paySign, submitSign } from "../net/signs.js";
+import { testActivate } from "../config/adminApi.js";
 
 interface SignModalProps {
   /** Cartaz que o jogador está carregando (null = nenhum). */
   equippedId: string | null;
   onEquip: (id: string | null) => void;
+  /** Conta admin: pode ativar um cartaz aprovado sem pagar (teste). */
+  isAdmin?: boolean;
   onClose: () => void;
 }
 
@@ -34,8 +38,9 @@ const brl = (cents: number) => `R$ ${(cents / 100).toFixed(2).replace(".", ",")}
  * Cartaz personalizado: texto curto + cor, carregado pelo personagem. Passa por
  * filtro e fila de moderação; só depois de aprovado o Pix é gerado.
  */
-export function SignModal({ equippedId, onEquip, onClose }: SignModalProps) {
+export function SignModal({ equippedId, onEquip, isAdmin = false, onClose }: SignModalProps) {
   const dialogRef = useModal<HTMLDivElement>(onClose);
+  const [info, setInfo] = useState(false);
   const [text, setText] = useState("");
   const [color, setColor] = useState<string>(SIGN_COLORS[1]);
   const [busy, setBusy] = useState(false);
@@ -58,6 +63,20 @@ export function SignModal({ equippedId, onEquip, onClose }: SignModalProps) {
   useEffect(() => {
     if (charge && mine.length > 0 && !mine.some((m) => m.status === "awaiting_payment")) setCharge(null);
   }, [charge, mine]);
+
+  const adminActivate = async (id: string) => {
+    setBusy(true);
+    setError(null);
+    try {
+      await testActivate("sign", id);
+      setNotice("Ativado sem pagar (teste de admin).");
+      reload();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erro ao ativar.");
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const send = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -108,10 +127,14 @@ export function SignModal({ equippedId, onEquip, onClose }: SignModalProps) {
           <h2 id="sign-title" style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: 28, fontWeight: 400, textTransform: "uppercase" }}>
             Cartaz
           </h2>
-          <button type="button" onClick={onClose} style={ghostBtn}>
-            Fechar
-          </button>
+          <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+            <InfoButton open={info} onClick={() => setInfo((v) => !v)} label="O que é e onde aparece" />
+            <button type="button" onClick={onClose} style={ghostBtn}>
+              Fechar
+            </button>
+          </div>
         </div>
+        {info && <InfoPanel what="Um cartaz com o seu texto que o seu personagem carrega numa vara. Você escolhe o texto e a cor, e paga por Pix depois que a equipe aprovar." where="Ao lado do seu personagem na avenida, visível para todos os jogadores que passam por você. Você escolhe quando carregar ou guardar o cartaz." />}
 
         {charge ? (
           <PixPanel
@@ -172,6 +195,11 @@ export function SignModal({ equippedId, onEquip, onClose }: SignModalProps) {
                     {m.status === "awaiting_payment" && (
                       <button type="button" disabled={busy} onClick={() => void pay(m.id)} style={primaryBtn}>
                         Pagar {brl(SIGN_PRICE_CENTS)} com Pix
+                      </button>
+                    )}
+                    {isAdmin && m.status === "awaiting_payment" && (
+                      <button type="button" disabled={busy} onClick={() => void adminActivate(m.id)} style={ghostBtn}>
+                        Ativar sem pagar (teste de admin)
                       </button>
                     )}
                     {m.status === "active" && (
