@@ -1,3 +1,4 @@
+import { deleteMyAccount } from "../net/account.js";
 import { useStageVoice } from "../net/useStageVoice.js";
 import { StageButton } from "../ui/StageButton.js";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -407,6 +408,14 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           }}
           onClose={() => setOptionsOpen(false)}
           onExit={onExit}
+          onDeleteAccount={
+            signedIn
+              ? async () => {
+                  await deleteMyAccount();
+                  onExit();
+                }
+              : undefined
+          }
           graphics={graphics}
           onGraphics={chooseGraphics}
           onOpenAdmin={isAdmin ? () => setAdminOpen(true) : undefined}

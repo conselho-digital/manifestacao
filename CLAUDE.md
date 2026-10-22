@@ -146,7 +146,7 @@ Regras dos agentes:
 - **Fase 2 — Conteúdo e identidade**: catálogo de personagens/camisas/bandeiras, veículos (moto, carro, carro de som), som por proximidade.
 - **Fase 3 — Contas e pagamentos**: Google OAuth (Supabase), Mercado Pago Pix + webhook, inventário/entitlements, Premium, recibos via Resend.
 - **Fase 4 — Conteúdo do usuário**: spray efêmero, cartazes com moderação, telões com leilão/créditos, superchat.
-- **Fase 5 — Moderação e voz**: painel admin, palanque com voz, "personagem sempre conectado" (Premium).
+- **Fase 5 — Moderação e voz** ✅: painel admin (silenciar/banir por conta), palanque com voz (WebRTC). "Personagem sempre conectado" foi **removido do escopo**.
 - **Fase 6 — Lançamento**: Sobre/Termos/Privacidade (LGPD), teste de carga, anti-cheat básico, rate limits, PWA/SEO.
 
 Em cada fase: entregar → rodar agentes de bugs/segurança/visual (§7) → corrigir → commit/push na `main`.

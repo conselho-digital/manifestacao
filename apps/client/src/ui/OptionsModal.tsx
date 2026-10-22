@@ -14,6 +14,7 @@ import {
 import { GRAPHICS_LEVELS, type GraphicsLevel } from "../config/graphics.js";
 import { AvatarGlyph } from "./AvatarGlyph.js";
 import { TeamFlagIcon } from "./TeamFlagIcon.js";
+import { LegalLinks } from "./LegalPage.js";
 
 interface OptionsModalProps {
   avatar: AvatarConfig;
@@ -23,6 +24,8 @@ interface OptionsModalProps {
   onExit: () => void;
   /** Só passado para contas admin: abre o painel de admin. */
   onOpenAdmin?: () => void;
+  /** Só para quem está logado: apaga a conta (LGPD). Rejeita com a mensagem de erro em pt-BR. */
+  onDeleteAccount?: () => Promise<void>;
   /** Qualidade gráfica (% da resolução); vale na hora. */
   graphics: GraphicsLevel;
   onGraphics: (l: GraphicsLevel) => void;
@@ -33,7 +36,10 @@ interface OptionsModalProps {
  * ou sair da plataforma. As mudanças só valem ao clicar em "Salvar" (evita
  * reentrar no canal em tempo real a cada tecla digitada no apelido).
  */
-export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin, graphics, onGraphics }: OptionsModalProps) {
+export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin, onDeleteAccount, graphics, onGraphics }: OptionsModalProps) {
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [team, setTeam] = useState<TeamId>(avatar.team);
   const [nickname, setNickname] = useState(avatar.nickname);
   const [character, setCharacter] = useState<CharacterId>(avatar.character);
@@ -268,6 +274,53 @@ export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin, gra
         >
           Sair da plataforma
         </button>
+
+        {onDeleteAccount && !confirmDelete && (
+          <button
+            type="button"
+            onClick={() => setConfirmDelete(true)}
+            style={{ ...ghostBtn, color: "var(--ink-dim)", border: "none", textDecoration: "underline" }}
+          >
+            Excluir minha conta
+          </button>
+        )}
+        {onDeleteAccount && confirmDelete && (
+          <div
+            role="alertdialog"
+            aria-label="Confirmar exclusão da conta"
+            style={{ border: "1px solid var(--danger)", borderRadius: "var(--r-md)", padding: 12, display: "flex", flexDirection: "column", gap: 10 }}
+          >
+            <p style={{ margin: 0, fontSize: "var(--t-ui)" }}>
+              Isso apaga seu perfil, compras, itens e créditos. Não dá para desfazer.
+            </p>
+            {deleteError && (
+              <p role="alert" style={{ margin: 0, fontSize: "var(--t-ui)", color: "var(--danger)" }}>
+                {deleteError}
+              </p>
+            )}
+            <div style={{ display: "flex", gap: 8 }}>
+              <button type="button" disabled={deleting} onClick={() => setConfirmDelete(false)} style={{ ...ghostBtn, flex: 1 }}>
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={deleting}
+                onClick={() => {
+                  setDeleting(true);
+                  setDeleteError(null);
+                  onDeleteAccount().catch((e: unknown) => {
+                    setDeleteError(e instanceof Error ? e.message : "Não foi possível excluir agora.");
+                    setDeleting(false);
+                  });
+                }}
+                style={{ ...ghostBtn, flex: 1, color: "var(--danger)", borderColor: "var(--danger)", fontWeight: 700 }}
+              >
+                {deleting ? "Excluindo…" : "Excluir de vez"}
+              </button>
+            </div>
+          </div>
+        )}
+        <LegalLinks />
       </form>
     </div>
   );

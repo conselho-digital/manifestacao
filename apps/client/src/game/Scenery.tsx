@@ -70,15 +70,16 @@ useGLTF.preload(MASP_URL);
 const PARK_Z0 = -(AVENUE_WIDTH / 2 + PARK_GAP); // z do lado do parque que encosta na calçada
 const PATH_W = 3;
 /**
- * Árvores do parque: o TRONCO tem 2,5 vezes a altura de um personagem a pé (o corpo geométrico tem ~2,0 de altura),
- * ou seja, 5,0 unidades para todas; o que varia entre árvores é a grossura do tronco e o tamanho da copa.
+ * Árvores do parque: o TRONCO tem 1,875 vez a altura de um personagem a pé (o corpo geométrico tem ~2,0 de altura;
+ * era 2,5 e foi reduzido em 25%), ou seja, 3,75 unidades para todas; o que varia entre árvores é a grossura do tronco
+ * e o tamanho da copa (também 25% menor, para manter a proporção).
  */
 const CHARACTER_HEIGHT = 2.0;
-const TRUNK_HEIGHT_FACTOR = 2.5;
-const TRUNK_HEIGHT = CHARACTER_HEIGHT * TRUNK_HEIGHT_FACTOR; // 5,0
+const TRUNK_HEIGHT_FACTOR = 1.875;
+const TRUNK_HEIGHT = CHARACTER_HEIGHT * TRUNK_HEIGHT_FACTOR; // 3,75
 const TRUNK_BASE_LENGTH = 2; // comprimento do cilindro base do tronco
 const TRUNK_WIDTH = 1.7;
-const CROWN_WIDTH = 1.4;
+const CROWN_WIDTH = 1.05;
 const CROWN_STRETCH = 1.15;
 const CROWN_RADIUS = 1.8; // raio da icosfera da copa
 

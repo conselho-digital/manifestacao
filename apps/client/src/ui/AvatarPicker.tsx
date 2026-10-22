@@ -1,3 +1,4 @@
+import { LegalLinks } from "./LegalPage.js";
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
 import {
@@ -450,6 +451,7 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
             Entrar na avenida
           </button>
         )}
+        <LegalLinks />
       </div>
     </div>
   );

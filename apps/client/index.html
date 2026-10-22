@@ -7,7 +7,23 @@
       content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
     />
     <meta name="theme-color" content="#15181d" />
-    <title>Manifestação Online — protótipo 3D</title>
+    <title>Manifestação Online — jogo 3D multiplayer na avenida</title>
+    <meta
+      name="description"
+      content="Jogo online, multiplayer e 3D: uma manifestação satírica numa avenida virtual. Escolha sua equipe, converse, pixe, use bandeiras, cartazes e veículos. Joga no celular e no PC."
+    />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" type="image/png" sizes="192x192" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Manifestação" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="pt_BR" />
+    <meta property="og:title" content="Manifestação Online" />
+    <meta property="og:description" content="Jogo 3D multiplayer, satírico, numa avenida virtual. Entre com sua conta Google e jogue no navegador." />
+    <meta property="og:image" content="/icons/icon-512.png" />
+    <meta name="twitter:card" content="summary" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -50,6 +66,9 @@
       * {
         box-sizing: border-box;
       }
+      .legal-body h2 { font-size: 18px; margin: 28px 0 8px; }
+      .legal-body p, .legal-body li { color: var(--ink); margin: 0 0 12px; }
+      .legal-body ul { padding-left: 20px; margin: 0 0 12px; }
       /* Nomes flutuantes (drei Html) somem enquanto um menu está aberto. */
       body[data-modal-open] .avatar-name {
         display: none !important;

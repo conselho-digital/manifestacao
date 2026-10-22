@@ -73,6 +73,8 @@ const MAX_CHAT = 30;
 /** Limites de recepção (anti-flood): jogadores na cena, intervalo mínimo por remetente. */
 const MAX_REMOTE_PLAYERS = 200;
 const MOVE_MIN_INTERVAL_MS = 40;
+/** Velocidade máx. aceita de um jogador remoto (u/s): a moto esportiva faz ~17; o dobro cobre jitter de rede. */
+const MAX_REMOTE_SPEED = 34;
 const CHAT_MIN_INTERVAL_MS = 500;
 /** Teto global de marcas de spray recebidas por segundo (todos os remetentes somados). */
 const MAX_SPRAYS_PER_SECOND = 5;
@@ -157,6 +159,7 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
   // origem (0,0) pra quem acabou de chegar.
   const lastMoveBySenderRef = useRef<Map<string, number>>(new Map());
   const lastChatBySenderRef = useRef<Map<string, number>>(new Map());
+  const lastPosBySenderRef = useRef<Map<string, { x: number; z: number; t: number }>>(new Map());
   const lastMoveRef = useRef<MoveBroadcast | null>(null);
   // Último anúncio de posição por jogador que entrou (limite de 1/s POR JOGADOR, não global).
   const lastAnnounceByKeyRef = useRef<Map<string, number>>(new Map());
@@ -255,7 +258,20 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
         capMap(lastMoveBySenderRef.current, 500);
         const existing = playersRef.current.get(m.id);
         if (existing) {
-          const safePos = clampToAvenue(m.x, m.z);
+          let safePos = clampToAvenue(m.x, m.z);
+          // Anti-teleporte básico: ninguém anda mais rápido que o veículo mais veloz (com folga para a rede).
+          // Passo maior que o possível é cortado; a posição "alcança" em poucos pacotes se for legítima (lag).
+          const last = lastPosBySenderRef.current.get(m.id);
+          if (last) {
+            const dt = Math.max(0.05, (nowMove - last.t) / 1000);
+            const maxStep = MAX_REMOTE_SPEED * Math.min(dt, 1.5);
+            const dx = safePos.x - last.x;
+            const dz = safePos.z - last.z;
+            const dist = Math.hypot(dx, dz);
+            if (dist > maxStep) safePos = { x: last.x + (dx / dist) * maxStep, z: last.z + (dz / dist) * maxStep };
+          }
+          lastPosBySenderRef.current.set(m.id, { x: safePos.x, z: safePos.z, t: nowMove });
+          capMap(lastPosBySenderRef.current, 500);
           existing.x = safePos.x;
           existing.z = safePos.z;
           if (FACINGS.has(m.facing)) existing.facing = m.facing;

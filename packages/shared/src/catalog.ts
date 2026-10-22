@@ -128,7 +128,7 @@ export const PASSES: Record<PassId, Pass> = {
     id: "premium",
     label: "Premium",
     description:
-      "Personagem sempre conectado, moto, carro, caixa de som básica inclusa (libera o carro de som), spray ilimitado e 5 cartazes.",
+      "Moto, carro, caixa de som básica inclusa (libera o carro de som), spray ilimitado e 5 cartazes.",
     priceCents: 1000,
   },
 };

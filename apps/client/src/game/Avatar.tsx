@@ -32,6 +32,19 @@ const MOTO_REAR_AXLE_Z = -0.7;
 function ProceduralBody({ color }: { color: number }) {
   return (
     <>
+      {/* Braços: manga na cor da camisa e mão na cor da pele, caindo dos ombros com leve abertura. */}
+      {[-1, 1].map((side) => (
+        <group key={side} position={[side * 0.46, 1.32, 0]} rotation={[0, 0, side * 0.12]}>
+          <mesh position={[0, -0.32, 0]} castShadow>
+            <capsuleGeometry args={[0.11, 0.42, 4, 8]} />
+            <meshStandardMaterial color={color} />
+          </mesh>
+          <mesh position={[0, -0.74, 0]} castShadow>
+            <sphereGeometry args={[0.1, 10, 10]} />
+            <meshStandardMaterial color={0xf2d2b6} />
+          </mesh>
+        </group>
+      ))}
       <mesh position={[0, 0.9, 0]} castShadow>
         <capsuleGeometry args={[0.35, 0.8, 4, 12]} />
         <meshStandardMaterial color={color} />
