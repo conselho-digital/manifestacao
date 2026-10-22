@@ -623,12 +623,15 @@ function ModerationTab({ busy, run }: TabProps) {
       setHits(await findUsers(q));
     }, "Busca feita.");
 
-  const apply = (u: AdminUserHit, kind: "mute" | "ban", minutes: number | null) =>
-    run(async () => {
+  const apply = async (u: AdminUserHit, kind: "mute" | "ban", minutes: number | null) => {
+    if (kind === "ban" && !window.confirm(`Banir ${u.nickname} permanentemente?`)) return;
+    await run(async () => {
       await sanctionUser(u.id, kind, minutes, reason);
+      setReason("");
       setHits(await findUsers(q));
       await load();
     }, kind === "mute" ? "Conta silenciada." : "Conta banida.");
+  };
 
   const lift = (s: AdminSanction) =>
     run(async () => {

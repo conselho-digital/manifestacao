@@ -213,6 +213,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     sendVoice: net.sendVoice,
     voiceHandlerRef: net.voiceHandlerRef,
     blocked: !!mutedNotice,
+    isOnline: (id) => net.playersRef.current.has(id),
   });
   // Só true depois do primeiro useFrame do Player — evita que um clique no
   // instante do mount (antes do R3F rodar o primeiro frame) borrife na

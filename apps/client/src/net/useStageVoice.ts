@@ -2,11 +2,12 @@ import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 
 import { STAGE_HEAR_RADIUS, STAGE_SPEAK_RADIUS, STAGE_X, STAGE_Z } from "../game/world.js";
 import { StageVoice, parseVoiceMsg, type VoiceMsg, type VoiceState } from "./stageVoice.js";
 
-const IDLE: VoiceState = { speakerId: null, speakerNick: "", speaking: false, error: null };
+const IDLE: VoiceState = { speakerId: null, speakerNick: "", speaking: false, starting: false, error: null };
 /** Mais perto que isto, volume cheio; depois cai linearmente até o fim do alcance. */
 const FULL_VOLUME_RADIUS = 10;
-/** Máx. de mensagens de voz aceitas por segundo (um cliente hostil não afoga os outros). */
-const MAX_MSGS_PER_SEC = 60;
+/** Máx. de mensagens de voz por segundo, por remetente e no total (um cliente hostil não afoga os outros). */
+const MAX_MSGS_PER_SENDER_SEC = 25;
+const MAX_MSGS_TOTAL_SEC = 150;
 
 interface Options {
   selfId: string;
@@ -17,6 +18,8 @@ interface Options {
   voiceHandlerRef: MutableRefObject<((payload: unknown) => void) | null>;
   /** Conta silenciada: não pode falar (ainda ouve). */
   blocked: boolean;
+  /** O remetente está na presence (quem não está online não fala nem assume o palanque). */
+  isOnline: (id: string) => boolean;
 }
 
 export interface StageVoiceUi {
@@ -27,7 +30,7 @@ export interface StageVoiceUi {
 }
 
 /** Liga o palanque de voz ao canal da avenida e à posição do jogador. */
-export function useStageVoice({ selfId, nickname, posRef, sendVoice, voiceHandlerRef, blocked }: Options): StageVoiceUi {
+export function useStageVoice({ selfId, nickname, posRef, sendVoice, voiceHandlerRef, blocked, isOnline }: Options): StageVoiceUi {
   const [state, setState] = useState<VoiceState>(IDLE);
   const [inZone, setInZone] = useState(false);
   const voiceRef = useRef<StageVoice | null>(null);
@@ -35,16 +38,27 @@ export function useStageVoice({ selfId, nickname, posRef, sendVoice, voiceHandle
   nickRef.current = nickname;
   const inZoneRef = useRef(false);
   const bucket = useRef({ t: 0, n: 0 });
+  const perSender = useRef(new Map<string, { t: number; n: number }>());
+  const blockedRef = useRef(blocked);
+  blockedRef.current = blocked;
+  const isOnlineRef = useRef(isOnline);
+  isOnlineRef.current = isOnline;
 
   useEffect(() => {
-    const v = new StageVoice(selfId, (m: VoiceMsg) => sendVoice(m), setState);
+    const v = new StageVoice(selfId, (m: VoiceMsg) => sendVoice(m), setState, () => inZoneRef.current && !blockedRef.current);
     voiceRef.current = v;
     voiceHandlerRef.current = (payload) => {
       const now = Date.now();
       if (now - bucket.current.t > 1000) bucket.current = { t: now, n: 0 };
-      if (++bucket.current.n > MAX_MSGS_PER_SEC) return;
+      if (++bucket.current.n > MAX_MSGS_TOTAL_SEC) return;
       const msg = parseVoiceMsg(payload);
-      if (msg) void v.handle(msg);
+      if (!msg || !isOnlineRef.current(msg.from)) return;
+      const senders = perSender.current;
+      const b = senders.get(msg.from);
+      if (!b || now - b.t > 1000) senders.set(msg.from, { t: now, n: 1 });
+      else if (++b.n > MAX_MSGS_PER_SENDER_SEC) return;
+      if (senders.size > 200) senders.clear();
+      void v.handle(msg);
     };
     const poll = window.setInterval(() => {
       const d = Math.hypot(posRef.current.x - STAGE_X, posRef.current.z - STAGE_Z);
@@ -52,9 +66,9 @@ export function useStageVoice({ selfId, nickname, posRef, sendVoice, voiceHandle
       if (zone !== inZoneRef.current) {
         inZoneRef.current = zone;
         setInZone(zone);
-        // Saiu da zona falando: devolve o palanque.
-        if (!zone) v.stopSpeaking();
       }
+      // Fora da zona (ou silenciado) não fica com o microfone aberto, mesmo que a permissão tenha demorado.
+      if ((!zone || blockedRef.current) && v.getState().speaking) v.stopSpeaking();
       const volume = d <= FULL_VOLUME_RADIUS ? 1 : 1 - (d - FULL_VOLUME_RADIUS) / (STAGE_HEAR_RADIUS - FULL_VOLUME_RADIUS);
       v.setListening(d <= STAGE_HEAR_RADIUS, volume);
     }, 500);

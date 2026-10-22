@@ -13,8 +13,8 @@ export function StageButton({ voice, blockedNotice }: StageButtonProps) {
   const showCard = inZone || state.speaking || busyByOther;
   if (!showCard && !state.error) return null;
 
-  const label = state.speaking ? "Parar de falar" : busyByOther ? "Palanque ocupado" : "Falar no palanque";
-  const disabled = !state.speaking && (busyByOther || !!blockedNotice);
+  const label = state.speaking ? "Parar de falar" : state.starting ? "Liberando microfone…" : busyByOther ? "Palanque ocupado" : "Falar no palanque";
+  const disabled = !state.speaking && (busyByOther || state.starting || !!blockedNotice);
 
   return (
     <div

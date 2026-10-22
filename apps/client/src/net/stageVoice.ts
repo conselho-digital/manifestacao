@@ -18,6 +18,8 @@ export interface VoiceState {
   speakerNick: string;
   /** Este cliente está falando. */
   speaking: boolean;
+  /** Esperando a permissão do microfone. */
+  starting: boolean;
   error: string | null;
 }
 
@@ -68,7 +70,7 @@ export function parseVoiceMsg(raw: unknown): VoiceMsg | null {
 }
 
 export class StageVoice {
-  private state: VoiceState = { speakerId: null, speakerNick: "", speaking: false, error: null };
+  private state: VoiceState = { speakerId: null, speakerNick: "", speaking: false, starting: false, error: null };
   private stream: MediaStream | null = null;
   private peers = new Map<string, RTCPeerConnection>(); // falante: um por ouvinte
   private listenPc: RTCPeerConnection | null = null; // ouvinte: conexão com o falante
@@ -82,11 +84,14 @@ export class StageVoice {
   private timer: number | null = null;
   private lastBeat = 0;
   private disposed = false;
+  private lastJoinFrom = new Map<string, number>();
 
   constructor(
     private readonly selfId: string,
     private readonly send: (m: VoiceMsg) => void,
     private readonly onChange: (s: VoiceState) => void,
+    /** Reconfere zona/silêncio quando o microfone é liberado (a permissão pode demorar). */
+    private readonly canSpeak: () => boolean = () => true,
   ) {
     this.timer = window.setInterval(() => this.tick(), 1000);
   }
@@ -111,7 +116,7 @@ export class StageVoice {
   }
 
   async startSpeaking(nick: string): Promise<void> {
-    if (this.state.speaking || this.disposed) return;
+    if (this.state.speaking || this.state.starting || this.disposed) return;
     if (this.state.speakerId && this.state.speakerId !== this.selfId) {
       this.set({ error: "O palanque está ocupado." });
       return;
@@ -120,23 +125,26 @@ export class StageVoice {
       this.set({ error: "Este navegador não permite usar o microfone." });
       return;
     }
+    this.set({ starting: true, error: null });
+    let stream: MediaStream;
     try {
-      this.stream = await navigator.mediaDevices.getUserMedia({
+      stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
       });
     } catch {
-      this.set({ error: "Microfone não liberado. Permita o acesso e tente de novo." });
+      this.set({ starting: false, error: "Microfone não liberado. Permita o acesso e tente de novo." });
       return;
     }
-    // Alguém pode ter assumido enquanto o navegador pedia permissão.
-    if (this.disposed || (this.state.speakerId && this.state.speakerId !== this.selfId)) {
-      this.stopTracks();
-      this.set({ error: "O palanque está ocupado." });
+    // Durante o pedido de permissão o jogador pode ter saído da zona, sido silenciado ou alguém assumiu.
+    if (this.disposed || !this.canSpeak() || (this.state.speakerId && this.state.speakerId !== this.selfId)) {
+      stream.getTracks().forEach((t) => t.stop());
+      this.set({ starting: false, error: this.disposed ? null : "O palanque não está disponível." });
       return;
     }
+    this.stream = stream;
     this.closeListen();
     this.nick = nick.slice(0, MAX_NICK);
-    this.set({ speaking: true, speakerId: this.selfId, speakerNick: this.nick, error: null });
+    this.set({ starting: false, speaking: true, speakerId: this.selfId, speakerNick: this.nick, error: null });
     this.beat();
   }
 
@@ -217,7 +225,13 @@ export class StageVoice {
           if (m.from === this.state.speakerId && !this.state.speaking) this.clearSpeaker();
           return;
         case "join":
-          if (m.to === this.selfId && this.state.speaking) await this.offerTo(m.from);
+          if (m.to === this.selfId && this.state.speaking) {
+            const now = Date.now();
+            if (now - (this.lastJoinFrom.get(m.from) ?? 0) < 2000) return;
+            this.lastJoinFrom.set(m.from, now);
+            if (this.lastJoinFrom.size > 100) this.lastJoinFrom.clear();
+            await this.offerTo(m.from);
+          }
           return;
         case "offer":
           if (m.to === this.selfId && m.from === this.state.speakerId && this.inRange) await this.answer(m);
@@ -260,7 +274,7 @@ export class StageVoice {
       if (e.candidate) this.send({ t: "ice", from: this.selfId, to: listener, c: e.candidate.toJSON() });
     };
     pc.onconnectionstatechange = () => {
-      if (pc.connectionState === "failed" || pc.connectionState === "closed" || pc.connectionState === "disconnected") {
+      if (pc.connectionState === "failed" || pc.connectionState === "closed") {
         pc.close();
         if (this.peers.get(listener) === pc) this.peers.delete(listener);
       }
@@ -288,14 +302,20 @@ export class StageVoice {
     };
     pc.onconnectionstatechange = () => {
       if (pc.connectionState === "failed" || pc.connectionState === "closed") {
-        if (this.listenPc === pc) this.listenPc = null;
+        if (this.listenPc === pc) this.closeListen();
       }
     };
-    await pc.setRemoteDescription({ type: "offer", sdp: m.sdp });
-    for (const c of this.pendingIce.splice(0)) await pc.addIceCandidate(c).catch(() => {});
-    const ans = await pc.createAnswer();
-    await pc.setLocalDescription(ans);
-    if (ans.sdp) this.send({ t: "answer", from: this.selfId, to: m.from, sdp: ans.sdp });
+    try {
+      await pc.setRemoteDescription({ type: "offer", sdp: m.sdp });
+      for (const c of this.pendingIce.splice(0)) await pc.addIceCandidate(c).catch(() => {});
+      const ans = await pc.createAnswer();
+      await pc.setLocalDescription(ans);
+      if (ans.sdp) this.send({ t: "answer", from: this.selfId, to: m.from, sdp: ans.sdp });
+    } catch {
+      // Oferta inválida: solta a conexão para o retry de `join` poder tentar de novo.
+      pc.close();
+      if (this.listenPc === pc) this.listenPc = null;
+    }
   }
 
   dispose(): void {
