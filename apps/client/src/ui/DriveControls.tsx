@@ -12,8 +12,9 @@ interface DriveControlsProps {
 type Key = keyof DriveInput;
 
 const SIZE = 76;
-/** Botões da cruz da moto (menores que os do carro para a cruz caber no canto). */
-const CROSS_SIZE = 62;
+/** Botões da cruz da moto: do mesmo tamanho dos de acelerar/frear, bem juntos. */
+const CROSS_SIZE = SIZE;
+const CROSS_GAP = 2;
 const cross: React.CSSProperties = { width: CROSS_SIZE, height: CROSS_SIZE };
 const EDGE = 14;
 
@@ -133,7 +134,7 @@ export function DriveControls({ kind, driveRef }: DriveControlsProps) {
             display: "grid",
             gridTemplateColumns: `repeat(3, ${CROSS_SIZE}px)`,
             gridTemplateRows: `repeat(3, ${CROSS_SIZE}px)`,
-            gap: 6,
+            gap: CROSS_GAP,
           }}
         >
           <HoldButton label="Empinar a roda da frente" onChange={bind("up")} style={{ ...cross, gridColumn: 2, gridRow: 1 }}>
