@@ -106,7 +106,7 @@ export function AdminPanel({ onClose, onChanged }: AdminPanelProps) {
           </button>
         </div>
 
-        <div role="tablist" style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+        <div role="tablist" style={{ display: "flex", gap: 6, overflowX: "auto", flexShrink: 0, paddingBottom: 4 }}>
           {TABS.map((t) => (
             <button
               key={t.id}
@@ -117,7 +117,7 @@ export function AdminPanel({ onClose, onChanged }: AdminPanelProps) {
                 setTab(t.id);
                 setMsg(null);
               }}
-              style={{
+              style={{ whiteSpace: "nowrap", flexShrink: 0,
                 ...ghostBtn,
                 background: tab === t.id ? "var(--accent)" : "transparent",
                 color: tab === t.id ? "var(--on-accent)" : "var(--ink)",

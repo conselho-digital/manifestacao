@@ -1,5 +1,5 @@
 import { teamIconImageUrl } from "../game/models.js";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useModal } from "./useModal.js";
 import {
   CHARACTERS,
@@ -38,6 +38,7 @@ interface OptionsModalProps {
  * reentrar no canal em tempo real a cada tecla digitada no apelido).
  */
 export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin, onDeleteAccount, graphics, onGraphics }: OptionsModalProps) {
+  const downOnBackdrop = useRef(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -57,7 +58,14 @@ export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin, onD
 
   return (
     <div
-      onMouseDown={(e) => e.target === e.currentTarget && onClose()}
+      // Só fecha se o clique COMEÇA e TERMINA no fundo (arrastar a seleção de um campo para fora não perde o que foi digitado).
+      onMouseDown={(e) => {
+        downOnBackdrop.current = e.target === e.currentTarget;
+      }}
+      onMouseUp={(e) => {
+        if (downOnBackdrop.current && e.target === e.currentTarget) onClose();
+        downOnBackdrop.current = false;
+      }}
       style={{
         position: "fixed",
         inset: 0,
