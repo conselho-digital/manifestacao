@@ -69,10 +69,13 @@ useGLTF.preload(MASP_URL);
 const PARK_Z0 = -(AVENUE_WIDTH / 2 + PARK_GAP); // z do lado do parque que encosta na calçada
 const PATH_W = 3;
 /**
- * Árvores com o DOBRO da altura anterior (~13 × escala, antes ~6,5). Tronco alto e mais grosso, copa mais larga
- * e levemente alongada, sentada no topo do tronco (em vez de esticar a copa toda no eixo Y).
+ * Árvores do parque: o TRONCO tem 2,5 vezes a altura de um personagem a pé (o corpo geométrico tem ~2,0 de altura),
+ * ou seja, 5,0 unidades para todas; o que varia entre árvores é a grossura do tronco e o tamanho da copa.
  */
-const TRUNK_HEIGHT = 4.6; // multiplicador da altura do tronco (cilindro base de 2 de altura)
+const CHARACTER_HEIGHT = 2.0;
+const TRUNK_HEIGHT_FACTOR = 2.5;
+const TRUNK_HEIGHT = CHARACTER_HEIGHT * TRUNK_HEIGHT_FACTOR; // 5,0
+const TRUNK_BASE_LENGTH = 2; // comprimento do cilindro base do tronco
 const TRUNK_WIDTH = 1.7;
 const CROWN_WIDTH = 1.4;
 const CROWN_STRETCH = 1.15;
@@ -147,14 +150,14 @@ function Park() {
     const color = new Color();
     const colliders: Sphere[] = [];
     trees.forEach((t, i) => {
-      const h = t.scale * TRUNK_HEIGHT;
       const trunkW = t.scale * TRUNK_WIDTH;
-      m.compose(new Vector3(t.x, h, t.z), q, new Vector3(trunkW, h, trunkW));
+      // Cilindro base tem 2 de comprimento e é centrado: escala Y = altura/2, centro na metade da altura.
+      m.compose(new Vector3(t.x, TRUNK_HEIGHT / 2, t.z), q, new Vector3(trunkW, TRUNK_HEIGHT / TRUNK_BASE_LENGTH, trunkW));
       trunks.current!.setMatrixAt(i, m);
       const cw = t.scale * CROWN_WIDTH;
       const radius = CROWN_RADIUS * cw;
-      // Topo do tronco = 2h; a copa afunda um pouco no tronco.
-      const crownY = 2 * h + radius * 0.35;
+      // A copa senta no topo do tronco e afunda um pouco nele.
+      const crownY = TRUNK_HEIGHT + radius * 0.35;
       m.compose(new Vector3(t.x, crownY, t.z), q, new Vector3(cw, cw * CROWN_STRETCH, cw));
       crowns.current!.setMatrixAt(i, m);
       colliders.push(new Sphere(new Vector3(t.x, crownY, t.z), radius));
