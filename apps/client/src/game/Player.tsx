@@ -14,6 +14,7 @@ import type { SignData } from "./useSigns.js";
 import {
   CAMERA_LOOK_AHEAD_RATIO,
   CAMERA_SHOULDER_RATIO,
+  AVATAR_RADIUS,
   CAMERA_PIVOT_HEIGHT,
   RUN_MULTIPLIER,
   WALK_SPEED,
@@ -22,6 +23,7 @@ import {
 import type { InputVector } from "./useInput.js";
 import { SPRAY_MAX_RANGE } from "./spray.js";
 import { allowedCameraDistance } from "./colliders.js";
+import { resolveSolids } from "./solids.js";
 
 /** Posição + rotação atuais do jogador local, lidas fora do Canvas (ex.: botão de spray). */
 export interface PlayerTransform {
@@ -80,6 +82,9 @@ function facingOf(x: number, z: number, prev: Facing): Facing {
  * Jogador local: move o avatar pelo input (velocidade ajustada pelo veículo),
  * mantém a câmera seguindo e envia posição + veículo + bandeira via Realtime.
  */
+/** Raio de colisão de qualquer veículo (carro, moto, caminhão). */
+const VEHICLE_RADIUS = 1.2;
+
 export function Player({
   color,
   name,
@@ -151,8 +156,9 @@ export function Player({
       stepDrive(st, di, vehicleRef.current, delta);
       const wantX = g.position.x + Math.sin(st.heading) * st.speed * delta;
       const wantZ = g.position.z + Math.cos(st.heading) * st.speed * delta;
-      const next = clampToAvenue(wantX, wantZ, g.position);
-      // Bateu na borda da avenida: perde velocidade.
+      const clamped = clampToAvenue(wantX, wantZ, g.position);
+      const next = resolveSolids(clamped.x, clamped.z, VEHICLE_RADIUS);
+      // Bateu na borda da avenida, em prédio ou árvore: perde velocidade.
       if (Math.hypot(next.x - wantX, next.z - wantZ) > 1e-3) st.speed *= 0.4;
       g.position.x = next.x;
       g.position.z = next.z;
@@ -185,7 +191,8 @@ export function Player({
       const worldX = input.x * cos - input.z * sin;
       const worldZ = -input.x * sin - input.z * cos;
       const step = (speed * delta) / len;
-      const next = clampToAvenue(g.position.x + worldX * step, g.position.z + worldZ * step, g.position);
+      const clamped = clampToAvenue(g.position.x + worldX * step, g.position.z + worldZ * step, g.position);
+      const next = resolveSolids(clamped.x, clamped.z, AVATAR_RADIUS);
       g.position.x = next.x;
       g.position.z = next.z;
       facing.current = facingOf(worldX, worldZ, facing.current);

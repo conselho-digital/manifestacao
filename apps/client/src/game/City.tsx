@@ -16,6 +16,7 @@ import {
 } from "three";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { clearCameraColliders, setCameraColliders } from "./colliders.js";
+import { clearSolids, setSolids } from "./solids.js";
 import {
   AVENUE_END_MARGIN,
   AVENUE_LENGTH,
@@ -282,10 +283,11 @@ function PoliceBlockade() {
     const out: { x: number; z: number; rot: number }[] = [];
     const half = AVENUE_WIDTH / 2 + SIDEWALK;
     for (const end of [1, -1] as const) {
-      const x = end * (AVENUE_LENGTH / 2 - AVENUE_END_MARGIN / 2);
+      const x = end * (AVENUE_LENGTH / 2 - 2.4);
       for (let z = -half + 2.4; z <= half - 2.4 + 0.01; z += 5.2) {
-        const jitter = ((Math.round(z * 10) % 7) - 3) * 0.03;
-        out.push({ x, z, rot: Math.PI / 2 + jitter });
+        const jitter = ((Math.round(z * 10) % 7) - 3) * 0.015;
+        // Paradas de lado para quem vem pela avenida: o comprimento da viatura fica ao longo de Z.
+        out.push({ x, z, rot: (end === 1 ? 0 : Math.PI) + jitter });
       }
     }
     return out;
@@ -328,6 +330,71 @@ function PoliceBlockade() {
   );
 }
 
+/** Cavalete de sinalização (comprimento ao longo de Z): duas tábuas amarelas com listra preta e pés. */
+function trestleParts(): Record<"yellow" | "black", BufferGeometry> {
+  const box = (w: number, h: number, d: number, x: number, y: number, z: number) => {
+    const g = new BoxGeometry(w, h, d);
+    g.translate(x, y, z);
+    return g;
+  };
+  const yellow: BufferGeometry[] = [];
+  const black: BufferGeometry[] = [];
+  for (const y of [1.0, 0.55]) {
+    yellow.push(box(0.08, 0.3, 2.2, 0, y, 0));
+    black.push(box(0.09, 0.07, 2.2, 0, y, 0));
+  }
+  for (const z of [-0.95, 0.95]) {
+    black.push(box(0.07, 1.15, 0.07, 0, 0.575, z));
+    black.push(box(0.5, 0.06, 0.07, 0, 0.03, z));
+  }
+  return { yellow: mergeGeometries(yellow)!, black: mergeGeometries(black)! };
+}
+
+/** Cavaletes amarelos alinhados na frente das viaturas, do lado da avenida. */
+function Trestles() {
+  const parts = useMemo(trestleParts, []);
+  const refs = useRef<Record<string, InstancedMesh | null>>({});
+  const spots = useMemo(() => {
+    const out: { x: number; z: number }[] = [];
+    const half = AVENUE_WIDTH / 2 + SIDEWALK;
+    for (const end of [1, -1] as const) {
+      for (let z = -half + 1.3; z <= half - 1.3 + 0.01; z += 2.6) out.push({ x: end * (AVENUE_LENGTH / 2 - 4.3), z });
+    }
+    return out;
+  }, []);
+
+  useLayoutEffect(() => {
+    const m = new Matrix4();
+    const q = new Quaternion();
+    for (const k of ["yellow", "black"] as const) {
+      const mesh = refs.current[k];
+      if (!mesh) continue;
+      spots.forEach((s, i) => {
+        m.compose(new Vector3(s.x, 0, s.z), q, new Vector3(1, 1, 1));
+        mesh.setMatrixAt(i, m);
+      });
+      mesh.instanceMatrix.needsUpdate = true;
+    }
+  }, [spots]);
+
+  return (
+    <group>
+      {(["yellow", "black"] as const).map((k) => (
+        <instancedMesh
+          key={k}
+          ref={(el) => {
+            refs.current[k] = el;
+          }}
+          args={[parts[k], undefined, spots.length]}
+          frustumCulled={false}
+        >
+          <meshStandardMaterial color={k === "yellow" ? 0xffd12e : 0x1b1d20} emissive={k === "yellow" ? 0x6b5200 : 0x000000} />
+        </instancedMesh>
+      ))}
+    </group>
+  );
+}
+
 export function City() {
   const { buildings, geometry } = useMemo(() => {
     const list = buildCity();
@@ -345,7 +412,15 @@ export function City() {
         ),
     );
     setCameraColliders("city", [], boxes);
-    return () => clearCameraColliders("city");
+    // O personagem e os veículos também não atravessam os prédios.
+    setSolids(
+      "city",
+      buildings.map((b) => ({ minX: b.x - b.w / 2, maxX: b.x + b.w / 2, minZ: b.z - b.d / 2, maxZ: b.z + b.d / 2 })),
+    );
+    return () => {
+      clearCameraColliders("city");
+      clearSolids("city");
+    };
   }, [buildings]);
   useEffect(() => () => texture.dispose(), [texture]);
   useEffect(() => () => geometry.dispose(), [geometry]);
@@ -382,6 +457,7 @@ export function City() {
       )}
       <Fences buildings={buildings} />
       <PoliceBlockade />
+      <Trestles />
       {/* Prédios (um mesh só) */}
       <mesh geometry={geometry}>
         <meshStandardMaterial map={texture} vertexColors />

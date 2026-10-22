@@ -3,6 +3,7 @@ import { Box3, Color, InstancedMesh, Matrix4, Mesh, Quaternion, Sphere, Vector3 
 import { ModelBoundary } from "./ModelBoundary.js";
 import { City } from "./City.js";
 import { clearCameraColliders, setCameraColliders } from "./colliders.js";
+import { clearSolids, setSolids } from "./solids.js";
 import { useGLTF } from "@react-three/drei";
 import { AVENUE_LENGTH, AVENUE_WIDTH, PARK_GAP, PARK_SIZE, PLAZA_HALF_X, PLAZA_MAX_Z } from "./world.js";
 
@@ -125,7 +126,8 @@ interface TreeSpec {
 function buildTrees(): TreeSpec[] {
   const rand = mulberry32(1905);
   const out: TreeSpec[] = [];
-  const step = 4.2;
+  // Metade da densidade anterior (passo 4,2): passo x √2.
+  const step = 4.2 * Math.SQRT2;
   for (let d = step / 2; d < PARK_SIZE; d += step) {
     for (let x = -PARK_SIZE / 2 + step / 2; x < PARK_SIZE / 2; x += step) {
       const jx = x + (rand() - 0.5) * 2.2;
@@ -168,7 +170,16 @@ function Park() {
     if (crowns.current.instanceColor) crowns.current.instanceColor.needsUpdate = true;
     // Copas como esferas: a câmera de terceira pessoa não as atravessa.
     setCameraColliders("park-trees", colliders);
-    return () => clearCameraColliders("park-trees");
+    // Troncos sólidos para quem anda (o cilindro vai de 0,35 de raio na base, escalado pela grossura).
+    setSolids(
+      "park-trees",
+      [],
+      trees.map((t) => ({ x: t.x, z: t.z, r: 0.35 * t.scale * TRUNK_WIDTH })),
+    );
+    return () => {
+      clearCameraColliders("park-trees");
+      clearSolids("park-trees");
+    };
   }, [trees]);
 
   const centerZ = PARK_Z0 - PARK_SIZE / 2;
@@ -224,6 +235,19 @@ export function Scenery() {
     }
     mesh.instanceMatrix.needsUpdate = true;
   }, [laneCount]);
+
+  // Pilares vermelhos do museu (medidos no modelo, em unidades do mundo): dá para andar por baixo, não pelos pilares.
+  useEffect(() => {
+    const pad = 0.2;
+    const rects = [] as { minX: number; maxX: number; minZ: number; maxZ: number }[];
+    for (const [x0, x1] of [[-21.4, -18.5], [20.7, 23.6]] as const) {
+      for (const [z0, z1] of [[20.5, 22.5], [28.9, 30.9]] as const) {
+        rects.push({ minX: x0 - pad, maxX: x1 + pad, minZ: z0 - pad, maxZ: z1 + pad });
+      }
+    }
+    setSolids("masp", rects);
+    return () => clearSolids("masp");
+  }, []);
 
   return (
     <group>
