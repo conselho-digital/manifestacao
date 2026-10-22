@@ -106,7 +106,7 @@ function HoldButton({
 
 /**
  * Controles de direção na tela (celular). Esquerda: virar. Direita: acelerar e frear.
- * Moto: mais dois botões (para cima / para baixo) que empinam e abaixam a roda da frente.
+ * Moto: mais dois botões (para cima / para baixo, no lado esquerdo) que empinam e abaixam a roda da frente.
  */
 export function DriveControls({ kind, driveRef }: DriveControlsProps) {
   const bind = (key: Key) => (down: boolean) => {
@@ -119,17 +119,10 @@ export function DriveControls({ kind, driveRef }: DriveControlsProps) {
   };
   return (
     <>
-      <div style={{ position: "fixed", left: inset.left, bottom: inset.bottom, zIndex: 5, display: "flex", gap: 12 }}>
-        <HoldButton label="Virar para a esquerda" onChange={bind("left")}>
-          <Arrow dir="left" />
-        </HoldButton>
-        <HoldButton label="Virar para a direita" onChange={bind("right")}>
-          <Arrow dir="right" />
-        </HoldButton>
-      </div>
-      <div style={{ position: "fixed", right: inset.right, bottom: inset.bottom, zIndex: 5, display: "flex", gap: 12, alignItems: "flex-end" }}>
+      {/* Esquerda: virar (e, na moto, empinar/abaixar a roda da frente logo acima). */}
+      <div style={{ position: "fixed", left: inset.left, bottom: inset.bottom, zIndex: 5, display: "flex", flexDirection: "column", gap: 12 }}>
         {kind === "moto" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "flex", gap: 12 }}>
             <HoldButton label="Empinar a roda da frente" onChange={bind("up")} style={{ width: 64, height: 64 }}>
               <Arrow dir="up" />
             </HoldButton>
@@ -138,14 +131,23 @@ export function DriveControls({ kind, driveRef }: DriveControlsProps) {
             </HoldButton>
           </div>
         )}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
-          <HoldButton label="Acelerar" onChange={bind("accel")} accent>
-            Acelerar
+        <div style={{ display: "flex", gap: 12 }}>
+          <HoldButton label="Virar para a esquerda" onChange={bind("left")}>
+            <Arrow dir="left" />
           </HoldButton>
-          <HoldButton label="Frear" onChange={bind("brake")}>
-            Frear
+          <HoldButton label="Virar para a direita" onChange={bind("right")}>
+            <Arrow dir="right" />
           </HoldButton>
         </div>
+      </div>
+      {/* Direita: acelerar e frear. */}
+      <div style={{ position: "fixed", right: inset.right, bottom: inset.bottom, zIndex: 5, display: "flex", flexDirection: "column", gap: 12 }}>
+        <HoldButton label="Acelerar" onChange={bind("accel")} accent>
+          Acelerar
+        </HoldButton>
+        <HoldButton label="Frear" onChange={bind("brake")}>
+          Frear
+        </HoldButton>
       </div>
     </>
   );
