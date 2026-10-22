@@ -75,14 +75,15 @@ export async function fetchMyCredit(): Promise<number | null> {
 }
 
 /** Lances no ar (leitura pública). */
-export async function fetchActiveBids(): Promise<BillboardAd[]> {
+export async function fetchActiveBids(): Promise<BillboardAd[] | null> {
   const supabase = getSupabase();
-  if (!supabase) return [];
-  const { data } = await supabase
+  if (!supabase) return null;
+  const { data, error } = await supabase
     .from("billboard_bids")
     .select("id, billboard_id, text, color, amount_cents")
     .eq("status", "active");
-  return (data as BillboardAd[] | null) ?? [];
+  // Erro (rede/tabela): null = "não sei", e o telão mantém o que já mostra em vez de zerar.
+  return error ? null : ((data as BillboardAd[] | null) ?? []);
 }
 
 /** Realtime: novo ativo entra; superado/estornado sai. */

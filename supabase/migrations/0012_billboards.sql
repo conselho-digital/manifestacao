@@ -4,7 +4,10 @@
 -- pagamentos em tabelas privadas; escrita só por Edge Function / RPC.
 -- Pré-requisito: tabela `user_credits` (0001).
 
-drop table if exists billboard_bids cascade;
+-- A tabela do 0001 nunca foi usada pelo app: é renomeada (sem apagar nada) e fechada para o cliente.
+alter table billboard_bids rename to billboard_bids_legacy_0001;
+alter table billboard_bids_legacy_0001 rename constraint billboard_bids_pkey to billboard_bids_legacy_0001_pkey;
+revoke all on billboard_bids_legacy_0001 from anon, authenticated;
 
 create table billboard_bids (
   id uuid primary key default gen_random_uuid(),

@@ -58,18 +58,16 @@ export function useSigns(remoteIds: string[], playersRef: { current: Map<string,
       if (oldest === undefined) break;
       askedRef.current.delete(oldest);
     }
-    let alive = true;
+    // Sem cancelar ao mudar a lista (isso acontece a cada entrada/saída de jogador e descartava o resultado):
+    // o resultado é sempre guardado — setState após desmontar é inofensivo.
     void fetchActiveSigns(missing).then((rows) => {
-      if (!alive || rows.length === 0) return;
+      if (rows.length === 0) return;
       setSigns((prev) => {
         const next = new Map(prev);
         for (const r of rows) next.set(r.id, { text: r.text, color: r.color });
         return next;
       });
     });
-    return () => {
-      alive = false;
-    };
     // `signs` fica de fora de propósito: só reconsulta quando a lista desejada ou o relógio de retry mudam.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wantedKey, tick]);

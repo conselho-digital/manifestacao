@@ -3,8 +3,11 @@
 -- Mesmo desenho do superchat: tabela pública só com o que é de todos; autor e
 -- pagamentos em tabelas privadas; escrita só por Edge Function/RPC.
 
-drop table if exists custom_signs cascade;
-drop type if exists sign_status;
+-- A tabela do 0001 nunca foi usada pelo app: é renomeada (sem apagar nada) e fechada para o cliente.
+alter table custom_signs rename to custom_signs_legacy_0001;
+alter table custom_signs_legacy_0001 rename constraint custom_signs_pkey to custom_signs_legacy_0001_pkey;
+alter index custom_signs_status_idx rename to custom_signs_legacy_0001_status_idx;
+revoke all on custom_signs_legacy_0001 from anon, authenticated;
 
 create table custom_signs (
   id uuid primary key default gen_random_uuid(),

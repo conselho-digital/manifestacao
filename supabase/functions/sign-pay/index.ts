@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
         description: "Cartaz personalizado",
         payment_method_id: "pix",
         external_reference: externalReference,
-        payer: { email: userData.user.email ?? "sem-email@manifestacao.com" },
+        payer: { email: userData.user.email ?? "sem-email@example.com" },
       }),
     });
     const mp = await mpRes.json();

@@ -27,6 +27,7 @@ import {
   type AdminSpray,
   fetchAdminCatalog,
   createCatalogItem,
+  mergeModels,
   deleteCatalogItem,
   newProductId,
   NEW_PRODUCT_KINDS,
@@ -80,13 +81,13 @@ export function AdminPanel({ onClose, onChanged }: AdminPanelProps) {
   const dialogRef = useModal<HTMLDivElement>(onClose);
 
   /** Roda uma escrita, recarrega a config e mostra o resultado. */
-  const run = async (what: () => Promise<void>, okText: string) => {
+  const run = async (what: () => Promise<void | string>, okText: string) => {
     setBusy(true);
     setMsg(null);
     try {
-      await what();
+      const custom = await what();
       await onChanged();
-      setMsg({ kind: "ok", text: okText });
+      setMsg({ kind: "ok", text: typeof custom === "string" ? custom : okText });
     } catch (e) {
       setMsg({ kind: "err", text: e instanceof Error ? e.message : "Erro ao salvar." });
     } finally {
@@ -149,7 +150,7 @@ export function AdminPanel({ onClose, onChanged }: AdminPanelProps) {
 
 interface TabProps {
   busy: boolean;
-  run: (what: () => Promise<void>, okText: string) => Promise<void>;
+  run: (what: () => Promise<void | string>, okText: string) => Promise<void>;
 }
 
 function TeamsTab({ busy, run }: TabProps) {
@@ -212,15 +213,12 @@ function FlagsTab({ busy, run }: TabProps) {
     run(async () => {
       const slot = `flagimg:${id}`;
       const url = await uploadModel(slot, file);
-      const next = { ...currentModelOverrides(), [slot]: url };
-      await saveConfigKey("models", next);
+      const next = await mergeModels({ [slot]: url });
       setModels(next);
     }, "Imagem da bandeira enviada.");
   const clearImage = (id: string) =>
     run(async () => {
-      const next = { ...currentModelOverrides() };
-      delete next[`flagimg:${id}`];
-      await saveConfigKey("models", next);
+      const next = await mergeModels({ [`flagimg:${id}`]: null });
       setModels(next);
     }, "Imagem removida (volta à cor).");
   return (
@@ -342,9 +340,12 @@ function ProductsTab({ busy, run }: TabProps) {
     if (!window.confirm(`Apagar o produto "${r.label}"? Se já foi comprado, ele só é desativado (some da loja) para não perder o histórico.`)) return;
     void run(async () => {
       const result = await deleteCatalogItem(r.id);
-      if (result === "deleted") setRows((cur) => (cur ?? []).filter((x) => x.id !== r.id));
-      else setRows((cur) => (cur ?? []).map((x) => (x.id === r.id ? { ...x, active: false } : x)));
-      if (result === "deactivated") throw new Error(`"${r.label}" já tem compras: foi desativado em vez de apagado.`);
+      if (result === "deleted") {
+        setRows((cur) => (cur ?? []).filter((x) => x.id !== r.id));
+        return;
+      }
+      setRows((cur) => (cur ?? []).map((x) => (x.id === r.id ? { ...x, active: false } : x)));
+      return `"${r.label}" já tem compras: foi desativado (some da loja) em vez de apagado.`;
     }, `"${r.label}" apagado.`);
   };
 
@@ -469,10 +470,7 @@ function SpraysTab({ busy, run }: TabProps) {
     void run(async () => {
       await removeSpray(r.slug);
       // Tira também o modelo 3D do spray (senão fica um override órfão na config).
-      const next = { ...currentModelOverrides() };
-      const hadModel = delete next[`spray:${r.slug}`];
-      const hadImage = delete next[`sprayimg:${r.slug}`];
-      if (hadModel || hadImage) await saveConfigKey("models", next);
+      await mergeModels({ [`spray:${r.slug}`]: null, [`sprayimg:${r.slug}`]: null });
       setRows((cur) => (cur ?? []).filter((x) => x.slug !== r.slug));
     }, "Spray removido.");
   };
@@ -481,8 +479,7 @@ function SpraysTab({ busy, run }: TabProps) {
     run(async () => {
       const slot = `spray:${r.slug}`;
       const url = await uploadModel(slot, file);
-      const next = { ...currentModelOverrides(), [slot]: url };
-      await saveConfigKey("models", next);
+      const next = await mergeModels({ [slot]: url });
       setModels(next);
     }, "Modelo 3D do spray enviado.");
 
@@ -490,24 +487,19 @@ function SpraysTab({ busy, run }: TabProps) {
     run(async () => {
       const slot = `sprayimg:${r.slug}`;
       const url = await uploadModel(slot, file);
-      const next = { ...currentModelOverrides(), [slot]: url };
-      await saveConfigKey("models", next);
+      const next = await mergeModels({ [slot]: url });
       setModels(next);
     }, "Imagem do spray enviada.");
 
   const clearImg = (r: AdminSpray) =>
     run(async () => {
-      const next = { ...currentModelOverrides() };
-      delete next[`sprayimg:${r.slug}`];
-      await saveConfigKey("models", next);
+      const next = await mergeModels({ [`sprayimg:${r.slug}`]: null });
       setModels(next);
     }, "Imagem removida.");
 
   const clearModel = (r: AdminSpray) =>
     run(async () => {
-      const next = { ...currentModelOverrides() };
-      delete next[`spray:${r.slug}`];
-      await saveConfigKey("models", next);
+      const next = await mergeModels({ [`spray:${r.slug}`]: null });
       setModels(next);
     }, "Modelo removido (volta ao padrão).");
 
@@ -616,17 +608,12 @@ function ModelsTab({ busy, run }: TabProps) {
   const setSlot = (slot: string, file: File) =>
     run(async () => {
       const url = await uploadModel(slot, file);
-      const next = { ...models, [slot]: url };
-      await saveConfigKey("models", next);
-      setModels(next);
+      setModels(await mergeModels({ [slot]: url }));
     }, "Modelo enviado.");
 
   const clearSlot = (slot: string) =>
     run(async () => {
-      const next = { ...models };
-      delete next[slot];
-      await saveConfigKey("models", next);
-      setModels(next);
+      setModels(await mergeModels({ [slot]: null }));
     }, "Modelo removido (volta ao padrão).");
 
   const renderSlot = (slot: string, label: string) => {

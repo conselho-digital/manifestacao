@@ -22,6 +22,23 @@ export async function saveConfigKey(key: "teams" | "flags" | "models", value: un
   if (error) throw new Error(error.message);
 }
 
+/**
+ * Atualiza `game_config.models` SEM perder o que já existe: lê o valor atual direto do banco (não do cache
+ * filtrado do cliente), aplica as mudanças (`null` remove a chave), grava e devolve o mapa resultante.
+ */
+export async function mergeModels(patch: Record<string, string | null>): Promise<Record<string, string>> {
+  const { data, error } = await db().from("game_config").select("value").eq("key", "models").maybeSingle();
+  if (error) throw new Error(error.message);
+  const current = data?.value && typeof data.value === "object" && !Array.isArray(data.value) ? (data.value as Record<string, string>) : {};
+  const next: Record<string, string> = { ...current };
+  for (const [slot, url] of Object.entries(patch)) {
+    if (url === null) delete next[slot];
+    else next[slot] = url;
+  }
+  await saveConfigKey("models", next);
+  return next;
+}
+
 export interface AdminCatalogRow {
   id: string;
   kind: string;
@@ -99,8 +116,10 @@ export async function createCatalogItem(row: AdminCatalogRow): Promise<void> {
  */
 export async function deleteCatalogItem(id: string): Promise<"deleted" | "deactivated"> {
   const supabase = db();
-  const { error } = await supabase.from("catalog_items").delete().eq("id", id);
-  if (!error) return "deleted";
+  const { data: removed, error } = await supabase.from("catalog_items").delete().eq("id", id).select("id");
+  if (!error && removed && removed.length > 0) return "deleted";
+  // 0 linhas sem erro = o banco recusou em silêncio (RLS): não finge que apagou.
+  if (!error) throw new Error("Sem permissão para apagar este produto.");
   if (error.code !== "23503") throw new Error(error.message);
   const { error: e2 } = await supabase.from("catalog_items").update({ active: false }).eq("id", id);
   if (e2) throw new Error(e2.message);

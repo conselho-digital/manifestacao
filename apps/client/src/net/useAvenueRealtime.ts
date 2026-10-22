@@ -75,6 +75,15 @@ const CHAT_MIN_INTERVAL_MS = 500;
 const MAX_SPRAYS_PER_SECOND = 5;
 const FACINGS: ReadonlySet<unknown> = new Set(["up", "down", "left", "right"]);
 
+/** Mapas de rate limit chaveados por id vindo da rede (forjável): descarta os mais antigos acima do teto. */
+function capMap<V>(map: Map<string, V>, max: number): void {
+  while (map.size > max) {
+    const oldest = map.keys().next().value;
+    if (oldest === undefined) break;
+    map.delete(oldest);
+  }
+}
+
 function emptyScores(): Record<TeamId, number> {
   return Object.fromEntries(TEAM_IDS.map((t) => [t, 0])) as Record<TeamId, number>;
 }
@@ -142,7 +151,8 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
   const lastMoveBySenderRef = useRef<Map<string, number>>(new Map());
   const lastChatBySenderRef = useRef<Map<string, number>>(new Map());
   const lastMoveRef = useRef<MoveBroadcast | null>(null);
-  const lastAnnounceAtRef = useRef(0);
+  // Último anúncio de posição por jogador que entrou (limite de 1/s POR JOGADOR, não global).
+  const lastAnnounceByKeyRef = useRef<Map<string, number>>(new Map());
 
   // Acrescenta uma mensagem ao log, validando o campo `team` vindo da rede.
   const pushChat = useCallback((c: ChatBroadcast) => {
@@ -221,8 +231,10 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
         if (key === selfId) return;
         const now = Date.now();
         const last = lastMoveRef.current;
-        if (!last || now - lastAnnounceAtRef.current < 1000) return;
-        lastAnnounceAtRef.current = now;
+        const announced = lastAnnounceByKeyRef.current;
+        if (!last || now - (announced.get(key) ?? 0) < 1000) return;
+        announced.set(key, now);
+        capMap(announced, 300);
         void channel.send({ type: "broadcast", event: BROADCAST.move, payload: last });
       })
       .on("broadcast", { event: BROADCAST.move }, ({ payload }) => {
@@ -233,14 +245,19 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
         const nowMove = Date.now();
         if (nowMove - (lastMoveBySenderRef.current.get(m.id) ?? 0) < MOVE_MIN_INTERVAL_MS) return;
         lastMoveBySenderRef.current.set(m.id, nowMove);
+        capMap(lastMoveBySenderRef.current, 500);
         const existing = playersRef.current.get(m.id);
         if (existing) {
           const safePos = clampToAvenue(m.x, m.z);
           existing.x = safePos.x;
           existing.z = safePos.z;
           if (FACINGS.has(m.facing)) existing.facing = m.facing;
+          const visualChanged =
+            (isVehicleId(m.vehicle) && m.vehicle !== existing.vehicle) || (isFlagId(m.flag) && m.flag !== existing.flag);
           if (isVehicleId(m.vehicle)) existing.vehicle = m.vehicle;
           if (isFlagId(m.flag)) existing.flag = m.flag;
+          // Troca de veículo/bandeira muda o desenho: força a cena a reler os jogadores (baixa frequência).
+          if (visualChanged) setRemoteIds((ids) => [...ids]);
         }
       })
       .on("broadcast", { event: BROADCAST.chat }, ({ payload }) => {
@@ -249,6 +266,7 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
         const nowChat = Date.now();
         if (nowChat - (lastChatBySenderRef.current.get(c.id) ?? 0) < CHAT_MIN_INTERVAL_MS) return;
         lastChatBySenderRef.current.set(c.id, nowChat);
+        capMap(lastChatBySenderRef.current, 500);
         pushChat(c);
       })
       .on("broadcast", { event: BROADCAST.spray }, ({ payload }) => {

@@ -69,13 +69,19 @@ Deno.serve(async (req) => {
     // criar outra cobrança a cada clique.
     const { data: pending } = await admin
       .from("orders")
-      .select("id, mp_payment_id, external_reference, status, amount_cents")
+      .select("id, mp_payment_id, external_reference, status, amount_cents, created_at")
       .eq("user_id", userId)
       .eq("item_id", item.id)
       .eq("status", "pending")
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    // Pedido pendente SEM pagamento criado: se é recente, outra chamada está criando agora (evita 2 Pix);
+    // se travou, será descartado abaixo.
+    if (pending && !pending.mp_payment_id && Date.now() - new Date(pending.created_at).getTime() < 60_000) {
+      return json({ error: "busy" }, 409);
+    }
 
     if (pending?.mp_payment_id) {
       const existing = await fetch(
@@ -107,6 +113,12 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Chegou aqui: o pendente anterior (se houver) está morto (rejeitado/expirado/travado). Fecha-o:
+    // o banco só permite UM pedido pendente por usuário e item.
+    if (pending) {
+      await admin.from("orders").update({ status: "failed" }).eq("id", pending.id).eq("status", "pending");
+    }
+
     const externalReference = crypto.randomUUID();
 
     // Grava o pedido ANTES de chamar o Mercado Pago (ver nota de robustez no
@@ -123,6 +135,7 @@ Deno.serve(async (req) => {
       })
       .select("id")
       .single();
+    if (orderErr?.code === "23505") return json({ error: "busy" }, 409); // outra chamada criou o pendente primeiro
     if (orderErr || !orderRow) {
       console.error("order_insert_failed", orderErr?.message);
       return json({ error: "order_failed" }, 500);
@@ -141,16 +154,15 @@ Deno.serve(async (req) => {
         description: item.label,
         payment_method_id: "pix",
         external_reference: externalReference,
-        payer: { email: userData.user.email ?? "sem-email@manifestacao.com" },
+        payer: { email: userData.user.email ?? "sem-email@example.com" },
       }),
     });
     const mp = await mpRes.json();
     if (!mpRes.ok) {
       console.error("mp_error", mp);
-      // O pedido local já existe como 'pending' sem mp_payment_id; uma nova
-      // tentativa do usuário cai de novo neste bloco (sem mp_payment_id,
-      // pula o reaproveitamento) e tenta criar o pagamento outra vez — sem
-      // deixar nenhum pagamento cobrado sem registro.
+      // Nenhum pagamento foi criado: fecha o pedido para o usuário poder tentar de novo na hora
+      // (o banco só permite UM pendente por usuário e item).
+      await admin.from("orders").update({ status: "failed" }).eq("id", orderRow.id).eq("status", "pending");
       return json({ error: "payment_provider_error" }, 502);
     }
 

@@ -23,7 +23,7 @@ export function useBillboards(enabled: boolean): Map<string, BillboardAd> {
         }),
       () => {
         void fetchActiveBids().then((rows) => {
-          if (alive) setAds(new Map(rows.map((r) => [r.billboard_id, r])));
+          if (alive && rows) setAds(new Map(rows.map((r) => [r.billboard_id, r])));
         });
       },
     );

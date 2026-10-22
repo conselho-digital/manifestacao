@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 
 /** Vetor de movimento no plano XZ, componentes em [-1, 1]. */
 export interface InputVector {
@@ -96,10 +96,12 @@ export function useInput(enabled = true) {
   }, []);
 
   /** Alimentado pelo joystick de toque (valores em [-1, 1]). */
-  const setJoystick = (x: number, z: number) => {
+  // Identidade estável (muda só com `enabled`): o Joystick não religa listeners a cada render do jogo.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const setJoystick = useCallback((x: number, z: number) => {
     joyRef.current = { x, z };
     apply();
-  };
+  }, [enabled]);
 
   return { inputRef, read, setJoystick };
 }
