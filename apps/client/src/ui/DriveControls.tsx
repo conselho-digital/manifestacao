@@ -14,7 +14,7 @@ type Key = keyof DriveInput;
 const SIZE = 76;
 /** Botões da cruz da moto: do mesmo tamanho dos de acelerar/frear, bem juntos. */
 const CROSS_SIZE = SIZE;
-const CROSS_GAP = 2;
+const CROSS_GAP = 0;
 const cross: React.CSSProperties = { width: CROSS_SIZE, height: CROSS_SIZE };
 const EDGE = 14;
 
