@@ -119,6 +119,7 @@ export function Player({
   flagRef.current = flag;
   const driveState = useRef<DriveState>({ speed: 0, heading: 0, wheelie: 0 });
   const prevVehicle = useRef<VehicleId>(vehicle);
+  const lastSentVehicle = useRef(vehicleRef.current);
   const tmp = useRef(new Vector3());
   const aimDir = useRef(new Vector3());
   const dir = useRef(new Vector3());
@@ -292,6 +293,11 @@ export function Player({
 
     const heading = driving ? driveState.current.heading : g.rotation.y;
     const wheelie = driving ? driveState.current.wheelie : 0;
+    // Trocou de veículo parado: avisa os outros na hora (senão só veem a mudança quando você andar).
+    if (lastSentVehicle.current !== vehicleRef.current) {
+      lastSentVehicle.current = vehicleRef.current;
+      onMove(g.position.x, g.position.z, facing.current, vehicleRef.current, flagRef.current, heading, wheelie);
+    }
     if (!moving) {
       accum.current = 0;
       if (wasMoving.current) {

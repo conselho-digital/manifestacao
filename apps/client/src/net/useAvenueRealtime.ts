@@ -106,7 +106,7 @@ function sanitizePresence(id: string, p: unknown): PresenceState {
     id,
     nickname: String(raw.nickname ?? "Anônimo").slice(0, MAX_NICKNAME_LENGTH),
     team: isTeamId(raw.team) ? raw.team : "neutro",
-    shirt: typeof raw.shirt === "number" && Number.isFinite(raw.shirt) ? raw.shirt : 0x8b97a3,
+    shirt: typeof raw.shirt === "number" && Number.isInteger(raw.shirt) && raw.shirt >= 0 && raw.shirt <= 0xffffff ? raw.shirt : 0x8b97a3,
     character: isCharacterId(raw.character) ? raw.character : "comum",
     flag: isFlagId(raw.flag) ? raw.flag : "nenhuma",
     signId: typeof raw.signId === "string" && SIGN_ID_RE.test(raw.signId) ? raw.signId : undefined,

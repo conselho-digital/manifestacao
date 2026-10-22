@@ -1,5 +1,5 @@
-import { Suspense, useMemo, type ReactNode } from "react";
-import { Shape } from "three";
+import { Suspense, useEffect, useMemo, type ReactNode } from "react";
+import { Shape, type SkinnedMesh } from "three";
 import { useGLTF, useTexture } from "@react-three/drei";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import type { VehicleId } from "@manifestacao/shared";
@@ -245,6 +245,14 @@ function GlbModelInner({ url }: { url: string }) {
   // Clone por uso: o cache do useGLTF devolve a MESMA cena; sem clonar, o
   // mesmo modelo em dois jogadores brigaria pelo mesmo pai (só um aparece).
   const instance = useMemo(() => cloneSkinned(scene), [scene]);
+  // O R3F não descarta <primitive>: o esqueleto clonado guarda uma textura de ossos própria. Geometria e materiais são
+  // compartilhados com o cache do useGLTF e NÃO podem ser descartados aqui.
+  useEffect(
+    () => () => {
+      instance.traverse((o) => (o as SkinnedMesh).skeleton?.dispose());
+    },
+    [instance],
+  );
   return <primitive object={instance} />;
 }
 

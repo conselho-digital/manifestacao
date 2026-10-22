@@ -175,11 +175,16 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     };
     const onDown = key(true);
     const onUp = key(false);
+    const release = () => {
+      driveRef.current = { ...driveRef.current, up: false, down: false };
+    };
     window.addEventListener("keydown", onDown);
     window.addEventListener("keyup", onUp);
+    window.addEventListener("blur", release);
     return () => {
       window.removeEventListener("keydown", onDown);
       window.removeEventListener("keyup", onUp);
+      window.removeEventListener("blur", release);
       driveRef.current = { ...driveRef.current, up: false, down: false };
     };
   }, [vehicleKind]);

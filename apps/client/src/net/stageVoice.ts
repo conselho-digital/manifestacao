@@ -185,9 +185,11 @@ export class StageVoice {
     this.set({ speakerId: null, speakerNick: "" });
   }
 
-  private joinIfNeeded(): void {
+  /** `throttle`: o heartbeat do falante (a cada 3 s) não pode reiniciar uma negociação que ainda está em andamento. */
+  private joinIfNeeded(throttle = false): void {
     const speaker = this.state.speakerId;
     if (!speaker || speaker === this.selfId || !this.inRange || this.listenPc) return;
+    if (throttle && Date.now() - this.lastJoinAt < JOIN_RETRY_MS) return;
     this.lastJoinAt = Date.now();
     this.send({ t: "join", from: this.selfId, to: speaker });
   }
@@ -218,7 +220,7 @@ export class StageVoice {
             this.set({ speakerId: m.from, speakerNick: m.nick });
           }
           this.lastSeen = Date.now();
-          this.joinIfNeeded();
+          this.joinIfNeeded(true);
           return;
         }
         case "release":

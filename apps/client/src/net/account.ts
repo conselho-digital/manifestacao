@@ -4,6 +4,8 @@ const ERRORS: Record<string, string> = {
   admin_not_allowed: "Contas de admin não podem ser excluídas por aqui.",
   pending_payment: "Há um Pix pendente. Pague ou espere expirar antes de excluir a conta.",
   active_sanction: "Sua conta tem uma sanção ativa e não pode ser excluída agora.",
+  active_bid: "Você tem um lance de telão no ar ou aguardando pagamento. Espere terminar para excluir a conta.",
+  credit_debt: "Sua conta tem uma pendência de crédito. Fale com o contato indicado nos Termos.",
   unauthorized: "Entre com sua conta para continuar.",
 };
 

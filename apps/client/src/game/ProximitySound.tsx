@@ -52,9 +52,23 @@ export function useProximitySound(active: boolean): PositionalAudio | null {
     setAudio(instance);
 
     return () => {
-      osc.stop();
-      osc.disconnect();
-      instance.disconnect();
+      // Cada passo isolado: desconectar um nó já desconectado lança InvalidAccessError no WebAudio, e uma exceção aqui
+      // (ao trocar de veículo) derrubava a cena inteira.
+      try {
+        instance.disconnect();
+      } catch {
+        /* já desconectado */
+      }
+      try {
+        osc.stop();
+      } catch {
+        /* já parado */
+      }
+      try {
+        osc.disconnect();
+      } catch {
+        /* já desconectado */
+      }
       setAudio(null);
     };
   }, [active, camera]);

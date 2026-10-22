@@ -122,7 +122,7 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
           position={[0, sign ? 3.2 : 2.2, 0]}
           center
           distanceFactor={14}
-          occlude
+          // Sem `occlude`: ele lança um raio contra a cena inteira por etiqueta a cada frame (pesa com muita gente).
           // O padrão do drei é um z-index enorme, que passava por cima de loja/opções.
           zIndexRange={[3, 0]}
           className="avatar-name"

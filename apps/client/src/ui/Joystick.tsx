@@ -62,6 +62,7 @@ export function Joystick({ onMove }: JoystickProps) {
     window.addEventListener("blur", release);
     document.addEventListener("visibilitychange", release);
     return () => {
+      onMove(0, 0); // desmontar com o dedo apoiado não pode deixar um input fantasma andando
       window.removeEventListener("resize", recalc);
       window.removeEventListener("orientationchange", recalc);
       window.removeEventListener("blur", release);

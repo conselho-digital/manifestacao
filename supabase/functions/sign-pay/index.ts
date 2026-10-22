@@ -5,6 +5,7 @@
 // quando o webhook (mp-webhook) confirma o pagamento.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
+import { isSanctioned } from "../_shared/sanctions.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 
 const MP_ACCESS_TOKEN = Deno.env.get("MP_ACCESS_TOKEN") ?? "";
@@ -23,6 +24,7 @@ Deno.serve(async (req) => {
     const { data: userData, error: userErr } = await admin.auth.getUser(token);
     if (userErr || !userData.user) return json({ error: "unauthorized" }, 401);
     const userId = userData.user.id;
+    if (await isSanctioned(admin, userId, ["mute", "ban"])) return json({ error: "sanctioned" }, 403);
 
     const { id } = await req.json().catch(() => ({ id: null }));
     if (typeof id !== "string" || !/^[0-9a-f-]{36}$/i.test(id)) return json({ error: "id_required" }, 400);
