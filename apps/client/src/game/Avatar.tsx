@@ -94,7 +94,8 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
         <ProceduralBody color={color} />
       )}
 
-      {flag !== "nenhuma" && <FlagProp flag={flag} color={color} />}
+      {/* Bandeira só a pé: em veículo as mãos estão ocupadas. */}
+      {flag !== "nenhuma" && vehicle === "nenhum" && <FlagProp flag={flag} color={color} />}
       {sign && <SignProp sign={sign} />}
       <Vehicle3D vehicle={vehicle} />
       </group>
