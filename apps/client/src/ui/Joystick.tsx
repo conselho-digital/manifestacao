@@ -9,12 +9,13 @@ const MAX = 56;
 const DEAD = 10;
 const BASE_SIZE = MAX * 2;
 const KNOB_SIZE = 44;
-/** Margem do canto esquerdo até o centro da bolinha fixa. */
-const ANCHOR_INSET = 28 + MAX;
-/** Margem do canto inferior até o centro da bolinha (mais alta que a lateral). */
-const ANCHOR_INSET_BOTTOM = 84 + MAX;
-/** Folga de toque ao redor da bolinha: só tocando perto dela o joystick responde. */
-const TOUCH_PAD = 28;
+/** Margem do canto esquerdo até a borda da bolinha fixa. */
+const INSET_LEFT = 28;
+/** Margem do canto inferior até a borda da bolinha (mais alta que a lateral). */
+const INSET_BOTTOM = 84;
+/** Folga de toque ao redor da bolinha. O RESTO da tela (inclusive o lado esquerdo) gira a câmera. */
+const TOUCH_PAD = 10;
+const ZONE_SIZE = BASE_SIZE + TOUCH_PAD * 2;
 
 /**
  * Joystick virtual de toque, fixo no canto inferior esquerdo (uma "bolinha"
@@ -31,10 +32,10 @@ export function Joystick({ onMove }: JoystickProps) {
   const zoneRef = useRef<HTMLDivElement | null>(null);
 
   const anchorOf = (zone: Element): { x: number; y: number } => {
-    // getBoundingClientRect já exclui a área sob a gesture bar do sistema
-    // quando a zona usa env(safe-area-inset-*) no CSS (ver estilo abaixo).
+    // Centro da zona (= centro da bolinha). getBoundingClientRect já considera os
+    // env(safe-area-inset-*) usados no posicionamento (ver estilo abaixo).
     const rect = zone.getBoundingClientRect();
-    return { x: rect.left + ANCHOR_INSET, y: rect.bottom - ANCHOR_INSET_BOTTOM };
+    return { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
   };
 
   // Recalcula o anchor se a viewport mudar com o dedo ainda tocando (ex.:
@@ -110,15 +111,11 @@ export function Joystick({ onMove }: JoystickProps) {
       onPointerCancel={end}
       style={{
         position: "fixed",
-        left: 0,
-        bottom: 0,
-        width: ANCHOR_INSET + MAX + TOUCH_PAD,
-        height: ANCHOR_INSET_BOTTOM + MAX + TOUCH_PAD,
-        // Garante que a bolinha fixa (ancorada no canto desta zona) não
-        // caia sob a gesture bar do sistema em iOS/Android.
-        paddingLeft: "env(safe-area-inset-left, 0px)",
-        paddingBottom: "env(safe-area-inset-bottom, 0px)",
-        boxSizing: "border-box",
+        // Zona de toque = só a bolinha + folga (nada de faixa até a borda da tela).
+        left: `calc(env(safe-area-inset-left, 0px) + ${INSET_LEFT - TOUCH_PAD}px)`,
+        bottom: `calc(env(safe-area-inset-bottom, 0px) + ${INSET_BOTTOM - TOUCH_PAD}px)`,
+        width: ZONE_SIZE,
+        height: ZONE_SIZE,
         touchAction: "none",
         zIndex: 5,
       }}
@@ -126,10 +123,7 @@ export function Joystick({ onMove }: JoystickProps) {
       <div
         style={{
           position: "absolute",
-          left: ANCHOR_INSET - MAX,
-          bottom: ANCHOR_INSET_BOTTOM - MAX,
-          width: BASE_SIZE,
-          height: BASE_SIZE,
+          inset: TOUCH_PAD,
           borderRadius: "50%",
           background: active ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.08)",
           border: "1px solid var(--line)",
@@ -139,14 +133,14 @@ export function Joystick({ onMove }: JoystickProps) {
       <div
         style={{
           position: "absolute",
-          left: ANCHOR_INSET - KNOB_SIZE / 2 + knob.dx,
-          bottom: ANCHOR_INSET_BOTTOM - KNOB_SIZE / 2 - knob.dy,
+          left: ZONE_SIZE / 2 - KNOB_SIZE / 2 + knob.dx,
+          top: ZONE_SIZE / 2 - KNOB_SIZE / 2 + knob.dy,
           width: KNOB_SIZE,
           height: KNOB_SIZE,
           borderRadius: "50%",
           background: active ? "rgba(255,255,255,0.75)" : "rgba(255,255,255,0.5)",
           border: "2px solid rgba(21,24,29,0.5)",
-          transition: active ? "none" : "left .15s, bottom .15s, background .15s",
+          transition: active ? "none" : "left .15s, top .15s, background .15s",
         }}
       />
     </div>
