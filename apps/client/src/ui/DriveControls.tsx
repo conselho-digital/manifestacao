@@ -12,6 +12,9 @@ interface DriveControlsProps {
 type Key = keyof DriveInput;
 
 const SIZE = 76;
+/** Botões da cruz da moto (menores que os do carro para a cruz caber no canto). */
+const CROSS_SIZE = 62;
+const cross: React.CSSProperties = { width: CROSS_SIZE, height: CROSS_SIZE };
 const EDGE = 14;
 
 function Arrow({ dir }: { dir: "left" | "right" | "up" | "down" }) {
@@ -106,7 +109,7 @@ function HoldButton({
 
 /**
  * Controles de direção na tela (celular). Esquerda: virar. Direita: acelerar e frear.
- * Moto: mais dois botões (para cima / para baixo, no lado esquerdo) que empinam e abaixam a roda da frente.
+ * Moto: cruz no lado esquerdo — cima/baixo empinam e abaixam a roda da frente, esquerda/direita viram.
  */
 export function DriveControls({ kind, driveRef }: DriveControlsProps) {
   const bind = (key: Key) => (down: boolean) => {
@@ -119,19 +122,35 @@ export function DriveControls({ kind, driveRef }: DriveControlsProps) {
   };
   return (
     <>
-      {/* Esquerda: virar (e, na moto, empinar/abaixar a roda da frente logo acima). */}
-      <div style={{ position: "fixed", left: inset.left, bottom: inset.bottom, zIndex: 5, display: "flex", flexDirection: "column", gap: 12 }}>
-        {kind === "moto" && (
-          <div style={{ display: "flex", gap: 12 }}>
-            <HoldButton label="Empinar a roda da frente" onChange={bind("up")} style={{ width: 64, height: 64 }}>
-              <Arrow dir="up" />
-            </HoldButton>
-            <HoldButton label="Abaixar a roda da frente" onChange={bind("down")} style={{ width: 64, height: 64 }}>
-              <Arrow dir="down" />
-            </HoldButton>
-          </div>
-        )}
-        <div style={{ display: "flex", gap: 12 }}>
+      {/* Esquerda. Moto: cruz (empinar em cima, abaixar embaixo, virar nos lados). Carro/caminhão: só virar. */}
+      {kind === "moto" ? (
+        <div
+          style={{
+            position: "fixed",
+            left: inset.left,
+            bottom: inset.bottom,
+            zIndex: 5,
+            display: "grid",
+            gridTemplateColumns: `repeat(3, ${CROSS_SIZE}px)`,
+            gridTemplateRows: `repeat(3, ${CROSS_SIZE}px)`,
+            gap: 6,
+          }}
+        >
+          <HoldButton label="Empinar a roda da frente" onChange={bind("up")} style={{ ...cross, gridColumn: 2, gridRow: 1 }}>
+            <Arrow dir="up" />
+          </HoldButton>
+          <HoldButton label="Virar para a esquerda" onChange={bind("left")} style={{ ...cross, gridColumn: 1, gridRow: 2 }}>
+            <Arrow dir="left" />
+          </HoldButton>
+          <HoldButton label="Virar para a direita" onChange={bind("right")} style={{ ...cross, gridColumn: 3, gridRow: 2 }}>
+            <Arrow dir="right" />
+          </HoldButton>
+          <HoldButton label="Abaixar a roda da frente" onChange={bind("down")} style={{ ...cross, gridColumn: 2, gridRow: 3 }}>
+            <Arrow dir="down" />
+          </HoldButton>
+        </div>
+      ) : (
+        <div style={{ position: "fixed", left: inset.left, bottom: inset.bottom, zIndex: 5, display: "flex", gap: 12 }}>
           <HoldButton label="Virar para a esquerda" onChange={bind("left")}>
             <Arrow dir="left" />
           </HoldButton>
@@ -139,7 +158,7 @@ export function DriveControls({ kind, driveRef }: DriveControlsProps) {
             <Arrow dir="right" />
           </HoldButton>
         </div>
-      </div>
+      )}
       {/* Direita: acelerar e frear. */}
       <div style={{ position: "fixed", right: inset.right, bottom: inset.bottom, zIndex: 5, display: "flex", flexDirection: "column", gap: 12 }}>
         <HoldButton label="Acelerar" onChange={bind("accel")} accent>
