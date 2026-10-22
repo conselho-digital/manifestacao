@@ -207,6 +207,8 @@ export function Player({
       g.rotation.y = wrapAngle(g.rotation.y + diff * Math.min(1, 18 * delta));
     }
 
+    if (!Number.isFinite(g.position.x + g.position.z)) g.position.set(0, 0, 0); // proteção: posição inválida nunca fica
+
     // Câmera orbital livre: gira (yaw) e inclina (pitch) em torno de um
     // pivô na altura do personagem, controlada pela zona de arrasto da
     // direita — não fica mais presa a um offset fixo no mundo, dá pra olhar
@@ -239,6 +241,9 @@ export function Player({
     offset.current.divideScalar(wantedDist);
     const wanted = allowedCameraDistance(pivot.current, offset.current, wantedDist);
     tmp.current.copy(pivot.current).addScaledVector(offset.current, wanted);
+    // Posição NaN/infinita nunca se recupera sozinha (o lerp mantém o NaN): reinicia a câmera no alvo.
+    if (!Number.isFinite(camera.position.x + camera.position.y + camera.position.z)) camera.position.copy(pivot.current);
+    if (!Number.isFinite(wanted)) tmp.current.copy(pivot.current).addScaledVector(offset.current, cameraDistance);
     camera.position.lerp(tmp.current, 1 - Math.pow(0.001, delta));
     // O lerp suaviza o afastamento, mas a aproximação é imediata: se a câmera
     // (ainda a caminho) ficou além do permitido, encosta já no limite.

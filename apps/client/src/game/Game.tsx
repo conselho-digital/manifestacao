@@ -136,6 +136,17 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     () => (flagAllowed || avatar.flag === "nenhuma" ? avatar : { ...avatar, flag: "nenhuma" as const }),
     [avatar, flagAllowed],
   );
+  // Contexto WebGL perdido (GPU/memória do celular): tenta restaurar; se não voltar logo, recria o canvas.
+  const [canvasKey, setCanvasKey] = useState(0);
+  const [glLost, setGlLost] = useState(false);
+  useEffect(() => {
+    if (!glLost) return;
+    const t = window.setTimeout(() => {
+      setGlLost(false);
+      setCanvasKey((k) => k + 1);
+    }, 2500);
+    return () => window.clearTimeout(t);
+  }, [glLost]);
   const net = useAvenueRealtime(playAvatar, signedIn, signId);
   const isTouch = useIsTouch();
   const signs = useSigns(net.remoteIds, net.playersRef, signId);
@@ -266,6 +277,19 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           usa pra orbitar a câmera — evita um salto/giro perceptível da
           câmera logo na entrada, antes do primeiro frame recalcular. */}
       <Canvas
+        // Novo `key` = novo canvas e novo contexto WebGL (recuperação quando a GPU derruba o contexto).
+        key={canvasKey}
+        onCreated={({ gl }) => {
+          const el = gl.domElement;
+          el.addEventListener("webglcontextlost", (e) => {
+            e.preventDefault(); // permite a restauração automática
+            setGlLost(true);
+          });
+          el.addEventListener("webglcontextrestored", () => {
+            setGlLost(false);
+            setCanvasKey((k) => k + 1);
+          });
+        }}
         // Contexto de empilhamento próprio: nada de dentro do canvas (nomes) passa por cima de menus.
         style={{ zIndex: 0 }}
         shadows
@@ -381,6 +405,11 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           Segure <strong>Shift</strong> para correr
         </div>
         )
+      )}
+      {glLost && (
+        <div role="status" style={{ position: "fixed", inset: 0, zIndex: 4, display: "grid", placeItems: "center", background: "var(--scrim)", color: "var(--ink)", fontWeight: 700 }}>
+          Recuperando a imagem…
+        </div>
       )}
       <Crosshair />
       <StageButton voice={voice} blockedNotice={mutedNotice} />

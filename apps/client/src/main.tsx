@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.js";
 import { LegalPage, legalKindFromPath } from "./ui/LegalPage.js";
+import { AppErrorBoundary } from "./ui/AppErrorBoundary.js";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("elemento #root não encontrado");
@@ -10,7 +11,7 @@ const legal = legalKindFromPath(window.location.pathname);
 
 createRoot(root).render(
   <StrictMode>
-    {legal ? <LegalPage kind={legal} /> : <App />}
+    <AppErrorBoundary>{legal ? <LegalPage kind={legal} /> : <App />}</AppErrorBoundary>
   </StrictMode>,
 );
 
