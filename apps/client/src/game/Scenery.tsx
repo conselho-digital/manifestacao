@@ -3,7 +3,7 @@ import { Box3, Color, InstancedMesh, Matrix4, Mesh, Quaternion, Sphere, Vector3 
 import { ModelBoundary } from "./ModelBoundary.js";
 import { clearCameraColliders, setCameraColliders } from "./colliders.js";
 import { useGLTF } from "@react-three/drei";
-import { AVENUE_LENGTH, AVENUE_WIDTH, PARK_GAP, PARK_SIZE } from "./world.js";
+import { AVENUE_LENGTH, AVENUE_WIDTH, PARK_GAP, PARK_SIZE, PLAZA_HALF_X, PLAZA_MAX_Z } from "./world.js";
 
 const MASP_URL = "/models/scenery/masp.glb";
 // Modelo original (Sketchfab, exportado de FBX) vem em unidades arbitrárias
@@ -12,7 +12,13 @@ const MASP_URL = "/models/scenery/masp.glb";
 // faixa dos prédios-placeholder anteriores (8-24). Y compensa o pivô do
 // modelo (base ~139.67 unidades abaixo da origem local) para encostar no chão.
 const MASP_SCALE = 0.03;
-const MASP_Y_OFFSET = 4.19;
+/** O prédio tem o DOBRO da altura (eixo Y x2): o vão livre sob ele passa de ~3 para ~6 e dá para andar por baixo. */
+const MASP_SCALE_Y = MASP_SCALE * 2;
+const MASP_Y_OFFSET = 139.67 * MASP_SCALE_Y;
+const MASP_Z = AVENUE_WIDTH / 2 + 6;
+/** Vão livre sob o prédio e topo do telhado (mundo), a partir das medidas do modelo (laje -38,6..282,4; chão -139,7). */
+const MASP_SLAB_BOTTOM = (-38.6 + 139.67) * MASP_SCALE_Y;
+const MASP_ROOF_TOP = (282.4 + 139.67) * MASP_SCALE_Y;
 
 /**
  * Prédio de cenário carregado de um glTF (CC0 — ver CREDITS.md). Habilita
@@ -22,12 +28,12 @@ function SceneryBuilding({
   url,
   position,
   rotation = 0,
-  scale = 1,
+  scale = [1, 1, 1],
 }: {
   url: string;
   position: [number, number, number];
   rotation?: number;
-  scale?: number;
+  scale?: [number, number, number];
 }) {
   const { scene } = useGLTF(url);
 
@@ -38,13 +44,14 @@ function SceneryBuilding({
         obj.receiveShadow = true;
       }
     });
-    // Caixa envolvente do prédio: a câmera de terceira pessoa não o atravessa.
+    // Colisão da câmera só na laje e no telhado (a partir do vão livre): por baixo do prédio a câmera passa livre.
     scene.updateMatrixWorld(true);
-    // Recorta o que invade a avenida: o jogador anda até a borda dela, e a
-    // câmera dele não pode "nascer" dentro da caixa.
-    const box = new Box3().setFromObject(scene);
-    box.min.z = Math.max(box.min.z, AVENUE_WIDTH / 2 + 1);
-    setCameraColliders(`building:${url}`, [], [box]);
+    const whole = new Box3().setFromObject(scene);
+    const slab = new Box3(
+      new Vector3(whole.min.x, MASP_SLAB_BOTTOM, Math.max(whole.min.z, AVENUE_WIDTH / 2 + 1)),
+      new Vector3(whole.max.x, MASP_ROOF_TOP, whole.max.z),
+    );
+    setCameraColliders(`building:${url}`, [], [slab]);
     return () => clearCameraColliders(`building:${url}`);
   }, [scene, url]);
 
@@ -223,14 +230,20 @@ export function Scenery() {
       {/* Parque arborizado do outro lado da avenida (lado oposto ao MASP). */}
       <Park />
 
+      {/* Praça do MASP: piso por baixo e ao redor do prédio suspenso, ligado à avenida (dá para andar embaixo). */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.006, (AVENUE_WIDTH / 2 + PLAZA_MAX_Z) / 2]} receiveShadow>
+        <planeGeometry args={[PLAZA_HALF_X * 2, PLAZA_MAX_Z - AVENUE_WIDTH / 2]} />
+        <meshStandardMaterial color={0x8e8a80} />
+      </mesh>
+
       {/* Marco visual: MASP ao lado da avenida. Suspense evita que a cena
           quebre enquanto o glTF (~920KB) ainda está baixando. */}
       <ModelBoundary>
       <Suspense fallback={null}>
         <SceneryBuilding
           url={MASP_URL}
-          position={[0, MASP_Y_OFFSET, AVENUE_WIDTH / 2 + 6]}
-          scale={MASP_SCALE}
+          position={[0, MASP_Y_OFFSET, MASP_Z]}
+          scale={[MASP_SCALE, MASP_SCALE_Y, MASP_SCALE]}
         />
       </Suspense>
       </ModelBoundary>

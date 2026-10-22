@@ -44,6 +44,13 @@ export const PARK_SIZE = 64;
 export const PARK_GAP = 4;
 
 /**
+ * Praça do MASP (lado +Z): piso livre sob o prédio suspenso e ao redor, ligado à avenida.
+ * x de -PLAZA_HALF_X a +PLAZA_HALF_X; z de AVENUE_WIDTH/2 até PLAZA_MAX_Z.
+ */
+export const PLAZA_HALF_X = 32;
+export const PLAZA_MAX_Z = 44;
+
+/**
  * Limite invisível do mapa: a avenida inteira mais o parque (que é uma
  * "extensão" no lado -Z, mais estreita que a avenida). O jogador não passa
  * dessas bordas — nem em posições vindas da rede (ver useAvenueRealtime).
@@ -57,9 +64,16 @@ export function clampToAvenue(
   const halfW = AVENUE_WIDTH / 2 - AVATAR_RADIUS;
   const parkHalf = PARK_SIZE / 2 - AVATAR_RADIUS;
   const zMin = -(AVENUE_WIDTH / 2 + PARK_GAP + PARK_SIZE) + AVATAR_RADIUS;
+  const plazaHalf = PLAZA_HALF_X - AVATAR_RADIUS;
   const cx = Math.max(-halfL, Math.min(halfL, x));
-  let cz = Math.max(zMin, Math.min(halfW, z));
+  let cz = Math.max(zMin, Math.min(PLAZA_MAX_Z - AVATAR_RADIUS, z));
   let cx2 = cx;
+  if (cz > halfW && Math.abs(cx) > plazaHalf) {
+    // Fora da largura da praça: vindo da avenida (prev) a borda dela vira parede; já na praça (ou posição da
+    // rede, sem prev) a parede é lateral — só trava x.
+    if (prev && prev.z <= halfW) cz = halfW;
+    else cx2 = Math.max(-plazaHalf, Math.min(plazaHalf, cx));
+  }
   if (cz < -halfW && Math.abs(cx) > parkHalf) {
     // Fora da largura do parque. Vindo da avenida (prev), a borda dela vira
     // parede; já dentro do parque (ou sem posição anterior, ex.: posição vinda
