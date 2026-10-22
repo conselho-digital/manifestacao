@@ -3,6 +3,7 @@ import { Group, Vector3 } from "three";
 import { useFrame, useThree } from "@react-three/fiber";
 import {
   VEHICLES,
+  type CharacterId,
   type Facing,
   type FlagId,
   type TeamId,
@@ -38,6 +39,8 @@ interface PlayerProps {
   name: string;
   flag: FlagId;
   team?: TeamId;
+  /** Personagem (aparência do corpo geométrico). */
+  character?: CharacterId;
   /** Cartaz personalizado que o jogador carrega. */
   sign?: SignData | null;
   vehicle: VehicleId;
@@ -90,6 +93,7 @@ export function Player({
   name,
   flag,
   team,
+  character,
   sign = null,
   vehicle,
   modelUrl,
@@ -315,6 +319,6 @@ export function Player({
   });
 
   return (
-    <Avatar ref={ref} color={color} name={name} flag={flag} team={team} vehicle={vehicle} sign={sign} modelUrl={modelUrl} wheelieRef={wheelieRef} />
+    <Avatar ref={ref} color={color} name={name} flag={flag} team={team} character={character} vehicle={vehicle} sign={sign} modelUrl={modelUrl} wheelieRef={wheelieRef} />
   );
 }

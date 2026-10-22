@@ -1,3 +1,4 @@
+import { ProceduralBody } from "../game/Avatar.js";
 import { Component, Suspense, useEffect, useRef, useState, type ReactNode } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Bounds } from "@react-three/drei";
@@ -46,19 +47,7 @@ function ProductModel({ itemId }: { itemId: string }) {
   if (kind === "character" && isCharacterId(slug)) {
     const url = modelUrlFor(slug);
     if (url) return <GlbModel url={url} />;
-    const color = TEAMS[TEAM_IDS[0]!].color;
-    return (
-      <group>
-        <mesh position={[0, 0.9, 0]}>
-          <capsuleGeometry args={[0.35, 0.8, 4, 12]} />
-          <meshStandardMaterial color={color} />
-        </mesh>
-        <mesh position={[0, 1.7, 0]}>
-          <sphereGeometry args={[0.28, 16, 16]} />
-          <meshStandardMaterial color={0xf2d2b6} />
-        </mesh>
-      </group>
-    );
+    return <ProceduralBody color={TEAMS[TEAM_IDS[0]!].color} character={slug} />;
   }
   if (kind === "spray" && slug) {
     const url = sprayModelUrl(slug);

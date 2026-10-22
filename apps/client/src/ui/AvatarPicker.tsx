@@ -12,6 +12,7 @@ import {
   TEAM_IDS,
   flagColor,
   hexColor,
+  DEFAULT_CHARACTER,
   isCharacterId,
   isFlagId,
   isTeamId,
@@ -65,7 +66,7 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
   const [team, setTeam] = useState<TeamId>(isTeamId(saved.team) ? saved.team : TEAM_IDS[0]);
   const [nickname, setNickname] = useState(saved.nickname ?? "");
   const [character, setCharacter] = useState<CharacterId>(
-    isCharacterId(saved.character) ? saved.character : "comum",
+    isCharacterId(saved.character) ? saved.character : DEFAULT_CHARACTER,
   );
   const [flag, setFlag] = useState<FlagId>(isFlagId(saved.flag) ? saved.flag : "nenhuma");
 
@@ -333,7 +334,7 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
                       </svg>
                     </span>
                   )}
-                  <AvatarGlyph color={teamColorHex} />
+                  <AvatarGlyph color={teamColorHex} character={id} />
                   <span style={{ fontSize: "var(--t-ui)", fontWeight: 700, color: "var(--ink)", textAlign: "center" }}>
                     {CHARACTERS[id].label}
                   </span>

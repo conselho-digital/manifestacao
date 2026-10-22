@@ -338,6 +338,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           name={avatar.nickname}
           flag={playAvatar.flag}
           team={avatar.team}
+          character={avatar.character}
           sign={signId ? signs.get(signId) ?? null : null}
           vehicle={vehicle}
           modelUrl={modelUrlFor(avatar.character, avatar.team)}

@@ -10,7 +10,14 @@
 import type { TeamId } from "./teams.js";
 
 // ── Personagens ────────────────────────────────────────────────────────────
-export type CharacterId = "comum" | "tiozao" | "jovem" | "trabalhador";
+export type CharacterId =
+  | "homem_comum"
+  | "homem_alternativo"
+  | "menino"
+  | "mulher_comum"
+  | "mulher_alternativa"
+  | "menina"
+  | "policial";
 
 export interface Character {
   id: CharacterId;
@@ -19,14 +26,29 @@ export interface Character {
   priceCents: number;
 }
 
+/** Todos os personagens existem para todas as equipes (o admin pode subir um modelo por equipe). */
 export const CHARACTERS: Record<CharacterId, Character> = {
-  comum: { id: "comum", label: "Brasileiro comum", priceCents: 0 },
-  jovem: { id: "jovem", label: "Jovem", priceCents: 0 },
-  trabalhador: { id: "trabalhador", label: "Trabalhador", priceCents: 2990 },
-  tiozao: { id: "tiozao", label: "Tiozão do Zap", priceCents: 2990 },
+  homem_comum: { id: "homem_comum", label: "Homem comum", priceCents: 0 },
+  homem_alternativo: { id: "homem_alternativo", label: "Homem alternativo", priceCents: 2990 },
+  menino: { id: "menino", label: "Menino", priceCents: 0 },
+  mulher_comum: { id: "mulher_comum", label: "Mulher comum", priceCents: 0 },
+  mulher_alternativa: { id: "mulher_alternativa", label: "Mulher alternativa", priceCents: 2990 },
+  menina: { id: "menina", label: "Menina", priceCents: 0 },
+  policial: { id: "policial", label: "Policial", priceCents: 2990 },
 };
 
-export const CHARACTER_IDS: CharacterId[] = ["comum", "jovem", "trabalhador", "tiozao"];
+export const CHARACTER_IDS: CharacterId[] = [
+  "homem_comum",
+  "homem_alternativo",
+  "menino",
+  "mulher_comum",
+  "mulher_alternativa",
+  "menina",
+  "policial",
+];
+
+/** Personagem inicial (e o que vale quando um valor salvo/recebido é inválido ou de uma versão antiga). */
+export const DEFAULT_CHARACTER: CharacterId = "homem_comum";
 
 export function isCharacterId(v: unknown): v is CharacterId {
   // Object.hasOwn (não `in`): evita que "constructor"/"toString" etc.

@@ -9,10 +9,13 @@ import { modelOverride } from "../config/gameConfig.js";
  * Fontes CC0 recomendadas (ver CLAUDE.md §6 e CREDITS.md): KayKit, Quaternius.
  */
 export const CHARACTER_MODELS: Record<CharacterId, string | null> = {
-  comum: null,
-  jovem: null,
-  trabalhador: null,
-  tiozao: null,
+  homem_comum: null,
+  homem_alternativo: null,
+  menino: null,
+  mulher_comum: null,
+  mulher_alternativa: null,
+  menina: null,
+  policial: null,
 };
 
 /** Prioridade: modelo do personagem NA equipe → modelo do personagem → padrão estático. */

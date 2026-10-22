@@ -2,7 +2,8 @@ import { forwardRef, Suspense, useRef } from "react";
 import { Group } from "three";
 import { useFrame } from "@react-three/fiber";
 import { Html } from "@react-three/drei";
-import { VEHICLES, flagColor, type FlagId, type TeamId, type VehicleId } from "@manifestacao/shared";
+import { VEHICLES, flagColor, type CharacterId, type FlagId, type TeamId, type VehicleId } from "@manifestacao/shared";
+import { lookOf } from "./characterLook.js";
 import { WHEELIE_MAX_ANGLE } from "./driving.js";
 import { Flag3D, Vehicle3D, GlbModel } from "./props3d.js";
 import { flagImageUrl, flagModelUrl, teamImageUrl } from "./models.js";
@@ -16,6 +17,8 @@ interface AvatarProps {
   flag?: FlagId;
   /** Equipe: a imagem da bandeira da equipe (enviada no admin) é a bandeira que o personagem carrega a pé. */
   team?: TeamId;
+  /** Personagem: define a aparência do corpo geométrico (cabelo, chapéu, tamanho). */
+  character?: CharacterId;
   vehicle?: VehicleId;
   /** Cartaz personalizado ativo (texto vem do banco, nunca direto da rede). */
   sign?: SignData | null;
@@ -28,10 +31,92 @@ interface AvatarProps {
 /** Eixo traseiro da moto: a roda da frente sobe girando em torno daqui. */
 const MOTO_REAR_AXLE_Z = -0.7;
 
+/** Cabelo/chapéu do personagem, sobre a cabeça (centro em y=1,7; frente = +Z). */
+function Headwear({ character }: { character?: CharacterId }) {
+  const look = lookOf(character);
+  const mat = <meshStandardMaterial color={look.hairColor} />;
+  switch (look.hair) {
+    case "short":
+      return (
+        <mesh position={[0, 1.83, -0.02]} scale={[1, 0.62, 1]} castShadow>
+          <sphereGeometry args={[0.3, 14, 10]} />
+          {mat}
+        </mesh>
+      );
+    case "mohawk":
+      return (
+        <group>
+          {[-0.16, -0.05, 0.06, 0.17].map((z, i) => (
+            <mesh key={z} position={[0, 1.96 + (i % 2) * 0.05, z]} castShadow>
+              <boxGeometry args={[0.07, 0.22, 0.09]} />
+              {mat}
+            </mesh>
+          ))}
+        </group>
+      );
+    case "long":
+      return (
+        <group>
+          <mesh position={[0, 1.83, -0.02]} scale={[1, 0.62, 1]} castShadow>
+            <sphereGeometry args={[0.3, 14, 10]} />
+            {mat}
+          </mesh>
+          <mesh position={[0, 1.48, -0.2]} castShadow>
+            <boxGeometry args={[0.52, 0.62, 0.12]} />
+            {mat}
+          </mesh>
+        </group>
+      );
+    case "bob":
+      return (
+        <mesh position={[0, 1.76, -0.03]} scale={[1, 0.85, 1.02]} castShadow>
+          <sphereGeometry args={[0.33, 14, 12]} />
+          {mat}
+        </mesh>
+      );
+    case "pigtails":
+      return (
+        <group>
+          <mesh position={[0, 1.83, -0.02]} scale={[1, 0.62, 1]} castShadow>
+            <sphereGeometry args={[0.3, 14, 10]} />
+            {mat}
+          </mesh>
+          {[-1, 1].map((side) => (
+            <mesh key={side} position={[side * 0.34, 1.62, -0.05]} castShadow>
+              <sphereGeometry args={[0.12, 10, 10]} />
+              {mat}
+            </mesh>
+          ))}
+        </group>
+      );
+    case "cap":
+    case "police":
+      return (
+        <group>
+          <mesh position={[0, 1.76, 0]} castShadow>
+            <sphereGeometry args={[0.31, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2]} />
+            {mat}
+          </mesh>
+          <mesh position={[0, 1.77, 0.27]} castShadow>
+            <boxGeometry args={[0.34, 0.03, 0.22]} />
+            {mat}
+          </mesh>
+          {look.hair === "police" && (
+            <mesh position={[0, 1.86, 0.3]}>
+              <boxGeometry args={[0.1, 0.1, 0.02]} />
+              <meshStandardMaterial color={0xe8c24a} />
+            </mesh>
+          )}
+        </group>
+      );
+  }
+}
+
 /** Corpo geométrico (fallback quando não há modelo glTF). */
-function ProceduralBody({ color, arms = true }: { color: number; arms?: boolean }) {
+export function ProceduralBody({ color, arms = true, character }: { color: number; arms?: boolean; character?: CharacterId }) {
+  const look = lookOf(character);
   return (
-    <>
+    <group scale={look.scale}>
       {/* Braços: manga na cor da camisa e mão na cor da pele, caindo dos ombros com leve abertura. */}
       {arms && [-1, 1].map((side) => (
         <group key={side} position={[side * 0.46, 1.32, 0]} rotation={[0, 0, side * 0.12]}>
@@ -53,7 +138,14 @@ function ProceduralBody({ color, arms = true }: { color: number; arms?: boolean 
         <sphereGeometry args={[0.28, 16, 16]} />
         <meshStandardMaterial color={0xf2d2b6} />
       </mesh>
-    </>
+      <Headwear character={character} />
+      {look.belt && (
+        <mesh position={[0, 0.78, 0]}>
+          <cylinderGeometry args={[0.37, 0.37, 0.09, 16]} />
+          <meshStandardMaterial color={0x15181d} />
+        </mesh>
+      )}
+    </group>
   );
 }
 
@@ -86,7 +178,7 @@ function FlagProp({ flag, color, team }: { flag: FlagId; color: number; team?: T
  * opcional e etiqueta de apelido. Usado pelo jogador local e pelos remotos.
  */
 export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
-  { color, name, flag = "nenhuma", team, vehicle = "nenhum", sign = null, modelUrl = null, wheelieRef },
+  { color, name, flag = "nenhuma", team, character, vehicle = "nenhum", sign = null, modelUrl = null, wheelieRef },
   ref,
 ) {
   const tiltRef = useRef<Group>(null);
@@ -103,11 +195,11 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
       <group ref={tiltRef} position={[0, 0, MOTO_REAR_AXLE_Z]}>
       <group position={[0, 0, -MOTO_REAR_AXLE_Z]}>
       {modelUrl ? (
-        <Suspense fallback={<ProceduralBody color={color} arms={vehicle === "nenhum"} />}>
-          <GlbModel url={modelUrl} fallback={<ProceduralBody color={color} arms={vehicle === "nenhum"} />} />
+        <Suspense fallback={<ProceduralBody color={color} arms={vehicle === "nenhum"} character={character} />}>
+          <GlbModel url={modelUrl} fallback={<ProceduralBody color={color} arms={vehicle === "nenhum"} character={character} />} />
         </Suspense>
       ) : (
-        <ProceduralBody color={color} arms={vehicle === "nenhum"} />
+        <ProceduralBody color={color} arms={vehicle === "nenhum"} character={character} />
       )}
 
       {/* Bandeira só a pé: em veículo as mãos estão ocupadas. */}

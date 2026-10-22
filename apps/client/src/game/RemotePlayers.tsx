@@ -75,6 +75,7 @@ export function RemotePlayers({ ids, playersRef, signs }: RemotePlayersProps) {
             name={p.nickname}
             flag={p.flag}
             team={p.team}
+            character={p.character}
             vehicle={p.vehicle}
             wheelieRef={wheelieRefFor(id)}
             sign={p.signId ? signs.get(p.signId) ?? null : null}
