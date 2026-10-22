@@ -13,7 +13,7 @@ import {
   type VehicleId,
 } from "@manifestacao/shared";
 import { Flag3D, GlbModel, ProceduralVehicle } from "../game/props3d.js";
-import { flagModelUrl, modelUrlFor, sprayModelUrl, vehicleModelUrl } from "../game/models.js";
+import { modelUrlFor, sprayModelUrl, teamImageUrl, vehicleModelUrl } from "../game/models.js";
 import { sprayOptionById } from "../config/sprays.js";
 
 const SIZE = 64;
@@ -62,9 +62,7 @@ function ProductModel({ itemId }: { itemId: string }) {
     );
   }
   if (kind === "flag" && isFlagId(slug) && slug !== "nenhuma") {
-    const url = flagModelUrl(slug as FlagId);
-    if (url) return <GlbModel url={url} />;
-    return <Flag3D color={flagColor(slug as FlagId, TEAMS[TEAM_IDS[0]!].color)} />;
+    return <Flag3D color={flagColor(slug as FlagId, TEAMS[TEAM_IDS[0]!].color)} imageUrl={teamImageUrl(TEAM_IDS[0]!)} />;
   }
   return null;
 }

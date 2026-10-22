@@ -1,4 +1,4 @@
-import { isFlagId, type CharacterId, type FlagId, type TeamId, type VehicleId } from "@manifestacao/shared";
+import type { CharacterId, TeamId, VehicleId } from "@manifestacao/shared";
 import { modelOverride } from "../config/gameConfig.js";
 
 /**
@@ -36,18 +36,9 @@ export function vehicleModelUrl(vehicle: VehicleId): string | null {
   return vehicle === "nenhum" ? null : modelOverride(`vehicle:${vehicle}`);
 }
 
-export function flagModelUrl(flag: FlagId): string | null {
-  return flag === "nenhuma" ? null : modelOverride(`flag:${flag}`);
-}
-
 /** Modelo 3D do spray: o da opção (spray:<slug>), senão o geral ("spray"), senão nenhum (mancha). */
 export function sprayModelUrl(style?: string): string | null {
   return (style ? modelOverride(`spray:${style}`) : null) ?? modelOverride("spray");
-}
-
-/** Imagem da bandeira (enviada pelo admin): vira o tecido da bandeira carregada e a marca do spray. */
-export function flagImageUrl(flag: FlagId | undefined): string | null {
-  return !flag || flag === "nenhuma" || flag === "time" ? null : modelOverride(`flagimg:${flag}`);
 }
 
 /** Imagem da bandeira da EQUIPE (enviada pelo admin): é a marca do spray de quem joga nessa equipe. */
@@ -55,15 +46,12 @@ export function teamImageUrl(team: TeamId | undefined): string | null {
   return team ? modelOverride(`teamimg:${team}`) : null;
 }
 
-/**
- * Imagem do spray: a da equipe; senão a da bandeira carregada; senão a bandeira de mesmo nome da equipe
- * (equipe "verde" ↔ bandeira "verde"). null = sem imagem enviada → o spray usa a bolinha na cor da equipe.
- */
-export function sprayImageFor(team: TeamId | undefined, flag: FlagId | undefined): string | null {
-  return teamImageUrl(team) ?? flagImageUrl(flag) ?? (isFlagId(team) ? flagImageUrl(team) : null);
+/** Imagem do spray: a bandeira da equipe de quem pixa. null = sem imagem enviada → bolinha de tinta na cor da equipe. */
+export function sprayImageFor(team: TeamId | undefined): string | null {
+  return teamImageUrl(team);
 }
 
-/** Imagem para o ícone de bandeira da equipe nas telas de entrada e opções (a da equipe, ou a bandeira de mesmo nome). */
+/** Imagem para o ícone de bandeira da equipe nas telas de entrada e opções. */
 export function teamIconImageUrl(team: TeamId): string | null {
-  return teamImageUrl(team) ?? (isFlagId(team) ? flagImageUrl(team) : null);
+  return teamImageUrl(team);
 }

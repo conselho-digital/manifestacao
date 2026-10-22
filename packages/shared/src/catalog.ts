@@ -56,36 +56,29 @@ export function isCharacterId(v: unknown): v is CharacterId {
   return typeof v === "string" && Object.hasOwn(CHARACTERS, v);
 }
 
-// ── Bandeiras ──────────────────────────────────────────────────────────────
-export type FlagId = "nenhuma" | "time" | "verde" | "amarela" | "branca" | "vermelha";
+// ── Bandeira ───────────────────────────────────────────────────────────────
+/** Só existe a bandeira da própria equipe (a imagem dela é enviada no admin, em Equipes) ou nenhuma. */
+export type FlagId = "nenhuma" | "time";
 
 export interface Flag {
   id: FlagId;
   label: string;
-  /** Cor do tecido (0xrrggbb) ou null para usar a cor do time. */
-  color: number | null;
 }
 
 export const FLAGS: Record<FlagId, Flag> = {
-  nenhuma: { id: "nenhuma", label: "Sem bandeira", color: null },
-  time: { id: "time", label: "Do meu time", color: null },
-  verde: { id: "verde", label: "Verde", color: 0x2ecc71 },
-  amarela: { id: "amarela", label: "Amarela", color: 0xffd12e },
-  branca: { id: "branca", label: "Branca", color: 0xf2f4f7 },
-  vermelha: { id: "vermelha", label: "Vermelha", color: 0xe5484d },
+  nenhuma: { id: "nenhuma", label: "Sem bandeira" },
+  time: { id: "time", label: "Bandeira da equipe" },
 };
 
-export const FLAG_IDS: FlagId[] = ["nenhuma", "time", "verde", "amarela", "branca", "vermelha"];
+export const FLAG_IDS: FlagId[] = ["nenhuma", "time"];
 
 export function isFlagId(v: unknown): v is FlagId {
   return typeof v === "string" && Object.hasOwn(FLAGS, v);
 }
 
-/** Cor efetiva da bandeira, resolvendo "time" para a cor do time. */
-export function flagColor(flag: FlagId, teamColor: number): number {
-  const f = FLAGS[flag];
-  if (!f || flag === "nenhuma") return teamColor;
-  return f.color ?? teamColor;
+/** Cor do tecido da bandeira: sempre a cor da equipe (a imagem, quando existe, cobre o tecido). */
+export function flagColor(_flag: FlagId, teamColor: number): number {
+  return teamColor;
 }
 
 // ── Veículos ──────────────────────────────────────────────────────────────

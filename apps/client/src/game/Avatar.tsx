@@ -6,7 +6,7 @@ import { VEHICLES, flagColor, type CharacterId, type FlagId, type TeamId, type V
 import { lookOf } from "./characterLook.js";
 import { WHEELIE_MAX_ANGLE } from "./driving.js";
 import { Flag3D, Vehicle3D, GlbModel } from "./props3d.js";
-import { flagImageUrl, flagModelUrl, teamImageUrl } from "./models.js";
+import { teamImageUrl } from "./models.js";
 import { SignProp } from "./SignProp.js";
 import type { SignData } from "./useSigns.js";
 
@@ -149,28 +149,9 @@ export function ProceduralBody({ color, arms = true, character }: { color: numbe
   );
 }
 
-/** Bandeira: modelo .glb do admin quando houver; senão o mastro com tecido. */
+/** Bandeira da equipe: o tecido leva a imagem enviada no admin (Equipes); sem imagem, a cor da equipe. */
 function FlagProp({ flag, color, team }: { flag: FlagId; color: number; team?: TeamId }) {
-  const cloth = (
-    <Flag3D
-      color={flagColor(flag, color)}
-      // Imagem da equipe tem prioridade; sem ela, a imagem da própria bandeira; sem nenhuma, tecido na cor.
-      imageUrl={teamImageUrl(team) ?? flagImageUrl(flag)}
-      // Vermelha: emblema "star-burst" (6 pontas) — não um emblema real de
-      // partido. Verde: faixa amarela sobre o verde (cores nacionais
-      // genéricas, sem brasão nem layout de bandeira real nenhuma).
-      emblem={flag === "vermelha" ? "star-burst" : flag === "verde" ? "stripe" : undefined}
-    />
-  );
-  const url = flagModelUrl(flag);
-  if (!url) return cloth;
-  return (
-    <Suspense fallback={cloth}>
-      <group position={[0.45, 0, 0]}>
-        <GlbModel url={url} fallback={cloth} />
-      </group>
-    </Suspense>
-  );
+  return <Flag3D color={flagColor(flag, color)} imageUrl={teamImageUrl(team)} />;
 }
 
 /**

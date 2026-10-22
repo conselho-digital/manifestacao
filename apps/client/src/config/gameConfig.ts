@@ -1,18 +1,14 @@
 import {
   CHARACTERS,
   CHARACTER_IDS,
-  FLAGS,
-  FLAG_IDS,
   TEAMS,
   TEAM_IDS,
   VEHICLES,
   VEHICLE_IDS,
   isCharacterId,
-  isFlagId,
   isTeamId,
   isVehicleId,
   type CharacterId,
-  type FlagId,
   type TeamId,
   type VehicleId,
 } from "@manifestacao/shared";
@@ -35,24 +31,18 @@ export interface TeamOverride {
   label?: string;
   color?: number;
 }
-export interface FlagOverride {
-  label?: string;
-  color?: number;
-}
 export interface GameConfig {
   teams: Partial<Record<TeamId, TeamOverride>>;
-  flags: Partial<Record<FlagId, FlagOverride>>;
   /** slot → URL pública de um .glb. Slots: ver `isModelSlot`. */
   models: Record<string, string>;
 }
 
-export const EMPTY_CONFIG: GameConfig = { teams: {}, flags: {}, models: {} };
+export const EMPTY_CONFIG: GameConfig = { teams: {}, models: {} };
 
 // Valores padrão capturados na primeira execução — permitem "restaurar" ao
 // reaplicar uma config sem override (ex.: admin removeu uma mudança).
 const DEFAULTS = {
   teams: Object.fromEntries(TEAM_IDS.map((id) => [id, { label: TEAMS[id].label, color: TEAMS[id].color }])) as Record<TeamId, Required<TeamOverride>>,
-  flags: Object.fromEntries(FLAG_IDS.map((id) => [id, { label: FLAGS[id].label, color: FLAGS[id].color }])) as Record<FlagId, { label: string; color: number | null }>,
   characters: Object.fromEntries(CHARACTER_IDS.map((id) => [id, { label: CHARACTERS[id].label, price: CHARACTERS[id].priceCents }])) as Record<CharacterId, { label: string; price: number }>,
   vehicles: Object.fromEntries(VEHICLE_IDS.map((id) => [id, { label: VEHICLES[id].label, price: VEHICLES[id].priceCents }])) as Record<VehicleId, { label: string; price: number }>,
 };
@@ -68,24 +58,22 @@ function cleanColor(v: unknown): number | undefined {
 
 /** Slots de IMAGEM (bandeira/spray): o valor é a URL de um .png/.jpg/.webp, não de um .glb. */
 export function isImageSlot(slot: string): boolean {
-  return slot.startsWith("flagimg:") || slot.startsWith("sprayimg:") || slot.startsWith("teamimg:");
+  return slot.startsWith("sprayimg:") || slot.startsWith("teamimg:");
 }
 
 /**
- * Slots válidos: character:<c>, character:<c>:<team>, vehicle:<v>, flag:<f>, spray (.glb)
- * e flagimg:<f> / sprayimg:<slug> (imagens da bandeira).
+ * Slots válidos: character:<c>, character:<c>:<team>, vehicle:<v>, spray (.glb)
+ * e teamimg:<team> (bandeira da equipe) / sprayimg:<slug> (imagens).
  */
 export function isModelSlot(slot: string): boolean {
   if (slot === "spray") return true;
   const [kind, id, team, extra] = slot.split(":");
-  if (kind === "flagimg") return isFlagId(id) && id !== "nenhuma" && id !== "time" && team === undefined && extra === undefined;
   if (kind === "teamimg") return isTeamId(id) && team === undefined && extra === undefined;
   if (kind === "sprayimg") return id !== undefined && team === undefined && extra === undefined && SPRAY_SLUG_RE.test(id);
   if (kind === "spray") return id !== undefined && team === undefined && extra === undefined && SPRAY_SLUG_RE.test(id);
   if (extra !== undefined) return false;
   if (kind === "character") return isCharacterId(id) && (team === undefined || isTeamId(team));
   if (kind === "vehicle") return isVehicleId(id) && team === undefined && id !== "nenhum";
-  if (kind === "flag") return isFlagId(id) && team === undefined && id !== "nenhuma";
   return false;
 }
 
@@ -110,19 +98,12 @@ export function isTrustedModelUrl(url: unknown, image = false): url is string {
 }
 
 export function sanitizeConfig(raw: { teams?: unknown; flags?: unknown; models?: unknown }): GameConfig {
-  const out: GameConfig = { teams: {}, flags: {}, models: {} };
+  const out: GameConfig = { teams: {}, models: {} };
   if (raw.teams && typeof raw.teams === "object") {
     for (const [id, v] of Object.entries(raw.teams)) {
       if (!isTeamId(id) || !v || typeof v !== "object") continue;
       const o = v as Record<string, unknown>;
       out.teams[id] = { label: cleanLabel(o.label), color: cleanColor(o.color) };
-    }
-  }
-  if (raw.flags && typeof raw.flags === "object") {
-    for (const [id, v] of Object.entries(raw.flags)) {
-      if (!isFlagId(id) || !v || typeof v !== "object") continue;
-      const o = v as Record<string, unknown>;
-      out.flags[id] = { label: cleanLabel(o.label), color: cleanColor(o.color) };
     }
   }
   if (raw.models && typeof raw.models === "object") {
@@ -152,11 +133,6 @@ export function applyGameConfig(cfg: GameConfig, catalog: CatalogRow[] = []): vo
     const o = cfg.teams[id];
     TEAMS[id].label = o?.label ?? DEFAULTS.teams[id].label;
     TEAMS[id].color = o?.color ?? DEFAULTS.teams[id].color;
-  }
-  for (const id of FLAG_IDS) {
-    const o = cfg.flags[id];
-    FLAGS[id].label = o?.label ?? DEFAULTS.flags[id].label;
-    FLAGS[id].color = o?.color ?? DEFAULTS.flags[id].color;
   }
   // Volta personagens/veículos ao padrão antes: um item que o admin renomeou e
   // depois desativou sai do catálogo ativo e não pode ficar com o nome antigo.

@@ -1,4 +1,4 @@
-import { flagImageUrl, teamIconImageUrl } from "../game/models.js";
+import { teamIconImageUrl } from "../game/models.js";
 import { LegalLinks } from "./LegalPage.js";
 import { useEffect, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
@@ -68,7 +68,7 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
   const [character, setCharacter] = useState<CharacterId>(
     isCharacterId(saved.character) ? saved.character : DEFAULT_CHARACTER,
   );
-  const [flag, setFlag] = useState<FlagId>(isFlagId(saved.flag) ? saved.flag : "nenhuma");
+  const [flag, setFlag] = useState<FlagId>(isFlagId(saved.flag) ? saved.flag : saved.flag ? "time" : "nenhuma");
 
   // Conta obrigatória pra entrar no mapa (quando o modo online está
   // disponível): sem sessão, o botão principal faz login em vez de entrar
@@ -371,6 +371,7 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
             <Row>
               {FLAG_IDS.map((id) => {
                 const accent = id === "nenhuma" ? "var(--accent)" : hexColor(flagColor(id, TEAMS[team].color));
+                const flagImg = id === "time" ? teamIconImageUrl(team) : null;
                 const selected = id === flag;
                 return (
                   <button
@@ -380,7 +381,7 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
                     onClick={() => setFlag(id)}
                     style={{ ...chip(selected, accent), display: "inline-flex", alignItems: "center", gap: 6 }}
                   >
-                    {flagImageUrl(id) && <TeamFlagIcon color={accent} size={14} imageUrl={flagImageUrl(id)} />}
+                    {flagImg && <TeamFlagIcon color={accent} size={14} imageUrl={flagImg} />}
                     {FLAGS[id].label}
                   </button>
                 );

@@ -62,7 +62,7 @@ export function SprayMarks({ marksRef, version }: SprayMarksProps) {
         );
         // A marca é a imagem da bandeira da equipe de quem pichou; sem ela, a imagem da bandeira que a pessoa carrega;
         // sem nenhuma imagem, a mancha na cor da equipe.
-        const imageUrl = i >= firstImageIndex ? sprayImageFor(m.team, m.flag) : null;
+        const imageUrl = i >= firstImageIndex ? sprayImageFor(m.team) : null;
         if (imageUrl) {
           return (
             <ModelBoundary key={`${m.id}:${imageUrl}`} fallback={circle}>
