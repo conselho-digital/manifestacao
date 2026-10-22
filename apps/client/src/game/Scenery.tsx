@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { Box3, Color, InstancedMesh, Matrix4, Mesh, Quaternion, Sphere, Vector3 } from "three";
 import { ModelBoundary } from "./ModelBoundary.js";
+import { City } from "./City.js";
 import { clearCameraColliders, setCameraColliders } from "./colliders.js";
 import { useGLTF } from "@react-three/drei";
 import { AVENUE_LENGTH, AVENUE_WIDTH, PARK_GAP, PARK_SIZE, PLAZA_HALF_X, PLAZA_MAX_Z } from "./world.js";
@@ -226,6 +227,9 @@ export function Scenery() {
           <meshStandardMaterial color={0xffd12e} />
         </mesh>
       ))}
+
+      {/* Quarteirões de prédios dos dois lados, atrás da praça e do parque. */}
+      <City />
 
       {/* Parque arborizado do outro lado da avenida (lado oposto ao MASP). */}
       <Park />
