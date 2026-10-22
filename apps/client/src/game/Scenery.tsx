@@ -5,7 +5,7 @@ import { City } from "./City.js";
 import { clearCameraColliders, setCameraColliders } from "./colliders.js";
 import { clearSolids, setSolids } from "./solids.js";
 import { useGLTF } from "@react-three/drei";
-import { AVENUE_LENGTH, AVENUE_WIDTH, PARK_GAP, PARK_SIZE, PLAZA_HALF_X, PLAZA_MAX_Z } from "./world.js";
+import { AVENUE_LENGTH, AVENUE_WIDTH, PARK_GAP, PARK_SIZE, PLAZA_HALF_X, PLAZA_MAX_Z, STAGE_SPEAK_RADIUS, STAGE_X, STAGE_Z } from "./world.js";
 
 const MASP_URL = "/models/scenery/masp.glb";
 // Modelo original (Sketchfab, exportado de FBX) vem em unidades arbitrárias
@@ -216,6 +216,54 @@ function Park() {
   );
 }
 
+/** Palanque da praça: tablado baixo, púlpito e duas caixas de som (sólidos). A voz é em net/useStageVoice. */
+function Stage() {
+  useEffect(() => {
+    setSolids(
+      "stage",
+      [],
+      [
+        { x: STAGE_X, z: STAGE_Z + 2.6, r: 0.55 },
+        { x: STAGE_X - 4.4, z: STAGE_Z + 2.4, r: 0.7 },
+        { x: STAGE_X + 4.4, z: STAGE_Z + 2.4, r: 0.7 },
+      ],
+    );
+    return () => clearSolids("stage");
+  }, []);
+  return (
+    <group position={[STAGE_X, 0, STAGE_Z]}>
+      <mesh position={[0, 0.04, 0]} receiveShadow>
+        <cylinderGeometry args={[STAGE_SPEAK_RADIUS, STAGE_SPEAK_RADIUS, 0.08, 40]} />
+        <meshStandardMaterial color={0x7a2e3a} />
+      </mesh>
+      <mesh position={[0, 0.045, 0]}>
+        <cylinderGeometry args={[STAGE_SPEAK_RADIUS - 0.5, STAGE_SPEAK_RADIUS - 0.5, 0.09, 40]} />
+        <meshStandardMaterial color={0x9a3d4b} />
+      </mesh>
+      {/* Púlpito com microfone */}
+      <mesh position={[0, 0.55, 2.6]} castShadow>
+        <boxGeometry args={[0.9, 1.1, 0.7]} />
+        <meshStandardMaterial color={0x2b2f36} />
+      </mesh>
+      <mesh position={[0, 1.35, 2.6]}>
+        <cylinderGeometry args={[0.03, 0.03, 0.5, 8]} />
+        <meshStandardMaterial color={0x15181c} />
+      </mesh>
+      <mesh position={[0, 1.65, 2.6]}>
+        <sphereGeometry args={[0.1, 12, 12]} />
+        <meshStandardMaterial color={0xcfd3d6} />
+      </mesh>
+      {/* Caixas de som */}
+      {[-4.4, 4.4].map((x) => (
+        <mesh key={x} position={[x, 0.9, 2.4]} castShadow>
+          <boxGeometry args={[1.0, 1.8, 0.9]} />
+          <meshStandardMaterial color={0x1d2025} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
 /**
  * Cenário: terreno plano (sem prédios-placeholder) com o MASP (CC0) como
  * marco visual num dos lados da avenida.
@@ -274,6 +322,8 @@ export function Scenery() {
         <planeGeometry args={[PLAZA_HALF_X * 2, PLAZA_MAX_Z - AVENUE_WIDTH / 2]} />
         <meshStandardMaterial color={0x8e8a80} />
       </mesh>
+
+      <Stage />
 
       {/* Marco visual: MASP ao lado da avenida. Suspense evita que a cena
           quebre enquanto o glTF (~920KB) ainda está baixando. */}

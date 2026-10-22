@@ -1,3 +1,5 @@
+import { useStageVoice } from "../net/useStageVoice.js";
+import { StageButton } from "../ui/StageButton.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { VEHICLES, type AvatarConfig, type VehicleId } from "@manifestacao/shared";
@@ -204,6 +206,14 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
   }, [vehicle, owned, entitlementsLoading]);
 
   const transformRef = useRef<PlayerTransform>({ x: 0, z: 0, rotationY: 0 });
+  const voice = useStageVoice({
+    selfId: net.selfId,
+    nickname: avatar.nickname,
+    posRef: transformRef,
+    sendVoice: net.sendVoice,
+    voiceHandlerRef: net.voiceHandlerRef,
+    blocked: !!mutedNotice,
+  });
   // Só true depois do primeiro useFrame do Player — evita que um clique no
   // instante do mount (antes do R3F rodar o primeiro frame) borrife na
   // origem do mundo (0,0) em vez de ignorar o clique.
@@ -356,6 +366,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
         )
       )}
       <Crosshair />
+      <StageButton voice={voice} blockedNotice={mutedNotice} />
       <TopRightPanel>
         <div style={{ display: "flex", gap: 8 }}>
           <ChatButton open={chatOpen} onClick={() => setChatOpen((o) => !o)} />

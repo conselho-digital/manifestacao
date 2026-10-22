@@ -124,6 +124,8 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
   // Posições dos outros jogadores: ref lido a cada frame pela cena (sem re-render).
   const playersRef = useRef<Map<string, RemotePlayer>>(new Map());
   const channelRef = useRef<RealtimeChannel | null>(null);
+  // Palanque com voz: quem usa registra aqui o tratador das mensagens de sinalização (payload cru da rede).
+  const voiceHandlerRef = useRef<((payload: unknown) => void) | null>(null);
   const presenceRef = useRef<PresenceState | null>(null);
   const selfFlagRef = useRef(self.flag);
   selfFlagRef.current = self.flag;
@@ -267,6 +269,9 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
           if (visualChanged) setRemoteIds((ids) => [...ids]);
         }
       })
+      .on("broadcast", { event: BROADCAST.voice }, ({ payload }) => {
+        voiceHandlerRef.current?.(payload);
+      })
       .on("broadcast", { event: BROADCAST.chat }, ({ payload }) => {
         const c = payload as ChatBroadcast;
         if (typeof c?.id !== "string" || c.id === selfId || c.id.length > 64) return;
@@ -398,6 +403,12 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
     [selfId, self.nickname, self.team, pushChat],
   );
 
+  /** Sinalização do palanque (sem eco local: o remetente já conhece o próprio estado). */
+  const sendVoice = useCallback((payload: unknown) => {
+    const channel = channelRef.current;
+    if (channel && channel.state === "joined") void channel.send({ type: "broadcast", event: BROADCAST.voice, payload });
+  }, []);
+
   const sendSpray = useCallback(
     (x: number, z: number, color: number, style: string): boolean => {
       // Cooldown próprio: defesa adicional (o cartucho em Game.tsx já limita
@@ -461,5 +472,7 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
     sendMove,
     sendChat,
     sendSpray,
+    sendVoice,
+    voiceHandlerRef,
   };
 }

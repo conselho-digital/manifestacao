@@ -86,3 +86,12 @@ export function clampToAvenue(
   }
   return { x: cx2, z: cz };
 }
+
+/**
+ * Palanque com voz (na praça, à frente do museu). Quem está na zona de fala pode usar o microfone; quem está dentro do
+ * alcance de escuta ouve, com volume caindo com a distância.
+ */
+export const STAGE_X = 0;
+export const STAGE_Z = 38;
+export const STAGE_SPEAK_RADIUS = 6;
+export const STAGE_HEAR_RADIUS = 45;

@@ -69,4 +69,6 @@ export const BROADCAST = {
   move: "move",
   chat: "chat",
   spray: "spray",
+  /** Sinalização WebRTC do palanque (claim/release/join/offer/answer/ice). */
+  voice: "voice",
 } as const;
