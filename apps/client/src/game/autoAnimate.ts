@@ -218,6 +218,9 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
 
       if (!hasRig) return;
       frame.updateWorldMatrix(true, true);
+      // O avatar gira com a direção em que anda: os balanços são sempre medidos no referencial ATUAL dele.
+      frame.getWorldQuaternion(frameQ);
+      frameInv.copy(frameQ).invert();
       for (const l of limbs) {
         const own = l.side * s; // lado esquerdo vai à frente quando s > 0
         let ang = 0;
