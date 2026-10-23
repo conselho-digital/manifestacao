@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { AmbientLight, Color, DirectionalLight, Group, PerspectiveCamera, Scene, WebGLRenderer } from "three";
 import { CHARACTERS, CHARACTER_IDS, TEAMS, TEAM_IDS, type CharacterId, type TeamId } from "@manifestacao/shared";
-import { generateCharacterFromPhoto, mergeModels, snapshotFile } from "../config/adminApi.js";
+import { mergeModels, snapshotFile, uploadModel } from "../config/adminApi.js";
+import { buildCharacter, exportGlb, loadPhoto, makeCutout, type Cutout, type LoadedPhoto } from "../config/photoTo3d.js";
 
 interface Props {
   busy: boolean;
@@ -38,60 +40,137 @@ const primary: React.CSSProperties = {
 };
 const hint: React.CSSProperties = { margin: 0, fontSize: "var(--t-ui)", color: "var(--ink-dim)" };
 
-/** Aba "Foto → 3D": envia uma foto e gera um personagem .glb (com esqueleto, se der) para usar num slot de personagem. */
+/** Prévia 3D giratória do personagem gerado (three puro, num canvas pequeno). */
+function Preview({ model }: { model: Group }) {
+  const ref = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    let renderer: WebGLRenderer;
+    try {
+      renderer = new WebGLRenderer({ canvas, antialias: true, alpha: true });
+    } catch {
+      return;
+    }
+    renderer.setPixelRatio(Math.min(2, window.devicePixelRatio));
+    renderer.setSize(260, 320, false);
+    const scene = new Scene();
+    scene.background = new Color(0x2a2f38);
+    scene.add(new AmbientLight(0xffffff, 1.6));
+    const sun = new DirectionalLight(0xffffff, 1.6);
+    sun.position.set(2, 4, 3);
+    scene.add(sun);
+    const cam = new PerspectiveCamera(32, 260 / 320, 0.1, 50);
+    cam.position.set(0, 1.0, 5.2);
+    cam.lookAt(0, 0.9, 0);
+    scene.add(model);
+    let raf = 0;
+    const loop = () => {
+      model.rotation.y += 0.012;
+      renderer.render(scene, cam);
+      raf = requestAnimationFrame(loop);
+    };
+    loop();
+    return () => {
+      cancelAnimationFrame(raf);
+      scene.remove(model);
+      model.rotation.y = 0;
+      renderer.dispose();
+    };
+  }, [model]);
+  return <canvas ref={ref} width={260} height={320} aria-label="Prévia 3D do personagem" style={{ width: 260, height: 320, borderRadius: 8, alignSelf: "flex-start", maxWidth: "100%" }} />;
+}
+
+/** Aba "Foto → 3D": gera, no navegador, um boneco 3D com esqueleto a partir de uma foto de corpo inteiro. */
 export function AdminPhoto3d({ busy, run }: Props) {
-  const [file, setFile] = useState<File | null>(null);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [photo, setPhoto] = useState<LoadedPhoto | null>(null);
+  const [tolerance, setTolerance] = useState(40);
   const [rights, setRights] = useState(false);
-  const [working, setWorking] = useState(false);
-  const [progress, setProgress] = useState<{ text: string; percent: number } | null>(null);
+  const [cut, setCut] = useState<Cutout | null>(null);
+  const [cutError, setCutError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [result, setResult] = useState<{ url: string; rigged: boolean } | null>(null);
+  const [working, setWorking] = useState(false);
+  const [model, setModel] = useState<Group | null>(null);
+  const [glb, setGlb] = useState<Blob | null>(null);
   const [character, setCharacter] = useState<CharacterId>(CHARACTER_IDS[0]!);
   const [team, setTeam] = useState<TeamId | "">("");
-  const abortRef = useRef<AbortController | null>(null);
+  const cutRef = useRef<HTMLCanvasElement>(null);
 
-  useEffect(() => () => abortRef.current?.abort(), []);
+  // Refaz o recorte ao trocar a foto ou a tolerância (rápido: a foto já está em memória).
   useEffect(() => {
-    if (!file) return setPreview(null);
-    const url = URL.createObjectURL(file);
-    setPreview(url);
-    return () => URL.revokeObjectURL(url);
-  }, [file]);
+    if (!photo) return;
+    const t = window.setTimeout(() => {
+      try {
+        setCut(makeCutout(photo, tolerance));
+        setCutError(null);
+      } catch (e) {
+        setCut(null);
+        setCutError(e instanceof Error ? e.message : "Não consegui recortar a foto.");
+      }
+    }, 120);
+    return () => window.clearTimeout(t);
+  }, [photo, tolerance]);
+
+  useEffect(() => {
+    const canvas = cutRef.current;
+    if (!canvas || !cut) return;
+    canvas.width = cut.w;
+    canvas.height = cut.h;
+    const ctx = canvas.getContext("2d");
+    ctx?.clearRect(0, 0, cut.w, cut.h);
+    ctx?.drawImage(cut.canvas, 0, 0);
+  }, [cut]);
+
+  useEffect(() => {
+    setModel(null);
+    setGlb(null);
+  }, [cut]);
+
+  const onFile = (f: File) =>
+    snapshotFile(f)
+      .then(loadPhoto)
+      .then((p) => {
+        setPhoto(p);
+        setError(null);
+      })
+      .catch((e: unknown) => setError(e instanceof Error ? e.message : "Falha ao ler o arquivo."));
 
   const generate = async () => {
-    if (!file) return;
-    const ctrl = new AbortController();
-    abortRef.current = ctrl;
+    if (!cut) return;
     setWorking(true);
     setError(null);
-    setResult(null);
     try {
-      setResult(await generateCharacterFromPhoto(file, (text, percent) => setProgress({ text, percent }), ctrl.signal));
+      const root = buildCharacter(cut);
+      setGlb(await exportGlb(root));
+      setModel(root);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Falha ao gerar o personagem.");
     } finally {
       setWorking(false);
-      setProgress(null);
     }
   };
 
-  const slot = team ? `character:${character}:${team}` : `character:${character}`;
+  const glbUrl = useMemo(() => (glb ? URL.createObjectURL(glb) : null), [glb]);
+  useEffect(() => () => (glbUrl ? URL.revokeObjectURL(glbUrl) : undefined), [glbUrl]);
+
+  const slot = useMemo(() => (team ? `character:${character}:${team}` : `character:${character}`), [character, team]);
   const use = () => {
-    if (!result) return;
+    if (!glb) return;
     void run(async () => {
-      await mergeModels({ [slot]: result.url });
+      const url = await uploadModel(slot, new File([glb], "personagem.glb", { type: "model/gltf-binary" }));
+      await mergeModels({ [slot]: url });
     }, "Personagem aplicado.");
   };
 
   return (
     <>
       <p style={hint}>
-        Envie uma foto de corpo inteiro (de frente, fundo limpo) e o gerador cria um modelo 3D. Leva alguns minutos. Use só imagens suas, de
-        personagens fictícios ou com autorização de quem aparece: o conteúdo é de responsabilidade do operador.
+        Gera um boneco 3D com esqueleto a partir de uma foto, aqui no navegador (sem serviço externo, sem custo). Use foto de corpo inteiro, de
+        frente, braços ao lado do corpo, pés levemente separados, em fundo liso (ou PNG sem fundo). O rosto e a roupa vêm da foto, achatados;
+        é um boneco estilizado, não um escaneamento. Use só imagens suas, fictícias ou autorizadas: o conteúdo é de responsabilidade do operador.
       </p>
       <label style={{ ...ghost, display: "inline-flex", alignItems: "center", alignSelf: "flex-start", opacity: working ? 0.5 : 1 }}>
-        {file ? "Trocar foto" : "Escolher foto"}
+        {photo ? "Trocar foto" : "Escolher foto"}
         <input
           type="file"
           accept="image/png,image/jpeg,image/webp"
@@ -101,48 +180,55 @@ export function AdminPhoto3d({ busy, run }: Props) {
             const input = e.target;
             const f = input.files?.[0];
             if (!f) return;
-            void snapshotFile(f)
-              .then((copy) => {
-                setFile(copy);
-                setResult(null);
-                setError(null);
-              })
-              .catch((err: unknown) => setError(err instanceof Error ? err.message : "Falha ao ler o arquivo."))
-              .finally(() => {
-                input.value = "";
-              });
+            void onFile(f).finally(() => {
+              input.value = "";
+            });
           }}
         />
       </label>
-      {preview && <img src={preview} alt="Foto escolhida" style={{ maxHeight: 220, maxWidth: "100%", objectFit: "contain", alignSelf: "flex-start", borderRadius: 8 }} />}
-      <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: "var(--t-ui)" }}>
-        <input type="checkbox" checked={rights} onChange={(e) => setRights(e.target.checked)} style={{ width: 22, height: 22, flexShrink: 0 }} />
-        Tenho direito de usar esta imagem (é minha, fictícia ou autorizada).
-      </label>
-      <button type="button" disabled={!file || !rights || working || busy} onClick={() => void generate()} style={{ ...primary, opacity: !file || !rights || working ? 0.5 : 1 }}>
-        {working ? "Gerando…" : "Gerar personagem 3D"}
-      </button>
-      {working && (
+
+      {photo && (
         <>
-          <button type="button" onClick={() => abortRef.current?.abort()} style={ghost}>
-            Cancelar
-          </button>
-          {progress && (
-            <p role="status" style={hint}>
-              {progress.text} {progress.percent > 0 ? `${Math.round(progress.percent)}%` : ""}
+          <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "var(--t-ui)" }}>
+            Tolerância do fundo: {tolerance}
+            <input type="range" min={10} max={110} value={tolerance} onChange={(e) => setTolerance(Number(e.target.value))} />
+          </label>
+          {cutError && (
+            <p role="alert" style={{ margin: 0, color: "var(--danger)", fontSize: "var(--t-ui)" }}>
+              {cutError}
             </p>
           )}
+          {cut && (
+            <>
+              <p style={hint}>Recorte (confira se pegou só a pessoa):</p>
+              <canvas
+                ref={cutRef}
+                aria-label="Recorte da pessoa"
+                style={{ maxHeight: 260, maxWidth: "100%", objectFit: "contain", alignSelf: "flex-start", borderRadius: 8, background: "repeating-conic-gradient(#555 0% 25%, #444 0% 50%) 50% / 16px 16px" }}
+              />
+            </>
+          )}
+          <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: "var(--t-ui)" }}>
+            <input type="checkbox" checked={rights} onChange={(e) => setRights(e.target.checked)} style={{ width: 22, height: 22, flexShrink: 0 }} />
+            Tenho direito de usar esta imagem (é minha, fictícia ou autorizada).
+          </label>
+          <button type="button" disabled={!cut || !rights || working || busy} onClick={() => void generate()} style={{ ...primary, opacity: !cut || !rights || working ? 0.5 : 1 }}>
+            {working ? "Gerando…" : "Gerar personagem 3D"}
+          </button>
         </>
       )}
+
       {error && (
         <p role="alert" style={{ margin: 0, color: "var(--danger)", fontSize: "var(--t-ui)" }}>
           {error}
         </p>
       )}
-      {result && (
+
+      {model && glb && (
         <>
+          <Preview model={model} />
           <p role="status" style={{ ...hint, color: "var(--ink)" }}>
-            Pronto! {result.rigged ? "O modelo tem esqueleto: vai andar no jogo." : "O modelo ficou sem esqueleto (balança o corpo todo ao andar)."}
+            Pronto ({(glb.size / 1024).toFixed(0)} KB). Tem esqueleto: anda no jogo.
           </p>
           <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
             <select aria-label="Personagem" value={character} onChange={(e) => setCharacter(e.target.value as CharacterId)} style={{ ...field, flex: "1 1 160px" }}>
@@ -164,9 +250,11 @@ export function AdminPhoto3d({ busy, run }: Props) {
           <button type="button" disabled={busy} onClick={use} style={primary}>
             Usar neste personagem
           </button>
-          <a href={result.url} target="_blank" rel="noreferrer" style={{ ...hint, textDecoration: "underline" }}>
-            Baixar o .glb
-          </a>
+          {glbUrl && (
+            <a href={glbUrl} download="personagem.glb" style={{ ...hint, textDecoration: "underline" }}>
+              Baixar o .glb
+            </a>
+          )}
         </>
       )}
     </>
