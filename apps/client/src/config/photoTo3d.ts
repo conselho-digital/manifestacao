@@ -221,7 +221,7 @@ const smooth = (a: number, b: number, v: number) => {
 };
 
 // Ossos (nomes que o jogo reconhece para animar a caminhada). x: + = esquerda do personagem (ele olha para +Z).
-const BONE_NAMES = [
+export const BONE_NAMES = [
   "Hips",
   "Spine",
   "Head",
@@ -240,7 +240,49 @@ const BONE_NAMES = [
   "LeftToeBase",
   "RightToeBase",
 ] as const;
-const B = Object.fromEntries(BONE_NAMES.map((n, i) => [n, i])) as Record<(typeof BONE_NAMES)[number], number>;
+export type BoneName = (typeof BONE_NAMES)[number];
+export const B = Object.fromEntries(BONE_NAMES.map((n, i) => [n, i])) as Record<BoneName, number>;
+
+const BONE_PARENT: Partial<Record<BoneName, BoneName>> = {
+  Spine: "Hips",
+  Head: "Spine",
+  LeftUpLeg: "Hips",
+  LeftLeg: "LeftUpLeg",
+  LeftFoot: "LeftLeg",
+  LeftToeBase: "LeftFoot",
+  RightUpLeg: "Hips",
+  RightLeg: "RightUpLeg",
+  RightFoot: "RightLeg",
+  RightToeBase: "RightFoot",
+  LeftArm: "Spine",
+  LeftForeArm: "LeftArm",
+  LeftHand: "LeftForeArm",
+  RightArm: "Spine",
+  RightForeArm: "RightArm",
+  RightHand: "RightForeArm",
+};
+
+/** Cria os ossos (na ordem de BONE_NAMES) com as posições do mundo dadas; cada osso fica relativo ao pai. */
+export function createBones(world: Record<BoneName, [number, number, number]>): Bone[] {
+  const bones = BONE_NAMES.map((n) => {
+    const b = new Bone();
+    b.name = n;
+    return b;
+  });
+  for (const n of BONE_NAMES) {
+    const b = bones[B[n]]!;
+    const p = BONE_PARENT[n];
+    const [x, y, z] = world[n];
+    if (p) {
+      const [px, py, pz] = world[p];
+      b.position.set(x - px, y - py, z - pz);
+      bones[B[p]]!.add(b);
+    } else {
+      b.position.set(x, y, z);
+    }
+  }
+  return bones;
+}
 
 /** Pesos (osso → peso) de um ponto do corpo; t = altura/H (0 pés … 1 topo), u = x/H (+ = esquerda do personagem). */
 function weightsAt(t: number, u: number): [number, number][] {
@@ -402,7 +444,7 @@ export function buildCharacter(cut: Cutout): Group {
 
   // Esqueleto: posições (m) no mundo; cada osso fica relativo ao pai.
   const H = HEIGHT_M;
-  const world: Record<(typeof BONE_NAMES)[number], [number, number, number]> = {
+  const world: Record<BoneName, [number, number, number]> = {
     Hips: [0, 0.5 * H, 0],
     Spine: [0, 0.58 * H, 0],
     Head: [0, 0.84 * H, 0],
@@ -421,41 +463,7 @@ export function buildCharacter(cut: Cutout): Group {
     RightForeArm: [-0.19 * H, 0.63 * H, 0],
     RightHand: [-0.19 * H, 0.45 * H, 0],
   };
-  const parent: Partial<Record<(typeof BONE_NAMES)[number], (typeof BONE_NAMES)[number]>> = {
-    Spine: "Hips",
-    Head: "Spine",
-    LeftUpLeg: "Hips",
-    LeftLeg: "LeftUpLeg",
-    LeftFoot: "LeftLeg",
-    LeftToeBase: "LeftFoot",
-    RightUpLeg: "Hips",
-    RightLeg: "RightUpLeg",
-    RightFoot: "RightLeg",
-    RightToeBase: "RightFoot",
-    LeftArm: "Spine",
-    LeftForeArm: "LeftArm",
-    LeftHand: "LeftForeArm",
-    RightArm: "Spine",
-    RightForeArm: "RightArm",
-    RightHand: "RightForeArm",
-  };
-  const bones = BONE_NAMES.map((n) => {
-    const b = new Bone();
-    b.name = n;
-    return b;
-  });
-  for (const n of BONE_NAMES) {
-    const b = bones[B[n]]!;
-    const p = parent[n];
-    const [x, y, z] = world[n];
-    if (p) {
-      const [px, py, pz] = world[p];
-      b.position.set(x - px, y - py, z - pz);
-      bones[B[p]]!.add(b);
-    } else {
-      b.position.set(x, y, z);
-    }
-  }
+  const bones = createBones(world);
   const root = new Group();
   root.name = "Personagem3D";
   root.add(mesh);

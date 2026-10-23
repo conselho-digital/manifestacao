@@ -1,3 +1,4 @@
+import { cleanRig, setRigs, type RigMarks } from "./rigs.js";
 import {
   CHARACTERS,
   CHARACTER_IDS,
@@ -35,9 +36,11 @@ export interface GameConfig {
   teams: Partial<Record<TeamId, TeamOverride>>;
   /** slot → URL pública de um .glb. Slots: ver `isModelSlot`. */
   models: Record<string, string>;
+  /** URL do .glb → marcações do esqueleto feitas no editor do admin. */
+  rigs: Record<string, RigMarks>;
 }
 
-export const EMPTY_CONFIG: GameConfig = { teams: {}, models: {} };
+export const EMPTY_CONFIG: GameConfig = { teams: {}, models: {}, rigs: {} };
 
 // Valores padrão capturados na primeira execução — permitem "restaurar" ao
 // reaplicar uma config sem override (ex.: admin removeu uma mudança).
@@ -97,8 +100,8 @@ export function isTrustedModelUrl(url: unknown, image = false): url is string {
   }
 }
 
-export function sanitizeConfig(raw: { teams?: unknown; flags?: unknown; models?: unknown }): GameConfig {
-  const out: GameConfig = { teams: {}, models: {} };
+export function sanitizeConfig(raw: { teams?: unknown; flags?: unknown; models?: unknown; rigs?: unknown }): GameConfig {
+  const out: GameConfig = { teams: {}, models: {}, rigs: {} };
   if (raw.teams && typeof raw.teams === "object") {
     for (const [id, v] of Object.entries(raw.teams)) {
       if (!isTeamId(id) || !v || typeof v !== "object") continue;
@@ -109,6 +112,12 @@ export function sanitizeConfig(raw: { teams?: unknown; flags?: unknown; models?:
   if (raw.models && typeof raw.models === "object") {
     for (const [slot, url] of Object.entries(raw.models)) {
       if (isModelSlot(slot) && isTrustedModelUrl(url, isImageSlot(slot))) out.models[slot] = url;
+    }
+  }
+  if (raw.rigs && typeof raw.rigs === "object") {
+    for (const [url, v] of Object.entries(raw.rigs)) {
+      const rig = isTrustedModelUrl(url) ? cleanRig(v) : null;
+      if (rig) out.rigs[url] = rig;
     }
   }
   return out;
@@ -157,6 +166,7 @@ export function applyGameConfig(cfg: GameConfig, catalog: CatalogRow[] = []): vo
     }
   }
   modelOverrides = cfg.models;
+  setRigs(cfg.rigs);
 }
 
 /** Busca config + catálogo no Supabase e aplica. Em modo offline, não faz nada. */

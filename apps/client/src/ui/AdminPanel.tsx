@@ -1,6 +1,10 @@
 import { useEffect, useState } from "react";
 import { useModal } from "./useModal.js";
 import { AdminPhoto3d } from "./AdminPhoto3d.js";
+import { RigEditor } from "./RigEditor.js";
+import type { Object3D } from "three";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { currentRigs, type RigMarks } from "../config/rigs.js";
 import {
   CHARACTERS,
   CHARACTER_IDS,
@@ -37,6 +41,7 @@ import {
   saveCatalogItem,
   saveConfigKey,
   uploadModel,
+  mergeRigs,
   snapshotFile,
   type AdminCatalogRow,
   findUsers,
@@ -370,8 +375,79 @@ function ProductsTab({ busy, run }: TabProps) {
   );
 }
 
+/** Modelo aberto no editor de esqueleto: arquivo novo (a enviar) ou já enviado (só edita as marcações). */
+interface RigSession {
+  slot: string;
+  title: string;
+  scene: Object3D;
+  file: File | null;
+  url: string | null;
+}
+
+async function parseGlb(buffer: ArrayBuffer): Promise<Object3D> {
+  try {
+    return (await new GLTFLoader().parseAsync(buffer, "")).scene;
+  } catch {
+    throw new Error("Não consegui abrir o modelo no editor (arquivo comprimido ou inválido).");
+  }
+}
+
 function ModelsTab({ busy, run }: TabProps) {
   const [models, setModels] = useState<Record<string, string>>(() => currentModelOverrides());
+  const [rigs, setRigs] = useState<Record<string, RigMarks>>(() => currentRigs());
+  const [session, setSession] = useState<RigSession | null>(null);
+  const [editorError, setEditorError] = useState<string | null>(null);
+
+  /** Personagem novo: antes de enviar, abre o editor para marcar frente, pernas, braços e cabeça. */
+  const startUpload = async (slot: string, title: string, file: File) => {
+    setEditorError(null);
+    try {
+      const copy = await snapshotFile(file);
+      if (!slot.startsWith("character:")) return void setSlot(slot, copy);
+      setSession({ slot, title, scene: await parseGlb(await copy.arrayBuffer()), file: copy, url: null });
+    } catch (e) {
+      setEditorError(e instanceof Error ? e.message : "Falha ao ler o arquivo.");
+    }
+  };
+
+  const editExisting = async (slot: string, title: string) => {
+    const url = models[slot];
+    if (!url) return;
+    setEditorError(null);
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error("Não consegui baixar o modelo.");
+      setSession({ slot, title, scene: await parseGlb(await res.arrayBuffer()), file: null, url });
+    } catch (e) {
+      setEditorError(e instanceof Error ? e.message : "Falha ao abrir o modelo.");
+    }
+  };
+
+  const saveRig = (s: RigSession, rig: RigMarks) =>
+    run(async () => {
+      let url = s.url;
+      if (s.file) {
+        url = await uploadModel(s.slot, s.file);
+        setModels(await mergeModels({ [s.slot]: url }));
+      }
+      if (!url) throw new Error("Modelo sem URL.");
+      await mergeRigs({ [url]: rig });
+      setRigs(currentRigs());
+      setSession(null);
+      return "Esqueleto salvo: o jogo anima braços e pernas sozinho.";
+    }, "Esqueleto salvo.");
+
+  const skipRig = (s: RigSession) => {
+    if (!s.file) return;
+    void setSlot(s.slot, s.file);
+    setSession(null);
+  };
+
+  const removeRig = (url: string) =>
+    run(async () => {
+      await mergeRigs({ [url]: null });
+      setRigs(currentRigs());
+    }, "Esqueleto removido.");
 
   const setSlot = (slot: string, file: File) =>
     run(async () => {
@@ -404,12 +480,22 @@ function ModelsTab({ busy, run }: TabProps) {
               const input = e.target;
               const f = input.files?.[0];
               if (!f) return;
-              void setSlot(slot, f).finally(() => {
+              void startUpload(slot, label, f).finally(() => {
                 input.value = "";
               });
             }}
           />
         </label>
+        {has && slot.startsWith("character:") && (
+          <button type="button" disabled={busy} onClick={() => void editExisting(slot, label)} style={ghostBtn}>
+            {rigs[models[slot]!] ? "Editar esqueleto" : "Criar esqueleto"}
+          </button>
+        )}
+        {has && rigs[models[slot]!] && (
+          <button type="button" disabled={busy} onClick={() => void removeRig(models[slot]!)} style={ghostBtn}>
+            Tirar esqueleto
+          </button>
+        )}
         {has && (
           <button type="button" disabled={busy} onClick={() => void clearSlot(slot)} style={ghostBtn}>
             Remover
@@ -419,13 +505,29 @@ function ModelsTab({ busy, run }: TabProps) {
     );
   };
 
+  if (session) {
+    return (
+      <RigEditor
+        scene={session.scene}
+        title={session.title}
+        initial={session.url ? (rigs[session.url] ?? null) : null}
+        busy={busy}
+        onSave={(rig) => void saveRig(session, rig)}
+        onSkip={session.file ? () => skipRig(session) : undefined}
+        onCancel={() => setSession(null)}
+      />
+    );
+  }
+
   return (
     <>
       <p style={hint}>
         Arquivos .glb (até 15 MB). Personagem: vale o da equipe, senão o geral, senão o padrão.
       </p>
 
+      {editorError && <p style={{ ...hint, color: "var(--danger)" }}>{editorError}</p>}
       <h3 style={sectionTitle}>Personagens</h3>
+      <p style={hint}>Ao enviar um personagem, abre o editor para marcar a frente, a cabeça, os braços e as pernas.</p>
       {CHARACTER_IDS.map((c) => (
         <div key={c} style={{ display: "flex", flexDirection: "column", gap: 4, padding: "8px 0" }}>
           <strong style={{ fontSize: "var(--t-ui)" }}>{CHARACTERS[c].label}</strong>

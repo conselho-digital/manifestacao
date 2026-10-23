@@ -9,6 +9,8 @@ import { useUserGestureUnlocked } from "./useUserGesture.js";
 import { vehicleModelUrl } from "./models.js";
 import { ModelBoundary } from "./ModelBoundary.js";
 import { createAutoAnimator, type AutoAnimator } from "./autoAnimate.js";
+import { getBakedRig, instantiateRig } from "./autoRig.js";
+import { rigForUrl } from "../config/rigs.js";
 
 export type FlagEmblem = "star-burst" | "ring" | "stripe";
 
@@ -249,7 +251,18 @@ function GlbModelInner({ url, animated, walking }: { url: string; animated: bool
   const { scene, animations } = useGLTF(url);
   // Clone por uso: o cache do useGLTF devolve a MESMA cena; sem clonar, o
   // mesmo modelo em dois jogadores brigaria pelo mesmo pai (só um aparece).
-  const instance = useMemo(() => cloneSkinned(scene), [scene]);
+  // Com marcações do editor do admin, o esqueleto é montado por código (autoRig.ts); senão, usa o do arquivo.
+  const rig = animated ? rigForUrl(url) : null;
+  const instance = useMemo(() => {
+    if (rig) {
+      try {
+        return instantiateRig(getBakedRig(url, scene, rig));
+      } catch (e) {
+        console.warn("esqueleto automático indisponível", e);
+      }
+    }
+    return cloneSkinned(scene);
+  }, [scene, rig, url]);
   // O R3F não descarta <primitive>: o esqueleto clonado guarda uma textura de ossos própria. Geometria e materiais são
   // compartilhados com o cache do useGLTF e NÃO podem ser descartados aqui.
   useEffect(
@@ -265,7 +278,7 @@ function GlbModelInner({ url, animated, walking }: { url: string; animated: bool
     if (!animated || !frame) return;
     // Uma falha ao montar a animação nunca derruba o personagem: ele só fica sem animar.
     try {
-      animRef.current = createAutoAnimator(instance, frame, animations);
+      animRef.current = createAutoAnimator(instance, frame, rig ? [] : animations);
     } catch (e) {
       console.warn("animação automática indisponível", e);
       animRef.current = null;
@@ -274,7 +287,7 @@ function GlbModelInner({ url, animated, walking }: { url: string; animated: bool
       animRef.current?.dispose();
       animRef.current = null;
     };
-  }, [animated, instance, animations]);
+  }, [animated, instance, animations, rig]);
   useFrame((_, dt) => {
     try {
       animRef.current?.update(Math.min(dt, 0.1), walking);

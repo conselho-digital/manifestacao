@@ -1,5 +1,6 @@
 import { ASSET_BUCKET, MAX_LABEL_LENGTH, isImageSlot, isModelSlot } from "./gameConfig.js";
 import { getSupabase } from "../net/supabase.js";
+import type { RigMarks } from "./rigs.js";
 
 /**
  * Escritas do painel de admin. Quem decide se a escrita vale é o RLS do
@@ -26,7 +27,7 @@ function deepEqual(a: unknown, b: unknown): boolean {
   return ka.every((k) => deepEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
 }
 
-export async function saveConfigKey(key: "teams" | "models", value: unknown): Promise<void> {
+export async function saveConfigKey(key: "teams" | "models" | "rigs", value: unknown): Promise<void> {
   const { data, error } = await db()
     .from("game_config")
     .upsert({ key, value, updated_at: new Date().toISOString() })
@@ -36,6 +37,18 @@ export async function saveConfigKey(key: "teams" | "models", value: unknown): Pr
   if (!data || data.length === 0) throw new Error("O banco não confirmou a gravação (sem permissão?). Tente sair e entrar de novo.");
   // jsonb reordena as chaves (em qualquer nível): compara em profundidade, sem depender da ordem.
   if (!deepEqual(data[0]!.value, value)) throw new Error("O banco guardou um valor diferente do enviado. Tente de novo.");
+}
+
+/** Guarda (ou remove, com `null`) as marcações de esqueleto de modelos, sem perder as dos outros. */
+export async function mergeRigs(patch: Record<string, RigMarks | null>): Promise<void> {
+  const { data, error } = await db().from("game_config").select("value").eq("key", "rigs").maybeSingle();
+  if (error) throw new Error(error.message);
+  const next: Record<string, unknown> = data?.value && typeof data.value === "object" && !Array.isArray(data.value) ? { ...(data.value as Record<string, unknown>) } : {};
+  for (const [url, rig] of Object.entries(patch)) {
+    if (rig === null) delete next[url];
+    else next[url] = rig;
+  }
+  await saveConfigKey("rigs", next);
 }
 
 /**
