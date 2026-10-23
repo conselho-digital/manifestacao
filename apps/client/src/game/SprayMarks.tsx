@@ -19,11 +19,20 @@ function placement(m: SprayMark): { position: [number, number, number]; quaterni
   const lift = ground ? 0 : 0.04;
   const position: [number, number, number] = ground ? [m.x, 0.02, m.z] : [m.x + m.nx * lift, m.y + m.ny * lift, m.z + m.nz * lift];
   const n = new Vector3(m.nx, m.ny, m.nz).normalize();
-  // Eixos: z = normal; x = horizontal ao longo da superfície; y = "para cima" da imagem (para cima do mundo nas paredes).
-  const x = new Vector3().crossVectors(new Vector3(0, 1, 0), n);
-  if (x.lengthSq() < 0.01) x.set(1, 0, 0);
-  x.normalize();
-  const y = new Vector3().crossVectors(n, x).normalize();
+  // Eixos: z = normal; y = "para cima" da imagem; x = à direita dela.
+  // Parede: o topo da imagem aponta para cima do mundo. Chão: o topo aponta para longe de quem pichou, então a base
+  // da imagem fica do lado do pé dele.
+  let x: Vector3;
+  let y: Vector3;
+  if (ground) {
+    y = new Vector3(Math.sin(m.rot), 0, Math.cos(m.rot));
+    x = new Vector3().crossVectors(y, n).normalize();
+  } else {
+    x = new Vector3().crossVectors(new Vector3(0, 1, 0), n);
+    if (x.lengthSq() < 0.01) x.set(1, 0, 0);
+    x.normalize();
+    y = new Vector3().crossVectors(n, x).normalize();
+  }
   const quaternion = new Quaternion().setFromRotationMatrix(new Matrix4().makeBasis(x, y, n));
   return { position, quaternion };
 }

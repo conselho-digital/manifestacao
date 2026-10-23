@@ -54,6 +54,8 @@ export interface SprayMark {
   ny: number;
   nz: number;
   color: number;
+  /** Direção (rad, em torno de Y) de quem pichou até a marca: no chão, a base da imagem fica do lado do pé dele. */
+  rot: number;
   /** Opção de spray (slug) — define o modelo 3D da marca. */
   style: string;
   /** Equipe de quem pichou: a marca é a imagem da bandeira da equipe (se o admin enviou). */
@@ -61,6 +63,12 @@ export interface SprayMark {
   /** Bandeira que quem pichou carrega: se a equipe não tem imagem, vale a imagem desta bandeira. */
   flag?: FlagId;
   createdAt: number;
+}
+
+/** Ângulo vindo da rede: só números finitos (normalizado para -π..π); senão o padrão (topo da imagem para -Z). */
+export function sanitizeSprayRot(v: unknown): number {
+  if (typeof v !== "number" || !Number.isFinite(v)) return Math.PI;
+  return Math.atan2(Math.sin(v), Math.cos(v));
 }
 
 /** Onde a mira (centro da tela) pinta: o ponto e a normal da superfície (chão, parede, tronco, copa…). */

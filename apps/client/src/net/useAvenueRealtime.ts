@@ -30,6 +30,7 @@ import {
   SPRAY_MAX_MARKS,
   SPRAY_MIN_INTERVAL_MS,
   sanitizeSprayPlacement,
+  sanitizeSprayRot,
   type SprayAim,
   type SprayMark,
 } from "../game/spray.js";
@@ -352,6 +353,7 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
           id: s.id,
           ...place,
           color,
+          rot: sanitizeSprayRot(s.rot),
           style,
           // Equipe do remetente vem da presence dele (não do payload do spray).
           team: playersRef.current.get(s.senderId)?.team,
@@ -432,7 +434,7 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
   }, []);
 
   const sendSpray = useCallback(
-    (aim: SprayAim, color: number, style: string): boolean => {
+    (aim: SprayAim, color: number, style: string, rotIn = Math.PI): boolean => {
       // Cooldown próprio: defesa adicional (o cartucho em Game.tsx já limita
       // o uso pela UI, mas isso é chamável direto, ex. via DevTools — o
       // cooldown de recepção no handler acima é quem garante o limite de
@@ -445,13 +447,14 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
       const id = crypto.randomUUID ? crypto.randomUUID() : String(Math.random());
       const place = sanitizeSprayPlacement(aim.x, aim.y, aim.z, aim.nx, aim.ny, aim.nz);
       if (!place) return false;
+      const rot = sanitizeSprayRot(rotIn);
       // Mostra a própria marca localmente (broadcast não ecoa pro remetente);
       // também passa pelo limite de SPRAY_MAX_MARKS, igual às recebidas.
-      addSprayMark(sprayMarksRef.current, { id, ...place, color, style, team: selfTeamRef.current, flag: selfFlagRef.current, createdAt: now });
+      addSprayMark(sprayMarksRef.current, { id, ...place, color, rot, style, team: selfTeamRef.current, flag: selfFlagRef.current, createdAt: now });
       setSprayVersion((v) => v + 1);
       const channel = channelRef.current;
       if (channel && channel.state === "joined") {
-        const payload: SprayBroadcast = { id, senderId: selfId, x: place.x, y: place.y, z: place.z, nx: place.nx, ny: place.ny, nz: place.nz, color, style };
+        const payload: SprayBroadcast = { id, senderId: selfId, x: place.x, y: place.y, z: place.z, nx: place.nx, ny: place.ny, nz: place.nz, color, style, rot };
         void channel.send({ type: "broadcast", event: BROADCAST.spray, payload });
       }
       return true;

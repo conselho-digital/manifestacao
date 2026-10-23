@@ -258,7 +258,12 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     // Onde a mira (centro da tela) cruza o chão — ver Player.tsx.
     const target = aimRef.current;
     // A marca é a bandeira da equipe (imagem); a cor da equipe é o reserva sem imagem.
-    if (!net.sendSpray(target, avatar.shirt, DEFAULT_SPRAY_ID)) sprays.refund();
+    // Direção do personagem até a marca: no chão, a base da imagem fica do lado do pé dele.
+    const me = transformRef.current;
+    const dx = target.x - me.x;
+    const dz = target.z - me.z;
+    const rot = Math.hypot(dx, dz) > 0.05 ? Math.atan2(dx, dz) : me.rotationY;
+    if (!net.sendSpray(target, avatar.shirt, DEFAULT_SPRAY_ID, rot)) sprays.refund();
   }, [net, avatar.shirt, sprays]);
 
   return (

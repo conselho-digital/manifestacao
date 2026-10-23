@@ -67,6 +67,8 @@ export interface SprayBroadcast {
   color: number;
   /** Opção de spray usada (slug); ausente/ inválida = clássico. */
   style?: string;
+  /** Direção (rad, em torno de Y) de quem pichou até a marca: no chão, o topo da imagem aponta para lá e a base fica no pé dele. */
+  rot?: number;
 }
 
 /** Nomes dos eventos de broadcast. */

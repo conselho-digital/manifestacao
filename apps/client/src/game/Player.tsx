@@ -24,7 +24,7 @@ import {
 import type { InputVector } from "./useInput.js";
 import { SPRAY_MAX_RANGE, type SprayAim } from "./spray.js";
 import { raycastSolids } from "./solids.js";
-import { allowedCameraDistance, raycastSurface } from "./colliders.js";
+import { CAMERA_MIN_HEIGHT, allowedCameraDistance, raycastSurface } from "./colliders.js";
 import { resolveSolids } from "./solids.js";
 
 /** Posição + rotação atuais do jogador local, lidas fora do Canvas (ex.: botão de spray). */
@@ -209,12 +209,10 @@ export function Player({
       g.position.x = next.x;
       g.position.z = next.z;
       facing.current = facingOf(worldX, worldZ, facing.current);
-    }
-    // A pé: o personagem olha para onde a mira aponta (gira junto com a câmera), parado ou andando.
-    // forward(yaw) = (sin yaw, cos yaw), o mesmo da rotação em Y. Em veículo a direção vem do volante.
-    if (!driving) {
-      const diff = wrapAngle(yaw - g.rotation.y);
-      g.rotation.y = wrapAngle(g.rotation.y + diff * Math.min(1, 18 * delta));
+      // A pé: o personagem vira para onde ANDA (a mira da câmera é só do spray). Parado, mantém a direção.
+      // forward(yaw) = (sin yaw, cos yaw), o mesmo da rotação em Y. Em veículo a direção vem do volante.
+      const diff = wrapAngle(Math.atan2(worldX, worldZ) - g.rotation.y);
+      g.rotation.y = wrapAngle(g.rotation.y + diff * Math.min(1, 14 * delta));
     }
 
     if (!Number.isFinite(g.position.x + g.position.z)) g.position.set(0, 0, 0); // proteção: posição inválida nunca fica
@@ -230,11 +228,16 @@ export function Player({
     // Veículos maiores pedem a câmera mais afastada (senão o caminhão tampa a tela).
     const camMul = vehicleRef.current === "caminhao" ? 1.9 : driving ? (VEHICLES[vehicleRef.current]?.kind === "car" ? 1.5 : 1.2) : 1;
     const cameraDistance = cameraDistanceProp * camMul;
-    const pitch = cameraPitchRef.current;
-    const cosPitch = Math.cos(pitch);
+    const wantedPitch = cameraPitchRef.current;
     const pivotX = g.position.x;
     const pivotY = g.position.y + CAMERA_PIVOT_HEIGHT;
     const pivotZ = g.position.z;
+    // Olhar para cima: a câmera desce atrás do personagem até encostar no chão; dali em diante ela NÃO se aproxima, fica
+    // na altura mínima e só inclina a visão para cima (o `lookUp` abaixo).
+    const groundPitch = Math.asin(Math.max(-1, Math.min(1, (CAMERA_MIN_HEIGHT + 0.03 - pivotY) / cameraDistance)));
+    const pitch = Math.max(wantedPitch, groundPitch);
+    const lookUp = Math.max(0, groundPitch - wantedPitch);
+    const cosPitch = Math.cos(pitch);
     // Câmera "sobre o ombro" (estilo GTA): o ponto que a câmera orbita e mira
     // fica deslocado pra DIREITA do personagem, então ele aparece à esquerda do
     // centro da tela e a mira (centro) nunca cai em cima dele.
@@ -267,7 +270,10 @@ export function Player({
     // Olha um pouco à frente do personagem: assim o centro da tela (onde fica
     // a mira do spray) cai no chão à frente dele, em vez de em cima da cabeça.
     const ahead = cameraDistance * CAMERA_LOOK_AHEAD_RATIO;
-    camera.lookAt(pivotX + shX + Math.sin(yaw) * ahead, pivotY, pivotZ + shZ + Math.cos(yaw) * ahead);
+    const lookX = pivotX + shX + Math.sin(yaw) * ahead;
+    const lookZ = pivotZ + shZ + Math.cos(yaw) * ahead;
+    const lookRange = Math.hypot(lookX - camera.position.x, lookZ - camera.position.z, pivotY - camera.position.y);
+    camera.lookAt(lookX, pivotY + Math.tan(Math.min(lookUp, 1.4)) * lookRange, lookZ);
 
     // Mira: raio do centro da tela até a primeira superfície com colisão (prédio, parede, tronco, copa, pilar) ou o
     // chão, dentro do alcance do spray a partir do personagem.

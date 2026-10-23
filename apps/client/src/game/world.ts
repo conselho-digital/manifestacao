@@ -9,7 +9,7 @@ export const RUN_MULTIPLIER = 1.7;
 export const AVATAR_RADIUS = 0.5;
 
 // ── Câmera de terceira pessoa (livre: gira e inclina em torno do personagem) ──
-export const CAMERA_DISTANCE = 14;
+export const CAMERA_DISTANCE = 10.5;
 /** Celular: 25% mais perto do personagem que o padrão. */
 export const CAMERA_DISTANCE_MOBILE = CAMERA_DISTANCE * 0.75;
 /** PC: câmera mais colada no personagem (metade da distância do celular). */
