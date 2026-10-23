@@ -25,7 +25,7 @@ function readStored(day: string): number {
  * aparelho; valem o maior dos dois, então mesmo sem armazenamento (aba anônima) o limite vale na sessão. Como o resto
  * do jogo no MVP (não autoritativo, CLAUDE.md §4), limpar os dados do navegador devolve os sprays.
  */
-export function useDailySprays() {
+export function useDailySprays(unlimited = false) {
   const mem = useRef({ day: today(), used: 0 });
   const current = useCallback((): number => {
     const day = today();
@@ -60,6 +60,7 @@ export function useDailySprays() {
 
   /** Gasta um spray; false se já acabaram (relê antes de negar: pode ter virado o dia). */
   const spend = useCallback((): boolean => {
+    if (unlimited) return true;
     const n = current();
     if (n >= SPRAY_DAILY_LIMIT) {
       setUsed(n);
@@ -67,10 +68,12 @@ export function useDailySprays() {
     }
     write(n + 1);
     return true;
-  }, [current, write]);
+  }, [current, write, unlimited]);
 
   /** Devolve um spray (o envio foi descartado depois de gastar). */
-  const refund = useCallback(() => write(Math.max(0, current() - 1)), [current, write]);
+  const refund = useCallback(() => {
+    if (!unlimited) write(Math.max(0, current() - 1));
+  }, [current, write, unlimited]);
 
-  return { charges: SPRAY_DAILY_LIMIT - used, max: SPRAY_DAILY_LIMIT, spend, refund };
+  return { charges: unlimited ? SPRAY_DAILY_LIMIT : SPRAY_DAILY_LIMIT - used, max: SPRAY_DAILY_LIMIT, spend, refund };
 }

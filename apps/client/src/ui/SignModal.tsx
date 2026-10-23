@@ -193,14 +193,15 @@ export function SignModal({ equippedId, onEquip, isAdmin = false, onClose }: Sig
                       </span>
                     </div>
                     {m.status === "awaiting_payment" && (
-                      <button type="button" disabled={busy} onClick={() => void pay(m.id)} style={primaryBtn}>
-                        Pagar {brl(SIGN_PRICE_CENTS)} com Pix
-                      </button>
-                    )}
-                    {isAdmin && m.status === "awaiting_payment" && (
-                      <button type="button" disabled={busy} onClick={() => void adminActivate(m.id)} style={ghostBtn}>
-                        Ativar sem pagar (teste de admin)
-                      </button>
+                      isAdmin ? (
+                        <button type="button" disabled={busy} onClick={() => void adminActivate(m.id)} style={primaryBtn}>
+                          Ativar grátis (admin)
+                        </button>
+                      ) : (
+                        <button type="button" disabled={busy} onClick={() => void pay(m.id)} style={primaryBtn}>
+                          Pagar {brl(SIGN_PRICE_CENTS)} com Pix
+                        </button>
+                      )
                     )}
                     {m.status === "active" && (
                       <button type="button" onClick={() => onEquip(equippedId === m.id ? null : m.id)} style={equippedId === m.id ? ghostBtn : primaryBtn}>

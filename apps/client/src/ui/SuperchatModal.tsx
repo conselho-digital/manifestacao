@@ -200,19 +200,15 @@ export function SuperchatModal({ defaultName, isAdmin = false, onClose }: Superc
                     </div>
                     <span style={{ fontSize: "var(--t-body)", overflowWrap: "anywhere" }}>{m.message}</span>
                     {m.status === "awaiting_payment" && (
-                      <button type="button" disabled={busy} onClick={() => void pay(m.id)} style={primaryBtn}>
-                        Pagar {brl(m.amount_cents)} com Pix
-                      </button>
-                    )}
-                    {isAdmin && m.status === "awaiting_payment" && (
-                      <button
-                        type="button"
-                        disabled={busy}
-                        onClick={() => void adminActivate(m.id)}
-                        style={ghostBtn}
-                      >
-                        Ativar sem pagar (teste de admin)
-                      </button>
+                      isAdmin ? (
+                        <button type="button" disabled={busy} onClick={() => void adminActivate(m.id)} style={primaryBtn}>
+                          Ativar grátis (admin)
+                        </button>
+                      ) : (
+                        <button type="button" disabled={busy} onClick={() => void pay(m.id)} style={primaryBtn}>
+                          Pagar {brl(m.amount_cents)} com Pix
+                        </button>
+                      )
                     )}
                   </div>
                 ))}

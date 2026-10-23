@@ -126,7 +126,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
   const ownsPaidFlag = useMemo(() => [...owned].some((id) => id.startsWith("flag:")), [owned]);
   const [flagChoice, setFlagChoice] = useState<FlagId>(avatar.flag);
   const flagWanted = flagChoice !== "nenhuma";
-  const flagTime = useFlagTime(flagWanted, ownsPaidFlag);
+  const flagTime = useFlagTime(flagWanted, ownsPaidFlag || isAdmin);
   const flagShown = flagWanted && !flagTime.exhausted;
   const playAvatar = useMemo(
     () => (flagShown ? { ...avatar, flag: flagChoice } : { ...avatar, flag: "nenhuma" as const }),
@@ -249,7 +249,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
   const transformReadyRef = useRef(false);
 
   // Sprays do dia (15 por dia): contador no aparelho — client-trust, como o resto do MVP não autoritativo (CLAUDE.md §4).
-  const sprays = useDailySprays();
+  const sprays = useDailySprays(isAdmin);
   const handleSpray = useCallback(() => {
     if (!transformReadyRef.current) return;
     // Gasta ANTES de enviar (a contagem relê o armazenamento: outra aba pode ter gasto); se o envio for descartado

@@ -258,12 +258,13 @@ export function BillboardModal({ ads, isAdmin = false, onClose }: BillboardModal
                     <span style={{ fontSize: "var(--t-body)", overflowWrap: "anywhere" }}>{m.text}</span>
                     {m.status === "awaiting_payment" && (
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <button type="button" disabled={busy} onClick={() => void pay(m.id)} style={{ ...primaryBtn, flex: "1 1 160px" }}>
-                          Pagar {brl(m.amount_cents)} com Pix
-                        </button>
-                        {isAdmin && (
-                          <button type="button" disabled={busy} onClick={() => void adminActivate(m.id)} style={{ ...ghostBtn, flex: "1 1 160px" }}>
-                            Ativar sem pagar (teste de admin)
+                        {isAdmin ? (
+                          <button type="button" disabled={busy} onClick={() => void adminActivate(m.id)} style={{ ...primaryBtn, flex: "1 1 160px" }}>
+                            Ativar grátis (admin)
+                          </button>
+                        ) : (
+                          <button type="button" disabled={busy} onClick={() => void pay(m.id)} style={{ ...primaryBtn, flex: "1 1 160px" }}>
+                            Pagar {brl(m.amount_cents)} com Pix
                           </button>
                         )}
                         {credit >= m.amount_cents && (
