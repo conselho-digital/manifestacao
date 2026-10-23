@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import {
-  channelNameFor,
+  AVENUE_CHANNEL,
   BROADCAST,
   MAX_CHAT_LENGTH,
   MAX_NICKNAME_LENGTH,
@@ -29,6 +29,8 @@ import {
   SPRAY_LIFETIME_MS,
   SPRAY_MAX_MARKS,
   SPRAY_MIN_INTERVAL_MS,
+  sanitizeSprayPlacement,
+  type SprayAim,
   type SprayMark,
 } from "../game/spray.js";
 import { clampToAvenue } from "../game/world.js";
@@ -196,7 +198,7 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
 
     // Canal PRIVADO: só quem está logado entra (policies em realtime.messages,
     // migration 0009). A chave de presence é o nosso id de sessão.
-    const channel = supabase.channel(channelNameFor(self.map), {
+    const channel = supabase.channel(AVENUE_CHANNEL, {
       config: { private: true, presence: { key: selfId } },
     });
     channelRef.current = channel;
@@ -338,7 +340,8 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
           bySender.delete(oldest);
         }
 
-        const pos = clampToAvenue(s.x, s.z);
+        const place = sanitizeSprayPlacement(s.x, s.y, s.z, s.nx, s.ny, s.nz);
+        if (!place) return;
         const color = Math.max(0, Math.min(0xffffff, Math.trunc(s.color)));
         // Estilo vindo da rede: só aceita slug conhecido, senão cai no clássico.
         const style =
@@ -347,8 +350,7 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
             : DEFAULT_SPRAY_ID;
         addSprayMark(sprayMarksRef.current, {
           id: s.id,
-          x: pos.x,
-          z: pos.z,
+          ...place,
           color,
           style,
           // Equipe do remetente vem da presence dele (não do payload do spray).
@@ -430,7 +432,7 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
   }, []);
 
   const sendSpray = useCallback(
-    (x: number, z: number, color: number, style: string): boolean => {
+    (aim: SprayAim, color: number, style: string): boolean => {
       // Cooldown próprio: defesa adicional (o cartucho em Game.tsx já limita
       // o uso pela UI, mas isso é chamável direto, ex. via DevTools — o
       // cooldown de recepção no handler acima é quem garante o limite de
@@ -441,14 +443,15 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
       lastOwnSprayAtRef.current = now;
 
       const id = crypto.randomUUID ? crypto.randomUUID() : String(Math.random());
-      const pos = clampToAvenue(x, z);
+      const place = sanitizeSprayPlacement(aim.x, aim.y, aim.z, aim.nx, aim.ny, aim.nz);
+      if (!place) return false;
       // Mostra a própria marca localmente (broadcast não ecoa pro remetente);
       // também passa pelo limite de SPRAY_MAX_MARKS, igual às recebidas.
-      addSprayMark(sprayMarksRef.current, { id, x: pos.x, z: pos.z, color, style, team: selfTeamRef.current, flag: selfFlagRef.current, createdAt: now });
+      addSprayMark(sprayMarksRef.current, { id, ...place, color, style, team: selfTeamRef.current, flag: selfFlagRef.current, createdAt: now });
       setSprayVersion((v) => v + 1);
       const channel = channelRef.current;
       if (channel && channel.state === "joined") {
-        const payload: SprayBroadcast = { id, senderId: selfId, x: pos.x, z: pos.z, color, style };
+        const payload: SprayBroadcast = { id, senderId: selfId, x: place.x, y: place.y, z: place.z, nx: place.nx, ny: place.ny, nz: place.nz, color, style };
         void channel.send({ type: "broadcast", event: BROADCAST.spray, payload });
       }
       return true;

@@ -1,4 +1,3 @@
-import { MapPicker } from "./MapPicker.js";
 import { teamIconImageUrl } from "../game/models.js";
 import { LegalLinks } from "./LegalPage.js";
 import { useEffect, useState } from "react";
@@ -14,9 +13,6 @@ import {
   flagColor,
   hexColor,
   DEFAULT_CHARACTER,
-  DEFAULT_MAP,
-  isMapId,
-  type MapId,
   isCharacterId,
   isFlagId,
   isTeamId,
@@ -72,7 +68,6 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
   const [character, setCharacter] = useState<CharacterId>(
     isCharacterId(saved.character) ? saved.character : DEFAULT_CHARACTER,
   );
-  const [map, setMap] = useState<MapId>(isMapId(saved.map) ? saved.map : DEFAULT_MAP);
   const [flag, setFlag] = useState<FlagId>(isFlagId(saved.flag) ? saved.flag : saved.flag ? "time" : "nenhuma");
 
   // Conta obrigatória pra entrar no mapa (quando o modo online está
@@ -95,7 +90,7 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
 
   const buildAvatar = (): AvatarConfig => {
     const name = nickname.trim().slice(0, MAX_NICKNAME_LENGTH) || "Anônimo";
-    const avatar: AvatarConfig = { team, nickname: name, shirt: TEAMS[team].color, character, flag, map };
+    const avatar: AvatarConfig = { team, nickname: name, shirt: TEAMS[team].color, character, flag };
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(avatar));
     } catch {
@@ -369,11 +364,6 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
                 <span style={{ fontSize: "var(--t-ui)", fontWeight: 700 }}>Loja</span>
               </button>
             )}
-          </div>
-
-          <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 6 }}>
-            <Label>Mapa</Label>
-            <MapPicker value={map} onChange={setMap} />
           </div>
 
           <div style={{ marginTop: 14 }}>

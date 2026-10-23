@@ -1,5 +1,3 @@
-import { PaulistaScenery } from "./paulista/PaulistaScenery.js";
-import { setActiveMap } from "./world.js";
 import { AVATAR_STORAGE_KEY } from "../ui/AvatarPicker.js";
 import { deleteMyAccount } from "../net/account.js";
 import { useStageVoice } from "../net/useStageVoice.js";
@@ -15,6 +13,7 @@ import { isTypingTarget, useInput } from "./useInput.js";
 import { modelUrlFor } from "./models.js";
 import { CAMERA_SHOULDER_RATIO, CAMERA_DISTANCE_MOBILE, CAMERA_DISTANCE_DESKTOP, CAMERA_PITCH_DEFAULT, CAMERA_PIVOT_HEIGHT } from "./world.js";
 import { useDailySprays } from "./useDailySprays.js";
+import type { SprayAim } from "./spray.js";
 import { sprayImageFor } from "./models.js";
 import { useAvenueRealtime } from "../net/useAvenueRealtime.js";
 import { Joystick } from "../ui/Joystick.js";
@@ -85,9 +84,6 @@ interface GameProps {
  * Sessão/loja não vivem aqui — ver App.tsx.
  */
 export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, onAvatarChange, onExit, isAdmin, signedIn, onConfigChanged, mutedNotice = null }: GameProps) {
-  // O mapa vale para tudo o que o jogo calcula (limites, colisão, palanque) — definido antes de qualquer movimento.
-  setActiveMap(avatar.map);
-  const isPaulista = avatar.map === "paulista";
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [graphics, setGraphics] = useState<GraphicsLevel>(loadGraphics);
@@ -191,7 +187,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     };
   }, [vehicleKind]);
   // Ponto do chão sob a mira (centro da tela), atualizado a cada frame pelo Player.
-  const aimRef = useRef({ x: 0, z: 0 });
+  const aimRef = useRef<SprayAim>({ x: 0, y: 0, z: 0, nx: 0, ny: 1, nz: 0 });
   const cameraDistance = isTouch ? CAMERA_DISTANCE_MOBILE : CAMERA_DISTANCE_DESKTOP;
 
   // Dica do Shift: some ao usar Shift ou depois de alguns segundos.
@@ -264,7 +260,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     // Onde a mira (centro da tela) cruza o chão — ver Player.tsx.
     const target = aimRef.current;
     // A marca é a bandeira da equipe (imagem); a cor da equipe é o reserva sem imagem.
-    if (!net.sendSpray(target.x, target.z, avatar.shirt, DEFAULT_SPRAY_ID)) sprays.refund();
+    if (!net.sendSpray(target, avatar.shirt, DEFAULT_SPRAY_ID)) sprays.refund();
   }, [net, avatar.shirt, sprays]);
 
   return (
@@ -300,7 +296,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
         }}
       >
         <color attach="background" args={[SKY_COLOR]} />
-        <fog attach="fog" args={[SKY_COLOR, isPaulista ? 140 : 70, isPaulista ? 520 : 260]} />
+        <fog attach="fog" args={[SKY_COLOR, 70, 260]} />
         <hemisphereLight args={["#bfdcff", "#4a5a3c", 0.55]} />
         <ambientLight intensity={0.25} />
         {/* Sol: luz direcional quente + disco visível no céu, na mesma direção. */}
@@ -322,7 +318,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           <sphereGeometry args={[9, 24, 16]} />
           <meshBasicMaterial color="#fff3b0" fog={false} />
         </mesh>
-        {isPaulista ? <PaulistaScenery /> : <Scenery />}
+        <Scenery />
         <SprayMarks marksRef={net.sprayMarksRef} version={net.sprayVersion} />
         <Player
           color={avatar.shirt}
@@ -347,7 +343,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           transformReadyRef={transformReadyRef}
         />
         <RemotePlayers ids={net.remoteIds} playersRef={net.playersRef} signs={signs} />
-        {!isPaulista && <Billboards ads={billboardAds} />}
+        <Billboards ads={billboardAds} />
       </Canvas>
 
       {isTouch && !driving && <Joystick onMove={setJoystick} />}
@@ -409,7 +405,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
         </div>
       )}
       <Crosshair />
-      {!isPaulista && <StageButton voice={voice} blockedNotice={mutedNotice} />}
+      <StageButton voice={voice} blockedNotice={mutedNotice} />
       <TopRightPanel>
         <div style={{ display: "flex", gap: 8 }}>
           <ChatButton open={chatOpen} onClick={() => setChatOpen((o) => !o)} />

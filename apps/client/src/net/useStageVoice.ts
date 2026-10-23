@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
-import { STAGE_HEAR_RADIUS, STAGE_SPEAK_RADIUS, activeStage } from "../game/world.js";
+import { STAGE_HEAR_RADIUS, STAGE_SPEAK_RADIUS, STAGE_X, STAGE_Z } from "../game/world.js";
 import { StageVoice, parseVoiceMsg, type VoiceMsg, type VoiceState } from "./stageVoice.js";
 
 const IDLE: VoiceState = { speakerId: null, speakerNick: "", speaking: false, starting: false, error: null };
@@ -61,8 +61,7 @@ export function useStageVoice({ selfId, nickname, posRef, sendVoice, voiceHandle
       void v.handle(msg);
     };
     const poll = window.setInterval(() => {
-      const stage = activeStage();
-      const d = stage ? Math.hypot(posRef.current.x - stage.x, posRef.current.z - stage.z) : Infinity;
+      const d = Math.hypot(posRef.current.x - STAGE_X, posRef.current.z - STAGE_Z);
       const zone = d <= STAGE_SPEAK_RADIUS;
       if (zone !== inZoneRef.current) {
         inZoneRef.current = zone;

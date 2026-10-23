@@ -176,6 +176,8 @@ function Park() {
       "park-trees",
       [],
       trees.map((t) => ({ x: t.x, z: t.z, r: 0.35 * t.scale * TRUNK_WIDTH })),
+      [],
+      TRUNK_HEIGHT,
     );
     return () => {
       clearCameraColliders("park-trees");
@@ -228,6 +230,8 @@ function Stage() {
         { x: STAGE_X - 4.4, z: STAGE_Z + 2.4, r: 0.7 },
         { x: STAGE_X + 4.4, z: STAGE_Z + 2.4, r: 0.7 },
       ],
+      [],
+      1.8,
     );
     return () => clearSolids("stage");
   }, []);
@@ -294,7 +298,7 @@ export function Scenery() {
         rects.push({ minX: x0 - pad, maxX: x1 + pad, minZ: z0 - pad, maxZ: z1 + pad });
       }
     }
-    setSolids("masp", rects);
+    setSolids("masp", rects, [], [], 28);
     return () => clearSolids("masp");
   }, []);
 

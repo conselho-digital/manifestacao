@@ -59,3 +59,58 @@ export function allowedCameraDistance(pivot: Vector3, dir: Vector3, desired: num
 
   return Math.max(MIN_DISTANCE, Math.min(desired, max));
 }
+
+export interface SurfaceHit {
+  /** Distância ao longo do raio. */
+  t: number;
+  x: number;
+  y: number;
+  z: number;
+  /** Normal da superfície atingida (unitária, apontando para fora). */
+  nx: number;
+  ny: number;
+  nz: number;
+}
+
+const hitPoint = new Vector3();
+
+/**
+ * Primeira superfície (caixa de prédio, laje, copa de árvore) atingida pelo raio até `maxDist`.
+ * Usada pelo spray: dá o ponto e a normal para pintar na parede/copa em vez de só no chão.
+ */
+export function raycastSurface(origin: Vector3, dir: Vector3, maxDist: number): SurfaceHit | null {
+  ray.origin.copy(origin);
+  ray.direction.copy(dir);
+  let best: SurfaceHit | null = null;
+  for (const group of boxes.values()) {
+    for (const b of group) {
+      if (b.containsPoint(origin) || !ray.intersectBox(b, hitPoint)) continue;
+      const t = hitPoint.distanceTo(origin);
+      if (t > maxDist || (best && t >= best.t)) continue;
+      // Face atingida: a coordenada do ponto que mais se aproxima de um limite da caixa.
+      const eps = 0.02;
+      let nx = 0;
+      let ny = 0;
+      let nz = 0;
+      if (Math.abs(hitPoint.x - b.min.x) < eps) nx = -1;
+      else if (Math.abs(hitPoint.x - b.max.x) < eps) nx = 1;
+      else if (Math.abs(hitPoint.z - b.min.z) < eps) nz = -1;
+      else if (Math.abs(hitPoint.z - b.max.z) < eps) nz = 1;
+      else if (Math.abs(hitPoint.y - b.max.y) < eps) ny = 1;
+      else ny = -1;
+      best = { t, x: hitPoint.x, y: hitPoint.y, z: hitPoint.z, nx, ny, nz };
+    }
+  }
+  for (const group of spheres.values()) {
+    for (const s of group) {
+      if (s.containsPoint(origin) || !ray.intersectSphere(s, hitPoint)) continue;
+      const t = hitPoint.distanceTo(origin);
+      if (t > maxDist || (best && t >= best.t)) continue;
+      const nx = (hitPoint.x - s.center.x) / s.radius;
+      const ny = (hitPoint.y - s.center.y) / s.radius;
+      const nz = (hitPoint.z - s.center.z) / s.radius;
+      best = { t, x: hitPoint.x, y: hitPoint.y, z: hitPoint.z, nx, ny, nz };
+    }
+  }
+  return best;
+}

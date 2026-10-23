@@ -1,4 +1,5 @@
 import type { FlagId, TeamId } from "@manifestacao/shared";
+import { AVENUE_LENGTH, AVENUE_WIDTH, PARK_GAP, PARK_SIZE, clampToAvenue } from "./world.js";
 
 /**
  * Constantes do spray/pichação (Fase 4, CLAUDE.md §3 "Spray / pixação").
@@ -45,7 +46,13 @@ export const SPRAY_ID_MAX_LENGTH = 64;
 export interface SprayMark {
   id: string;
   x: number;
+  /** Altura do ponto pintado (0 = chão). */
+  y: number;
   z: number;
+  /** Normal da superfície pintada (unitária); (0,1,0) = chão. */
+  nx: number;
+  ny: number;
+  nz: number;
   color: number;
   /** Opção de spray (slug) — define o modelo 3D da marca. */
   style: string;
@@ -54,4 +61,46 @@ export interface SprayMark {
   /** Bandeira que quem pichou carrega: se a equipe não tem imagem, vale a imagem desta bandeira. */
   flag?: FlagId;
   createdAt: number;
+}
+
+/** Onde a mira (centro da tela) pinta: o ponto e a normal da superfície (chão, parede, tronco, copa…). */
+export interface SprayAim {
+  x: number;
+  y: number;
+  z: number;
+  nx: number;
+  ny: number;
+  nz: number;
+}
+
+const finite = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+
+/**
+ * Valida o ponto de uma marca (vindo da rede ou da mira local): números finitos, dentro do mundo, normal unitária.
+ * Marca no chão (normal para cima) segue a regra de andar da avenida; em paredes só vale o recorte do mundo.
+ */
+export function sanitizeSprayPlacement(x: unknown, y: unknown, z: unknown, nx: unknown, ny: unknown, nz: unknown): SprayAim | null {
+  if (!finite(x) || !finite(z)) return null;
+  let yy = finite(y) ? y : 0;
+  let ux = finite(nx) ? nx : 0;
+  let uy = finite(ny) ? ny : 1;
+  let uz = finite(nz) ? nz : 0;
+  const len = Math.hypot(ux, uy, uz);
+  if (len < 0.5 || len > 1.5) {
+    ux = 0;
+    uy = 1;
+    uz = 0;
+  } else {
+    ux /= len;
+    uy /= len;
+    uz /= len;
+  }
+  if (uy > 0.9) {
+    const p = clampToAvenue(x, z);
+    return { x: p.x, y: 0, z: p.z, nx: 0, ny: 1, nz: 0 };
+  }
+  yy = Math.max(0, Math.min(160, yy));
+  const xLimit = AVENUE_LENGTH / 2 + 60;
+  const zMin = -(AVENUE_WIDTH / 2 + PARK_GAP + PARK_SIZE) - 8;
+  return { x: Math.max(-xLimit, Math.min(xLimit, x)), y: yy, z: Math.max(zMin, Math.min(140, z)), nx: ux, ny: uy, nz: uz };
 }

@@ -59,6 +59,11 @@ export interface SprayBroadcast {
   /** Posição no mundo (plano XZ) onde a marca aparece. */
   x: number;
   z: number;
+  /** Altura e normal da superfície pintada (parede, tronco…). Ausentes = chão. */
+  y?: number;
+  nx?: number;
+  ny?: number;
+  nz?: number;
   color: number;
   /** Opção de spray usada (slug); ausente/ inválida = clássico. */
   style?: string;

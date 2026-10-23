@@ -147,7 +147,6 @@ Regras dos agentes:
 - **Fase 3 — Contas e pagamentos**: Google OAuth (Supabase), Mercado Pago Pix + webhook, inventário/entitlements, Premium, recibos via Resend.
 - **Fase 4 — Conteúdo do usuário**: spray efêmero, cartazes com moderação, telões com leilão/créditos, superchat.
 - **Fase 5 — Moderação e voz** ✅: painel admin (silenciar/banir por conta), palanque com voz (WebRTC). "Personagem sempre conectado" foi **removido do escopo**.
-- **Mapas**: `MapId` em `packages/shared/src/maps.ts` (avenida original e `paulista`, trecho real do OpenStreetMap em `apps/client/src/game/paulista`). Cada mapa tem o seu canal Realtime (`avenue` e `avenue:paulista`, com policies em `realtime.messages`); escolha na entrada e em Opções.
 - **Fase 6 — Lançamento**: Sobre/Termos/Privacidade (LGPD), teste de carga, anti-cheat básico, rate limits, PWA/SEO.
 
 Em cada fase: entregar → rodar agentes de bugs/segurança/visual (§7) → corrigir → commit/push na `main`.

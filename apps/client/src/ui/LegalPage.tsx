@@ -44,10 +44,6 @@ function Sobre() {
         atribuições estão em <code>CREDITS.md</code> no repositório do projeto.
       </p>
       <p>
-        O mapa "Av. Paulista" usa ruas e prédios do OpenStreetMap: © contribuidores do OpenStreetMap, licença ODbL
-        (openstreetmap.org/copyright).
-      </p>
-      <p>
         Dúvidas, denúncias ou pedidos sobre seus dados: <Contact />.
       </p>
     </>

@@ -26,18 +26,22 @@ export interface SolidPoly {
   maxZ: number;
 }
 
+/** Altura de cada grupo (m): 0 = não recebe spray (já coberto pelos colisores da câmera, ou sem altura conhecida). */
+const groupHeights = new Map<string, number>();
 const polyGroups = new Map<string, SolidPoly[]>();
 const rectGroups = new Map<string, SolidRect[]>();
 const circleGroups = new Map<string, SolidCircle[]>();
 
 /** Registra (ou substitui) um grupo de obstáculos sob um nome. */
-export function setSolids(name: string, rects: SolidRect[], circles: SolidCircle[] = [], polys: SolidPoly[] = []): void {
+export function setSolids(name: string, rects: SolidRect[], circles: SolidCircle[] = [], polys: SolidPoly[] = [], height = 0): void {
+  groupHeights.set(name, height);
   rectGroups.set(name, rects);
   circleGroups.set(name, circles);
   polyGroups.set(name, polys);
 }
 
 export function clearSolids(name: string): void {
+  groupHeights.delete(name);
   rectGroups.delete(name);
   circleGroups.delete(name);
   polyGroups.delete(name);
@@ -132,4 +136,80 @@ export function resolveSolids(x: number, z: number, r: number): { x: number; z: 
     }
   }
   return { x: px, z: pz };
+}
+
+export interface SolidHit {
+  t: number;
+  x: number;
+  y: number;
+  z: number;
+  nx: number;
+  ny: number;
+  nz: number;
+}
+
+/**
+ * Raio contra os sólidos que têm altura registrada (troncos, pilares, palanque): o spray pinta neles.
+ * Troncos são cilindros verticais; retângulos, caixas.
+ */
+export function raycastSolids(ox: number, oy: number, oz: number, dx: number, dy: number, dz: number, maxDist: number): SolidHit | null {
+  let best: SolidHit | null = null;
+  const consider = (t: number, nx: number, ny: number, nz: number) => {
+    if (t < 0 || t > maxDist || (best && t >= best.t)) return;
+    best = { t, x: ox + dx * t, y: oy + dy * t, z: oz + dz * t, nx, ny, nz };
+  };
+  for (const [name, circles] of circleGroups) {
+    const h = groupHeights.get(name) ?? 0;
+    if (h <= 0) continue;
+    for (const c of circles) {
+      // Interseção raio × cilindro vertical (no plano XZ) e confere a altura.
+      const fx = ox - c.x;
+      const fz = oz - c.z;
+      const a = dx * dx + dz * dz;
+      if (a < 1e-9) continue;
+      const b = 2 * (fx * dx + fz * dz);
+      const cc = fx * fx + fz * fz - c.r * c.r;
+      const disc = b * b - 4 * a * cc;
+      if (disc < 0) continue;
+      const t = (-b - Math.sqrt(disc)) / (2 * a);
+      const y = oy + dy * t;
+      if (y < 0 || y > h) continue;
+      const px = ox + dx * t - c.x;
+      const pz = oz + dz * t - c.z;
+      consider(t, px / c.r, 0, pz / c.r);
+    }
+  }
+  for (const [name, rects] of rectGroups) {
+    const h = groupHeights.get(name) ?? 0;
+    if (h <= 0) continue;
+    for (const r of rects) {
+      // Slabs nos três eixos.
+      let tmin = -Infinity;
+      let tmax = Infinity;
+      let face = 0;
+      const axes: [number, number, number, number, number][] = [
+        [ox, dx, r.minX, r.maxX, 1],
+        [oy, dy, 0, h, 2],
+        [oz, dz, r.minZ, r.maxZ, 3],
+      ];
+      let ok = true;
+      for (const [o, d, lo, hi, id] of axes) {
+        if (Math.abs(d) < 1e-9) {
+          if (o < lo || o > hi) ok = false;
+          continue;
+        }
+        let t1 = (lo - o) / d;
+        let t2 = (hi - o) / d;
+        if (t1 > t2) [t1, t2] = [t2, t1];
+        if (t1 > tmin) {
+          tmin = t1;
+          face = id * (d > 0 ? -1 : 1);
+        }
+        tmax = Math.min(tmax, t2);
+      }
+      if (!ok || tmin > tmax) continue;
+      consider(tmin, Math.abs(face) === 1 ? Math.sign(face) : 0, Math.abs(face) === 2 ? Math.sign(face) : 0, Math.abs(face) === 3 ? Math.sign(face) : 0);
+    }
+  }
+  return best;
 }

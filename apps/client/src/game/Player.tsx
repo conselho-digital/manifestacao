@@ -22,8 +22,9 @@ import {
   clampToAvenue,
 } from "./world.js";
 import type { InputVector } from "./useInput.js";
-import { SPRAY_MAX_RANGE } from "./spray.js";
-import { allowedCameraDistance } from "./colliders.js";
+import { SPRAY_MAX_RANGE, type SprayAim } from "./spray.js";
+import { raycastSolids } from "./solids.js";
+import { allowedCameraDistance, raycastSurface } from "./colliders.js";
 import { resolveSolids } from "./solids.js";
 
 /** Posição + rotação atuais do jogador local, lidas fora do Canvas (ex.: botão de spray). */
@@ -53,7 +54,7 @@ interface PlayerProps {
   /** Distância da câmera ao personagem (menor no PC). */
   cameraDistance: number;
   /** Atualizado a cada frame com o ponto do chão sob a mira (centro da tela) — onde o spray cai. */
-  aimRef: { current: { x: number; z: number } };
+  aimRef: { current: SprayAim };
   /** true enquanto o botão de correr está pressionado. */
   runRef: { current: boolean };
   onMove: (x: number, z: number, facing: Facing, vehicle: VehicleId, flag: FlagId, heading?: number, wheelie?: number) => void;
@@ -87,6 +88,9 @@ function facingOf(x: number, z: number, prev: Facing): Facing {
  */
 /** Raio de colisão de qualquer veículo (carro, moto, caminhão). */
 const VEHICLE_RADIUS = 1.2;
+
+/** Até onde o raio da mira procura superfícies (m, a partir da câmera). */
+const SPRAY_RAY_MAX = 60;
 
 export function Player({
   color,
@@ -264,29 +268,52 @@ export function Player({
     const ahead = cameraDistance * CAMERA_LOOK_AHEAD_RATIO;
     camera.lookAt(pivotX + shX + Math.sin(yaw) * ahead, pivotY, pivotZ + shZ + Math.cos(yaw) * ahead);
 
-    // Mira: raio do centro da tela até o chão (y=0), limitado ao alcance do spray.
+    // Mira: raio do centro da tela até a primeira superfície com colisão (prédio, parede, tronco, copa, pilar) ou o
+    // chão, dentro do alcance do spray a partir do personagem.
     camera.getWorldDirection(aimDir.current);
     const d = aimDir.current;
-    let ax: number;
-    let az: number;
-    if (d.y < -0.01) {
-      const t = -camera.position.y / d.y;
-      ax = camera.position.x + d.x * t;
-      az = camera.position.z + d.z * t;
+    const groundT = d.y < -0.01 ? -camera.position.y / d.y : Infinity;
+    const maxT = Math.min(groundT, SPRAY_RAY_MAX);
+    const box = raycastSurface(camera.position, d, maxT);
+    const solid = raycastSolids(camera.position.x, camera.position.y, camera.position.z, d.x, d.y, d.z, maxT);
+    const surface = box && (!solid || box.t <= solid.t) ? box : solid;
+    const aim = aimRef.current;
+    const inRange =
+      surface !== null &&
+      Math.hypot(surface.x - g.position.x, surface.y - (g.position.y + 1.2), surface.z - g.position.z) <= SPRAY_MAX_RANGE;
+    if (surface && inRange) {
+      aim.x = surface.x;
+      aim.y = surface.y;
+      aim.z = surface.z;
+      aim.nx = surface.nx;
+      aim.ny = surface.ny;
+      aim.nz = surface.nz;
     } else {
-      // Olhando pro horizonte/céu: sem ponto no chão, usa o alcance máximo na direção do olhar.
-      ax = pivotX + d.x * SPRAY_MAX_RANGE;
-      az = pivotZ + d.z * SPRAY_MAX_RANGE;
+      // Sem superfície ao alcance: pinta o chão (como antes), limitado ao alcance.
+      let ax: number;
+      let az: number;
+      if (groundT !== Infinity) {
+        ax = camera.position.x + d.x * groundT;
+        az = camera.position.z + d.z * groundT;
+      } else {
+        // Olhando pro horizonte/céu: sem ponto no chão, usa o alcance máximo na direção do olhar.
+        ax = pivotX + d.x * SPRAY_MAX_RANGE;
+        az = pivotZ + d.z * SPRAY_MAX_RANGE;
+      }
+      const dx = ax - g.position.x;
+      const dz = az - g.position.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist > SPRAY_MAX_RANGE) {
+        ax = g.position.x + (dx / dist) * SPRAY_MAX_RANGE;
+        az = g.position.z + (dz / dist) * SPRAY_MAX_RANGE;
+      }
+      aim.x = ax;
+      aim.y = 0;
+      aim.z = az;
+      aim.nx = 0;
+      aim.ny = 1;
+      aim.nz = 0;
     }
-    const dx = ax - g.position.x;
-    const dz = az - g.position.z;
-    const dist = Math.hypot(dx, dz);
-    if (dist > SPRAY_MAX_RANGE) {
-      ax = g.position.x + (dx / dist) * SPRAY_MAX_RANGE;
-      az = g.position.z + (dz / dist) * SPRAY_MAX_RANGE;
-    }
-    aimRef.current.x = ax;
-    aimRef.current.z = az;
 
     if (transformRef) {
       transformRef.current.x = g.position.x;

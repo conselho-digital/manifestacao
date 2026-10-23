@@ -1,4 +1,3 @@
-import { MapPicker } from "./MapPicker.js";
 import { teamIconImageUrl } from "../game/models.js";
 import { useRef, useState } from "react";
 import { useModal } from "./useModal.js";
@@ -11,7 +10,6 @@ import {
   hexColor,
   type AvatarConfig,
   type CharacterId,
-  type MapId,
   type TeamId,
 } from "@manifestacao/shared";
 import { GRAPHICS_LEVELS, type GraphicsLevel } from "../config/graphics.js";
@@ -47,14 +45,13 @@ export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin, onD
   const [team, setTeam] = useState<TeamId>(avatar.team);
   const [nickname, setNickname] = useState(avatar.nickname);
   const [character, setCharacter] = useState<CharacterId>(avatar.character);
-  const [map, setMap] = useState<MapId>(avatar.map);
 
   const dialogRef = useModal<HTMLFormElement>(onClose);
 
   const save = (e: React.FormEvent) => {
     e.preventDefault();
     const name = nickname.trim().slice(0, MAX_NICKNAME_LENGTH) || "Anônimo";
-    onSave({ ...avatar, team, nickname: name, shirt: TEAMS[team].color, character, map });
+    onSave({ ...avatar, team, nickname: name, shirt: TEAMS[team].color, character });
   };
 
   const teamColorHex = hexColor(TEAMS[team].color);
@@ -171,11 +168,6 @@ export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin, onD
               );
             })}
           </div>
-        </section>
-
-        <section style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-          <Label>Mapa</Label>
-          <MapPicker value={map} onChange={setMap} />
         </section>
 
         <section>
