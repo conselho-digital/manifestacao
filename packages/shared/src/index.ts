@@ -12,3 +12,4 @@ export * from "./catalog.js";
 export * from "./superchat.js";
 export * from "./signs.js";
 export * from "./billboards.js";
+export * from "./maps.js";

@@ -1,3 +1,5 @@
+import type { MapId } from "@manifestacao/shared";
+import { clampToPaulista } from "./paulista/world.js";
 /**
  * Dimensões da avenida no espaço 3D (plano XZ, Y para cima).
  * A avenida é longa em X e estreita em Z (como uma rua).
@@ -53,6 +55,19 @@ export const AVENUE_END_MARGIN = 6;
 export const PLAZA_HALF_X = 32;
 export const PLAZA_MAX_Z = 44;
 
+/** Mapa em jogo (definido pelo Game antes de qualquer movimento): troca limites do mundo e o palanque. */
+let activeMap: MapId = "avenida";
+export function setActiveMap(map: MapId): void {
+  activeMap = map;
+}
+export function getActiveMap(): MapId {
+  return activeMap;
+}
+/** Palanque do mapa ativo; null = o mapa não tem palanque. */
+export function activeStage(): { x: number; z: number } | null {
+  return activeMap === "avenida" ? { x: STAGE_X, z: STAGE_Z } : null;
+}
+
 /**
  * Limite invisível do mapa: a avenida inteira mais o parque (que é uma
  * "extensão" no lado -Z, mais estreita que a avenida). O jogador não passa
@@ -63,6 +78,7 @@ export function clampToAvenue(
   z: number,
   prev?: { x: number; z: number },
 ): { x: number; z: number } {
+  if (activeMap === "paulista") return clampToPaulista(x, z);
   // Nas pontas a avenida é fechada por viaturas (ver City.tsx): o jogador para antes delas.
   const halfL = AVENUE_LENGTH / 2 - AVENUE_END_MARGIN;
   // Avenida + calçadas dos dois lados (os prédios começam na borda da calçada).

@@ -33,3 +33,11 @@ arquivos crus — só embutidos no bundle já convertidos para GLB.
 ## Fontes e áudio
 
 _(a preencher conforme entrarem.)_
+
+## Mapa "Av. Paulista" (dados abertos)
+
+- **Ruas e prédios** (contornos e alturas): © contribuidores do OpenStreetMap, licença ODbL
+  (https://www.openstreetmap.org/copyright). Extraídos pela API do OpenStreetMap para a área desenhada pelo operador;
+  o trecho processado fica em `apps/client/src/game/paulista/data.json`. Obras derivadas (o mapa jogável) exigem o
+  crédito acima; se a base extraída for publicada, deve permanecer sob a ODbL.
+- Nenhum dado do Google (Street View, satélite, modelos 3D) foi usado.

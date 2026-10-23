@@ -1,3 +1,5 @@
+import { PaulistaScenery } from "./paulista/PaulistaScenery.js";
+import { setActiveMap } from "./world.js";
 import { AVATAR_STORAGE_KEY } from "../ui/AvatarPicker.js";
 import { deleteMyAccount } from "../net/account.js";
 import { useStageVoice } from "../net/useStageVoice.js";
@@ -83,6 +85,9 @@ interface GameProps {
  * Sessão/loja não vivem aqui — ver App.tsx.
  */
 export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, onAvatarChange, onExit, isAdmin, signedIn, onConfigChanged, mutedNotice = null }: GameProps) {
+  // O mapa vale para tudo o que o jogo calcula (limites, colisão, palanque) — definido antes de qualquer movimento.
+  setActiveMap(avatar.map);
+  const isPaulista = avatar.map === "paulista";
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [graphics, setGraphics] = useState<GraphicsLevel>(loadGraphics);
@@ -295,7 +300,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
         }}
       >
         <color attach="background" args={[SKY_COLOR]} />
-        <fog attach="fog" args={[SKY_COLOR, 70, 260]} />
+        <fog attach="fog" args={[SKY_COLOR, isPaulista ? 140 : 70, isPaulista ? 520 : 260]} />
         <hemisphereLight args={["#bfdcff", "#4a5a3c", 0.55]} />
         <ambientLight intensity={0.25} />
         {/* Sol: luz direcional quente + disco visível no céu, na mesma direção. */}
@@ -317,7 +322,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           <sphereGeometry args={[9, 24, 16]} />
           <meshBasicMaterial color="#fff3b0" fog={false} />
         </mesh>
-        <Scenery />
+        {isPaulista ? <PaulistaScenery /> : <Scenery />}
         <SprayMarks marksRef={net.sprayMarksRef} version={net.sprayVersion} />
         <Player
           color={avatar.shirt}
@@ -342,7 +347,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           transformReadyRef={transformReadyRef}
         />
         <RemotePlayers ids={net.remoteIds} playersRef={net.playersRef} signs={signs} />
-        <Billboards ads={billboardAds} />
+        {!isPaulista && <Billboards ads={billboardAds} />}
       </Canvas>
 
       {isTouch && !driving && <Joystick onMove={setJoystick} />}
@@ -404,7 +409,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
         </div>
       )}
       <Crosshair />
-      <StageButton voice={voice} blockedNotice={mutedNotice} />
+      {!isPaulista && <StageButton voice={voice} blockedNotice={mutedNotice} />}
       <TopRightPanel>
         <div style={{ display: "flex", gap: 8 }}>
           <ChatButton open={chatOpen} onClick={() => setChatOpen((o) => !o)} />

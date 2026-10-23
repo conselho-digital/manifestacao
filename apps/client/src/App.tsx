@@ -143,6 +143,8 @@ export function App() {
     <>
       {liveAvatar ? (
         <Game
+          // Trocar de mapa remonta o jogo (novo canal, novo cenário, posição inicial).
+          key={liveAvatar.map}
           avatar={liveAvatar}
           owned={owned}
           onOpenStore={() => setStoreOpen(true)}

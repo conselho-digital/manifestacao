@@ -34,8 +34,8 @@ import {
  * terceiros), num único mesh com cor por prédio e textura de janelas repetida pelo tamanho real de cada fachada.
  */
 
-const WINDOW_W = 3; // largura de uma "janela" (unidades do mundo)
-const FLOOR_H = 3.4; // altura de um andar
+export const WINDOW_W = 3; // largura de uma "janela" (unidades do mundo)
+export const FLOOR_H = 3.4; // altura de um andar
 const X_LIMIT = AVENUE_LENGTH / 2 + 30; // a cidade passa um pouco das pontas da avenida
 const SIDEWALK = SIDEWALK_WIDTH; // largura da calçada junto à avenida
 
@@ -61,7 +61,7 @@ function mulberry32(seed: number) {
   };
 }
 
-const PALETTE = [0x8aa0b0, 0x9aa7ad, 0xb8ad9a, 0x7d6f64, 0xc9c6bd, 0x5f7686, 0xa9b4bb, 0x6f8190];
+export const PALETTE = [0x8aa0b0, 0x9aa7ad, 0xb8ad9a, 0x7d6f64, 0xc9c6bd, 0x5f7686, 0xa9b4bb, 0x6f8190];
 
 /** Posiciona os prédios em fileiras paralelas à avenida, pulando a praça do MASP e o parque. */
 function buildCity(): Building[] {
@@ -142,7 +142,7 @@ function boxFor(b: Building): BufferGeometry {
 }
 
 /** Textura de fachada: parede cinza com uma janela escura e uma moldura clara (uma célula = 1 janela × 1 andar). */
-function makeFacadeTexture(): CanvasTexture {
+export function makeFacadeTexture(): CanvasTexture {
   const S = 64;
   const canvas = document.createElement("canvas");
   canvas.width = S;

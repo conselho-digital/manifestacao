@@ -7,6 +7,7 @@
  */
 
 import type { CharacterId, FlagId } from "./catalog.js";
+import type { MapId } from "./maps.js";
 import type { TeamId } from "./teams.js";
 import type { Facing, MoveInput } from "./world.js";
 
@@ -18,6 +19,8 @@ export interface AvatarConfig {
   shirt: number;
   character: CharacterId;
   flag: FlagId;
+  /** Mapa em que o jogador entra (cada mapa tem o seu canal). */
+  map: MapId;
 }
 
 /** Estado de um jogador visível na avenida, como o servidor o reporta. */

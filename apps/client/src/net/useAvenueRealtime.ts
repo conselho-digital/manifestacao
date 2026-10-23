@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { RealtimeChannel } from "@supabase/supabase-js";
 import {
-  AVENUE_CHANNEL,
+  channelNameFor,
   BROADCAST,
   MAX_CHAT_LENGTH,
   MAX_NICKNAME_LENGTH,
@@ -196,7 +196,7 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
 
     // Canal PRIVADO: só quem está logado entra (policies em realtime.messages,
     // migration 0009). A chave de presence é o nosso id de sessão.
-    const channel = supabase.channel(AVENUE_CHANNEL, {
+    const channel = supabase.channel(channelNameFor(self.map), {
       config: { private: true, presence: { key: selfId } },
     });
     channelRef.current = channel;
