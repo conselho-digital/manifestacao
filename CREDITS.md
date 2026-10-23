@@ -10,6 +10,8 @@ exigem crédito, mas registramos mesmo assim como prova de licença; assets CC-B
 | Arquivo | Descrição | Licença | Uso |
 |---|---|---|---|
 | `apps/client/public/models/scenery/masp.glb` | MASP (Museu de Arte de São Paulo), simplificado — marco visual do cenário | CC0 (informado pelo usuário) | Prédio de cenário no mapa inicial |
+| `apps/client/public/models/characters/mulher_alternativa.glb` | Personagem "Mia" (Mixamo), enviado pelo operador | Mixamo (Adobe): uso permitido embutido em projetos; arquivo convertido para GLB, não redistribuir cru | Personagem Mulher alternativa |
+| `apps/client/public/models/characters/mulher_comum.glb` | Variante do "Mia": sem saia (calça jeans), cabelo longo loiro (textura e malha editadas por nós) | Mixamo (Adobe), derivado | Personagem Mulher comum |
 
 Os avatares de personagem ainda são geométricos, gerados por código.
 
