@@ -177,7 +177,7 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
       <group position={[0, 0, -MOTO_REAR_AXLE_Z]}>
       {modelUrl ? (
         <Suspense fallback={<ProceduralBody color={color} arms={vehicle === "nenhum"} character={character} />}>
-          <GlbModel url={modelUrl} fallback={<ProceduralBody color={color} arms={vehicle === "nenhum"} character={character} />} />
+          <GlbModel url={modelUrl} animated walking={vehicle === "nenhum"} fallback={<ProceduralBody color={color} arms={vehicle === "nenhum"} character={character} />} />
         </Suspense>
       ) : (
         <ProceduralBody color={color} arms={vehicle === "nenhum"} character={character} />

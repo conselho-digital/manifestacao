@@ -1,5 +1,6 @@
-import { Suspense, useEffect, useMemo, type ReactNode } from "react";
-import { Shape, type SkinnedMesh } from "three";
+import { Suspense, useEffect, useMemo, useRef, type ReactNode } from "react";
+import { Shape, type Group, type SkinnedMesh } from "three";
+import { useFrame } from "@react-three/fiber";
 import { useGLTF, useTexture } from "@react-three/drei";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import type { VehicleId } from "@manifestacao/shared";
@@ -7,6 +8,7 @@ import { useProximitySound } from "./ProximitySound.js";
 import { useUserGestureUnlocked } from "./useUserGesture.js";
 import { vehicleModelUrl } from "./models.js";
 import { ModelBoundary } from "./ModelBoundary.js";
+import { createAutoAnimator, type AutoAnimator } from "./autoAnimate.js";
 
 export type FlagEmblem = "star-burst" | "ring" | "stripe";
 
@@ -231,17 +233,20 @@ export function ProceduralVehicle({ vehicle }: { vehicle: VehicleId }) {
   );
 }
 
-/** Modelo glTF do personagem (usado quando há URL registrada). */
-export function GlbModel({ url, fallback = null }: { url: string; fallback?: ReactNode }) {
+/**
+ * Modelo glTF (personagem ou objeto). Com `animated`, ganha animação automática (clipes do arquivo ou balanço por
+ * código, ver autoAnimate.ts); `walking` falso (de veículo) deixa o personagem parado.
+ */
+export function GlbModel({ url, fallback = null, animated = false, walking = true }: { url: string; fallback?: ReactNode; animated?: boolean; walking?: boolean }) {
   return (
     <ModelBoundary key={url} fallback={fallback}>
-      <GlbModelInner url={url} />
+      <GlbModelInner url={url} animated={animated} walking={walking} />
     </ModelBoundary>
   );
 }
 
-function GlbModelInner({ url }: { url: string }) {
-  const { scene } = useGLTF(url);
+function GlbModelInner({ url, animated, walking }: { url: string; animated: boolean; walking: boolean }) {
+  const { scene, animations } = useGLTF(url);
   // Clone por uso: o cache do useGLTF devolve a MESMA cena; sem clonar, o
   // mesmo modelo em dois jogadores brigaria pelo mesmo pai (só um aparece).
   const instance = useMemo(() => cloneSkinned(scene), [scene]);
@@ -253,7 +258,35 @@ function GlbModelInner({ url }: { url: string }) {
     },
     [instance],
   );
-  return <primitive object={instance} />;
+  const frameRef = useRef<Group>(null);
+  const animRef = useRef<AutoAnimator | null>(null);
+  useEffect(() => {
+    const frame = frameRef.current;
+    if (!animated || !frame) return;
+    // Uma falha ao montar a animação nunca derruba o personagem: ele só fica sem animar.
+    try {
+      animRef.current = createAutoAnimator(instance, frame, animations);
+    } catch (e) {
+      console.warn("animação automática indisponível", e);
+      animRef.current = null;
+    }
+    return () => {
+      animRef.current?.dispose();
+      animRef.current = null;
+    };
+  }, [animated, instance, animations]);
+  useFrame((_, dt) => {
+    try {
+      animRef.current?.update(Math.min(dt, 0.1), walking);
+    } catch {
+      animRef.current = null;
+    }
+  });
+  return (
+    <group ref={frameRef}>
+      <primitive object={instance} />
+    </group>
+  );
 }
 
 /**
