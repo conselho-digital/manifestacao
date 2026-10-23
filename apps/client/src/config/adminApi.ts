@@ -222,7 +222,7 @@ export async function uploadModel(slot: string, file: File): Promise<string> {
   const path = `${slot.replace(/:/g, "_")}-${Date.now()}.glb`;
   const { error } = await supabase.storage
     .from(ASSET_BUCKET)
-    .upload(path, file, { contentType: "model/gltf-binary", upsert: false });
+    .upload(path, new Blob([file], { type: "model/gltf-binary" }), { contentType: "model/gltf-binary", upsert: false });
   if (error) throw new Error(error.message);
   return supabase.storage.from(ASSET_BUCKET).getPublicUrl(path).data.publicUrl;
 }
