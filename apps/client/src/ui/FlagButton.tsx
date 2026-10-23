@@ -17,7 +17,7 @@ interface FlagButtonProps {
 }
 
 /**
- * Botão de bandeira, abaixo do spray: escolhe "Sem bandeira" ou a bandeira da equipe e mostra o contador do tempo grátis
+ * Botão de bandeira, abaixo do spray (um só retângulo: imagem ao fundo; "Bandeira" ou, com ela ligada, o contador): escolhe "Sem bandeira" ou a bandeira da equipe e mostra o contador do tempo grátis
  * (3 horas por dia, gastas só enquanto a bandeira aparece no jogo).
  */
 export function FlagButton({ choice, onChoose, teamImageUrl, teamColor, teamLabel, remaining, shown }: FlagButtonProps) {
@@ -95,49 +95,28 @@ export function FlagButton({ choice, onChoose, teamImageUrl, teamColor, teamLabe
         aria-label={`Bandeira: ${choice === "nenhuma" ? "sem bandeira" : "da equipe"}${shown && !unlimited ? `, ${formatClock(remaining)} restantes hoje` : ""}`}
         onClick={toggle}
         style={{
+          minWidth: 92,
+          minHeight: 44,
+          padding: "4px 12px",
           display: "flex",
-          gap: 6,
-          padding: 0,
-          border: "none",
-          background: "transparent",
-          color: "var(--ink)",
+          alignItems: "center",
+          justifyContent: "center",
+          borderRadius: "var(--r-sm)",
+          border: `1px solid ${shown ? "var(--accent)" : "var(--line)"}`,
+          background:
+            choice === "nenhuma"
+              ? "var(--scrim)"
+              : `linear-gradient(rgba(0,0,0,.35), rgba(0,0,0,.35)), ${teamImageUrl ? `center / cover no-repeat url("${teamImageUrl}"), ` : ""}${teamColor}`,
+          color: choice === "nenhuma" ? "var(--ink)" : "#fff",
+          textShadow: choice === "nenhuma" ? "none" : "0 1px 3px rgba(0,0,0,.9)",
+          fontSize: "var(--t-ui)",
+          fontWeight: 800,
+          fontVariantNumeric: "tabular-nums",
           cursor: "pointer",
           touchAction: "manipulation",
         }}
       >
-        <span
-          style={{
-            minWidth: 92,
-            minHeight: 44,
-            padding: "4px 12px",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            borderRadius: "var(--r-sm)",
-            border: `1px solid ${shown ? "var(--accent)" : "var(--line)"}`,
-            background: "var(--scrim)",
-            fontSize: "var(--t-ui)",
-            fontWeight: 800,
-            lineHeight: 1.15,
-          }}
-        >
-          Bandeira
-          <span style={{ color: exhausted ? "var(--danger)" : "var(--ink-dim)", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
-            {choice === "nenhuma" ? "desligada" : unlimited ? "ligada" : exhausted ? "acabou hoje" : formatClock(remaining)}
-          </span>
-        </span>
-        <span
-          aria-hidden="true"
-          style={{
-            width: 64,
-            minHeight: 44,
-            borderRadius: "var(--r-sm)",
-            border: `1px solid ${shown ? "var(--accent)" : "var(--line)"}`,
-            background: choice === "nenhuma" ? "var(--scrim)" : teamImageUrl ? `center / cover no-repeat url("${teamImageUrl}"), ${teamColor}` : teamColor,
-            opacity: shown || choice === "nenhuma" ? 1 : 0.5,
-          }}
-        />
+        {choice === "nenhuma" || !shown ? (exhausted && choice !== "nenhuma" ? "Acabou" : "Bandeira") : unlimited ? "Ligada" : formatClock(remaining)}
       </button>
 
       {open && pos && (
