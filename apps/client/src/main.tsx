@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App.js";
 import { LegalPage, legalKindFromPath } from "./ui/LegalPage.js";
 import { AppErrorBoundary } from "./ui/AppErrorBoundary.js";
+import "./ui/installPrompt.js";
 
 const root = document.getElementById("root");
 if (!root) throw new Error("elemento #root não encontrado");

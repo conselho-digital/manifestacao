@@ -27,7 +27,7 @@ function deepEqual(a: unknown, b: unknown): boolean {
   return ka.every((k) => deepEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
 }
 
-export async function saveConfigKey(key: "teams" | "models" | "rigs", value: unknown): Promise<void> {
+export async function saveConfigKey(key: "teams" | "models" | "rigs" | "screen", value: unknown): Promise<void> {
   const { data, error } = await db()
     .from("game_config")
     .upsert({ key, value, updated_at: new Date().toISOString() })

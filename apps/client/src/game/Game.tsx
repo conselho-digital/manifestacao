@@ -31,6 +31,7 @@ import { SuperchatModal } from "../ui/SuperchatModal.js";
 import { SignModal } from "../ui/SignModal.js";
 import { useSigns } from "./useSigns.js";
 import { BillboardModal } from "../ui/BillboardModal.js";
+import { ParkScreenModal } from "../ui/ParkScreenModal.js";
 import { Billboards } from "./Billboards.js";
 import { useBillboards } from "./useBillboards.js";
 import {
@@ -471,6 +472,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
         />
       )}
       {superchatOpen && signedIn && <SuperchatModal defaultName={avatar.nickname} isAdmin={isAdmin} onClose={() => setSuperchatOpen(false)} />}
+      <ParkScreenModal />
       {billboardOpen && signedIn && <BillboardModal ads={billboardAds} isAdmin={isAdmin} onClose={() => setBillboardOpen(false)} />}
       {signOpen && signedIn && <SignModal equippedId={signId} onEquip={equipSign} isAdmin={isAdmin} onClose={() => setSignOpen(false)} />}
       <SuperchatBanner enabled={signedIn} />

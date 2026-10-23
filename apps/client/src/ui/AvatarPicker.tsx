@@ -1,3 +1,4 @@
+import { InstallShortcut } from "./InstallShortcut.js";
 import { teamIconImageUrl } from "../game/models.js";
 import { LegalLinks } from "./LegalPage.js";
 import { useEffect, useState } from "react";
@@ -203,6 +204,8 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
           margin: "0 auto",
         }}
       >
+        <InstallShortcut />
+
         {/* Lado */}
         <section>
           <SectionTitle>De que lado você está?</SectionTitle>

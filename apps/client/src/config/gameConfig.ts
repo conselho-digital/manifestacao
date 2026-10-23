@@ -1,4 +1,5 @@
 import { cleanRig, setRigs, type RigMarks } from "./rigs.js";
+import { cleanScreen, setParkScreen, type ScreenConfig } from "./parkScreen.js";
 import {
   CHARACTERS,
   CHARACTER_IDS,
@@ -38,9 +39,11 @@ export interface GameConfig {
   models: Record<string, string>;
   /** URL do .glb → marcações do esqueleto feitas no editor do admin. */
   rigs: Record<string, RigMarks>;
+  /** Link do outdoor do parque (vídeo ou página); null = sem conteúdo. */
+  screen: ScreenConfig | null;
 }
 
-export const EMPTY_CONFIG: GameConfig = { teams: {}, models: {}, rigs: {} };
+export const EMPTY_CONFIG: GameConfig = { teams: {}, models: {}, rigs: {}, screen: null };
 
 // Valores padrão capturados na primeira execução — permitem "restaurar" ao
 // reaplicar uma config sem override (ex.: admin removeu uma mudança).
@@ -100,8 +103,8 @@ export function isTrustedModelUrl(url: unknown, image = false): url is string {
   }
 }
 
-export function sanitizeConfig(raw: { teams?: unknown; flags?: unknown; models?: unknown; rigs?: unknown }): GameConfig {
-  const out: GameConfig = { teams: {}, models: {}, rigs: {} };
+export function sanitizeConfig(raw: { teams?: unknown; flags?: unknown; models?: unknown; rigs?: unknown; screen?: unknown }): GameConfig {
+  const out: GameConfig = { teams: {}, models: {}, rigs: {}, screen: cleanScreen(raw.screen) };
   if (raw.teams && typeof raw.teams === "object") {
     for (const [id, v] of Object.entries(raw.teams)) {
       if (!isTeamId(id) || !v || typeof v !== "object") continue;
@@ -167,6 +170,7 @@ export function applyGameConfig(cfg: GameConfig, catalog: CatalogRow[] = []): vo
   }
   modelOverrides = cfg.models;
   setRigs(cfg.rigs);
+  setParkScreen(cfg.screen);
 }
 
 /** Busca config + catálogo no Supabase e aplica. Em modo offline, não faz nada. */

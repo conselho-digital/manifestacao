@@ -6,6 +6,7 @@ import {
   vehicleRequiresEntitlement,
   type VehicleId,
 } from "@manifestacao/shared";
+import { openParkScreen, useParkScreen } from "../config/parkScreen.js";
 
 interface ActionsMenuProps {
   /** Conta logada: só ela divulga (telões, cartaz, superchat). */
@@ -33,6 +34,7 @@ function formatBRL(cents: number): string {
  */
 export function ActionsMenu({ signedIn, onBillboards, onSign, onSuperchat, vehicle, onVehicle, owned, onLocked, loading }: ActionsMenuProps) {
   const [open, setOpen] = useState(false);
+  const screen = useParkScreen();
   const rootRef = useRef<HTMLDivElement>(null);
   const btnRef = useRef<HTMLButtonElement>(null);
   const [pos, setPos] = useState<{ top: number; right: number } | null>(null);
@@ -188,6 +190,14 @@ export function ActionsMenu({ signedIn, onBillboards, onSign, onSuperchat, vehic
                   Superchat
                 </button>
               </div>
+            </>
+          )}
+          {screen && (
+            <>
+              <p style={heading}>Parque</p>
+              <button type="button" role="menuitem" onClick={choose(openParkScreen)} style={optionBtn}>
+                ▶ Outdoor{screen.title ? `: ${screen.title}` : ""}
+              </button>
             </>
           )}
           <p style={heading}>Veículo</p>

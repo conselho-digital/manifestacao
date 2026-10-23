@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useModal } from "./useModal.js";
 import { AdminPhoto3d } from "./AdminPhoto3d.js";
 import { RigEditor } from "./RigEditor.js";
+import { SCREEN_TITLE_MAX, cleanScreen, currentParkScreen, parseScreenMedia } from "../config/parkScreen.js";
 import type { Object3D } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { currentRigs, type RigMarks } from "../config/rigs.js";
@@ -60,12 +61,13 @@ interface AdminPanelProps {
   onChanged: () => Promise<void>;
 }
 
-type Tab = "equipes" | "produtos" | "modelos" | "foto3d" | "superchats" | "cartazes" | "telões" | "moderação" | "testes";
+type Tab = "equipes" | "produtos" | "modelos" | "foto3d" | "outdoor" | "superchats" | "cartazes" | "telões" | "moderação" | "testes";
 const TABS: { id: Tab; label: string }[] = [
   { id: "equipes", label: "Equipes e bandeiras" },
   { id: "produtos", label: "Produtos" },
   { id: "modelos", label: "Modelos 3D" },
   { id: "foto3d", label: "Foto → 3D" },
+  { id: "outdoor", label: "Outdoor" },
   { id: "superchats", label: "Superchats" },
   { id: "cartazes", label: "Cartazes" },
   { id: "telões", label: "Telões" },
@@ -148,6 +150,7 @@ export function AdminPanel({ onClose, onChanged }: AdminPanelProps) {
         {tab === "produtos" && <ProductsTab busy={busy} run={run} />}
         {tab === "modelos" && <ModelsTab busy={busy} run={run} />}
         {tab === "foto3d" && <AdminPhoto3d busy={busy} run={run} />}
+        {tab === "outdoor" && <ScreenTab busy={busy} run={run} />}
         {tab === "superchats" && <SuperchatsTab busy={busy} run={run} />}
         {tab === "cartazes" && <SignsTab busy={busy} run={run} />}
         {tab === "telões" && <BidsTab busy={busy} run={run} />}
@@ -390,6 +393,60 @@ async function parseGlb(buffer: ArrayBuffer): Promise<Object3D> {
   } catch {
     throw new Error("Não consegui abrir o modelo no editor (arquivo comprimido ou inválido).");
   }
+}
+
+/** Link do outdoor do parque: vídeo do YouTube ou página da internet (https). */
+function ScreenTab({ busy, run }: TabProps) {
+  const saved = currentParkScreen();
+  const [url, setUrl] = useState(saved?.url ?? "");
+  const [title, setTitle] = useState(saved?.title ?? "");
+  const parsed = cleanScreen({ url, title });
+  const media = parsed ? parseScreenMedia(parsed.url) : null;
+
+  return (
+    <>
+      <p style={hint}>
+        O outdoor gigante no fundo do parque mostra este link. Vídeo do YouTube toca dentro do jogo; qualquer outra página https abre numa
+        janela (alguns sites não permitem ser abertos assim; a janela tem o botão "Abrir em outra aba"). O conteúdo é de responsabilidade do
+        operador.
+      </p>
+      <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "var(--t-ui)" }}>
+        Link (https://…)
+        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://www.youtube.com/watch?v=…" inputMode="url" maxLength={500} style={input} />
+      </label>
+      <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "var(--t-ui)" }}>
+        Título (aparece no outdoor)
+        <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Ex.: Assista agora" maxLength={SCREEN_TITLE_MAX} style={input} />
+      </label>
+      <p style={hint}>
+        {url.trim() === "" ? "Sem link: o outdoor mostra “Em breve”." : !parsed ? "Link inválido: use https." : media?.kind === "youtube" ? "Vídeo do YouTube detectado." : "Página da internet."}
+      </p>
+      <button
+        type="button"
+        disabled={busy || !parsed}
+        style={{ ...primaryBtn, opacity: !parsed ? 0.5 : 1 }}
+        onClick={() => void run(async () => saveConfigKey("screen", parsed), "Outdoor atualizado.")}
+      >
+        Salvar outdoor
+      </button>
+      {saved && (
+        <button
+          type="button"
+          disabled={busy}
+          style={ghostBtn}
+          onClick={() =>
+            void run(async () => {
+              await saveConfigKey("screen", {});
+              setUrl("");
+              setTitle("");
+            }, "Outdoor limpo.")
+          }
+        >
+          Limpar outdoor
+        </button>
+      )}
+    </>
+  );
 }
 
 function ModelsTab({ busy, run }: TabProps) {
