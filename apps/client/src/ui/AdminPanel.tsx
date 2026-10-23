@@ -116,7 +116,7 @@ export function AdminPanel({ onClose, onChanged }: AdminPanelProps) {
           </button>
         </div>
 
-        <div role="tablist" style={{ display: "flex", gap: 6, overflowX: "auto", flexShrink: 0, paddingBottom: 4 }}>
+        <div role="tablist" style={{ display: "flex", flexWrap: "wrap", gap: 6, flexShrink: 0, paddingBottom: 4 }}>
           {TABS.map((t) => (
             <button
               key={t.id}
