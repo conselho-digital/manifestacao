@@ -148,6 +148,18 @@ const WEBP_QUALITY = 0.9;
 /** Lado máximo aceito do arquivo original (px): barra imagens que decodificam para centenas de MB. */
 const MAX_SOURCE_SIDE = 8000;
 
+/**
+ * Copia o arquivo escolhido para a memória. No Android o navegador revoga o acesso ao arquivo quando o input é
+ * limpo ou o app do seletor fecha ("requested file could not be read"); com a cópia isso não afeta mais o envio.
+ */
+export async function snapshotFile(file: File): Promise<File> {
+  try {
+    return new File([await file.arrayBuffer()], file.name, { type: file.type, lastModified: file.lastModified });
+  } catch {
+    throw new Error("Não consegui ler o arquivo. Escolha de novo (de preferência da galeria ou de Downloads).");
+  }
+}
+
 /** Converte a imagem para WebP (com transparência, no máx. 1024 px de lado); null se o navegador não souber gerar WebP. */
 export async function toWebp(file: File): Promise<Blob | null> {
   let bitmap: ImageBitmap;

@@ -4,7 +4,7 @@ import { useStageVoice } from "../net/useStageVoice.js";
 import { StageButton } from "../ui/StageButton.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
-import { TEAMS, VEHICLES, hexColor, type AvatarConfig, type VehicleId } from "@manifestacao/shared";
+import { TEAMS, VEHICLES, hexColor, type AvatarConfig, type FlagId, type VehicleId } from "@manifestacao/shared";
 import { Scenery } from "./Scenery.js";
 import { Player, type PlayerTransform } from "./Player.js";
 import { RemotePlayers } from "./RemotePlayers.js";
@@ -13,6 +13,8 @@ import { isTypingTarget, useInput } from "./useInput.js";
 import { modelUrlFor } from "./models.js";
 import { CAMERA_SHOULDER_RATIO, CAMERA_DISTANCE_MOBILE, CAMERA_DISTANCE_DESKTOP, CAMERA_PITCH_DEFAULT, CAMERA_PIVOT_HEIGHT } from "./world.js";
 import { useDailySprays } from "./useDailySprays.js";
+import { useFlagTime } from "./useFlagTime.js";
+import { FlagButton } from "../ui/FlagButton.js";
 import type { SprayAim } from "./spray.js";
 import { sprayImageFor } from "./models.js";
 import { useAvenueRealtime } from "../net/useAvenueRealtime.js";
@@ -49,8 +51,6 @@ import { DriveControls } from "../ui/DriveControls.js";
 import { NO_DRIVE_INPUT, type DriveInput } from "./driving.js";
 
 const SIGN_KEY = "manifestacao.sign";
-/** Quanto tempo quem não comprou bandeira pode carregar a escolhida, contado da conexão. */
-const FREE_FLAG_MS = 30 * 60 * 1000;
 const SKY_COLOR = "#8fc4f0";
 const SUN_POSITION: [number, number, number] = [60, 110, -80];
 
@@ -122,17 +122,15 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     return () => document.body.removeAttribute("data-modal-open");
   }, [modalOpen]);
   const { inputRef, setJoystick } = useInput(!paused && !optionsOpen && !adminOpen && !superchatOpen && !signOpen && !billboardOpen);
-  // Bandeira: quem não comprou nenhuma pode carregar a escolhida por 30 minutos desde que conectou; depois some.
+  // Bandeira: grátis por 3 horas por dia (contadas só enquanto aparece no jogo); quem comprou bandeira não tem limite.
   const ownsPaidFlag = useMemo(() => [...owned].some((id) => id.startsWith("flag:")), [owned]);
-  const [freeFlagExpired, setFreeFlagExpired] = useState(false);
-  useEffect(() => {
-    const t = window.setTimeout(() => setFreeFlagExpired(true), FREE_FLAG_MS);
-    return () => window.clearTimeout(t);
-  }, []);
-  const flagAllowed = ownsPaidFlag || !freeFlagExpired;
+  const [flagChoice, setFlagChoice] = useState<FlagId>(avatar.flag);
+  const flagWanted = flagChoice !== "nenhuma";
+  const flagTime = useFlagTime(flagWanted, ownsPaidFlag);
+  const flagShown = flagWanted && !flagTime.exhausted;
   const playAvatar = useMemo(
-    () => (flagAllowed || avatar.flag === "nenhuma" ? avatar : { ...avatar, flag: "nenhuma" as const }),
-    [avatar, flagAllowed],
+    () => (flagShown ? { ...avatar, flag: flagChoice } : { ...avatar, flag: "nenhuma" as const }),
+    [avatar, flagChoice, flagShown],
   );
   // Contexto WebGL perdido (GPU/memória do celular): tenta restaurar; se não voltar logo, recria o canvas.
   const [canvasKey, setCanvasKey] = useState(0);
@@ -429,6 +427,15 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           onSpray={handleSpray}
           imageUrl={sprayImageFor(avatar.team)}
           color={hexColor(TEAMS[avatar.team].color)}
+        />
+        <FlagButton
+          choice={flagChoice}
+          onChoose={setFlagChoice}
+          teamImageUrl={sprayImageFor(avatar.team)}
+          teamColor={hexColor(TEAMS[avatar.team].color)}
+          teamLabel={TEAMS[avatar.team].label}
+          remaining={flagTime.remaining}
+          shown={flagShown}
         />
       </TopRightPanel>
       {optionsOpen && !adminOpen && (

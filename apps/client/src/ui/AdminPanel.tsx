@@ -36,6 +36,7 @@ import {
   saveCatalogItem,
   saveConfigKey,
   uploadModel,
+  snapshotFile,
   type AdminCatalogRow,
   findUsers,
   sanctionUser,
@@ -171,7 +172,7 @@ function TeamsTab({ busy, run }: TabProps) {
   const sendImage = (id: TeamId, file: File) =>
     run(async () => {
       const slot = `teamimg:${id}`;
-      const url = await uploadModel(slot, file);
+      const url = await uploadModel(slot, await snapshotFile(file));
       setModels(await mergeModels({ [slot]: url }));
     }, "Imagem da bandeira da equipe enviada.");
   const clearImage = (id: TeamId) =>
@@ -212,9 +213,13 @@ function TeamsTab({ busy, run }: TabProps) {
                 disabled={busy}
                 style={{ display: "none" }}
                 onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  e.target.value = "";
-                  if (f) void sendImage(id, f);
+                  const input = e.target;
+                  const f = input.files?.[0];
+                  if (!f) return;
+                  // Só limpa o input depois de copiar o arquivo (senão o Android revoga a leitura).
+                  void sendImage(id, f).finally(() => {
+                    input.value = "";
+                  });
                 }}
               />
             </label>
@@ -367,7 +372,7 @@ function ModelsTab({ busy, run }: TabProps) {
 
   const setSlot = (slot: string, file: File) =>
     run(async () => {
-      const url = await uploadModel(slot, file);
+      const url = await uploadModel(slot, await snapshotFile(file));
       setModels(await mergeModels({ [slot]: url }));
     }, "Modelo enviado.");
 
@@ -393,9 +398,12 @@ function ModelsTab({ busy, run }: TabProps) {
             disabled={busy}
             style={{ display: "none" }}
             onChange={(e) => {
-              const f = e.target.files?.[0];
-              e.target.value = "";
-              if (f) void setSlot(slot, f);
+              const input = e.target;
+              const f = input.files?.[0];
+              if (!f) return;
+              void setSlot(slot, f).finally(() => {
+                input.value = "";
+              });
             }}
           />
         </label>
