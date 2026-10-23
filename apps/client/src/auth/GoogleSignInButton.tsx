@@ -248,6 +248,10 @@ export function GoogleSignInButton({ onSignedIn }: GoogleSignInButtonProps) {
       style={{
         display: "flex",
         justifyContent: "center",
+        // O botão do Google é um iframe de documento claro: com o app em color-scheme escuro o navegador pinta um
+        // quadrado branco atrás dele. Com o mesmo esquema (claro) no contêiner, o fundo do iframe fica transparente.
+        colorScheme: "light",
+        background: "transparent",
         height: showFallback || busy ? 0 : undefined,
         overflow: showFallback || busy ? "hidden" : undefined,
       }}
