@@ -483,3 +483,95 @@ export async function fetchModerationLog(): Promise<AdminModLogRow[]> {
   if (error) throw modError(error.message);
   return (data as AdminModLogRow[]) ?? [];
 }
+
+// ---------- Foto → personagem 3D (edge function character-3d, só admin) ----------
+
+const CHAR3D_ERRORS: Record<string, string> = {
+  forbidden: "Só o admin pode gerar personagens.",
+  no_key: "Falta configurar a chave MESHY_API_KEY nos Secrets do Supabase.",
+  image_invalid: "Imagem inválida ou grande demais.",
+  too_big: "O modelo gerado passa de 40 MB.",
+  download_failed: "Não consegui baixar o modelo gerado.",
+  upload_failed: "Falha ao guardar o modelo.",
+};
+
+async function char3d<T>(body: Record<string, unknown>): Promise<T> {
+  const { data, error } = await db().functions.invoke<T & { error?: string; message?: string }>("character-3d", { body });
+  if (error) {
+    let info: { error?: string; message?: string } | null = null;
+    const ctx = (error as { context?: Response }).context;
+    if (ctx && typeof ctx.json === "function") info = await ctx.json().catch(() => null);
+    throw new Error((info?.error && CHAR3D_ERRORS[info.error]) || info?.message || "Não foi possível gerar o personagem.");
+  }
+  if (!data || data.error) throw new Error((data?.error && CHAR3D_ERRORS[data.error]) || data?.message || "Não foi possível gerar o personagem.");
+  return data;
+}
+
+/** Reduz a foto (lado máx. 1024 px, JPEG, fundo branco) para enviar ao gerador. */
+export async function photoToDataUri(file: File): Promise<string> {
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    throw new Error("Não consegui abrir a imagem. Tente outro arquivo.");
+  }
+  try {
+    const scale = Math.min(1, MAX_IMAGE_SIDE / Math.max(bitmap.width, bitmap.height));
+    const w = Math.max(1, Math.round(bitmap.width * scale));
+    const h = Math.max(1, Math.round(bitmap.height * scale));
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) throw new Error("Este navegador não consegue preparar a imagem.");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(bitmap, 0, 0, w, h);
+    return canvas.toDataURL("image/jpeg", 0.92);
+  } finally {
+    bitmap.close();
+  }
+}
+
+export type Char3dProgress = (text: string, percent: number) => void;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+async function waitTask(phase: "model" | "rig", taskId: string, onProgress: Char3dProgress, label: string, signal: AbortSignal): Promise<string> {
+  for (let i = 0; i < 150; i++) {
+    if (signal.aborted) throw new Error("Cancelado.");
+    const r = await char3d<{ status: string; progress: number; glb: string | null; error: string | null }>({ action: "status", phase, taskId });
+    onProgress(label, r.progress);
+    if (r.status === "SUCCEEDED") {
+      if (!r.glb) throw new Error("O gerador não devolveu o arquivo .glb.");
+      return r.glb;
+    }
+    if (r.status === "FAILED" || r.status === "CANCELED") throw new Error(r.error || "O gerador não conseguiu criar o modelo.");
+    await sleep(4000);
+  }
+  throw new Error("Demorou demais. Tente de novo.");
+}
+
+/**
+ * Foto → .glb guardado no bucket. Cria o modelo 3D e tenta o rig (esqueleto) para o jogo animar; se o rig falhar
+ * (ex.: não parece humanoide), guarda o modelo sem esqueleto. Devolve a URL pública e se tem esqueleto.
+ */
+export async function generateCharacterFromPhoto(file: File, onProgress: Char3dProgress, signal: AbortSignal): Promise<{ url: string; rigged: boolean }> {
+  const image = await photoToDataUri(file);
+  onProgress("Enviando a foto…", 0);
+  const { taskId } = await char3d<{ taskId: string }>({ action: "start", image });
+  const modelGlb = await waitTask("model", taskId, onProgress, "Criando o modelo 3D…", signal);
+  let finalUrl = modelGlb;
+  let rigged = false;
+  try {
+    const rig = await char3d<{ taskId: string }>({ action: "rig", taskId });
+    finalUrl = await waitTask("rig", rig.taskId, onProgress, "Criando o esqueleto para animar…", signal);
+    rigged = true;
+  } catch (e) {
+    if (signal.aborted) throw e;
+    finalUrl = modelGlb;
+  }
+  onProgress("Guardando o modelo…", 100);
+  const saved = await char3d<{ url: string }>({ action: "save", url: finalUrl });
+  return { url: saved.url, rigged };
+}

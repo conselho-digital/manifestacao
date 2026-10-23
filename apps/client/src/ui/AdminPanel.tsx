@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useModal } from "./useModal.js";
+import { AdminPhoto3d } from "./AdminPhoto3d.js";
 import {
   CHARACTERS,
   CHARACTER_IDS,
@@ -54,11 +55,12 @@ interface AdminPanelProps {
   onChanged: () => Promise<void>;
 }
 
-type Tab = "equipes" | "produtos" | "modelos" | "superchats" | "cartazes" | "telões" | "moderação" | "testes";
+type Tab = "equipes" | "produtos" | "modelos" | "foto3d" | "superchats" | "cartazes" | "telões" | "moderação" | "testes";
 const TABS: { id: Tab; label: string }[] = [
   { id: "equipes", label: "Equipes e bandeiras" },
   { id: "produtos", label: "Produtos" },
   { id: "modelos", label: "Modelos 3D" },
+  { id: "foto3d", label: "Foto → 3D" },
   { id: "superchats", label: "Superchats" },
   { id: "cartazes", label: "Cartazes" },
   { id: "telões", label: "Telões" },
@@ -140,6 +142,7 @@ export function AdminPanel({ onClose, onChanged }: AdminPanelProps) {
         {tab === "equipes" && <TeamsTab busy={busy} run={run} />}
         {tab === "produtos" && <ProductsTab busy={busy} run={run} />}
         {tab === "modelos" && <ModelsTab busy={busy} run={run} />}
+        {tab === "foto3d" && <AdminPhoto3d busy={busy} run={run} />}
         {tab === "superchats" && <SuperchatsTab busy={busy} run={run} />}
         {tab === "cartazes" && <SignsTab busy={busy} run={run} />}
         {tab === "telões" && <BidsTab busy={busy} run={run} />}
