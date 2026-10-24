@@ -13,7 +13,7 @@ import {
   type TeamId,
 } from "@manifestacao/shared";
 import { GRAPHICS_LEVELS, type GraphicsLevel } from "../config/graphics.js";
-import { AvatarGlyph } from "./AvatarGlyph.js";
+import { CharacterFace } from "./CharacterFace.js";
 import { TeamFlagIcon } from "./TeamFlagIcon.js";
 import { LegalLinks } from "./LegalPage.js";
 
@@ -222,7 +222,7 @@ export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin, onD
                     cursor: "pointer",
                   }}
                 >
-                  <AvatarGlyph color={teamColorHex} character={id} />
+                  <CharacterFace color={teamColorHex} character={id} />
                   <span style={{ fontSize: "var(--t-ui)", fontWeight: 700, color: "var(--ink)", textAlign: "center" }}>
                     {CHARACTERS[id].label}
                   </span>

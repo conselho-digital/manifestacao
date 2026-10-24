@@ -182,6 +182,17 @@ export function ProceduralBody({
         <sphereGeometry args={[0.28, 16, 16]} />
         <meshStandardMaterial color={0xf2d2b6} />
       </mesh>
+      {/* Rosto: olhos e sorriso, na frente (+Z) da cabeça */}
+      {[-1, 1].map((sx) => (
+        <mesh key={sx} position={[sx * 0.095, 1.73, 0.25]}>
+          <sphereGeometry args={[0.032, 8, 8]} />
+          <meshStandardMaterial color={0x1b1b1f} />
+        </mesh>
+      ))}
+      <mesh position={[0, 1.63, 0.26]} rotation={[0, 0, Math.PI]}>
+        <torusGeometry args={[0.06, 0.012, 6, 12, Math.PI]} />
+        <meshStandardMaterial color={0x8a3b32} />
+      </mesh>
       <Headwear character={character} />
       {look.belt && (
         <mesh position={[0, 0.78, 0]}>

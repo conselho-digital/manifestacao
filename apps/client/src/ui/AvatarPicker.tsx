@@ -26,7 +26,7 @@ import { consumePendingGoogleRedirect, signInWithGoogle, signOut } from "../auth
 import { GoogleSignInButton } from "../auth/GoogleSignInButton.js";
 import { isOnlineEnabled } from "../config/env.js";
 import { TeamFlagIcon } from "./TeamFlagIcon.js";
-import { AvatarGlyph } from "./AvatarGlyph.js";
+import { CharacterFace } from "./CharacterFace.js";
 
 export const AVATAR_STORAGE_KEY = "manifestacao.avatar";
 const STORAGE_KEY = AVATAR_STORAGE_KEY;
@@ -337,7 +337,7 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
                       </svg>
                     </span>
                   )}
-                  <AvatarGlyph color={teamColorHex} character={id} />
+                  <CharacterFace color={teamColorHex} character={id} />
                   <span style={{ fontSize: "var(--t-ui)", fontWeight: 700, color: "var(--ink)", textAlign: "center" }}>
                     {CHARACTERS[id].label}
                   </span>
