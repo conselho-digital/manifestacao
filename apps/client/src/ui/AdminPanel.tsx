@@ -556,11 +556,12 @@ function ModelsTab({ busy, run }: TabProps) {
     if (!isModelSlot(slot)) return null;
     const has = Boolean(models[slot]);
     return (
-      <div key={slot} style={{ ...row, justifyContent: "space-between", flexWrap: "wrap" }}>
-        <span style={{ fontSize: "var(--t-ui)", flex: 1, minWidth: 0 }}>
+      <div key={slot} style={{ display: "flex", flexDirection: "column", gap: 6, padding: "6px 0" }}>
+        <span style={{ fontSize: "var(--t-ui)", minWidth: 0, overflowWrap: "anywhere" }}>
           {label}
           <span style={{ color: has ? "var(--accent)" : "var(--ink-dim)", marginLeft: 6 }}>{has ? "• enviado" : "• padrão"}</span>
         </span>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
         <label style={{ ...ghostBtn, display: "inline-flex", alignItems: "center", opacity: busy ? 0.5 : 1 }}>
           {has ? "Trocar" : "Enviar .glb"}
           <input
@@ -593,6 +594,7 @@ function ModelsTab({ busy, run }: TabProps) {
             Remover
           </button>
         )}
+        </div>
       </div>
     );
   };
