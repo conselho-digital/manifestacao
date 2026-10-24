@@ -5,9 +5,11 @@ import {
   Box3,
   CanvasTexture,
   Color,
+  DoubleSide,
   CylinderGeometry,
   InstancedMesh,
   Matrix4,
+  PlaneGeometry,
   Quaternion,
   RepeatWrapping,
   SRGBColorSpace,
@@ -18,9 +20,10 @@ import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js
 import { clearCameraColliders, setCameraColliders } from "./colliders.js";
 import { clearSolids, setSolids } from "./solids.js";
 import {
-  AVENUE_END_MARGIN,
   AVENUE_LENGTH,
   AVENUE_WIDTH,
+  CITY_HALF_X,
+  CITY_HALF_Z,
   PARK_GAP,
   PARK_SIZE,
   PLAZA_HALF_X,
@@ -108,28 +111,32 @@ function buildCity(): Building[] {
   return out;
 }
 
-/** Caixa do prédio com UV proporcional ao tamanho real (janelas não esticam) e cor por vértice. */
+/** Altura do térreo (lojas de vidro). Os andares de cima (apartamentos, com janelas) começam aqui. */
+export const GROUND_FLOOR_H = 4.4;
+
+/** Andares de cima do prédio: caixa com UV proporcional ao tamanho real (janelas não esticam) e cor por vértice. */
 function boxFor(b: Building): BufferGeometry {
-  const g = new BoxGeometry(b.w, b.h, b.d);
+  const hh = b.h - GROUND_FLOOR_H;
+  const g = new BoxGeometry(b.w, hh, b.d);
   const uv = g.getAttribute("uv");
   // Ordem das faces do BoxGeometry: +x, -x, +y, -y, +z, -z (4 vértices cada).
   const faces: [number, number][] = [
-    [b.d, b.h], // +x
-    [b.d, b.h], // -x
+    [b.d, hh], // +x
+    [b.d, hh], // -x
     [0, 0], // +y (telhado)
     [0, 0], // -y
-    [b.w, b.h], // +z
-    [b.w, b.h], // -z
+    [b.w, hh], // +z
+    [b.w, hh], // -z
   ];
   for (let f = 0; f < 6; f++) {
     const [sw, sh] = faces[f]!;
     for (let v = 0; v < 4; v++) {
       const i = f * 4 + v;
-      if (sw === 0) uv.setXY(i, 0.02, 0.02); // telhado: cor lisa do canto da textura
+      if (sw === 0) uv.setXY(i, 0.02, 0.02); // telhado/teto: cor lisa do canto da textura
       else uv.setXY(i, (uv.getX(i) * sw) / WINDOW_W, (uv.getY(i) * sh) / FLOOR_H);
     }
   }
-  g.translate(b.x, b.h / 2, b.z);
+  g.translate(b.x, GROUND_FLOOR_H + hh / 2, b.z);
   const c = new Color(b.color);
   const colors = new Float32Array(g.getAttribute("position").count * 3);
   for (let i = 0; i < colors.length; i += 3) {
@@ -139,6 +146,125 @@ function boxFor(b: Building): BufferGeometry {
   }
   g.setAttribute("color", new BufferAttribute(colors, 3));
   return g;
+}
+
+// ── Térreo: lojas de vidro, sem porta ───────────────────────────────────────────────────────────
+const ENTRANCE_W = 3.4; // vão de entrada (sem porta) no meio de cada lado
+const GLASS_T = 0.2; // espessura da parede de vidro (colisão)
+const SHOP_COLORS = [0xd7263d, 0x1b998b, 0xf46036, 0x2e86ab, 0xf6c445, 0x7b2d8e, 0x3a7d44, 0xe36397];
+const FLOOR_COLORS = [0xe8e2d6, 0xd9d4c8, 0xcfd8dc, 0xe6dccb, 0xdbe4d4];
+
+interface ShopParts {
+  /** Estrutura e interior (cor por vértice). */
+  solid: BufferGeometry;
+  /** Vidros (translúcidos). */
+  glass: BufferGeometry;
+  /** Retângulos que bloqueiam quem anda: paredes de vidro (com o vão), colunas, balcão e prateleiras. */
+  rects: { minX: number; maxX: number; minZ: number; maxZ: number }[];
+}
+
+function coloredBox(w: number, h: number, d: number, x: number, y: number, z: number, color: number): BufferGeometry {
+  const g = new BoxGeometry(w, h, d);
+  g.translate(x, y + h / 2, z);
+  g.deleteAttribute("uv");
+  const c = new Color(color);
+  const n = g.getAttribute("position").count;
+  const colors = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) {
+    colors[i * 3] = c.r;
+    colors[i * 3 + 1] = c.g;
+    colors[i * 3 + 2] = c.b;
+  }
+  g.setAttribute("color", new BufferAttribute(colors, 3));
+  return g;
+}
+
+/** Loja do térreo de um prédio: paredes de vidro com um vão (sem porta) em cada lado, colunas, letreiro, balcão e prateleiras. */
+function shopFor(b: Building, rand: () => number): ShopParts {
+  const solid: BufferGeometry[] = [];
+  const glass: BufferGeometry[] = [];
+  const rects: ShopParts["rects"] = [];
+  const x0 = b.x - b.w / 2;
+  const x1 = b.x + b.w / 2;
+  const z0 = b.z - b.d / 2;
+  const z1 = b.z + b.d / 2;
+  const accent = SHOP_COLORS[Math.floor(rand() * SHOP_COLORS.length)]!;
+  const dark = new Color(b.color).multiplyScalar(0.55).getHex();
+  const GH = 3.5; // topo do vidro; acima dele, o letreiro até o teto
+  const rect = (minX: number, maxX: number, minZ: number, maxZ: number) => rects.push({ minX, maxX, minZ, maxZ });
+
+  // Piso da loja
+  solid.push(coloredBox(b.w - 0.1, 0.06, b.d - 0.1, b.x, 0, b.z, FLOOR_COLORS[Math.floor(rand() * FLOOR_COLORS.length)]!));
+  // Colunas nos quatro cantos
+  for (const [cx, cz] of [
+    [x0 + 0.25, z0 + 0.25],
+    [x1 - 0.25, z0 + 0.25],
+    [x0 + 0.25, z1 - 0.25],
+    [x1 - 0.25, z1 - 0.25],
+  ] as const) {
+    solid.push(coloredBox(0.5, GROUND_FLOOR_H, 0.5, cx, 0, cz, dark));
+    rect(cx - 0.25, cx + 0.25, cz - 0.25, cz + 0.25);
+  }
+  // Quatro lados: vidro com um vão no meio, rodapé, caixilhos e letreiro colorido por cima.
+  const sides: { alongX: boolean; fixed: number; from: number; to: number; sign: 1 | -1 }[] = [
+    { alongX: true, fixed: z0, from: x0, to: x1, sign: -1 },
+    { alongX: true, fixed: z1, from: x0, to: x1, sign: 1 },
+    { alongX: false, fixed: x0, from: z0, to: z1, sign: -1 },
+    { alongX: false, fixed: x1, from: z0, to: z1, sign: 1 },
+  ];
+  for (const sd of sides) {
+    const mid = (sd.from + sd.to) / 2;
+    const segs: [number, number][] = [
+      [sd.from + 0.5, mid - ENTRANCE_W / 2],
+      [mid + ENTRANCE_W / 2, sd.to - 0.5],
+    ];
+    for (const [a, c] of segs) {
+      const len = c - a;
+      if (len <= 0.1) continue;
+      const m = (a + c) / 2;
+      // Vidro (plano duplo-face)
+      const pane = new PlaneGeometry(len, GH - 0.45);
+      if (sd.alongX) pane.translate(m, 0.45 + (GH - 0.45) / 2, sd.fixed);
+      else {
+        pane.rotateY(Math.PI / 2);
+        pane.translate(sd.fixed, 0.45 + (GH - 0.45) / 2, m);
+      }
+      glass.push(pane);
+      // Rodapé escuro + caixilhos a cada ~3,5 m
+      if (sd.alongX) solid.push(coloredBox(len, 0.45, 0.16, m, 0, sd.fixed, dark));
+      else solid.push(coloredBox(0.16, 0.45, len, sd.fixed, 0, m, dark));
+      const n = Math.max(1, Math.round(len / 3.5));
+      for (let k = 0; k <= n; k++) {
+        const t = a + (len * k) / n;
+        if (sd.alongX) solid.push(coloredBox(0.1, GH - 0.45, 0.1, t, 0.45, sd.fixed, dark));
+        else solid.push(coloredBox(0.1, GH - 0.45, 0.1, sd.fixed, 0.45, t, dark));
+      }
+      // Colisão da parede de vidro
+      if (sd.alongX) rect(a, c, sd.fixed - GLASS_T / 2, sd.fixed + GLASS_T / 2);
+      else rect(sd.fixed - GLASS_T / 2, sd.fixed + GLASS_T / 2, a, c);
+    }
+    // Letreiro: faixa colorida ao longo do lado inteiro, entre o vidro e o teto
+    const fl = sd.to - sd.from;
+    if (sd.alongX) solid.push(coloredBox(fl, GROUND_FLOOR_H - GH, 0.3, mid, GH, sd.fixed, accent));
+    else solid.push(coloredBox(0.3, GROUND_FLOOR_H - GH, fl, sd.fixed, GH, mid, accent));
+  }
+  // Interior: balcão ao fundo e duas prateleiras compridas com produtos (deixam corredores livres)
+  const bx = b.x;
+  const bz = z1 - 2.2;
+  solid.push(coloredBox(Math.min(5, b.w * 0.4), 1.0, 0.9, bx, 0, bz, accent));
+  rect(bx - Math.min(5, b.w * 0.4) / 2, bx + Math.min(5, b.w * 0.4) / 2, bz - 0.45, bz + 0.45);
+  for (const sx of [-1, 1]) {
+    const sx0 = b.x + sx * (b.w / 2 - 1.6);
+    const len = Math.max(3, b.d * 0.45);
+    solid.push(coloredBox(0.5, 2.0, len, sx0, 0, b.z - 0.5, 0x8d6e4f));
+    rect(sx0 - 0.25, sx0 + 0.25, b.z - 0.5 - len / 2, b.z - 0.5 + len / 2);
+    for (let k = 0; k < 5; k++) {
+      solid.push(coloredBox(0.36, 0.3, 0.5, sx0, 0.5 + (k % 3) * 0.5, b.z - 0.5 - len / 2 + 0.6 + (len - 1.2) * (k / 4), SHOP_COLORS[Math.floor(rand() * SHOP_COLORS.length)]!));
+    }
+  }
+  // Luminárias no teto
+  for (const lx of [-1, 1]) solid.push(coloredBox(1.4, 0.06, 0.5, b.x + lx * (b.w * 0.22), GROUND_FLOOR_H - 0.07, b.z, 0xfff6d6));
+  return { solid: mergeGeometries(solid)!, glass: mergeGeometries(glass)!, rects };
 }
 
 /** Textura de fachada: parede cinza com uma janela escura e uma moldura clara (uma célula = 1 janela × 1 andar). */
@@ -161,82 +287,57 @@ export function makeFacadeTexture(): CanvasTexture {
   return tex;
 }
 
-interface FenceSeg {
-  x0: number;
-  x1: number;
-  side: 1 | -1;
-}
-
-/** Vãos entre os prédios da frente (fora da praça e do parque): é onde não há avenida, então ganham cerca. */
-function fenceSegments(buildings: Building[]): FenceSeg[] {
-  const out: FenceSeg[] = [];
-  const reach = AVENUE_LENGTH / 2 - AVENUE_END_MARGIN; // até onde o jogador chega
-  const open = PLAZA_HALF_X; // praça (+Z) e parque (-Z) têm 2×32 de largura e ficam abertos
-  for (const side of [1, -1] as const) {
-    const row = buildings
-      .filter((b) => b.row === 0 && Math.sign(b.z) === side)
-      .sort((a, b) => a.x - b.x);
-    const edges: [number, number][] = []; // trechos ocupados por prédio
-    for (const b of row) edges.push([b.x - b.w / 2, b.x + b.w / 2]);
-    let cursor = -reach;
-    const gaps: [number, number][] = [];
-    for (const [l, r] of edges) {
-      if (l > cursor) gaps.push([cursor, Math.min(l, reach)]);
-      cursor = Math.max(cursor, r);
-    }
-    if (cursor < reach) gaps.push([cursor, reach]);
-    for (const [g0, g1] of gaps) {
-      // tira a parte que cai na praça/parque (aberta)
-      const parts: [number, number][] = [];
-      if (g0 < -open) parts.push([g0, Math.min(g1, -open)]);
-      if (g1 > open) parts.push([Math.max(g0, open), g1]);
-      for (const [a, b] of parts) if (b - a > 0.3) out.push({ x0: a, x1: b, side });
-    }
-  }
-  return out;
-}
-
-/** Cercas com faixa amarela nos vãos entre prédios: mostram onde a calçada acaba (dois meshes instanciados). */
-function Fences({ buildings }: { buildings: Building[] }) {
-  const segs = useMemo(() => fenceSegments(buildings), [buildings]);
+/** Faixa amarela e postes em volta de TODA a cidade (e só ali): é o limite por onde o jogador não passa. */
+function PerimeterTape() {
   const posts = useRef<InstancedMesh>(null);
   const tapes = useRef<InstancedMesh>(null);
-  const zLine = AVENUE_WIDTH / 2 + SIDEWALK - 0.2;
-
-  const postCount = useMemo(() => segs.reduce((n, s) => n + Math.ceil((s.x1 - s.x0) / 3) + 1, 0), [segs]);
+  const edges = useMemo(() => {
+    const e: { x0: number; z0: number; x1: number; z1: number }[] = [];
+    const hx = CITY_HALF_X;
+    const hz = CITY_HALF_Z;
+    e.push({ x0: -hx, z0: -hz, x1: hx, z1: -hz }, { x0: -hx, z0: hz, x1: hx, z1: hz });
+    e.push({ x0: -hx, z0: -hz, x1: -hx, z1: hz }, { x0: hx, z0: -hz, x1: hx, z1: hz });
+    return e;
+  }, []);
+  const postCount = useMemo(() => edges.reduce((n, e) => n + Math.ceil(Math.hypot(e.x1 - e.x0, e.z1 - e.z0) / 4) + 1, 0), [edges]);
 
   useLayoutEffect(() => {
     if (!posts.current || !tapes.current) return;
     const m = new Matrix4();
     const q = new Quaternion();
+    const up = new Vector3(0, 1, 0);
     let pi = 0;
     let ti = 0;
-    for (const sg of segs) {
-      const z = sg.side * zLine;
-      const len = sg.x1 - sg.x0;
-      const n = Math.ceil(len / 3);
+    for (const e of edges) {
+      const dx = e.x1 - e.x0;
+      const dz = e.z1 - e.z0;
+      const len = Math.hypot(dx, dz);
+      const n = Math.ceil(len / 4);
       for (let k = 0; k <= n; k++) {
-        m.compose(new Vector3(sg.x0 + (len * k) / n, 0.9, z), q, new Vector3(1, 1, 1));
+        m.compose(new Vector3(e.x0 + (dx * k) / n, 0.9, e.z0 + (dz * k) / n), q, new Vector3(1, 1, 1));
         posts.current.setMatrixAt(pi++, m);
       }
+      // Faixa: caixa comprida girada para seguir o lado (comprimento em X antes de girar).
+      q.setFromAxisAngle(up, -Math.atan2(dz, dx));
       for (const y of [0.7, 1.35]) {
-        m.compose(new Vector3((sg.x0 + sg.x1) / 2, y, z), q, new Vector3(len, 1, 1));
+        m.compose(new Vector3((e.x0 + e.x1) / 2, y, (e.z0 + e.z1) / 2), q, new Vector3(len, 1, 1));
         tapes.current.setMatrixAt(ti++, m);
       }
+      q.identity();
     }
     posts.current.count = pi;
     tapes.current.count = ti;
     posts.current.instanceMatrix.needsUpdate = true;
     tapes.current.instanceMatrix.needsUpdate = true;
-  }, [segs]);
+  }, [edges]);
 
   return (
     <group>
       <instancedMesh ref={posts} frustumCulled={false} args={[undefined, undefined, Math.max(1, postCount)]}>
-        <cylinderGeometry args={[0.06, 0.06, 1.8, 6]} />
+        <cylinderGeometry args={[0.07, 0.07, 1.8, 6]} />
         <meshStandardMaterial color={0x555b62} />
       </instancedMesh>
-      <instancedMesh ref={tapes} frustumCulled={false} args={[undefined, undefined, Math.max(2, segs.length * 2)]}>
+      <instancedMesh ref={tapes} frustumCulled={false} args={[undefined, undefined, edges.length * 2]}>
         <boxGeometry args={[1, 0.16, 0.05]} />
         <meshStandardMaterial color={0xffd12e} emissive={0x6b5200} />
       </instancedMesh>
@@ -283,7 +384,7 @@ function PoliceBlockade() {
     const out: { x: number; z: number; rot: number }[] = [];
     const half = AVENUE_WIDTH / 2 + SIDEWALK;
     for (const end of [1, -1] as const) {
-      const x = end * (AVENUE_LENGTH / 2 - 2.4);
+      const x = end * (CITY_HALF_X - 2.4);
       for (let z = -half + 2.4; z <= half - 2.4 + 0.01; z += 5.2) {
         const jitter = ((Math.round(z * 10) % 7) - 3) * 0.015;
         // Paradas de lado para quem vem pela avenida: o comprimento da viatura fica ao longo de Z.
@@ -358,7 +459,7 @@ function Trestles() {
     const out: { x: number; z: number }[] = [];
     const half = AVENUE_WIDTH / 2 + SIDEWALK;
     for (const end of [1, -1] as const) {
-      for (let z = -half + 1.3; z <= half - 1.3 + 0.01; z += 2.6) out.push({ x: end * (AVENUE_LENGTH / 2 - 4.3), z });
+      for (let z = -half + 1.3; z <= half - 1.3 + 0.01; z += 2.6) out.push({ x: end * (CITY_HALF_X - 4.3), z });
     }
     return out;
   }, []);
@@ -396,32 +497,46 @@ function Trestles() {
 }
 
 export function City() {
-  const { buildings, geometry } = useMemo(() => {
+  const { buildings, geometry, shops } = useMemo(() => {
     const list = buildCity();
-    return { buildings: list, geometry: mergeGeometries(list.map(boxFor))! };
+    const rand = mulberry32(4242);
+    const parts = list.map((b) => shopFor(b, rand));
+    return {
+      buildings: list,
+      geometry: mergeGeometries(list.map(boxFor))!,
+      shops: {
+        solid: mergeGeometries(parts.map((p) => p.solid))!,
+        glass: mergeGeometries(parts.map((p) => p.glass))!,
+        rects: parts.flatMap((p) => p.rects),
+      },
+    };
   }, []);
   const texture = useMemo(() => makeFacadeTexture(), []);
 
-  // A câmera de terceira pessoa não atravessa os prédios.
   useEffect(() => {
+    // Câmera: só os andares de cima bloqueiam (dá para entrar nas lojas do térreo).
     const boxes = buildings.map(
       (b) =>
         new Box3(
-          new Vector3(b.x - b.w / 2, 0, b.z - b.d / 2),
+          new Vector3(b.x - b.w / 2, GROUND_FLOOR_H, b.z - b.d / 2),
           new Vector3(b.x + b.w / 2, b.h, b.z + b.d / 2),
         ),
     );
     setCameraColliders("city", [], boxes);
-    // O personagem e os veículos também não atravessam os prédios.
-    setSolids(
-      "city",
-      buildings.map((b) => ({ minX: b.x - b.w / 2, maxX: b.x + b.w / 2, minZ: b.z - b.d / 2, maxZ: b.z + b.d / 2 })),
-    );
+    // Personagem e veículos: só vidros, colunas, balcões e prateleiras (a cidade é toda andável).
+    setSolids("city", shops.rects);
     return () => {
       clearCameraColliders("city");
       clearSolids("city");
     };
-  }, [buildings]);
+  }, [buildings, shops]);
+  useEffect(
+    () => () => {
+      shops.solid.dispose();
+      shops.glass.dispose();
+    },
+    [shops],
+  );
   useEffect(() => () => texture.dispose(), [texture]);
   useEffect(() => () => geometry.dispose(), [geometry]);
 
@@ -455,12 +570,18 @@ export function City() {
           );
         }),
       )}
-      <Fences buildings={buildings} />
+      <PerimeterTape />
       <PoliceBlockade />
       <Trestles />
       {/* Prédios (um mesh só) */}
       <mesh geometry={geometry}>
         <meshStandardMaterial map={texture} vertexColors />
+      </mesh>
+      <mesh geometry={shops.solid}>
+        <meshStandardMaterial vertexColors />
+      </mesh>
+      <mesh geometry={shops.glass}>
+        <meshStandardMaterial color={0x9fd8ee} transparent opacity={0.22} side={DoubleSide} depthWrite={false} />
       </mesh>
       {antenna && (
         <group position={[antenna.x, antenna.h, antenna.z]}>

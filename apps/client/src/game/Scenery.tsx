@@ -1,11 +1,12 @@
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react";
-import { Box3, Color, InstancedMesh, Matrix4, Mesh, Quaternion, Sphere, Vector3 } from "three";
+import { Box3, BufferAttribute, Color, IcosahedronGeometry, CylinderGeometry, type BufferGeometry, InstancedMesh, Matrix4, Mesh, Quaternion, Sphere, Vector3 } from "three";
 import { ModelBoundary } from "./ModelBoundary.js";
 import { ParkScreen } from "./ParkScreen.js";
 import { City } from "./City.js";
 import { clearCameraColliders, setCameraColliders } from "./colliders.js";
 import { clearSolids, setSolids } from "./solids.js";
 import { useGLTF } from "@react-three/drei";
+import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
 import { AVENUE_LENGTH, AVENUE_WIDTH, PARK_GAP, PARK_SIZE, PLAZA_HALF_X, PLAZA_MAX_Z, STAGE_SPEAK_RADIUS, STAGE_X, STAGE_Z } from "./world.js";
 
 const MASP_URL = "/models/scenery/masp.glb";
@@ -80,7 +81,8 @@ const SCREEN_Z = -(AVENUE_WIDTH / 2 + PARK_GAP / 2);
  */
 const CHARACTER_HEIGHT = 2.0;
 const TRUNK_HEIGHT_FACTOR = 1.875;
-const TRUNK_HEIGHT = CHARACTER_HEIGHT * TRUNK_HEIGHT_FACTOR; // 3,75
+const TREE_HEIGHT_BOOST = 1.25; // árvores 25% mais altas
+const TRUNK_HEIGHT = CHARACTER_HEIGHT * TRUNK_HEIGHT_FACTOR * TREE_HEIGHT_BOOST; // 4,69
 const TRUNK_BASE_LENGTH = 2; // comprimento do cilindro base do tronco
 const TRUNK_WIDTH = 1.7;
 const CROWN_WIDTH = 1.05;
@@ -128,6 +130,41 @@ interface TreeSpec {
   hue: number;
 }
 
+
+/** Copa mais rica: cinco blobs sobrepostos, escurecidos embaixo e claros em cima (cor por vértice, multiplica a cor da instância). */
+function makeCrownGeometry(): BufferGeometry {
+  const blobs: [number, number, number, number][] = [
+    [0, 0, 0, 1],
+    [0.9, -0.25, 0.3, 0.7],
+    [-0.8, -0.2, -0.4, 0.72],
+    [0.1, 0.75, -0.2, 0.68],
+    [-0.2, -0.1, 0.9, 0.62],
+  ];
+  const parts = blobs.map(([x, y, z, k]) => {
+    const g = new IcosahedronGeometry(CROWN_RADIUS * k, 2);
+    g.translate(x * CROWN_RADIUS * 0.6, y * CROWN_RADIUS * 0.6, z * CROWN_RADIUS * 0.6);
+    g.deleteAttribute("uv");
+    const pos = g.getAttribute("position");
+    const col = new Float32Array(pos.count * 3);
+    for (let i = 0; i < pos.count; i++) {
+      const t = Math.min(1, Math.max(0, (pos.getY(i) + CROWN_RADIUS) / (CROWN_RADIUS * 2)));
+      const v = 0.55 + 0.5 * t;
+      col[i * 3] = v;
+      col[i * 3 + 1] = v;
+      col[i * 3 + 2] = v;
+    }
+    g.setAttribute("color", new BufferAttribute(col, 3));
+    return g;
+  });
+  return mergeGeometries(parts)!;
+}
+
+/** Tronco afilado, com base alargada. */
+function makeTrunkGeometry(): BufferGeometry {
+  const g = new CylinderGeometry(0.18, 0.38, TRUNK_BASE_LENGTH, 8, 1);
+  return g;
+}
+
 function buildTrees(): TreeSpec[] {
   const rand = mulberry32(1905);
   const out: TreeSpec[] = [];
@@ -149,6 +186,9 @@ function Park() {
   const trees = useMemo(buildTrees, []);
   const trunks = useRef<InstancedMesh>(null);
   const crowns = useRef<InstancedMesh>(null);
+  const crownGeo = useMemo(makeCrownGeometry, []);
+  const trunkGeo = useMemo(makeTrunkGeometry, []);
+  useEffect(() => () => { crownGeo.dispose(); trunkGeo.dispose(); }, [crownGeo, trunkGeo]);
 
   useLayoutEffect(() => {
     if (!trunks.current || !crowns.current) return;
@@ -212,12 +252,12 @@ function Park() {
       ))}
       {/* Árvores: troncos e copas instanciados (2 draw calls no total) */}
       <instancedMesh ref={trunks} frustumCulled={false} args={[undefined, undefined, trees.length]}>
-        <cylinderGeometry args={[0.25, 0.35, 2, 6]} />
+        <primitive object={trunkGeo} attach="geometry" />
         <meshStandardMaterial color={0x5b3a22} />
       </instancedMesh>
       <instancedMesh ref={crowns} frustumCulled={false} args={[undefined, undefined, trees.length]}>
-        <icosahedronGeometry args={[1.8, 0]} />
-        <meshStandardMaterial color={0xffffff} flatShading />
+        <primitive object={crownGeo} attach="geometry" />
+        <meshStandardMaterial color={0xffffff} vertexColors />
       </instancedMesh>
     </group>
   );

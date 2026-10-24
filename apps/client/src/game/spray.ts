@@ -1,5 +1,5 @@
 import type { FlagId, TeamId } from "@manifestacao/shared";
-import { AVENUE_LENGTH, AVENUE_WIDTH, PARK_GAP, PARK_SIZE, clampToAvenue } from "./world.js";
+import { AVENUE_LENGTH, CITY_HALF_Z, clampToAvenue } from "./world.js";
 
 /**
  * Constantes do spray/pichação (Fase 4, CLAUDE.md §3 "Spray / pixação").
@@ -109,6 +109,6 @@ export function sanitizeSprayPlacement(x: unknown, y: unknown, z: unknown, nx: u
   }
   yy = Math.max(0, Math.min(160, yy));
   const xLimit = AVENUE_LENGTH / 2 + 60;
-  const zMin = -(AVENUE_WIDTH / 2 + PARK_GAP + PARK_SIZE) - 8;
-  return { x: Math.max(-xLimit, Math.min(xLimit, x)), y: yy, z: Math.max(zMin, Math.min(140, z)), nx: ux, ny: uy, nz: uz };
+  const zMin = -CITY_HALF_Z - 8;
+  return { x: Math.max(-xLimit, Math.min(xLimit, x)), y: yy, z: Math.max(zMin, Math.min(CITY_HALF_Z + 8, z)), nx: ux, ny: uy, nz: uz };
 }

@@ -56,37 +56,22 @@ export const PLAZA_HALF_X = 32;
 export const PLAZA_MAX_Z = 44;
 
 /**
- * Limite invisível do mapa: a avenida inteira mais o parque (que é uma
- * "extensão" no lado -Z, mais estreita que a avenida). O jogador não passa
- * dessas bordas — nem em posições vindas da rede (ver useAvenueRealtime).
+ * Limites da cidade: dá para andar em tudo dentro deles (ruas, calçadas, praça, parque e as lojas do térreo dos
+ * prédios). A cidade é cercada por faixas amarelas (ver City.tsx) e o jogador não passa delas — nem em posições vindas
+ * da rede (ver useAvenueRealtime).
  */
+export const CITY_HALF_X = AVENUE_LENGTH / 2 + 27;
+export const CITY_HALF_Z = 112;
+
 export function clampToAvenue(
   x: number,
   z: number,
-  prev?: { x: number; z: number },
+  _prev?: { x: number; z: number },
 ): { x: number; z: number } {
-  // Nas pontas a avenida é fechada por viaturas (ver City.tsx): o jogador para antes delas.
-  const halfL = AVENUE_LENGTH / 2 - AVENUE_END_MARGIN;
-  // Avenida + calçadas dos dois lados (os prédios começam na borda da calçada).
-  const halfSide = AVENUE_WIDTH / 2 + SIDEWALK_WIDTH - AVATAR_RADIUS;
-  const parkHalf = PARK_SIZE / 2 - AVATAR_RADIUS;
-  const zMin = -(AVENUE_WIDTH / 2 + PARK_GAP + PARK_SIZE) + AVATAR_RADIUS;
-  const plazaHalf = PLAZA_HALF_X - AVATAR_RADIUS;
-  const cx = Math.max(-halfL, Math.min(halfL, x));
-  let cz = Math.max(zMin, Math.min(PLAZA_MAX_Z - AVATAR_RADIUS, z));
-  let cx2 = cx;
-  if (cz > halfSide && Math.abs(cx) > plazaHalf) {
-    // Fora da largura da praça: vindo da calçada (prev) a borda dela vira parede; já na praça (ou posição da
-    // rede, sem prev) a parede é lateral — só trava x.
-    if (prev && prev.z <= halfSide) cz = halfSide;
-    else cx2 = Math.max(-plazaHalf, Math.min(plazaHalf, cx));
-  }
-  if (cz < -halfSide && Math.abs(cx) > parkHalf) {
-    // Fora da largura do parque: idem (parede na calçada vindo dela; lateral se já dentro do parque).
-    if (prev && prev.z >= -halfSide) cz = -halfSide;
-    else cx2 = Math.max(-parkHalf, Math.min(parkHalf, cx));
-  }
-  return { x: cx2, z: cz };
+  return {
+    x: Math.max(-CITY_HALF_X + AVATAR_RADIUS, Math.min(CITY_HALF_X - AVATAR_RADIUS, x)),
+    z: Math.max(-CITY_HALF_Z + AVATAR_RADIUS, Math.min(CITY_HALF_Z - AVATAR_RADIUS, z)),
+  };
 }
 
 /**
