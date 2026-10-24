@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useModal } from "./useModal.js";
 import { AdminPhoto3d } from "./AdminPhoto3d.js";
 import { RigEditor } from "./RigEditor.js";
+import { AdminVideoControls } from "./AdminVideoControls.js";
 import { DEFAULT_SCREEN_OPTIONS, SCREEN_TITLE_MAX, cleanScreen, currentParkScreen, parseScreenMedia } from "../config/parkScreen.js";
 import type { Object3D } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -422,6 +423,7 @@ function ScreenTab({ busy, run }: TabProps) {
         janela (alguns sites não permitem ser abertos assim; a janela tem o botão "Abrir em outra aba"). O conteúdo é de responsabilidade do
         operador.
       </p>
+      <AdminVideoControls videoId={media?.kind === "youtube" ? media.id : null} />
       <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "var(--t-ui)" }}>
         Link (https://…)
         <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://www.youtube.com/watch?v=…" inputMode="url" maxLength={500} style={input} />
