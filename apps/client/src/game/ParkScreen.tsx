@@ -144,8 +144,8 @@ export function ParkScreen({ x, z }: { x: number; z: number }) {
     <group position={[x, 0, z]}>
       {/* Pernas */}
       {[-LEG_X, LEG_X].map((dx) => (
-        <mesh key={dx} position={[dx, SCREEN_BOTTOM / 2, -0.3]} castShadow>
-          <boxGeometry args={[1.2, SCREEN_BOTTOM, 1.2]} />
+        <mesh key={dx} position={[dx, (SCREEN_BOTTOM - FRAME) / 2, -0.3]} castShadow>
+          <boxGeometry args={[1.2, SCREEN_BOTTOM - FRAME, 0.6]} />
           <meshStandardMaterial color={0x3a3f47} />
         </mesh>
       ))}

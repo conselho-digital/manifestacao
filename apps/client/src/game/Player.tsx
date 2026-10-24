@@ -18,7 +18,7 @@ import {
   AVATAR_RADIUS,
   CAMERA_PIVOT_HEIGHT,
   RUN_MULTIPLIER,
-  WALK_SPEED,
+  FOOT_WALK_SPEED,
   clampToAvenue,
 } from "./world.js";
 import type { InputVector } from "./useInput.js";
@@ -191,7 +191,7 @@ export function Player({
     const yaw = cameraYawRef.current;
     // Correr só a pé (a velocidade do veículo vem da direção).
     const runMul = runRef.current ? RUN_MULTIPLIER : 1;
-    const speed = WALK_SPEED * runMul;
+    const speed = FOOT_WALK_SPEED * runMul;
     if (!driving && len > 0) {
       // Entrada do joystick é relativa à tela (z negativo = pra frente, ver
       // useInput.ts); giramos pelo ângulo da câmera para mover "pra onde a

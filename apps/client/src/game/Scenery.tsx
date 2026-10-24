@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { Box3, Color, InstancedMesh, Matrix4, Mesh, Quaternion, Sphere, Vector3 } from "three";
 import { ModelBoundary } from "./ModelBoundary.js";
-import { ParkScreen, SCREEN_W } from "./ParkScreen.js";
+import { ParkScreen } from "./ParkScreen.js";
 import { City } from "./City.js";
 import { clearCameraColliders, setCameraColliders } from "./colliders.js";
 import { clearSolids, setSolids } from "./solids.js";
@@ -70,9 +70,9 @@ useGLTF.preload(MASP_URL);
 // calçada (d=0 encosta na avenida, cresce afastando-se dela).
 const PARK_Z0 = -(AVENUE_WIDTH / 2 + PARK_GAP); // z do lado do parque que encosta na calçada
 const PATH_W = 3;
-/** Outdoor gigante no fundo do parque, no eixo central, virado para a avenida. */
+/** Outdoor gigante na calçada do parque, junto da rua, no eixo central e virado para a avenida. */
 const SCREEN_X = 0;
-const SCREEN_Z = PARK_Z0 - 54;
+const SCREEN_Z = -(AVENUE_WIDTH / 2 + PARK_GAP / 2);
 /**
  * Árvores do parque: o TRONCO tem 1,875 vez a altura de um personagem a pé (o corpo geométrico tem ~2,0 de altura;
  * era 2,5 e foi reduzido em 25%), ou seja, 3,75 unidades para todas; o que varia entre árvores é a grossura do tronco
@@ -141,8 +141,7 @@ function buildTrees(): TreeSpec[] {
       out.push({ x: jx, z: PARK_Z0 - jd, scale: 0.8 + rand() * 0.7, hue: rand() });
     }
   }
-  // Sem árvores na área do outdoor (filtra depois, para as outras ficarem onde sempre estiveram).
-  return out.filter((t) => Math.abs(t.x - SCREEN_X) > SCREEN_W / 2 + 2 || Math.abs(t.z - SCREEN_Z) > 5);
+  return out;
 }
 
 /** Quadrado arborizado: gramado, alamedas e árvores low-poly instanciadas. */

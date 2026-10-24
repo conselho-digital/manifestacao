@@ -69,8 +69,9 @@ function Board({ spot, ad }: { spot: BillboardSpot; ad: BillboardAd | undefined 
   return (
     <group position={[spot.x, 0, spot.z]} rotation={[0, spot.rotationY, 0]}>
       {[-5, 5].map((px) => (
-        <mesh key={px} position={[px, 3.5, 0]} castShadow>
-          <boxGeometry args={[0.4, 7, 0.4]} />
+        // Colunas debaixo do painel (param na base dele, y=4,9) e atrás do plano da tela: nunca cobrem a imagem.
+        <mesh key={px} position={[px, 2.45, -0.15]} castShadow>
+          <boxGeometry args={[0.4, 4.9, 0.3]} />
           <meshStandardMaterial color="#3b434c" />
         </mesh>
       ))}

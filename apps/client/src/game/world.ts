@@ -4,12 +4,14 @@
  */
 export const AVENUE_LENGTH = 500; // eixo X (2,5x o tamanho anterior)
 export const AVENUE_WIDTH = 40; // eixo Z
-export const WALK_SPEED = 6; // unidades/segundo
-export const RUN_MULTIPLIER = 1.7;
+export const WALK_SPEED = 6; // unidades/segundo (base dos veículos: ver driving.ts)
+/** A pé: andar e correr (mais rápidos que a base dos veículos). */
+export const FOOT_WALK_SPEED = 7.5;
+export const RUN_MULTIPLIER = 1.9;
 export const AVATAR_RADIUS = 0.5;
 
 // ── Câmera de terceira pessoa (livre: gira e inclina em torno do personagem) ──
-export const CAMERA_DISTANCE = 10.5;
+export const CAMERA_DISTANCE = 5.25;
 /** Celular: 25% mais perto do personagem que o padrão. */
 export const CAMERA_DISTANCE_MOBILE = CAMERA_DISTANCE * 0.75;
 /** PC: câmera mais colada no personagem (metade da distância do celular). */
