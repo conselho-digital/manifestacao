@@ -7,6 +7,7 @@ import { lookOf } from "./characterLook.js";
 import { WHEELIE_MAX_ANGLE } from "./driving.js";
 import { Flag3D, Vehicle3D, GlbModel } from "./props3d.js";
 import { teamImageUrl } from "./models.js";
+import { flagTilt, handPosition, strikeArm, strikeEnvelope, strikeProgress } from "./strike.js";
 import { SignProp } from "./SignProp.js";
 import type { SignData } from "./useSigns.js";
 
@@ -26,6 +27,8 @@ interface AvatarProps {
   modelUrl?: string | null;
   /** Quanto a moto está empinada (0..1), lido a cada frame (sem re-render). */
   wheelieRef?: { current: number };
+  /** Início (performance.now) do golpe com a bandeira em andamento; 0 = nenhum. Lido a cada frame. */
+  hitRef?: { current: number };
 }
 
 /** Eixo traseiro da moto: a roda da frente sobe girando em torno daqui. */
@@ -113,14 +116,37 @@ function Headwear({ character }: { character?: CharacterId }) {
 }
 
 /** Corpo geométrico (fallback quando não há modelo glTF). */
-export function ProceduralBody({ color, arms = true, character, riding = false }: { color: number; arms?: boolean; character?: CharacterId; riding?: boolean }) {
+export function ProceduralBody({
+  color,
+  arms = true,
+  character,
+  riding = false,
+  hitRef,
+}: {
+  color: number;
+  arms?: boolean;
+  character?: CharacterId;
+  riding?: boolean;
+  hitRef?: { current: number };
+}) {
   const look = lookOf(character);
+  const armRefs = useRef<(Group | null)[]>([null, null]);
+  // Golpe com a bandeira: o braço da bandeira (esquerdo, +x) levanta e desce; o outro acompanha um pouco.
+  useFrame(() => {
+    const p = hitRef ? strikeProgress(hitRef.current) : -1;
+    armRefs.current.forEach((g, i) => {
+      if (!g) return;
+      const side = i === 0 ? -1 : 1;
+      const base = riding ? -1.05 : 0;
+      g.rotation.x = p >= 0 ? base * (1 - strikeEnvelope(p)) - strikeArm(p) * (side > 0 ? 1 : 0.6) * strikeEnvelope(p) : base;
+    });
+  });
   return (
     // De piloto: o corpo desce até o banco e se inclina para a frente; os braços vão ao guidão.
     <group scale={look.scale} position={riding ? [0, -0.1, -0.32] : undefined} rotation={riding ? [0.38, 0, 0] : undefined}>
       {/* Braços: manga na cor da camisa e mão na cor da pele, caindo dos ombros com leve abertura. */}
       {arms && [-1, 1].map((side) => (
-        <group key={side} position={[side * 0.46, 1.32, 0]} rotation={riding ? [-1.05, 0, side * 0.12] : [0, 0, side * 0.12]}>
+        <group key={side} ref={(g) => (armRefs.current[side < 0 ? 0 : 1] = g)} position={[side * 0.46, 1.32, 0]} rotation={riding ? [-1.05, 0, side * 0.12] : [0, 0, side * 0.12]}>
           <mesh position={[0, -0.32, 0]} castShadow>
             <capsuleGeometry args={[0.11, 0.42, 4, 8]} />
             <meshStandardMaterial color={color} />
@@ -160,10 +186,11 @@ function FlagProp({ flag, color, team }: { flag: FlagId; color: number; team?: T
  * opcional e etiqueta de apelido. Usado pelo jogador local e pelos remotos.
  */
 export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
-  { color, name, flag = "nenhuma", team, character, vehicle = "nenhum", sign = null, modelUrl = null, wheelieRef },
+  { color, name, flag = "nenhuma", team, character, vehicle = "nenhum", sign = null, modelUrl = null, wheelieRef, hitRef },
   ref,
 ) {
   const tiltRef = useRef<Group>(null);
+  const flagPivotRef = useRef<Group>(null);
   const kind = VEHICLES[vehicle]?.kind ?? "foot";
   const isMoto = kind === "moto";
   const hideBody = kind !== "foot" && kind !== "moto";
@@ -173,6 +200,15 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
     if (!g) return;
     const target = isMoto ? -(wheelieRef?.current ?? 0) * WHEELIE_MAX_ANGLE : 0;
     g.rotation.x += (target - g.rotation.x) * 0.35;
+    // Golpe com a bandeira: ela gira em torno da mão, que acompanha o braço.
+    const pivot = flagPivotRef.current;
+    if (pivot) {
+      const p = hitRef ? strikeProgress(hitRef.current) : -1;
+      const env = p >= 0 ? strikeEnvelope(p) : 0;
+      const hand = handPosition(p >= 0 ? strikeArm(p) * env : 0);
+      pivot.position.set(0, hand.y, hand.z);
+      pivot.rotation.x = p >= 0 ? flagTilt(p) * env : 0;
+    }
   });
   return (
     <group ref={ref}>
@@ -181,21 +217,28 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
       {/* Moto: o personagem vai sentado de piloto. Carro, caminhão e carro de som: só o veículo aparece. */}
       {!hideBody &&
         (modelUrl ? (
-          <Suspense fallback={<ProceduralBody color={color} arms riding={isMoto} character={character} />}>
+          <Suspense fallback={<ProceduralBody color={color} arms riding={isMoto} character={character} hitRef={hitRef} />}>
             <GlbModel
               url={modelUrl}
               animated
               walking={vehicle === "nenhum"}
               pose={isMoto ? "moto" : null}
+              strikeRef={hitRef}
               fallback={<ProceduralBody color={color} arms riding={isMoto} character={character} />}
             />
           </Suspense>
         ) : (
-          <ProceduralBody color={color} arms={vehicle === "nenhum" || isMoto} riding={isMoto} character={character} />
+          <ProceduralBody color={color} arms={vehicle === "nenhum" || isMoto} riding={isMoto} character={character} hitRef={hitRef} />
         ))}
 
       {/* Bandeira só a pé: em veículo as mãos estão ocupadas. */}
-      {flag !== "nenhuma" && vehicle === "nenhum" && <FlagProp flag={flag} color={color} team={team} />}
+      {flag !== "nenhuma" && vehicle === "nenhum" && (
+        <group ref={flagPivotRef} position={[0, handPosition(0).y, 0]}>
+          <group position={[0, -handPosition(0).y, 0]}>
+            <FlagProp flag={flag} color={color} team={team} />
+          </group>
+        </group>
+      )}
       {sign && !hideBody && <SignProp sign={sign} />}
       <Vehicle3D vehicle={vehicle} />
       </group>

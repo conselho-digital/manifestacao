@@ -11,6 +11,7 @@ import { ModelBoundary } from "./ModelBoundary.js";
 import { createAutoAnimator, type AutoAnimator, type AutoPose } from "./autoAnimate.js";
 import { getBakedRig, instantiateRig } from "./autoRig.js";
 import { rigForUrl } from "../config/rigs.js";
+import { strikeProgress } from "./strike.js";
 
 export type FlagEmblem = "star-burst" | "ring" | "stripe";
 
@@ -245,6 +246,7 @@ export function GlbModel({
   animated = false,
   walking = true,
   pose = null,
+  strikeRef,
 }: {
   url: string;
   fallback?: ReactNode;
@@ -252,15 +254,17 @@ export function GlbModel({
   walking?: boolean;
   /** "moto": o personagem aparece sentado, de piloto. */
   pose?: AutoPose;
+  /** Início (performance.now) do golpe com a bandeira em andamento; 0 = nenhum. */
+  strikeRef?: { current: number };
 }) {
   return (
     <ModelBoundary key={url} fallback={fallback}>
-      <GlbModelInner url={url} animated={animated} walking={walking} pose={pose} />
+      <GlbModelInner url={url} animated={animated} walking={walking} pose={pose} strikeRef={strikeRef} />
     </ModelBoundary>
   );
 }
 
-function GlbModelInner({ url, animated, walking, pose }: { url: string; animated: boolean; walking: boolean; pose: AutoPose }) {
+function GlbModelInner({ url, animated, walking, pose, strikeRef }: { url: string; animated: boolean; walking: boolean; pose: AutoPose; strikeRef?: { current: number } }) {
   const { scene, animations } = useGLTF(url);
   // Clone por uso: o cache do useGLTF devolve a MESMA cena; sem clonar, o
   // mesmo modelo em dois jogadores brigaria pelo mesmo pai (só um aparece).
@@ -303,7 +307,7 @@ function GlbModelInner({ url, animated, walking, pose }: { url: string; animated
   }, [animated, instance, animations, rig]);
   useFrame((_, dt) => {
     try {
-      animRef.current?.update(Math.min(dt, 0.1), walking, pose);
+      animRef.current?.update(Math.min(dt, 0.1), walking, pose, strikeRef ? strikeProgress(strikeRef.current) : -1);
     } catch {
       animRef.current = null;
     }

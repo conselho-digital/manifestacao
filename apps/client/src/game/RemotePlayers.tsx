@@ -32,6 +32,17 @@ export function RemotePlayers({ ids, playersRef, signs }: RemotePlayersProps) {
     return r;
   };
 
+  // Início do último golpe com a bandeira de cada jogador (lido pelo Avatar a cada frame).
+  const hits = useRef<Map<string, { current: number }>>(new Map());
+  const hitRefFor = (id: string) => {
+    let r = hits.current.get(id);
+    if (!r) {
+      r = { current: 0 };
+      hits.current.set(id, r);
+    }
+    return r;
+  };
+
   function refFor(id: string): (g: Group | null) => void {
     let fn = refCallbacks.current.get(id);
     if (!fn) {
@@ -59,6 +70,7 @@ export function RemotePlayers({ ids, playersRef, signs }: RemotePlayersProps) {
       }
       const w = wheelieRefFor(id);
       w.current += (p.wheelie - w.current) * t;
+      hitRefFor(id).current = p.hitAt ?? 0;
     }
   });
 
@@ -78,6 +90,7 @@ export function RemotePlayers({ ids, playersRef, signs }: RemotePlayersProps) {
             character={p.character}
             vehicle={p.vehicle}
             wheelieRef={wheelieRefFor(id)}
+            hitRef={hitRefFor(id)}
             sign={p.signId ? signs.get(p.signId) ?? null : null}
             modelUrl={modelUrlFor(p.character, p.team)}
           />

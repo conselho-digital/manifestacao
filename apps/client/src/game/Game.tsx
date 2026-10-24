@@ -14,6 +14,8 @@ import { modelUrlFor } from "./models.js";
 import { CAMERA_SHOULDER_RATIO, CAMERA_DISTANCE_MOBILE, CAMERA_DISTANCE_DESKTOP, CAMERA_PITCH_DEFAULT, CAMERA_PIVOT_HEIGHT } from "./world.js";
 import { useDailySprays } from "./useDailySprays.js";
 import { useFlagTime } from "./useFlagTime.js";
+import { HitButton } from "../ui/HitButton.js";
+import { STRIKE_SECONDS, strikeProgress } from "./strike.js";
 import { FlagButton } from "../ui/FlagButton.js";
 import type { SprayAim } from "./spray.js";
 import { sprayImageFor } from "./models.js";
@@ -158,6 +160,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
   // Direção: botões na tela escrevem em driveRef; wheelieRef (moto empinada) é só leitura do desenho.
   const driveRef = useRef<DriveInput>(NO_DRIVE_INPUT);
   const wheelieRef = useRef(0);
+  const hitRef = useRef(0);
   const cameraTouchedAtRef = useRef(0);
   const vehicleKind = VEHICLES[vehicle]?.kind ?? "foot";
   const driving = vehicleKind !== "foot";
@@ -251,6 +254,25 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
 
   // Sprays do dia (15 por dia): contador no aparelho — client-trust, como o resto do MVP não autoritativo (CLAUDE.md §4).
   const sprays = useDailySprays(isAdmin);
+  // Golpe com a bandeira (0,7 s): botão "Bater" ou tecla F, só a pé e com a bandeira à mostra.
+  const canHit = flagShown && !driving;
+  const [hitBusy, setHitBusy] = useState(false);
+  const doHit = useCallback(() => {
+    if (!canHit || strikeProgress(hitRef.current) >= 0) return;
+    hitRef.current = performance.now();
+    net.sendHit();
+    setHitBusy(true);
+    window.setTimeout(() => setHitBusy(false), STRIKE_SECONDS * 1000);
+  }, [canHit, net]);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.repeat || e.key.toLowerCase() !== "f" || isTypingTarget(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
+      doHit();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [doHit]);
+
   const handleSpray = useCallback(() => {
     if (!transformReadyRef.current) return;
     // Gasta ANTES de enviar (a contagem relê o armazenamento: outra aba pode ter gasto); se o envio for descartado
@@ -342,6 +364,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           onMove={net.sendMove}
           driveRef={driveRef}
           wheelieRef={wheelieRef}
+          hitRef={hitRef}
           cameraTouchedAtRef={cameraTouchedAtRef}
           transformRef={transformRef}
           transformReadyRef={transformReadyRef}
@@ -443,6 +466,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           remaining={flagTime.remaining}
           shown={flagShown}
         />
+        {canHit && <HitButton onHit={doHit} busy={hitBusy} />}
       </TopRightPanel>
       {optionsOpen && !adminOpen && (
         <OptionsModal

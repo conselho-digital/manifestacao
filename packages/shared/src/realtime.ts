@@ -78,4 +78,11 @@ export const BROADCAST = {
   spray: "spray",
   /** Sinalização WebRTC do palanque (claim/release/join/offer/answer/ice). */
   voice: "voice",
+  /** Golpe com a bandeira (só a animação: quem recebe toca os 0,7 s no jogador que bateu). */
+  hit: "hit",
 } as const;
+
+export interface HitBroadcast {
+  /** Chave de presence de quem bateu. */
+  senderId: string;
+}

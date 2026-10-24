@@ -19,6 +19,7 @@ import {
   type MoveBroadcast,
   type PresenceState,
   type SprayBroadcast,
+  type HitBroadcast,
   type TeamId,
   type VehicleId,
 } from "@manifestacao/shared";
@@ -35,6 +36,7 @@ import {
   type SprayMark,
 } from "../game/spray.js";
 import { clampToAvenue } from "../game/world.js";
+import { STRIKE_SECONDS } from "../game/strike.js";
 import { DEFAULT_SPRAY_ID, SPRAY_SLUG_RE, sprayOptions } from "../config/sprays.js";
 
 /** `typeof === "number"` deixa passar NaN/Infinity; isto não. */
@@ -66,6 +68,8 @@ export interface RemotePlayer extends PresenceState {
   heading: number;
   wheelie: number;
   vehicle: VehicleId;
+  /** Quando (performance.now deste aparelho) o jogador deu o último golpe com a bandeira; 0 = nenhum. */
+  hitAt?: number;
 }
 
 /** Mensagem de chat com chave local estável para render no React. */
@@ -295,6 +299,16 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
       .on("broadcast", { event: BROADCAST.voice }, ({ payload }) => {
         voiceHandlerRef.current?.(payload);
       })
+      .on("broadcast", { event: BROADCAST.hit }, ({ payload }) => {
+        const h = payload as HitBroadcast;
+        if (typeof h?.senderId !== "string" || h.senderId === selfId || h.senderId.length > 64) return;
+        const who = playersRef.current.get(h.senderId);
+        if (!who || who.vehicle !== "nenhum" || who.flag === "nenhuma") return; // só quem está a pé com bandeira
+        const nowHit = performance.now();
+        // No máximo um golpe por duração da animação (anti-flood).
+        if (who.hitAt && nowHit - who.hitAt < STRIKE_SECONDS * 1000 * 0.9) return;
+        who.hitAt = nowHit;
+      })
       .on("broadcast", { event: BROADCAST.chat }, ({ payload }) => {
         const c = payload as ChatBroadcast;
         if (typeof c?.id !== "string" || c.id === selfId || c.id.length > 64) return;
@@ -428,6 +442,14 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
   );
 
   /** Sinalização do palanque (sem eco local: o remetente já conhece o próprio estado). */
+  const sendHit = useCallback(() => {
+    const channel = channelRef.current;
+    if (channel && channel.state === "joined") {
+      const payload: HitBroadcast = { senderId: selfId };
+      void channel.send({ type: "broadcast", event: BROADCAST.hit, payload });
+    }
+  }, [selfId]);
+
   const sendVoice = useCallback((payload: unknown) => {
     const channel = channelRef.current;
     if (channel && channel.state === "joined") void channel.send({ type: "broadcast", event: BROADCAST.voice, payload });
@@ -498,6 +520,7 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
     sendMove,
     sendChat,
     sendSpray,
+    sendHit,
     sendVoice,
     voiceHandlerRef,
   };

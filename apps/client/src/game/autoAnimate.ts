@@ -1,4 +1,5 @@
 import { FOOT_WALK_SPEED } from "./world.js";
+import { strikeArm, strikeEnvelope, strikeLean, strikeTwist } from "./strike.js";
 import { AnimationAction, AnimationClip, AnimationMixer, Bone, Group, Object3D, Quaternion, Vector3 } from "three";
 
 /**
@@ -77,7 +78,7 @@ export type AutoPose = "moto" | null;
 
 export interface AutoAnimator {
   /** Avança um quadro. `walking` = a pé (em veículo o personagem não anda); `pose` = sentado na moto. */
-  update(dt: number, walking: boolean, pose?: AutoPose): void;
+  update(dt: number, walking: boolean, pose?: AutoPose, strike?: number): void;
   dispose(): void;
 }
 
@@ -116,7 +117,7 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
     const run = runClip && runClip !== walkClip ? play(runClip) : null;
     const idle = play(idleClip);
     return {
-      update(dt, walking, _pose) {
+      update(dt, walking, _pose, _strike) {
         (frame.parent ?? frame).getWorldPosition(pos);
         if (havePos && dt > 0) speed += (Math.min(24, pos.distanceTo(lastPos) / dt) - speed) * Math.min(1, dt * 10);
         lastPos.copy(pos);
@@ -249,7 +250,7 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
   let runK = 0; // 0 andando → 1 correndo
 
   return {
-    update(dt, walking, pose = null) {
+    update(dt, walking, pose = null, strike = -1) {
       t += dt;
       sit += ((pose === "moto" ? 1 : 0) - sit) * Math.min(1, dt * 9);
       const stand = 1 - sit;
@@ -350,10 +351,18 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
           }
           ang = ang * stand + seated * sit;
         }
+        // Golpe com a bandeira: o braço da bandeira (esquerdo, lado +x) leva a bandeira; o outro ajuda um pouco.
+        const hit = strike >= 0 ? strikeEnvelope(strike) : 0;
+        if (hit > 0) {
+          if (l.role === "arm") ang = ang * (1 - hit) + strikeArm(strike) * (l.side > 0 ? 1 : 0.6) * hit;
+          else if (l.role === "forearm") ang = ang * (1 - hit) + (l.side > 0 ? 0.35 : 0.5) * hit;
+          else if (l.role === "hips") ang += -forward * strikeTwist(strike) * hit;
+        }
         // ângulo positivo no eixo = balança para a frente
         if (l.role === "spine") {
-          rotTwist.setFromAxisAngle(l.axis, ang); // `ang` já vem misturado com a pose
-          rotLean.setFromAxisAngle(leanAxis, (-forward * 0.6 * sit) / spineCount); // para cima, o mesmo eixo inclina o tronco ao contrário das pernas
+          rotTwist.setFromAxisAngle(l.axis, ang + (strike >= 0 ? forward * strikeTwist(strike) * hit * 0.6 : 0)); // `ang` já vem misturado com a pose
+          const lean = 0.6 * sit + (strike >= 0 ? strikeLean(strike) * hit : 0);
+          rotLean.setFromAxisAngle(leanAxis, (-forward * lean) / spineCount); // para cima, o mesmo eixo inclina o tronco ao contrário das pernas
           rot.copy(rotLean).multiply(rotTwist).multiply(l.rest);
         } else {
           rot.setFromAxisAngle(l.axis, ang).multiply(l.rest);

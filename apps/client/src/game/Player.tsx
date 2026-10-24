@@ -62,6 +62,8 @@ interface PlayerProps {
   driveRef: { current: DriveInput };
   /** Quanto a moto está empinada (0..1) — lido pelo Avatar para inclinar o desenho. */
   wheelieRef: { current: number };
+  /** Início (performance.now) do golpe com a bandeira em andamento. */
+  hitRef?: { current: number };
   /** Instante (ms) do último arrasto de câmera — a câmera só se alinha ao veículo sozinha se faz tempo. */
   cameraTouchedAtRef: { current: number };
   /** Atualizado a cada frame com a posição atual (opcional). */
@@ -110,6 +112,7 @@ export function Player({
   onMove,
   driveRef,
   wheelieRef,
+  hitRef,
   cameraTouchedAtRef,
   transformRef,
   transformReadyRef,
@@ -354,6 +357,6 @@ export function Player({
   });
 
   return (
-    <Avatar ref={ref} color={color} name={name} flag={flag} team={team} character={character} vehicle={vehicle} sign={sign} modelUrl={modelUrl} wheelieRef={wheelieRef} />
+    <Avatar ref={ref} color={color} name={name} flag={flag} team={team} character={character} vehicle={vehicle} sign={sign} modelUrl={modelUrl} wheelieRef={wheelieRef} hitRef={hitRef} />
   );
 }
