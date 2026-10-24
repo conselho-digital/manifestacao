@@ -18,7 +18,6 @@ export const RIG_POINTS = [
   { key: "hand", label: "Mão", help: "Pulso/mão do mesmo lado" },
   { key: "pelvis", label: "Cintura", help: "Centro da cintura/pélvis" },
   { key: "hip", label: "Quadril", help: "Articulação da perna, no topo da coxa (mesmo lado)" },
-  { key: "thigh", label: "Coxa", help: "Meio da coxa, do mesmo lado" },
   { key: "knee", label: "Joelho", help: "Dobra da perna, do mesmo lado" },
   { key: "ankle", label: "Pé", help: "Tornozelo, onde a perna encontra o pé" },
   { key: "toe", label: "Ponta do pé", help: "Ponta do pé, do mesmo lado" },
