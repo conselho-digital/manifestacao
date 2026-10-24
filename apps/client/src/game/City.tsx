@@ -287,6 +287,32 @@ export function makeFacadeTexture(): CanvasTexture {
   return tex;
 }
 
+/** Metade dos prédios (as fileiras junto à rua) têm lojas; os de trás ficam fechados. */
+export const hasShop = (b: Building) => b.row < 2;
+
+/** Térreo fechado: paredes cheias e uma porta dupla fechada voltada para a rua. */
+function closedFor(b: Building, rand: () => number): ShopParts {
+  const solid: BufferGeometry[] = [];
+  const wall = new Color(b.color).multiplyScalar(0.8).getHex();
+  solid.push(coloredBox(b.w, GROUND_FLOOR_H, b.d, b.x, 0, b.z, wall));
+  const toStreet = b.z > 0 ? -1 : 1;
+  const zf = b.z + toStreet * (b.d / 2 + 0.06);
+  const frame = 0x2a2d33;
+  const door = [0x6b4a2f, 0x3d5a80, 0x5a3d3d, 0x2f4f4f][Math.floor(rand() * 4)]!;
+  const dx = b.x + (rand() - 0.5) * Math.max(0, b.w - 5);
+  solid.push(coloredBox(3.0, 2.8, 0.1, dx, 0, zf, frame));
+  for (const sx of [-1, 1]) {
+    solid.push(coloredBox(1.35, 2.6, 0.14, dx + sx * 0.7, 0, zf + toStreet * 0.03, door));
+    solid.push(coloredBox(0.08, 0.3, 0.1, dx + sx * 0.12, 1.0, zf + toStreet * 0.13, 0xd8c27a));
+  }
+  solid.push(coloredBox(3.2, 0.12, 0.2, dx, 2.85, zf, frame));
+  return {
+    solid: mergeGeometries(solid)!,
+    glass: new PlaneGeometry(0.001, 0.001),
+    rects: [{ minX: b.x - b.w / 2, maxX: b.x + b.w / 2, minZ: b.z - b.d / 2, maxZ: b.z + b.d / 2 }],
+  };
+}
+
 /** Faixa amarela e postes em volta de TODA a cidade (e só ali): é o limite por onde o jogador não passa. */
 function PerimeterTape() {
   const posts = useRef<InstancedMesh>(null);
@@ -500,7 +526,7 @@ export function City() {
   const { buildings, geometry, shops } = useMemo(() => {
     const list = buildCity();
     const rand = mulberry32(4242);
-    const parts = list.map((b) => shopFor(b, rand));
+    const parts = list.map((b) => (hasShop(b) ? shopFor(b, rand) : closedFor(b, rand)));
     return {
       buildings: list,
       geometry: mergeGeometries(list.map(boxFor))!,
@@ -518,7 +544,7 @@ export function City() {
     const boxes = buildings.map(
       (b) =>
         new Box3(
-          new Vector3(b.x - b.w / 2, GROUND_FLOOR_H, b.z - b.d / 2),
+          new Vector3(b.x - b.w / 2, hasShop(b) ? GROUND_FLOOR_H : 0, b.z - b.d / 2),
           new Vector3(b.x + b.w / 2, b.h, b.z + b.d / 2),
         ),
     );

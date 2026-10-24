@@ -22,7 +22,7 @@ const SIZE = 64;
 // o jogo já usa um): cada miniatura espera a vez, renderiza UMA vez, vira
 // imagem estática (PNG) e libera o contexto.
 let queue: Promise<void> = Promise.resolve();
-function acquire(): Promise<() => void> {
+export function acquire(): Promise<() => void> {
   let release!: () => void;
   const mine = new Promise<void>((r) => (release = r));
   const turn = queue.then(() => release);
@@ -78,7 +78,7 @@ function Snapshot({ onShot }: { onShot: (dataUrl: string) => void }) {
   return null;
 }
 
-class Boundary extends Component<{ onError: () => void; children: ReactNode }, { failed: boolean }> {
+export class Boundary extends Component<{ onError: () => void; children: ReactNode }, { failed: boolean }> {
   override state = { failed: false };
   static getDerivedStateFromError() {
     return { failed: true };

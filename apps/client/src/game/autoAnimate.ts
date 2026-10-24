@@ -110,6 +110,9 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
   let havePos = false;
   let speed = 0;
   let phase = 0;
+  // Cada personagem tem um jeito próprio de andar (±10% na cadência, ±12% na amplitude), como os pedestres de GTA.
+  const gaitFreq = 0.9 + Math.random() * 0.2;
+  const gaitAmp = 0.88 + Math.random() * 0.24;
   let t = 0;
 
   frame.updateWorldMatrix(true, true);
@@ -259,6 +262,7 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
   const parentInv = new Quaternion();
   const baseY = frame.position.y;
   const baseZ = frame.position.z;
+  const baseX = frame.position.x;
   const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
   const smooth = (a: number, b: number, v: number) => {
     const x = Math.max(0, Math.min(1, (v - a) / (b - a)));
@@ -291,7 +295,7 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
       w += ((moving ? 1 : 0) - w) * k;
       runK += ((moving ? smooth(FOOT_WALK_SPEED * 1.25, FOOT_WALK_SPEED * 1.9, speed) : 0) - runK) * k;
       // Cadência (ciclos/s): andar devagar (~2 passos/s); correr com passos mais rápidos. O ciclo completo = dois passos.
-      const freq = lerp(0.62 + 0.1 * speed, 1.35 + 0.05 * speed, runK);
+      const freq = lerp(0.62 + 0.1 * speed, 1.35 + 0.05 * speed, runK) * gaitFreq;
       if (moving) phase += dt * Math.PI * 2 * freq;
       else phase += (Math.round(phase / Math.PI) * Math.PI - phase) * Math.min(1, dt * 6);
       const sin = Math.sin(phase);
@@ -300,8 +304,8 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
       const hasRig = limbs.length > 0;
       const idle = (1 - w) * stand;
       // Amplitudes da marcha (andar → correr).
-      const thighAmp = lerp(0.46, 1.0, runK);
-      const armAmp = lerp(0.4, 0.9, runK);
+      const thighAmp = lerp(0.46, 0.85, runK) * gaitAmp;
+      const armAmp = lerp(0.4, 0.72, runK) * gaitAmp;
       const bob = hasRig
         ? // O quadril desce quando as pernas se abrem (pés no chão) e sobe no apoio; na corrida ainda há um impulso.
           -legLen * (1 - Math.cos(0.5 * thighAmp * Math.abs(sin))) * w + runK * 0.05 * (0.5 + 0.5 * Math.cos(2 * phase)) * w
@@ -310,6 +314,7 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
       const seatDrop = hasRig ? 0.82 - hipY : -0.3;
       frame.position.y = baseY + bob * stand + seatDrop * sit;
       frame.position.z = baseZ + -0.05 * sit;
+      frame.position.x = baseX + 0.025 * Math.sin(phase) * w * stand * (hasRig ? 1 : 0);
       frame.rotation.x = forward * (lerp(0.03, 0.24, runK) * w * stand + (hasRig ? 0 : 0.3) * sit);
       frame.rotation.y = !hasRig ? sin * 0.07 * w * stand : 0;
       // Parado: o corpo todo balança de leve, como respirando e mudando o peso de perna.
@@ -331,7 +336,10 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
       const fall = knock.fall >= 0 ? fallLimbs(knock.fall) : null;
       const breathe = Math.sin(t * 2.2);
       const sway = Math.sin(t * 0.55); // peso passando de uma perna para a outra
-      const look = Math.sin(t * 0.31);
+      // Parado: de tempos em tempos olha em volta (cabeça gira rápido, segura e volta), como pedestre esperando.
+      const lookCycle = (t * 0.22 + gaitFreq * 7) % 1;
+      const glance = lookCycle < 0.18 ? Math.sin((lookCycle / 0.18) * Math.PI) : 0;
+      const look = Math.sin(t * 0.31) * 0.5 + glance * (Math.floor(t * 0.22 + gaitFreq * 7) % 2 ? 1 : -1) * 1.6;
 
       for (const l of limbs) {
         const sl = l.side > 0 ? sin : -sin; // a esquerda vai à frente quando sin > 0
@@ -526,6 +534,7 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
       for (const l of limbs) l.bone.quaternion.copy(l.restLocal);
       frame.position.y = baseY;
       frame.position.z = baseZ;
+      frame.position.x = baseX;
       frame.rotation.set(0, 0, 0);
       frame.scale.y = 1;
     },

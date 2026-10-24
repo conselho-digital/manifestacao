@@ -41,12 +41,16 @@ export function App() {
   // Config editável pelo admin (equipes, bandeiras, nomes/preços, modelos 3D):
   // aplicada por cima dos padrões; `configVersion` força o re-render de quem lê.
   const [configVersion, setConfigVersion] = useState(0);
+  // A primeira carga precisa terminar antes de mostrar seletor/jogo: senão o boneco padrão aparece e só depois troca
+  // pelo modelo enviado pelo admin.
+  const [configReady, setConfigReady] = useState(false);
   const reloadConfig = useCallback(async () => {
     try {
-      await loadAndApplyGameConfig();
+      await Promise.race([loadAndApplyGameConfig(), new Promise((r) => setTimeout(r, 8000))]);
     } catch {
       /* sem rede/Supabase: segue com os padrões */
     }
+    setConfigReady(true);
     clearProductThumbs();
     setConfigVersion((v) => v + 1);
   }, []);
@@ -135,6 +139,14 @@ export function App() {
         >
           Sair da conta
         </button>
+      </main>
+    );
+  }
+
+  if (!configReady) {
+    return (
+      <main style={{ minHeight: "100dvh", display: "flex", alignItems: "center", justifyContent: "center", background: "var(--bg)", color: "var(--ink-dim)" }}>
+        Carregando…
       </main>
     );
   }
