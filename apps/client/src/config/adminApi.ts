@@ -1,6 +1,8 @@
 import { ASSET_BUCKET, MAX_LABEL_LENGTH, isImageSlot, isModelSlot } from "./gameConfig.js";
 import { getSupabase } from "../net/supabase.js";
 import type { RigMarks } from "./rigs.js";
+import { serverNow, type PlaybackState } from "./parkScreen.js";
+import { userImageUrl } from "../net/userImages.js";
 
 /**
  * Escritas do painel de admin. Quem decide se a escrita vale é o RLS do
@@ -27,7 +29,7 @@ function deepEqual(a: unknown, b: unknown): boolean {
   return ka.every((k) => deepEqual((a as Record<string, unknown>)[k], (b as Record<string, unknown>)[k]));
 }
 
-export async function saveConfigKey(key: "teams" | "models" | "rigs" | "screen", value: unknown): Promise<void> {
+export async function saveConfigKey(key: "teams" | "models" | "rigs" | "screen" | "screen_playback", value: unknown): Promise<void> {
   const { data, error } = await db()
     .from("game_config")
     .upsert({ key, value, updated_at: new Date().toISOString() })
@@ -387,6 +389,24 @@ export async function fetchSignQueue(): Promise<AdminSign[]> {
 export async function moderateSign(id: string, approve: boolean, reason?: string): Promise<void> {
   const { error } = await db().rpc("moderate_sign", { p_id: id, p_approve: approve, p_reason: reason ?? null });
   if (error) throw new Error(error.message.includes("already_moderated") ? "Este cartaz já foi moderado." : error.message);
+}
+
+/** Imagens (cartaz/lance) por id, para a moderação ver o que foi enviado: id → URL pública. */
+export async function fetchMediaUrls(ids: string[]): Promise<Record<string, string>> {
+  if (ids.length === 0) return {};
+  const { data, error } = await db().rpc("admin_media_paths", { p_ids: ids });
+  if (error) return {};
+  const out: Record<string, string> = {};
+  for (const r of (data as { id: string; image_path: string }[] | null) ?? []) {
+    const url = userImageUrl(r.image_path);
+    if (url) out[r.id] = url;
+  }
+  return out;
+}
+
+/** Comando do admin para o vídeo do outdoor: chega na hora a quem está com ele aberto. */
+export async function publishPlayback(state: PlaybackState, position: number): Promise<void> {
+  await saveConfigKey("screen_playback", { state, position: Math.max(0, Math.round(position * 10) / 10), at: serverNow() });
 }
 
 // ── Telões (fila de moderação dos lances) ─────────────────────────────────

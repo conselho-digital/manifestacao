@@ -12,6 +12,7 @@ import {
 import { Avatar } from "./Avatar.js";
 import { NO_DRIVE_INPUT, stepDrive, type DriveInput, type DriveState } from "./driving.js";
 import type { SignData } from "./useSigns.js";
+import { fallSeconds, type KnockRefs } from "./knock.js";
 import {
   CAMERA_LOOK_AHEAD_RATIO,
   CAMERA_SHOULDER_RATIO,
@@ -64,6 +65,8 @@ interface PlayerProps {
   wheelieRef: { current: number };
   /** Início (performance.now) do golpe com a bandeira em andamento. */
   hitRef?: { current: number };
+  /** Reação a golpe e queda do jogador local: caído, ele não anda. */
+  knock?: KnockRefs;
   /** Instante (ms) do último arrasto de câmera — a câmera só se alinha ao veículo sozinha se faz tempo. */
   cameraTouchedAtRef: { current: number };
   /** Atualizado a cada frame com a posição atual (opcional). */
@@ -113,6 +116,7 @@ export function Player({
   driveRef,
   wheelieRef,
   hitRef,
+  knock,
   cameraTouchedAtRef,
   transformRef,
   transformReadyRef,
@@ -145,7 +149,9 @@ export function Player({
     if (!g) return;
 
     const input = inputRef.current;
-    const len = Math.hypot(input.x, input.z);
+    // Caído (ou levantando): não anda até terminar a animação.
+    const downed = knock ? fallSeconds(knock.fallAt.current) >= 0 : false;
+    const len = downed ? 0 : Math.hypot(input.x, input.z);
     const driving = (VEHICLES[vehicleRef.current]?.kind ?? "foot") !== "foot";
     // Trocou de veículo (ou desceu): zera a velocidade e herda a direção atual.
     if (prevVehicle.current !== vehicleRef.current) {
@@ -182,7 +188,7 @@ export function Player({
       wheelieRef.current = st.wheelie;
       moving = Math.abs(st.speed) > 0.05 || st.wheelie > 0.01;
       // A câmera se alinha atrás do veículo, a menos que o jogador esteja olhando em volta.
-      if (Math.abs(st.speed) > 1 && performance.now() - cameraTouchedAtRef.current > 1500) {
+      if (Math.abs(st.speed) > 1 && performance.now() - cameraTouchedAtRef.current > 900) {
         const diff = wrapAngle(st.heading - cameraYawRef.current);
         cameraYawRef.current = wrapAngle(cameraYawRef.current + diff * Math.min(1, 2.2 * delta));
       }
@@ -212,6 +218,16 @@ export function Player({
       g.position.x = next.x;
       g.position.z = next.z;
       facing.current = facingOf(worldX, worldZ, facing.current);
+      // Sem arrastar a câmera (dedo/mouse soltos faz um instante), ela passa para as costas do personagem enquanto ele
+      // anda para a frente, como nos veículos. Só a parte "para a frente" do joystick conta: andar de lado ou de ré
+      // não gira a câmera (senão ela giraria em círculos).
+      if (performance.now() - cameraTouchedAtRef.current > 900) {
+        const fwdK = Math.max(0, -input.z / len);
+        if (fwdK > 0.3) {
+          const diff = wrapAngle(Math.atan2(worldX, worldZ) - cameraYawRef.current);
+          cameraYawRef.current = wrapAngle(cameraYawRef.current + diff * Math.min(1, 1.8 * delta * fwdK));
+        }
+      }
       // A pé: o personagem vira para onde ANDA (a mira da câmera é só do spray). Parado, mantém a direção.
       // forward(yaw) = (sin yaw, cos yaw), o mesmo da rotação em Y. Em veículo a direção vem do volante.
       const diff = wrapAngle(Math.atan2(worldX, worldZ) - g.rotation.y);
@@ -357,6 +373,6 @@ export function Player({
   });
 
   return (
-    <Avatar ref={ref} color={color} name={name} flag={flag} team={team} character={character} vehicle={vehicle} sign={sign} modelUrl={modelUrl} wheelieRef={wheelieRef} hitRef={hitRef} />
+    <Avatar ref={ref} color={color} name={name} flag={flag} team={team} character={character} vehicle={vehicle} sign={sign} modelUrl={modelUrl} wheelieRef={wheelieRef} hitRef={hitRef} knock={knock} />
   );
 }

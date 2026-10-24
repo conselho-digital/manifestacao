@@ -7,6 +7,7 @@ import { lookOf } from "./characterLook.js";
 import { WHEELIE_MAX_ANGLE } from "./driving.js";
 import { Flag3D, Vehicle3D, GlbModel } from "./props3d.js";
 import { teamImageUrl } from "./models.js";
+import { fallBody, fallSeconds, reactBody, reactProgress, type KnockRefs } from "./knock.js";
 import { flagTilt, handPosition, strikeArm, strikeEnvelope, strikeProgress } from "./strike.js";
 import { SignProp } from "./SignProp.js";
 import type { SignData } from "./useSigns.js";
@@ -29,6 +30,8 @@ interface AvatarProps {
   wheelieRef?: { current: number };
   /** Início (performance.now) do golpe com a bandeira em andamento; 0 = nenhum. Lido a cada frame. */
   hitRef?: { current: number };
+  /** Reação a golpe e queda (o corpo recua, ou cai para trás, fica deitado e levanta). */
+  knock?: KnockRefs;
 }
 
 /** Eixo traseiro da moto: a roda da frente sobe girando em torno daqui. */
@@ -186,11 +189,12 @@ function FlagProp({ flag, color, team }: { flag: FlagId; color: number; team?: T
  * opcional e etiqueta de apelido. Usado pelo jogador local e pelos remotos.
  */
 export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
-  { color, name, flag = "nenhuma", team, character, vehicle = "nenhum", sign = null, modelUrl = null, wheelieRef, hitRef },
+  { color, name, flag = "nenhuma", team, character, vehicle = "nenhum", sign = null, modelUrl = null, wheelieRef, hitRef, knock },
   ref,
 ) {
   const tiltRef = useRef<Group>(null);
   const flagPivotRef = useRef<Group>(null);
+  const knockGroupRef = useRef<Group>(null);
   const kind = VEHICLES[vehicle]?.kind ?? "foot";
   const isMoto = kind === "moto";
   const hideBody = kind !== "foot" && kind !== "moto";
@@ -200,6 +204,24 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
     if (!g) return;
     const target = isMoto ? -(wheelieRef?.current ?? 0) * WHEELIE_MAX_ANGLE : 0;
     g.rotation.x += (target - g.rotation.x) * 0.35;
+    // Levar golpe: recuo. Queda: cai para trás em torno dos pés, fica deitado e levanta (3,4 s).
+    const kg = knockGroupRef.current;
+    if (kg) {
+      const fs = knock ? fallSeconds(knock.fallAt.current) : -1;
+      const rp = knock ? reactProgress(knock.reactAt.current) : -1;
+      if (fs >= 0) {
+        const b = fallBody(fs);
+        kg.rotation.x = b.tilt;
+        kg.position.set(0, b.lift, b.shift);
+      } else if (rp >= 0) {
+        const b = reactBody(rp);
+        kg.rotation.x = b.tilt;
+        kg.position.set(0, 0, b.back);
+      } else {
+        kg.rotation.x = 0;
+        kg.position.set(0, 0, 0);
+      }
+    }
     // Golpe com a bandeira: ela gira em torno da mão, que acompanha o braço.
     const pivot = flagPivotRef.current;
     if (pivot) {
@@ -212,6 +234,7 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
   });
   return (
     <group ref={ref}>
+      <group ref={knockGroupRef}>
       <group ref={tiltRef} position={[0, 0, MOTO_REAR_AXLE_Z]}>
       <group position={[0, 0, -MOTO_REAR_AXLE_Z]}>
       {/* Moto: o personagem vai sentado de piloto. Carro, caminhão e carro de som: só o veículo aparece. */}
@@ -224,6 +247,7 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
               walking={vehicle === "nenhum"}
               pose={isMoto ? "moto" : null}
               strikeRef={hitRef}
+              knock={knock}
               fallback={<ProceduralBody color={color} arms riding={isMoto} character={character} />}
             />
           </Suspense>
@@ -265,6 +289,7 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
           {name}
         </Html>
       )}
+      </group>
     </group>
   );
 });

@@ -6,21 +6,20 @@ import type { SignData } from "./useSigns.js";
 const W = 512;
 const H = 256;
 
-/** Desenha o texto do cartaz (quebra de linha por palavra, tamanho ajustado ao comprimento). */
-function drawSign(sign: SignData): CanvasTexture {
-  const canvas = document.createElement("canvas");
-  canvas.width = W;
-  canvas.height = H;
-  const ctx = canvas.getContext("2d")!;
+/** Desenha o cartaz: imagem (se houver) e/ou texto (quebra de linha por palavra, tamanho ajustado ao comprimento). */
+function paintSign(ctx: CanvasRenderingContext2D, sign: SignData, img: HTMLImageElement | null): void {
   ctx.fillStyle = sign.color;
   ctx.fillRect(0, 0, W, H);
+  if (img) {
+    const k = Math.max(W / img.naturalWidth, H / img.naturalHeight);
+    ctx.drawImage(img, (W - img.naturalWidth * k) / 2, (H - img.naturalHeight * k) / 2, img.naturalWidth * k, img.naturalHeight * k);
+  }
   ctx.strokeStyle = SIGN_INK;
   ctx.lineWidth = 10;
   ctx.strokeRect(5, 5, W - 10, H - 10);
-  ctx.fillStyle = SIGN_INK;
+  if (!sign.text) return;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-
   const size = sign.text.length > 24 ? 56 : sign.text.length > 12 ? 70 : 88;
   ctx.font = `800 ${size}px system-ui, sans-serif`;
   const lines: string[] = [];
@@ -36,18 +35,49 @@ function drawSign(sign: SignData): CanvasTexture {
   }
   lines.push(line);
   const lh = size * 1.15;
-  const top = H / 2 - ((lines.length - 1) * lh) / 2;
-  lines.forEach((l, i) => ctx.fillText(l, W / 2, top + i * lh, W - 40));
-
-  const tex = new CanvasTexture(canvas);
-  tex.colorSpace = SRGBColorSpace;
-  tex.anisotropy = 4;
-  return tex;
+  if (img) {
+    const bandH = lines.length * lh + 16;
+    ctx.fillStyle = "rgba(0,0,0,0.62)";
+    ctx.fillRect(5, H - 5 - bandH, W - 10, bandH);
+    ctx.fillStyle = "#fff";
+    lines.forEach((l, i) => ctx.fillText(l, W / 2, H - 5 - bandH + 8 + lh / 2 + i * lh, W - 40));
+  } else {
+    ctx.fillStyle = SIGN_INK;
+    const top = H / 2 - ((lines.length - 1) * lh) / 2;
+    lines.forEach((l, i) => ctx.fillText(l, W / 2, top + i * lh, W - 40));
+  }
 }
 
 /** Cartaz numa vara, carregado ao lado do personagem. */
 export function SignProp({ sign }: { sign: SignData }) {
-  const texture = useMemo(() => drawSign(sign), [sign.text, sign.color]); // eslint-disable-line react-hooks/exhaustive-deps
+  const { canvas, texture } = useMemo(() => {
+    const c = document.createElement("canvas");
+    c.width = W;
+    c.height = H;
+    const t = new CanvasTexture(c);
+    t.colorSpace = SRGBColorSpace;
+    t.anisotropy = 4;
+    return { canvas: c, texture: t };
+  }, []);
+  useEffect(() => {
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    paintSign(ctx, sign, null);
+    texture.needsUpdate = true;
+    if (!sign.imageUrl) return;
+    let alive = true;
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      if (!alive) return;
+      paintSign(ctx, sign, img);
+      texture.needsUpdate = true;
+    };
+    img.src = sign.imageUrl;
+    return () => {
+      alive = false;
+    };
+  }, [sign.text, sign.color, sign.imageUrl, canvas, texture]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => () => texture.dispose(), [texture]);
   return (
     <group position={[-1.1, 0, 0]}>

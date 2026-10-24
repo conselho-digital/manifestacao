@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import {
+  AD_DURATION_HOURS,
   SIGN_COLORS,
   SIGN_INK,
   SIGN_MAX_TEXT,
@@ -12,6 +13,8 @@ import { InfoButton, InfoPanel } from "./InfoButton.js";
 import { PixPanel } from "../shop/Store.js";
 import type { PixCharge } from "../net/payments.js";
 import { fetchMySigns, paySign, submitSign } from "../net/signs.js";
+import { uploadUserImage, userImageUrl } from "../net/userImages.js";
+import { AdImagePicker, untilLabel } from "./AdImagePicker.js";
 import { testActivate } from "../config/adminApi.js";
 
 interface SignModalProps {
@@ -29,6 +32,7 @@ const STATUS_LABEL: Record<SignStatus, string> = {
   active: "Ativo",
   rejected: "Recusado",
   refunded: "Estornado",
+  expired: "Encerrado (12 h)",
 };
 
 const COLOR_NAMES: Record<string, string> = { "#f8f9fa": "branco", "#ffd43b": "amarelo", "#51cf66": "verde", "#4dabf7": "azul", "#ff6b6b": "vermelho", "#b197fc": "roxo" };
@@ -42,6 +46,7 @@ export function SignModal({ equippedId, onEquip, isAdmin = false, onClose }: Sig
   const dialogRef = useModal<HTMLDivElement>(onClose);
   const [info, setInfo] = useState(false);
   const [text, setText] = useState("");
+  const [image, setImage] = useState<File | null>(null);
   const [color, setColor] = useState<string>(SIGN_COLORS[1]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -84,8 +89,10 @@ export function SignModal({ equippedId, onEquip, isAdmin = false, onClose }: Sig
     setError(null);
     setNotice(null);
     try {
-      await submitSign(text.trim(), color);
+      const imagePath = image ? await uploadUserImage(image) : null;
+      await submitSign(text.trim(), color, imagePath);
       setText("");
+      setImage(null);
       setNotice("Enviado para análise. Você só paga depois da aprovação.");
       reload();
     } catch (err) {
@@ -151,9 +158,10 @@ export function SignModal({ equippedId, onEquip, isAdmin = false, onClose }: Sig
             <form onSubmit={send} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <label style={label}>
                 Texto do cartaz
-                <input value={text} maxLength={SIGN_MAX_TEXT} onChange={(e) => setText(e.target.value)} required style={field} />
+                <input value={text} maxLength={SIGN_MAX_TEXT} onChange={(e) => setText(e.target.value)} required={!image} placeholder={image ? "Texto (opcional)" : ""} style={field} />
                 <span style={{ ...hint, alignSelf: "flex-end" }}>{text.length}/{SIGN_MAX_TEXT}</span>
               </label>
+              <AdImagePicker file={image} onChange={setImage} onError={setError} disabled={busy} />
               <div role="radiogroup" aria-label="Cor do cartaz" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {SIGN_COLORS.map((c) => (
                   <button
@@ -171,8 +179,9 @@ export function SignModal({ equippedId, onEquip, isAdmin = false, onClose }: Sig
                 aria-label="Prévia do cartaz"
                 style={{ background: color, color: SIGN_INK, border: `4px solid ${SIGN_INK}`, borderRadius: 6, minHeight: 72, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", fontWeight: 800, fontSize: 22, padding: 10, overflowWrap: "anywhere" }}
               >
-                {text || "Seu texto aqui"}
+                {text || (image ? "" : "Seu texto aqui")}
               </div>
+              <p style={hint}>Texto, imagem ou os dois. Depois de ativo, fica no ar por {AD_DURATION_HOURS} horas.</p>
               {notice && <p role="status" style={{ margin: 0, fontSize: "var(--t-ui)", color: "var(--accent)" }}>{notice}</p>}
               {error && <p role="alert" style={{ margin: 0, fontSize: "var(--t-ui)", color: "var(--danger)" }}>{error}</p>}
               <button type="submit" disabled={busy} style={{ ...primaryBtn, opacity: busy ? 0.6 : 1 }}>
@@ -187,9 +196,13 @@ export function SignModal({ equippedId, onEquip, isAdmin = false, onClose }: Sig
                 {mine.map((m) => (
                   <div key={m.id} style={{ background: "var(--surface-2)", borderRadius: "var(--r-md)", padding: 10, display: "flex", flexDirection: "column", gap: 6 }}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 8, fontSize: "var(--t-ui)", fontWeight: 700 }}>
-                      <span style={{ background: m.color, color: SIGN_INK, padding: "2px 8px", borderRadius: 4, overflowWrap: "anywhere" }}>{m.text}</span>
+                      <span style={{ display: "flex", gap: 8, alignItems: "center", minWidth: 0 }}>
+                        {userImageUrl(m.image_path) && <img src={userImageUrl(m.image_path)!} alt="" style={{ height: 40, width: 56, objectFit: "cover", borderRadius: 4, flexShrink: 0 }} />}
+                        {m.text && <span style={{ background: m.color, color: SIGN_INK, padding: "2px 8px", borderRadius: 4, overflowWrap: "anywhere" }}>{m.text}</span>}
+                      </span>
                       <span style={{ color: m.status === "rejected" || m.status === "refunded" ? "var(--danger)" : m.status === "awaiting_payment" ? "var(--accent)" : "var(--ink-dim)", textAlign: "right" }}>
                         {STATUS_LABEL[m.status]}
+                        {m.status === "active" && m.expires_at ? ` até ${untilLabel(m.expires_at)}` : ""}
                       </span>
                     </div>
                     {m.status === "awaiting_payment" && (

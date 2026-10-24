@@ -5,6 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.4";
 import { isSanctioned } from "../_shared/sanctions.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { checkContent, sanitize } from "../_shared/moderation.ts";
+import { checkUserImage } from "../_shared/userImage.ts";
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -28,10 +29,13 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => null);
     const text = typeof body?.text === "string" ? sanitize(body.text) : "";
     const color = body?.color;
-    if (!text || text.length > MAX_TEXT) return json({ error: "text_invalid" }, 400);
+    // Texto OU imagem (pode ter os dois).
+    const image = await checkUserImage(admin, userId, body?.imagePath);
+    if ("error" in image) return json({ error: image.error }, 400);
+    if (text.length > MAX_TEXT || (!text && !image.path)) return json({ error: "text_invalid" }, 400);
     if (typeof color !== "string" || !COLORS.includes(color)) return json({ error: "color_invalid" }, 400);
 
-    const verdict = checkContent(text);
+    const verdict = text ? checkContent(text) : { ok: true as const };
     if (!verdict.ok) {
       const target = `user:${userId}`;
       const { count: blocked } = await admin
@@ -46,7 +50,7 @@ Deno.serve(async (req) => {
       return json({ error: "content_blocked", reason: verdict.reason }, 422);
     }
 
-    const { data: id, error } = await admin.rpc("sign_create", { p_user: userId, p_text: text, p_color: color });
+    const { data: id, error } = await admin.rpc("sign_create_v2", { p_user: userId, p_text: text, p_color: color, p_image: image.path });
     if (error || !id) {
       const msg = error?.message ?? "";
       if (msg.includes("too_many_open") || msg.includes("too_many_daily")) return json({ error: "too_many_open" }, 429);

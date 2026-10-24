@@ -21,7 +21,7 @@ export const BID_MIN_CENTS = 2000;
 export const BID_MAX_CENTS = 1000000;
 export const BID_MAX_TEXT = 60;
 
-export type BidStatus = "review" | "awaiting_payment" | "active" | "outbid" | "rejected" | "refunded";
+export type BidStatus = "review" | "awaiting_payment" | "active" | "outbid" | "rejected" | "refunded" | "expired";
 
 /** O que o público vê de um telão no ar. */
 export interface BillboardAd {
@@ -30,6 +30,10 @@ export interface BillboardAd {
   text: string;
   color: SignColor | string;
   amount_cents: number;
+  /** Imagem do anúncio (bucket user-media); com ou sem texto. */
+  image_path?: string | null;
+  /** Fim das 12 h no ar. */
+  expires_at?: string | null;
 }
 
 export interface MyBid extends BillboardAd {

@@ -1,4 +1,7 @@
 import { useEffect, useRef, useState } from "react";
+import { publishPlayback } from "../config/adminApi.js";
+import type { PlaybackState } from "../config/parkScreen.js";
+import { syncServerClock } from "../net/screenSync.js";
 
 const YT_ORIGIN = "https://www.youtube-nocookie.com";
 
@@ -41,6 +44,18 @@ export function AdminVideoControls({ videoId }: { videoId: string | null }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const [info, setInfo] = useState<Info>({ time: 0, duration: 0, state: -1, volume: 100, muted: false });
   const [dragging, setDragging] = useState<number | null>(null);
+  const [broadcast, setBroadcast] = useState(true);
+  const [pubError, setPubError] = useState<string | null>(null);
+  useEffect(() => {
+    void syncServerClock();
+  }, []);
+
+  /** Manda o comando também para o outdoor que todos veem. */
+  const publish = (state: PlaybackState, position: number) => {
+    if (!broadcast) return;
+    setPubError(null);
+    publishPlayback(state, position).catch((e: unknown) => setPubError(e instanceof Error ? e.message : "Não consegui avisar os jogadores."));
+  };
 
   const send = (func: string, args: unknown[] = []) =>
     ref.current?.contentWindow?.postMessage(JSON.stringify({ event: "command", func, args }), YT_ORIGIN);
@@ -80,6 +95,7 @@ export function AdminVideoControls({ videoId }: { videoId: string | null }) {
     send("pauseVideo");
     send("seekTo", [0, true]);
     setInfo((p) => ({ ...p, time: 0, state: 5 }));
+    publish("stopped", 0);
   };
 
   return (
@@ -103,10 +119,18 @@ export function AdminVideoControls({ videoId }: { videoId: string | null }) {
       </div>
 
       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-        <button type="button" disabled={!enabled || playing} onClick={() => send("playVideo")} style={{ ...btn, opacity: !enabled || playing ? 0.5 : 1 }} aria-label="Tocar">
+        <button type="button" disabled={!enabled || playing} onClick={() => {
+            send("playVideo");
+            publish("playing", info.time);
+          }}
+          style={{ ...btn, opacity: !enabled || playing ? 0.5 : 1 }} aria-label="Tocar">
           ▶ Tocar
         </button>
-        <button type="button" disabled={!enabled || !playing} onClick={() => send("pauseVideo")} style={{ ...btn, opacity: !enabled || !playing ? 0.5 : 1 }} aria-label="Pausar">
+        <button type="button" disabled={!enabled || !playing} onClick={() => {
+            send("pauseVideo");
+            publish("paused", info.time);
+          }}
+          style={{ ...btn, opacity: !enabled || !playing ? 0.5 : 1 }} aria-label="Pausar">
           ⏸ Pausar
         </button>
         <button type="button" disabled={!enabled} onClick={stop} style={{ ...btn, opacity: enabled ? 1 : 0.5 }} aria-label="Parar">
@@ -140,11 +164,17 @@ export function AdminVideoControls({ videoId }: { videoId: string | null }) {
           disabled={!enabled || info.duration <= 0}
           onChange={(e) => setDragging(Number(e.target.value))}
           onPointerUp={() => {
-            if (dragging !== null) send("seekTo", [dragging, true]);
+            if (dragging !== null) {
+              send("seekTo", [dragging, true]);
+              publish(playing ? "playing" : "paused", dragging);
+            }
             setDragging(null);
           }}
           onKeyUp={() => {
-            if (dragging !== null) send("seekTo", [dragging, true]);
+            if (dragging !== null) {
+              send("seekTo", [dragging, true]);
+              publish(playing ? "playing" : "paused", dragging);
+            }
             setDragging(null);
           }}
           style={{ width: "100%", minHeight: 32 }}
@@ -168,7 +198,21 @@ export function AdminVideoControls({ videoId }: { videoId: string | null }) {
           style={{ width: "100%", minHeight: 32 }}
         />
       </label>
-      <p style={{ margin: 0, fontSize: "var(--t-ui)", color: "var(--ink-dim)" }}>Estes comandos controlam a prévia aqui no painel. Para o público valem as opções salvas mais abaixo.</p>
+      <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: "var(--t-ui)" }}>
+        <input type="checkbox" checked={broadcast} onChange={(e) => setBroadcast(e.target.checked)} style={{ width: 22, height: 22, flexShrink: 0 }} />
+        <span>
+          <strong>Transmitir para todos</strong>
+          <br />
+          <span style={{ color: "var(--ink-dim)" }}>
+            Tocar, pausar, parar e pular aqui também tocam, pausam, param e pulam o vídeo do outdoor de quem está com ele aberto. O link precisa estar salvo.
+          </span>
+        </span>
+      </label>
+      {pubError && (
+        <p role="alert" style={{ margin: 0, color: "var(--danger)", fontSize: "var(--t-ui)" }}>
+          {pubError}
+        </p>
+      )}
     </section>
   );
 }

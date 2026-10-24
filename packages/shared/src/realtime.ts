@@ -80,7 +80,15 @@ export const BROADCAST = {
   voice: "voice",
   /** Golpe com a bandeira (só a animação: quem recebe toca os 0,7 s no jogador que bateu). */
   hit: "hit",
+  /** Golpe que acertou alguém (alvo reage; no 5º seguido, cai). */
+  impact: "impact",
 } as const;
+
+export interface ImpactBroadcast {
+  senderId: string;
+  /** Chave de presence de quem levou o golpe. */
+  targetId: string;
+}
 
 export interface HitBroadcast {
   /** Chave de presence de quem bateu. */

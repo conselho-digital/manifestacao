@@ -1,6 +1,9 @@
+import { uploadUserImage, userImageUrl } from "../net/userImages.js";
+import { AdImagePicker, untilLabel } from "./AdImagePicker.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BID_MAX_CENTS,
+  AD_DURATION_HOURS,
   BID_MAX_TEXT,
   BILLBOARDS,
   SIGN_COLORS,
@@ -32,6 +35,7 @@ const STATUS_LABEL: Record<BidStatus, string> = {
   outbid: "Superado — valor virou crédito",
   rejected: "Recusado",
   refunded: "Estornado",
+  expired: "Encerrado (12 h)",
 };
 
 const COLOR_NAMES: Record<string, string> = { "#f8f9fa": "branco", "#ffd43b": "amarelo", "#51cf66": "verde", "#4dabf7": "azul", "#ff6b6b": "vermelho", "#b197fc": "roxo" };
@@ -47,6 +51,7 @@ export function BillboardModal({ ads, isAdmin = false, onClose }: BillboardModal
   const [info, setInfo] = useState(false);
   const [board, setBoard] = useState<string>(BILLBOARDS[0]!.id);
   const [text, setText] = useState("");
+  const [image, setImage] = useState<File | null>(null);
   const [color, setColor] = useState<string>(SIGN_COLORS[1]);
   const [amount, setAmount] = useState("");
   const [busy, setBusy] = useState(false);
@@ -93,8 +98,10 @@ export function BillboardModal({ ads, isAdmin = false, onClose }: BillboardModal
     setError(null);
     setNotice(null);
     try {
-      await submitBid(board, text.trim(), color, cents);
+      const imagePath = image ? await uploadUserImage(image) : null;
+      await submitBid(board, text.trim(), color, cents, imagePath);
       setText("");
+      setImage(null);
       setNotice("Enviado para análise. Você só paga depois da aprovação.");
       reload();
     } catch (err) {
@@ -210,9 +217,10 @@ export function BillboardModal({ ads, isAdmin = false, onClose }: BillboardModal
             <form onSubmit={send} style={{ display: "flex", flexDirection: "column", gap: 10 }}>
               <label style={label}>
                 Texto do anúncio
-                <input value={text} maxLength={BID_MAX_TEXT} onChange={(e) => setText(e.target.value)} required style={field} />
+                <input value={text} maxLength={BID_MAX_TEXT} onChange={(e) => setText(e.target.value)} required={!image} placeholder={image ? "Texto (opcional)" : ""} style={field} />
                 <span style={{ ...hint, alignSelf: "flex-end" }}>{text.length}/{BID_MAX_TEXT}</span>
               </label>
+              <AdImagePicker file={image} onChange={setImage} onError={setError} disabled={busy} />
               <div role="radiogroup" aria-label="Cor do anúncio" style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {SIGN_COLORS.map((c) => (
                   <button
@@ -230,8 +238,11 @@ export function BillboardModal({ ads, isAdmin = false, onClose }: BillboardModal
                 aria-label="Prévia do anúncio"
                 style={{ background: color, color: SIGN_INK, border: `4px solid ${SIGN_INK}`, borderRadius: 6, minHeight: 72, display: "flex", alignItems: "center", justifyContent: "center", textAlign: "center", fontWeight: 800, fontSize: 22, padding: 10, overflowWrap: "anywhere" }}
               >
-                {text || "Seu anúncio aqui"}
+                {text || (image ? "" : "Seu anúncio aqui")}
               </div>
+              <p style={hint}>
+                Texto, imagem ou os dois. Depois de pago, o anúncio fica no ar por {AD_DURATION_HOURS} horas ou até alguém dar um lance maior.
+              </p>
               <label style={label}>
                 Seu lance (mínimo {brl(minCents)})
                 <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} required style={field} />
@@ -253,9 +264,13 @@ export function BillboardModal({ ads, isAdmin = false, onClose }: BillboardModal
                       <span>{boardLabel(m.billboard_id)} · {brl(m.amount_cents)}</span>
                       <span style={{ textAlign: "right", color: m.status === "rejected" || m.status === "refunded" ? "var(--danger)" : m.status === "awaiting_payment" || m.status === "active" ? "var(--accent)" : "var(--ink-dim)" }}>
                         {STATUS_LABEL[m.status]}
+                        {m.status === "active" && m.expires_at ? ` até ${untilLabel(m.expires_at)}` : ""}
                       </span>
                     </div>
-                    <span style={{ fontSize: "var(--t-body)", overflowWrap: "anywhere" }}>{m.text}</span>
+                    <span style={{ display: "flex", gap: 8, alignItems: "center", fontSize: "var(--t-body)", overflowWrap: "anywhere" }}>
+                      {userImageUrl(m.image_path) && <img src={userImageUrl(m.image_path)!} alt="" style={{ height: 48, width: 84, objectFit: "cover", borderRadius: 4, flexShrink: 0 }} />}
+                      {m.text}
+                    </span>
                     {m.status === "awaiting_payment" && (
                       <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                         {isAdmin ? (

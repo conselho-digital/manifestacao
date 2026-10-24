@@ -38,6 +38,8 @@ import {
   type AdminBid,
   fetchSignQueue,
   moderateSign,
+  fetchMediaUrls,
+  publishPlayback,
   type AdminSign,
   type AdminSuperchat,
   saveCatalogItem,
@@ -396,6 +398,21 @@ async function parseGlb(buffer: ArrayBuffer): Promise<Object3D> {
   }
 }
 
+/** Imagens enviadas junto de cada item da fila (id → URL). */
+function useAdImages(rows: { id: string }[] | null): Record<string, string> {
+  const [images, setImages] = useState<Record<string, string>>({});
+  const key = (rows ?? []).map((r) => r.id).join(",");
+  useEffect(() => {
+    if (!key) return setImages({});
+    let alive = true;
+    void fetchMediaUrls(key.split(",")).then((m) => alive && setImages(m));
+    return () => {
+      alive = false;
+    };
+  }, [key]);
+  return images;
+}
+
 /** Link do outdoor do parque: vídeo do YouTube ou página da internet (https). */
 function ScreenTab({ busy, run }: TabProps) {
   const saved = currentParkScreen();
@@ -462,7 +479,13 @@ function ScreenTab({ busy, run }: TabProps) {
         type="button"
         disabled={busy || !parsed}
         style={{ ...primaryBtn, opacity: !parsed ? 0.5 : 1 }}
-        onClick={() => void run(async () => saveConfigKey("screen", parsed), "Outdoor atualizado.")}
+        onClick={() =>
+          void run(async () => {
+            await saveConfigKey("screen", parsed);
+            // Vídeo novo começa parado: o estado de reprodução do vídeo anterior não vale mais.
+            if (saved?.url !== parsed?.url) await publishPlayback("stopped", 0).catch(() => {});
+          }, "Outdoor atualizado.")
+        }
       >
         Salvar outdoor
       </button>
@@ -833,6 +856,7 @@ function ModerationTab({ busy, run }: TabProps) {
 
 function SignsTab({ busy, run }: TabProps) {
   const [rows, setRows] = useState<AdminSign[] | null>(null);
+  const images = useAdImages(rows);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = () =>
@@ -861,9 +885,12 @@ function SignsTab({ busy, run }: TabProps) {
       {rows.length === 0 && <p style={hint}>Nenhum cartaz aguardando.</p>}
       {rows.map((r) => (
         <div key={r.id} style={{ border: "1px solid var(--line)", borderRadius: "var(--r-md)", padding: 10, display: "flex", flexDirection: "column", gap: 8 }}>
-          <div style={{ background: r.color, color: "#1a1d21", borderRadius: 4, padding: "8px 10px", fontWeight: 800, fontSize: "var(--t-body)", overflowWrap: "anywhere" }}>
-            {r.text}
-          </div>
+          {images[r.id] && <img src={images[r.id]} alt="Imagem enviada" style={{ maxHeight: 200, maxWidth: "100%", objectFit: "contain", alignSelf: "flex-start", borderRadius: 6 }} />}
+          {r.text && (
+            <div style={{ background: r.color, color: "#1a1d21", borderRadius: 4, padding: "8px 10px", fontWeight: 800, fontSize: "var(--t-body)", overflowWrap: "anywhere" }}>
+              {r.text}
+            </div>
+          )}
           <span style={{ ...hint }}>
             Enviado às {new Date(r.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
           </span>
@@ -921,6 +948,7 @@ function TestsTab({ busy, run }: TabProps) {
 
 function BidsTab({ busy, run }: TabProps) {
   const [rows, setRows] = useState<AdminBid[] | null>(null);
+  const images = useAdImages(rows);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const load = () =>
@@ -953,9 +981,12 @@ function BidsTab({ busy, run }: TabProps) {
             <span>{BILLBOARDS.find((b) => b.id === r.billboard_id)?.label ?? r.billboard_id}</span>
             <span>R$ {(r.amount_cents / 100).toFixed(2).replace(".", ",")}</span>
           </div>
-          <div style={{ background: r.color, color: "#1a1d21", borderRadius: 4, padding: "8px 10px", fontWeight: 800, fontSize: "var(--t-body)", overflowWrap: "anywhere" }}>
-            {r.text}
-          </div>
+          {images[r.id] && <img src={images[r.id]} alt="Imagem enviada" style={{ maxHeight: 200, maxWidth: "100%", objectFit: "contain", alignSelf: "flex-start", borderRadius: 6 }} />}
+          {r.text && (
+            <div style={{ background: r.color, color: "#1a1d21", borderRadius: 4, padding: "8px 10px", fontWeight: 800, fontSize: "var(--t-body)", overflowWrap: "anywhere" }}>
+              {r.text}
+            </div>
+          )}
           <span style={hint}>
             Enviado às {new Date(r.created_at).toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
           </span>

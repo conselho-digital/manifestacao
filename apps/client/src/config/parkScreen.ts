@@ -65,7 +65,7 @@ export function cleanScreen(v: unknown): ScreenConfig | null {
   return { url: u.href, title, autoplay: flag("autoplay"), controls: flag("controls"), loop: flag("loop"), mute: flag("mute") };
 }
 
-export function embedUrl(media: ScreenMedia, cfg: ScreenConfig): string {
+export function embedUrl(media: ScreenMedia, cfg: ScreenConfig, api = false): string {
   if (media.kind !== "youtube") return cfg.url;
   const p = new URLSearchParams({
     autoplay: cfg.autoplay ? "1" : "0",
@@ -75,6 +75,11 @@ export function embedUrl(media: ScreenMedia, cfg: ScreenConfig): string {
     playsinline: "1",
     modestbranding: "1",
   });
+  if (api) {
+    // Deixa o jogo comandar o player (tocar/pausar/pular em sincronia com o admin).
+    p.set("enablejsapi", "1");
+    p.set("origin", window.location.origin);
+  }
   if (cfg.loop) {
     p.set("loop", "1");
     p.set("playlist", media.id); // o YouTube só repete com a lista do próprio vídeo
@@ -86,10 +91,46 @@ export function thumbnailUrl(media: ScreenMedia): string | null {
   return media.kind === "youtube" ? `https://i.ytimg.com/vi/${media.id}/hqdefault.jpg` : null;
 }
 
+// ── Reprodução sincronizada: o admin controla o vídeo (play/pause/parar/pular) e quem está com o outdoor aberto acompanha ──
+export type PlaybackState = "playing" | "paused" | "stopped";
+export interface ScreenPlayback {
+  state: PlaybackState;
+  /** Posição do vídeo (s) no instante `at`. */
+  position: number;
+  /** Hora do servidor (ms desde 1970) em que o admin apertou o botão. */
+  at: number;
+}
+
+export function cleanPlayback(v: unknown): ScreenPlayback | null {
+  if (!v || typeof v !== "object") return null;
+  const o = v as Record<string, unknown>;
+  if (o.state !== "playing" && o.state !== "paused" && o.state !== "stopped") return null;
+  if (typeof o.position !== "number" || !Number.isFinite(o.position) || o.position < 0 || o.position > 86_400) return null;
+  if (typeof o.at !== "number" || !Number.isFinite(o.at)) return null;
+  return { state: o.state, position: o.position, at: o.at };
+}
+
+let clockOffset = 0;
+/** Diferença (ms) entre o relógio do servidor e o deste aparelho. */
+export function setClockOffset(ms: number): void {
+  clockOffset = Number.isFinite(ms) && Math.abs(ms) < 24 * 3600_000 ? ms : 0;
+}
+export function serverNow(): number {
+  return Date.now() + clockOffset;
+}
+
+/** Onde o vídeo deveria estar agora (tocando: avança com o tempo desde o comando do admin). */
+export function expectedPosition(pb: ScreenPlayback, now = serverNow()): number {
+  if (pb.state === "stopped") return 0;
+  if (pb.state === "paused") return pb.position;
+  return Math.max(0, pb.position + (now - pb.at) / 1000);
+}
+
 // ── Estado compartilhado (config + modal aberto), lido pela cena 3D e pela interface ──
 type Listener = () => void;
 const listeners = new Set<Listener>();
 let screen: ScreenConfig | null = null;
+let playback: ScreenPlayback | null = null;
 let open = false;
 
 function emit() {
@@ -104,6 +145,16 @@ export function setParkScreen(next: ScreenConfig | null): void {
   screen = next;
   if (!next) open = false;
   emit();
+}
+export function setPlayback(next: ScreenPlayback | null): void {
+  playback = next;
+  emit();
+}
+export function currentPlayback(): ScreenPlayback | null {
+  return playback;
+}
+export function usePlayback(): ScreenPlayback | null {
+  return useSyncExternalStore(subscribe, () => playback);
 }
 export function currentParkScreen(): ScreenConfig | null {
   return screen;

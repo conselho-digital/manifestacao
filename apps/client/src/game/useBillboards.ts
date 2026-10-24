@@ -27,8 +27,20 @@ export function useBillboards(enabled: boolean): Map<string, BillboardAd> {
         });
       },
     );
+    // Passou das 12 h: o anúncio sai do telão (checa a cada 30 s).
+    const expiry = setInterval(() => {
+      const now = Date.now();
+      setAds((prev) => {
+        const gone = [...prev.entries()].filter(([, a]) => a.expires_at && Date.parse(a.expires_at) <= now);
+        if (gone.length === 0) return prev;
+        const next = new Map(prev);
+        for (const [k] of gone) next.delete(k);
+        return next;
+      });
+    }, 30_000);
     return () => {
       alive = false;
+      clearInterval(expiry);
       unsubscribe();
       setAds(new Map());
     };

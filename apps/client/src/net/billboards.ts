@@ -3,6 +3,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import type { BillboardAd, MyBid } from "@manifestacao/shared";
 import { getSupabase } from "./supabase.js";
 import type { PixCharge } from "./payments.js";
+import { notExpired } from "./userImages.js";
 
 const brl = (cents: number) => `R$ ${(cents / 100).toFixed(2).replace(".", ",")}`;
 
@@ -11,7 +12,9 @@ const ERRORS: Record<string, string> = {
   board_invalid: "Telão inválido.",
   amount_invalid: "Valor entre R$ 20,00 e R$ 10.000,00.",
   credit_debt: "Há um estorno pendente na sua conta. Fale com o suporte para voltar a dar lances.",
-  text_invalid: "Texto inválido (1 a 60 caracteres).",
+  text_invalid: "Escreva um texto (até 60 caracteres) ou envie uma imagem.",
+  image_invalid: "Imagem inválida.",
+  image_missing: "A imagem não chegou. Escolha de novo.",
   color_invalid: "Escolha uma das cores.",
   content_blocked: "Texto não permitido: sem links, telefones, @ de contato ou palavras ofensivas.",
   too_many_open: "Você já tem lances em análise ou aguardando pagamento. Aguarde ou pague antes de enviar outro.",
@@ -42,8 +45,9 @@ async function call<T>(fn: string, body: Record<string, unknown>): Promise<T> {
   return data;
 }
 
-export function submitBid(billboardId: string, text: string, color: string, amountCents: number) {
-  return call<{ id: string }>("bid-submit", { billboardId, text, color, amountCents });
+/** Lance com texto, imagem (caminho do uploadUserImage) ou os dois. */
+export function submitBid(billboardId: string, text: string, color: string, amountCents: number, imagePath?: string | null) {
+  return call<{ id: string }>("bid-submit", { billboardId, text, color, amountCents, ...(imagePath ? { imagePath } : {}) });
 }
 
 export function payBid(id: string) {
@@ -64,8 +68,9 @@ export async function payBidWithCredit(id: string): Promise<void> {
 export async function fetchMyBids(): Promise<MyBid[] | null> {
   const supabase = getSupabase();
   if (!supabase) return null;
-  const { data, error } = await supabase.rpc("my_bids");
-  return error ? null : ((data as MyBid[] | null) ?? []);
+  let res: { data: unknown; error: unknown } = await supabase.rpc("my_bids_v2");
+  if (res.error) res = await supabase.rpc("my_bids"); // banco ainda sem a migração 0025
+  return res.error ? null : ((res.data as MyBid[] | null) ?? []);
 }
 
 export async function fetchMyCredit(): Promise<number | null> {
@@ -79,12 +84,10 @@ export async function fetchMyCredit(): Promise<number | null> {
 export async function fetchActiveBids(): Promise<BillboardAd[] | null> {
   const supabase = getSupabase();
   if (!supabase) return null;
-  const { data, error } = await supabase
-    .from("billboard_bids")
-    .select("id, billboard_id, text, color, amount_cents")
-    .eq("status", "active");
+  let res: { data: unknown; error: unknown } = await supabase.from("billboard_bids").select("id, billboard_id, text, color, amount_cents, image_path, expires_at").eq("status", "active");
+  if (res.error) res = await supabase.from("billboard_bids").select("id, billboard_id, text, color, amount_cents").eq("status", "active"); // sem a migração 0025
   // Erro (rede/tabela): null = "não sei", e o telão mantém o que já mostra em vez de zerar.
-  return error ? null : ((data as BillboardAd[] | null) ?? []);
+  return res.error ? null : ((res.data as BillboardAd[] | null) ?? []).filter((r) => notExpired(r.expires_at));
 }
 
 /** Realtime: novo ativo entra; superado/estornado sai. */
@@ -101,10 +104,10 @@ export function subscribeBids(
       const r = p.new as Partial<BillboardAd> & { status?: string };
       if (!r || typeof r.id !== "string") return;
       if (r.status === "active") {
-        if (typeof r.billboard_id === "string" && typeof r.text === "string" && typeof r.color === "string" && typeof r.amount_cents === "number") {
+        if (typeof r.billboard_id === "string" && typeof r.text === "string" && typeof r.color === "string" && typeof r.amount_cents === "number" && notExpired(r.expires_at)) {
           onActive(r as BillboardAd);
         }
-      } else if (r.status === "outbid" || r.status === "refunded") {
+      } else if (r.status === "outbid" || r.status === "refunded" || r.status === "expired") {
         onGone(r.id);
       }
     })

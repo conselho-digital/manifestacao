@@ -1,5 +1,6 @@
 import { FOOT_WALK_SPEED } from "./world.js";
 import { strikeArm, strikeEnvelope, strikeLean, strikeTwist } from "./strike.js";
+import { fallEnvelope, fallLimbs, reactBody } from "./knock.js";
 import { AnimationAction, AnimationClip, AnimationMixer, Bone, Group, Object3D, Quaternion, Vector3 } from "three";
 
 /**
@@ -78,7 +79,8 @@ export type AutoPose = "moto" | null;
 
 export interface AutoAnimator {
   /** Avança um quadro. `walking` = a pé (em veículo o personagem não anda); `pose` = sentado na moto. */
-  update(dt: number, walking: boolean, pose?: AutoPose, strike?: number): void;
+  /** `knock`: reação a golpe (0..1, -1 = nenhuma) e segundos de queda (-1 = em pé). */
+  update(dt: number, walking: boolean, pose?: AutoPose, strike?: number, knock?: { react: number; fall: number }): void;
   dispose(): void;
 }
 
@@ -117,7 +119,7 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
     const run = runClip && runClip !== walkClip ? play(runClip) : null;
     const idle = play(idleClip);
     return {
-      update(dt, walking, _pose, _strike) {
+      update(dt, walking, _pose, _strike, _knock) {
         (frame.parent ?? frame).getWorldPosition(pos);
         if (havePos && dt > 0) speed += (Math.min(24, pos.distanceTo(lastPos) / dt) - speed) * Math.min(1, dt * 10);
         lastPos.copy(pos);
@@ -250,7 +252,7 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
   let runK = 0; // 0 andando → 1 correndo
 
   return {
-    update(dt, walking, pose = null, strike = -1) {
+    update(dt, walking, pose = null, strike = -1, knock = { react: -1, fall: -1 }) {
       t += dt;
       sit += ((pose === "moto" ? 1 : 0) - sit) * Math.min(1, dt * 9);
       const stand = 1 - sit;
@@ -358,10 +360,39 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
           else if (l.role === "forearm") ang = ang * (1 - hit) + (l.side > 0 ? 0.35 : 0.5) * hit;
           else if (l.role === "hips") ang += -forward * strikeTwist(strike) * hit;
         }
+        // Levar golpe (recuo) e cair no chão: os membros seguem a pose, que domina o andar.
+        const react = knock.react >= 0 ? reactBody(knock.react) : null;
+        const fallEnv = knock.fall >= 0 ? fallEnvelope(knock.fall) : 0;
+        const fall = knock.fall >= 0 ? fallLimbs(knock.fall) : null;
+        let knockLean = 0;
+        if (react) {
+          if (l.role === "arm") ang += react.arms;
+          knockLean += react.tilt;
+        }
+        if (fall && fallEnv > 0) {
+          switch (l.role) {
+            case "arm":
+              ang = ang * (1 - fallEnv) + fall.arm * fallEnv;
+              break;
+            case "forearm":
+              ang = ang * (1 - fallEnv) + fall.forearm * fallEnv;
+              break;
+            case "thigh":
+              ang = ang * (1 - fallEnv) + fall.thigh * fallEnv;
+              break;
+            case "knee":
+              ang = ang * (1 - fallEnv) + fall.knee * fallEnv;
+              break;
+            case "foot":
+              ang = ang * (1 - fallEnv);
+              break;
+          }
+          knockLean += fall.lean * fallEnv;
+        }
         // ângulo positivo no eixo = balança para a frente
         if (l.role === "spine") {
           rotTwist.setFromAxisAngle(l.axis, ang + (strike >= 0 ? forward * strikeTwist(strike) * hit * 0.6 : 0)); // `ang` já vem misturado com a pose
-          const lean = 0.6 * sit + (strike >= 0 ? strikeLean(strike) * hit : 0);
+          const lean = 0.6 * sit + (strike >= 0 ? strikeLean(strike) * hit : 0) + knockLean;
           rotLean.setFromAxisAngle(leanAxis, (-forward * lean) / spineCount); // para cima, o mesmo eixo inclina o tronco ao contrário das pernas
           rot.copy(rotLean).multiply(rotTwist).multiply(l.rest);
         } else {

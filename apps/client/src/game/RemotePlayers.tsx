@@ -1,3 +1,4 @@
+import { newKnockRefs, type KnockRefs } from "./knock.js";
 import { useRef } from "react";
 import { Group } from "three";
 import { useFrame } from "@react-three/fiber";
@@ -43,6 +44,17 @@ export function RemotePlayers({ ids, playersRef, signs }: RemotePlayersProps) {
     return r;
   };
 
+  // Reação a golpe e queda de cada jogador (lidas pelo Avatar a cada frame).
+  const knocks = useRef<Map<string, KnockRefs>>(new Map());
+  const knockFor = (id: string) => {
+    let r = knocks.current.get(id);
+    if (!r) {
+      r = newKnockRefs();
+      knocks.current.set(id, r);
+    }
+    return r;
+  };
+
   function refFor(id: string): (g: Group | null) => void {
     let fn = refCallbacks.current.get(id);
     if (!fn) {
@@ -71,6 +83,9 @@ export function RemotePlayers({ ids, playersRef, signs }: RemotePlayersProps) {
       const w = wheelieRefFor(id);
       w.current += (p.wheelie - w.current) * t;
       hitRefFor(id).current = p.hitAt ?? 0;
+      const k = knockFor(id);
+      k.reactAt.current = p.reactAt ?? 0;
+      k.fallAt.current = p.fallAt ?? 0;
     }
   });
 
@@ -91,6 +106,7 @@ export function RemotePlayers({ ids, playersRef, signs }: RemotePlayersProps) {
             vehicle={p.vehicle}
             wheelieRef={wheelieRefFor(id)}
             hitRef={hitRefFor(id)}
+            knock={knockFor(id)}
             sign={p.signId ? signs.get(p.signId) ?? null : null}
             modelUrl={modelUrlFor(p.character, p.team)}
           />

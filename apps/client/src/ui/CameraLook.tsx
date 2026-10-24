@@ -37,6 +37,7 @@ export function CameraLook({ yawRef, pitchRef, fullScreen = false, touchedAtRef 
   useEffect(() => {
     const release = () => {
       pointer.current = null;
+      if (touchedAtRef) touchedAtRef.current = performance.now();
     };
     window.addEventListener("blur", release);
     document.addEventListener("visibilitychange", release);
@@ -44,13 +45,15 @@ export function CameraLook({ yawRef, pitchRef, fullScreen = false, touchedAtRef 
       window.removeEventListener("blur", release);
       document.removeEventListener("visibilitychange", release);
     };
-  }, []);
+  }, [touchedAtRef]);
 
   const start = (e: React.PointerEvent) => {
     if (pointer.current !== null) return;
     // Mouse: só o botão principal (o menu de contexto do botão direito pode engolir o pointerup).
     if (e.pointerType === "mouse" && e.button !== 0) return;
     pointer.current = e.pointerId;
+    // Dedo/botão do mouse na tela: a câmera não se alinha sozinha enquanto durar (mesmo parado).
+    if (touchedAtRef) touchedAtRef.current = Number.MAX_SAFE_INTEGER;
     (e.target as Element).setPointerCapture(e.pointerId);
     lastX.current = e.clientX;
     lastY.current = e.clientY;
@@ -74,6 +77,7 @@ export function CameraLook({ yawRef, pitchRef, fullScreen = false, touchedAtRef 
   const end = (e: React.PointerEvent) => {
     if (e.pointerId !== pointer.current) return;
     pointer.current = null;
+    if (touchedAtRef) touchedAtRef.current = performance.now();
   };
 
   return (

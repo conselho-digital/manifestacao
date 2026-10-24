@@ -12,6 +12,7 @@ import { createAutoAnimator, type AutoAnimator, type AutoPose } from "./autoAnim
 import { getBakedRig, instantiateRig } from "./autoRig.js";
 import { rigForUrl } from "../config/rigs.js";
 import { strikeProgress } from "./strike.js";
+import { fallSeconds, reactProgress, type KnockRefs } from "./knock.js";
 
 export type FlagEmblem = "star-burst" | "ring" | "stripe";
 
@@ -247,6 +248,7 @@ export function GlbModel({
   walking = true,
   pose = null,
   strikeRef,
+  knock,
 }: {
   url: string;
   fallback?: ReactNode;
@@ -256,15 +258,17 @@ export function GlbModel({
   pose?: AutoPose;
   /** Início (performance.now) do golpe com a bandeira em andamento; 0 = nenhum. */
   strikeRef?: { current: number };
+  /** Reação a golpe e queda (início de cada uma, em performance.now). */
+  knock?: KnockRefs;
 }) {
   return (
     <ModelBoundary key={url} fallback={fallback}>
-      <GlbModelInner url={url} animated={animated} walking={walking} pose={pose} strikeRef={strikeRef} />
+      <GlbModelInner url={url} animated={animated} walking={walking} pose={pose} strikeRef={strikeRef} knock={knock} />
     </ModelBoundary>
   );
 }
 
-function GlbModelInner({ url, animated, walking, pose, strikeRef }: { url: string; animated: boolean; walking: boolean; pose: AutoPose; strikeRef?: { current: number } }) {
+function GlbModelInner({ url, animated, walking, pose, strikeRef, knock }: { url: string; animated: boolean; walking: boolean; pose: AutoPose; strikeRef?: { current: number }; knock?: KnockRefs }) {
   const { scene, animations } = useGLTF(url);
   // Clone por uso: o cache do useGLTF devolve a MESMA cena; sem clonar, o
   // mesmo modelo em dois jogadores brigaria pelo mesmo pai (só um aparece).
@@ -307,7 +311,10 @@ function GlbModelInner({ url, animated, walking, pose, strikeRef }: { url: strin
   }, [animated, instance, animations, rig]);
   useFrame((_, dt) => {
     try {
-      animRef.current?.update(Math.min(dt, 0.1), walking, pose, strikeRef ? strikeProgress(strikeRef.current) : -1);
+      animRef.current?.update(Math.min(dt, 0.1), walking, pose, strikeRef ? strikeProgress(strikeRef.current) : -1, {
+        react: knock ? reactProgress(knock.reactAt.current) : -1,
+        fall: knock ? fallSeconds(knock.fallAt.current) : -1,
+      });
     } catch {
       animRef.current = null;
     }

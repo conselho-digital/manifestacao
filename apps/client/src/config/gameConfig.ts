@@ -1,5 +1,5 @@
 import { cleanRig, setRigs, type RigMarks } from "./rigs.js";
-import { cleanScreen, setParkScreen, type ScreenConfig } from "./parkScreen.js";
+import { cleanPlayback, cleanScreen, setParkScreen, setPlayback, type ScreenConfig, type ScreenPlayback } from "./parkScreen.js";
 import {
   CHARACTERS,
   CHARACTER_IDS,
@@ -41,9 +41,11 @@ export interface GameConfig {
   rigs: Record<string, RigMarks>;
   /** Link do outdoor do parque (vídeo ou página); null = sem conteúdo. */
   screen: ScreenConfig | null;
+  /** Estado de reprodução do vídeo do outdoor (controlado pelo admin). */
+  playback: ScreenPlayback | null;
 }
 
-export const EMPTY_CONFIG: GameConfig = { teams: {}, models: {}, rigs: {}, screen: null };
+export const EMPTY_CONFIG: GameConfig = { teams: {}, models: {}, rigs: {}, screen: null, playback: null };
 
 // Valores padrão capturados na primeira execução — permitem "restaurar" ao
 // reaplicar uma config sem override (ex.: admin removeu uma mudança).
@@ -103,8 +105,8 @@ export function isTrustedModelUrl(url: unknown, image = false): url is string {
   }
 }
 
-export function sanitizeConfig(raw: { teams?: unknown; flags?: unknown; models?: unknown; rigs?: unknown; screen?: unknown }): GameConfig {
-  const out: GameConfig = { teams: {}, models: {}, rigs: {}, screen: cleanScreen(raw.screen) };
+export function sanitizeConfig(raw: { teams?: unknown; flags?: unknown; models?: unknown; rigs?: unknown; screen?: unknown; screen_playback?: unknown }): GameConfig {
+  const out: GameConfig = { teams: {}, models: {}, rigs: {}, screen: cleanScreen(raw.screen), playback: cleanPlayback(raw.screen_playback) };
   if (raw.teams && typeof raw.teams === "object") {
     for (const [id, v] of Object.entries(raw.teams)) {
       if (!isTeamId(id) || !v || typeof v !== "object") continue;
@@ -171,6 +173,7 @@ export function applyGameConfig(cfg: GameConfig, catalog: CatalogRow[] = []): vo
   modelOverrides = cfg.models;
   setRigs(cfg.rigs);
   setParkScreen(cfg.screen);
+  setPlayback(cfg.playback);
 }
 
 /** Busca config + catálogo no Supabase e aplica. Em modo offline, não faz nada. */

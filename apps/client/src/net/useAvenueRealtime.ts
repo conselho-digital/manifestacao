@@ -20,6 +20,7 @@ import {
   type PresenceState,
   type SprayBroadcast,
   type HitBroadcast,
+  type ImpactBroadcast,
   type TeamId,
   type VehicleId,
 } from "@manifestacao/shared";
@@ -37,6 +38,7 @@ import {
 } from "../game/spray.js";
 import { clampToAvenue } from "../game/world.js";
 import { STRIKE_SECONDS } from "../game/strike.js";
+import { FALL_SECONDS, newKnockRefs, registerHit } from "../game/knock.js";
 import { DEFAULT_SPRAY_ID, SPRAY_SLUG_RE, sprayOptions } from "../config/sprays.js";
 
 /** `typeof === "number"` deixa passar NaN/Infinity; isto não. */
@@ -70,6 +72,9 @@ export interface RemotePlayer extends PresenceState {
   vehicle: VehicleId;
   /** Quando (performance.now deste aparelho) o jogador deu o último golpe com a bandeira; 0 = nenhum. */
   hitAt?: number;
+  /** Início (performance.now) da última reação a golpe e da última queda deste jogador. */
+  reactAt?: number;
+  fallAt?: number;
 }
 
 /** Mensagem de chat com chave local estável para render no React. */
@@ -160,6 +165,10 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
   // por ignorar o próprio cooldown de envio.
   const lastSprayBySenderRef = useRef<Map<string, number>>(new Map());
   const lastOwnSprayAtRef = useRef(0);
+  // Golpes de bandeira: contagem por alvo, limite de recepção e o estado de reação/queda do jogador local.
+  const hitCountsRef = useRef<Map<string, { n: number; at: number }>>(new Map());
+  const lastImpactBySenderRef = useRef<Map<string, number>>(new Map());
+  const selfKnockRef = useRef(newKnockRefs());
   // Teto GLOBAL de recepção de spray (o senderId vem do payload e pode ser forjado).
   const sprayBucketRef = useRef({ t: 0, n: 0 });
   // Limites de recepção por remetente (chat/movimento) e último movimento
@@ -309,6 +318,18 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
         if (who.hitAt && nowHit - who.hitAt < STRIKE_SECONDS * 1000 * 0.9) return;
         who.hitAt = nowHit;
       })
+      .on("broadcast", { event: BROADCAST.impact }, ({ payload }) => {
+        const h = payload as ImpactBroadcast;
+        if (typeof h?.senderId !== "string" || typeof h?.targetId !== "string" || h.senderId === selfId || h.senderId.length > 64 || h.targetId.length > 64) return;
+        const nowImpact = Date.now();
+        // Anti-flood: no máximo um golpe que acerta por remetente a cada 0,6 s.
+        if (nowImpact - (lastImpactBySenderRef.current.get(h.senderId) ?? 0) < 600) return;
+        lastImpactBySenderRef.current.set(h.senderId, nowImpact);
+        capMap(lastImpactBySenderRef.current, 500);
+        const attacker = playersRef.current.get(h.senderId);
+        if (!attacker || attacker.vehicle !== "nenhum" || attacker.flag === "nenhuma") return; // só quem bate com bandeira, a pé
+        applyImpact(h.targetId);
+      })
       .on("broadcast", { event: BROADCAST.chat }, ({ payload }) => {
         const c = payload as ChatBroadcast;
         if (typeof c?.id !== "string" || c.id === selfId || c.id.length > 64) return;
@@ -442,6 +463,39 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
   );
 
   /** Sinalização do palanque (sem eco local: o remetente já conhece o próprio estado). */
+  /** Aplica um golpe que acertou `targetId` (eu ou outro jogador): reação, ou queda no 5º seguido. */
+  const applyImpact = useCallback(
+    (targetId: string) => {
+      const now = performance.now();
+      const who = targetId === selfId ? null : playersRef.current.get(targetId);
+      if (targetId !== selfId && (!who || who.vehicle !== "nenhum")) return; // só quem está a pé
+      const fallAtNow = targetId === selfId ? selfKnockRef.current.fallAt.current : (who?.fallAt ?? 0);
+      if (fallAtNow > 0 && now - fallAtNow < FALL_SECONDS * 1000) return; // já caído: não conta
+      const kind = registerHit(hitCountsRef.current, targetId);
+      if (targetId === selfId) {
+        if (kind === "fall") selfKnockRef.current.fallAt.current = now;
+        else selfKnockRef.current.reactAt.current = now;
+      } else if (who) {
+        if (kind === "fall") who.fallAt = now;
+        else who.reactAt = now;
+      }
+    },
+    [selfId],
+  );
+
+  /** Meu golpe acertou `targetId`: aplica aqui e avisa os outros. */
+  const sendImpact = useCallback(
+    (targetId: string) => {
+      applyImpact(targetId);
+      const channel = channelRef.current;
+      if (channel && channel.state === "joined") {
+        const payload: ImpactBroadcast = { senderId: selfId, targetId };
+        void channel.send({ type: "broadcast", event: BROADCAST.impact, payload });
+      }
+    },
+    [selfId, applyImpact],
+  );
+
   const sendHit = useCallback(() => {
     const channel = channelRef.current;
     if (channel && channel.state === "joined") {
@@ -521,6 +575,8 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
     sendChat,
     sendSpray,
     sendHit,
+    sendImpact,
+    selfKnock: selfKnockRef.current,
     sendVoice,
     voiceHandlerRef,
   };

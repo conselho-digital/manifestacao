@@ -8,7 +8,10 @@ export const SIGN_COLORS = ["#f8f9fa", "#ffd43b", "#51cf66", "#4dabf7", "#ff6b6b
 export type SignColor = (typeof SIGN_COLORS)[number];
 
 /** review → awaiting_payment (admin aprova) → active (Pix pago) | rejected | refunded. */
-export type SignStatus = "review" | "awaiting_payment" | "active" | "rejected" | "refunded";
+export type SignStatus = "review" | "awaiting_payment" | "active" | "rejected" | "refunded" | "expired";
+
+/** Quanto tempo um cartaz (ou telão) fica no ar depois de ativado. */
+export const AD_DURATION_HOURS = 12;
 
 export interface CustomSign {
   id: string;
@@ -16,6 +19,10 @@ export interface CustomSign {
   color: string;
   status: SignStatus;
   created_at: string;
+  /** Caminho da imagem (bucket user-media), se o cartaz é uma imagem. */
+  image_path?: string | null;
+  /** Fim das 12 h no ar (só depois de ativado). */
+  expires_at?: string | null;
 }
 
 export const SIGN_ID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

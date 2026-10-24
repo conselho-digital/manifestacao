@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { SIGN_ID_RE } from "@manifestacao/shared";
 import { fetchActiveSigns, subscribeSignRefunds } from "../net/signs.js";
+import { userImageUrl } from "../net/userImages.js";
 import type { RemotePlayer } from "../net/useAvenueRealtime.js";
 
 export interface SignData {
   text: string;
   color: string;
+  /** Imagem do cartaz (URL pública), se houver; o texto pode ficar vazio. */
+  imageUrl?: string | null;
+  /** Fim das 12 h no ar (ms); depois disso o cartaz sai da cena. */
+  expiresAt?: number | null;
 }
 
 /** Teto de ids consultados guardados (presence forjado com UUIDs aleatórios não cresce a memória sem fim). */
@@ -64,13 +69,34 @@ export function useSigns(remoteIds: string[], playersRef: { current: Map<string,
       if (rows.length === 0) return;
       setSigns((prev) => {
         const next = new Map(prev);
-        for (const r of rows) next.set(r.id, { text: r.text, color: r.color });
+        for (const r of rows) {
+          const exp = r.expires_at ? Date.parse(r.expires_at) : NaN;
+          next.set(r.id, { text: r.text, color: r.color, imageUrl: userImageUrl(r.image_path), expiresAt: Number.isFinite(exp) ? exp : null });
+        }
         return next;
       });
     });
     // `signs` fica de fora de propósito: só reconsulta quando a lista desejada ou o relógio de retry mudam.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [wantedKey, tick]);
+
+  // Passou das 12 h: o cartaz sai da cena (checa a cada 30 s).
+  useEffect(() => {
+    const t = setInterval(() => {
+      const now = Date.now();
+      setSigns((prev) => {
+        const gone = [...prev.entries()].filter(([, s]) => s.expiresAt != null && s.expiresAt <= now);
+        if (gone.length === 0) return prev;
+        const next = new Map(prev);
+        for (const [id] of gone) {
+          next.delete(id);
+          askedRef.current.delete(id);
+        }
+        return next;
+      });
+    }, 30_000);
+    return () => clearInterval(t);
+  }, []);
 
   // Cartaz estornado sai da cena na hora.
   useEffect(

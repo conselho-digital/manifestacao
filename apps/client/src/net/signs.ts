@@ -3,10 +3,13 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { SIGN_ID_RE, type CustomSign } from "@manifestacao/shared";
 import { getSupabase } from "./supabase.js";
 import type { PixCharge } from "./payments.js";
+import { notExpired } from "./userImages.js";
 
 const ERRORS: Record<string, string> = {
   sanctioned: "Sua conta está silenciada ou banida. Veja o aviso no jogo.",
-  text_invalid: "Texto inválido (1 a 40 caracteres).",
+  text_invalid: "Escreva um texto (até 40 caracteres) ou envie uma imagem.",
+  image_invalid: "Imagem inválida.",
+  image_missing: "A imagem não chegou. Escolha de novo.",
   color_invalid: "Escolha uma das cores.",
   content_blocked: "Texto não permitido: sem links, telefones, @ de contato ou palavras ofensivas.",
   too_many_open: "Você já tem cartazes em análise ou aguardando pagamento. Aguarde ou pague antes de enviar outro.",
@@ -34,8 +37,9 @@ async function call<T>(fn: string, body: Record<string, unknown>): Promise<T> {
   return data;
 }
 
-export function submitSign(text: string, color: string) {
-  return call<{ id: string }>("sign-submit", { text, color });
+/** Cartaz de texto, de imagem (caminho do uploadUserImage) ou os dois. */
+export function submitSign(text: string, color: string, imagePath?: string | null) {
+  return call<{ id: string }>("sign-submit", { text, color, ...(imagePath ? { imagePath } : {}) });
 }
 
 export function paySign(id: string) {
@@ -46,17 +50,20 @@ export function paySign(id: string) {
 export async function fetchMySigns(): Promise<CustomSign[] | null> {
   const supabase = getSupabase();
   if (!supabase) return null;
-  const { data, error } = await supabase.rpc("my_signs");
-  return error ? null : ((data as CustomSign[] | null) ?? []);
+  let res: { data: unknown; error: unknown } = await supabase.rpc("my_signs_v2");
+  if (res.error) res = await supabase.rpc("my_signs"); // banco ainda sem a migração 0025
+  return res.error ? null : ((res.data as CustomSign[] | null) ?? []);
 }
 
 /** Cartazes ATIVOS (pagos) por id — é com isso que se valida o que vem pela rede. */
-export async function fetchActiveSigns(ids: string[]): Promise<Pick<CustomSign, "id" | "text" | "color">[]> {
+export async function fetchActiveSigns(ids: string[]): Promise<Pick<CustomSign, "id" | "text" | "color" | "image_path" | "expires_at">[]> {
   const supabase = getSupabase();
   const valid = ids.filter((id) => SIGN_ID_RE.test(id));
   if (!supabase || valid.length === 0) return [];
-  const { data } = await supabase.from("custom_signs").select("id, text, color").eq("status", "active").in("id", valid.slice(0, 50));
-  return (data as Pick<CustomSign, "id" | "text" | "color">[] | null) ?? [];
+  let res: { data: unknown; error: unknown } = await supabase.from("custom_signs").select("id, text, color, image_path, expires_at").eq("status", "active").in("id", valid.slice(0, 50));
+  if (res.error) res = await supabase.from("custom_signs").select("id, text, color").eq("status", "active").in("id", valid.slice(0, 50)); // sem a migração 0025
+  const rows = (res.data as Pick<CustomSign, "id" | "text" | "color" | "image_path" | "expires_at">[] | null) ?? [];
+  return rows.filter((r) => notExpired(r.expires_at));
 }
 
 /** Realtime: cartaz que vira 'refunded' (Pix estornado) — a cena o retira. */

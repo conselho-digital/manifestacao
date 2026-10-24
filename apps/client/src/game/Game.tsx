@@ -16,6 +16,7 @@ import { useDailySprays } from "./useDailySprays.js";
 import { useFlagTime } from "./useFlagTime.js";
 import { HitButton } from "../ui/HitButton.js";
 import { STRIKE_SECONDS, strikeProgress } from "./strike.js";
+import { STRIKE_IMPACT_AT, fallSeconds, findStrikeTarget } from "./knock.js";
 import { FlagButton } from "../ui/FlagButton.js";
 import type { SprayAim } from "./spray.js";
 import { sprayImageFor } from "./models.js";
@@ -255,12 +256,24 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
   // Sprays do dia (15 por dia): contador no aparelho — client-trust, como o resto do MVP não autoritativo (CLAUDE.md §4).
   const sprays = useDailySprays(isAdmin);
   // Golpe com a bandeira (0,7 s): botão "Bater" ou tecla F, só a pé e com a bandeira à mostra.
-  const canHit = flagShown && !driving;
+  const [fallenNow, setFallenNow] = useState(false);
+  // Caído, não bate (e o botão fica desligado enquanto levanta).
+  useEffect(() => {
+    const t = window.setInterval(() => setFallenNow(fallSeconds(net.selfKnock.fallAt.current) >= 0), 200);
+    return () => window.clearInterval(t);
+  }, [net]);
+  const canHit = flagShown && !driving && !fallenNow;
   const [hitBusy, setHitBusy] = useState(false);
   const doHit = useCallback(() => {
     if (!canHit || strikeProgress(hitRef.current) >= 0) return;
     hitRef.current = performance.now();
     net.sendHit();
+    // No instante em que a bandeira acerta (35% dos 0,7 s), quem estiver à frente, perto, leva o golpe.
+    window.setTimeout(() => {
+      const me = transformRef.current;
+      const target = findStrikeTarget(me, net.playersRef.current);
+      if (target) net.sendImpact(target);
+    }, STRIKE_SECONDS * 1000 * STRIKE_IMPACT_AT);
     setHitBusy(true);
     window.setTimeout(() => setHitBusy(false), STRIKE_SECONDS * 1000);
   }, [canHit, net]);
@@ -365,6 +378,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           driveRef={driveRef}
           wheelieRef={wheelieRef}
           hitRef={hitRef}
+          knock={net.selfKnock}
           cameraTouchedAtRef={cameraTouchedAtRef}
           transformRef={transformRef}
           transformReadyRef={transformReadyRef}
