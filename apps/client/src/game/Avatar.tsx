@@ -113,13 +113,14 @@ function Headwear({ character }: { character?: CharacterId }) {
 }
 
 /** Corpo geométrico (fallback quando não há modelo glTF). */
-export function ProceduralBody({ color, arms = true, character }: { color: number; arms?: boolean; character?: CharacterId }) {
+export function ProceduralBody({ color, arms = true, character, riding = false }: { color: number; arms?: boolean; character?: CharacterId; riding?: boolean }) {
   const look = lookOf(character);
   return (
-    <group scale={look.scale}>
+    // De piloto: o corpo desce até o banco e se inclina para a frente; os braços vão ao guidão.
+    <group scale={look.scale} position={riding ? [0, -0.1, -0.32] : undefined} rotation={riding ? [0.38, 0, 0] : undefined}>
       {/* Braços: manga na cor da camisa e mão na cor da pele, caindo dos ombros com leve abertura. */}
       {arms && [-1, 1].map((side) => (
-        <group key={side} position={[side * 0.46, 1.32, 0]} rotation={[0, 0, side * 0.12]}>
+        <group key={side} position={[side * 0.46, 1.32, 0]} rotation={riding ? [-1.05, 0, side * 0.12] : [0, 0, side * 0.12]}>
           <mesh position={[0, -0.32, 0]} castShadow>
             <capsuleGeometry args={[0.11, 0.42, 4, 8]} />
             <meshStandardMaterial color={color} />
@@ -163,7 +164,9 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
   ref,
 ) {
   const tiltRef = useRef<Group>(null);
-  const isMoto = VEHICLES[vehicle]?.kind === "moto";
+  const kind = VEHICLES[vehicle]?.kind ?? "foot";
+  const isMoto = kind === "moto";
+  const hideBody = kind !== "foot" && kind !== "moto";
   // Empinar: inclina corpo + moto em torno do eixo traseiro (frente +Z sobe com rotação negativa em X).
   useFrame(() => {
     const g = tiltRef.current;
@@ -175,17 +178,25 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
     <group ref={ref}>
       <group ref={tiltRef} position={[0, 0, MOTO_REAR_AXLE_Z]}>
       <group position={[0, 0, -MOTO_REAR_AXLE_Z]}>
-      {modelUrl ? (
-        <Suspense fallback={<ProceduralBody color={color} arms={vehicle === "nenhum"} character={character} />}>
-          <GlbModel url={modelUrl} animated walking={vehicle === "nenhum"} fallback={<ProceduralBody color={color} arms={vehicle === "nenhum"} character={character} />} />
-        </Suspense>
-      ) : (
-        <ProceduralBody color={color} arms={vehicle === "nenhum"} character={character} />
-      )}
+      {/* Moto: o personagem vai sentado de piloto. Carro, caminhão e carro de som: só o veículo aparece. */}
+      {!hideBody &&
+        (modelUrl ? (
+          <Suspense fallback={<ProceduralBody color={color} arms riding={isMoto} character={character} />}>
+            <GlbModel
+              url={modelUrl}
+              animated
+              walking={vehicle === "nenhum"}
+              pose={isMoto ? "moto" : null}
+              fallback={<ProceduralBody color={color} arms riding={isMoto} character={character} />}
+            />
+          </Suspense>
+        ) : (
+          <ProceduralBody color={color} arms={vehicle === "nenhum" || isMoto} riding={isMoto} character={character} />
+        ))}
 
       {/* Bandeira só a pé: em veículo as mãos estão ocupadas. */}
       {flag !== "nenhuma" && vehicle === "nenhum" && <FlagProp flag={flag} color={color} team={team} />}
-      {sign && <SignProp sign={sign} />}
+      {sign && !hideBody && <SignProp sign={sign} />}
       <Vehicle3D vehicle={vehicle} />
       </group>
       </group>

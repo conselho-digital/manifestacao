@@ -8,7 +8,7 @@ import { useProximitySound } from "./ProximitySound.js";
 import { useUserGestureUnlocked } from "./useUserGesture.js";
 import { vehicleModelUrl } from "./models.js";
 import { ModelBoundary } from "./ModelBoundary.js";
-import { createAutoAnimator, type AutoAnimator } from "./autoAnimate.js";
+import { createAutoAnimator, type AutoAnimator, type AutoPose } from "./autoAnimate.js";
 import { getBakedRig, instantiateRig } from "./autoRig.js";
 import { rigForUrl } from "../config/rigs.js";
 
@@ -239,15 +239,28 @@ export function ProceduralVehicle({ vehicle }: { vehicle: VehicleId }) {
  * Modelo glTF (personagem ou objeto). Com `animated`, ganha animação automática (clipes do arquivo ou balanço por
  * código, ver autoAnimate.ts); `walking` falso (de veículo) deixa o personagem parado.
  */
-export function GlbModel({ url, fallback = null, animated = false, walking = true }: { url: string; fallback?: ReactNode; animated?: boolean; walking?: boolean }) {
+export function GlbModel({
+  url,
+  fallback = null,
+  animated = false,
+  walking = true,
+  pose = null,
+}: {
+  url: string;
+  fallback?: ReactNode;
+  animated?: boolean;
+  walking?: boolean;
+  /** "moto": o personagem aparece sentado, de piloto. */
+  pose?: AutoPose;
+}) {
   return (
     <ModelBoundary key={url} fallback={fallback}>
-      <GlbModelInner url={url} animated={animated} walking={walking} />
+      <GlbModelInner url={url} animated={animated} walking={walking} pose={pose} />
     </ModelBoundary>
   );
 }
 
-function GlbModelInner({ url, animated, walking }: { url: string; animated: boolean; walking: boolean }) {
+function GlbModelInner({ url, animated, walking, pose }: { url: string; animated: boolean; walking: boolean; pose: AutoPose }) {
   const { scene, animations } = useGLTF(url);
   // Clone por uso: o cache do useGLTF devolve a MESMA cena; sem clonar, o
   // mesmo modelo em dois jogadores brigaria pelo mesmo pai (só um aparece).
@@ -290,7 +303,7 @@ function GlbModelInner({ url, animated, walking }: { url: string; animated: bool
   }, [animated, instance, animations, rig]);
   useFrame((_, dt) => {
     try {
-      animRef.current?.update(Math.min(dt, 0.1), walking);
+      animRef.current?.update(Math.min(dt, 0.1), walking, pose);
     } catch {
       animRef.current = null;
     }

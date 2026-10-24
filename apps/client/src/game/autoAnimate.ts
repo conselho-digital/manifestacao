@@ -69,9 +69,15 @@ function bonesOf(root: Object3D): Bone[] {
   return out;
 }
 
+/** Posição do quadril do piloto na moto (m, a partir da origem da moto; z para a frente). */
+export const MOTO_RIDER_HIP_Y = 0.82;
+export const MOTO_RIDER_Z = -0.05;
+
+export type AutoPose = "moto" | null;
+
 export interface AutoAnimator {
-  /** Avança um quadro. `walking` = a pé (em veículo o personagem não anda). */
-  update(dt: number, walking: boolean): void;
+  /** Avança um quadro. `walking` = a pé (em veículo o personagem não anda); `pose` = sentado na moto. */
+  update(dt: number, walking: boolean, pose?: AutoPose): void;
   dispose(): void;
 }
 
@@ -110,7 +116,7 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
     const run = runClip && runClip !== walkClip ? play(runClip) : null;
     const idle = play(idleClip);
     return {
-      update(dt, walking) {
+      update(dt, walking, _pose) {
         (frame.parent ?? frame).getWorldPosition(pos);
         if (havePos && dt > 0) speed += (Math.min(24, pos.distanceTo(lastPos) / dt) - speed) * Math.min(1, dt * 10);
         lastPos.copy(pos);
@@ -222,10 +228,18 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
     }
   }
 
+  // Altura do quadril em repouso (para sentar na moto) e eixo de inclinação do tronco (o mesmo que balança as pernas).
+  const hipsLimb = limbs.find((l) => l.role === "hips");
+  const hipY = hipsLimb ? worldPos(hipsLimb.bone, new Vector3()).y : 0.9;
+  const leanAxis = (limbs.find((l) => l.role === "thigh") ?? { axis: new Vector3(1, 0, 0) }).axis;
+  const rotTwist = new Quaternion();
+  const rotLean = new Quaternion();
   const rot = new Quaternion();
   const parentQ = new Quaternion();
   const parentInv = new Quaternion();
   const baseY = frame.position.y;
+  const baseZ = frame.position.z;
+  let sit = 0; // 0 em pé → 1 sentado na moto
   const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
   const smooth = (a: number, b: number, v: number) => {
     const x = Math.max(0, Math.min(1, (v - a) / (b - a)));
@@ -235,8 +249,10 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
   let runK = 0; // 0 andando → 1 correndo
 
   return {
-    update(dt, walking) {
+    update(dt, walking, pose = null) {
       t += dt;
+      sit += ((pose === "moto" ? 1 : 0) - sit) * Math.min(1, dt * 9);
+      const stand = 1 - sit;
       // Velocidade do avatar (pai do grupo): o balanço do próprio corpo não conta.
       (frame.parent ?? frame).getWorldPosition(pos);
       if (havePos && dt > 0) speed += (Math.min(24, pos.distanceTo(lastPos) / dt) - speed) * Math.min(1, dt * 10);
@@ -260,10 +276,13 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
         ? // O quadril desce quando as pernas se abrem (pés no chão) e sobe no apoio; na corrida ainda há um impulso.
           -legLen * (1 - Math.cos(0.5 * thighAmp * Math.abs(sin))) * w + runK * 0.05 * (0.5 + 0.5 * Math.cos(2 * phase)) * w
         : (Math.abs(sin) * lerp(0.07, 0.12, runK)) * w;
-      frame.position.y = baseY + bob;
-      frame.rotation.x = forward * lerp(0.04, 0.24, runK) * w;
-      frame.rotation.y = !hasRig ? sin * 0.07 * w : 0;
-      frame.rotation.z = !hasRig ? sin * 0.06 * w : 0;
+      // Sentado na moto: o quadril desce até o banco e vai um pouco para trás; sem esqueleto, o corpo todo afunda e inclina.
+      const seatDrop = hasRig ? MOTO_RIDER_HIP_Y - hipY : -0.3;
+      frame.position.y = baseY + bob * stand + seatDrop * sit;
+      frame.position.z = baseZ + MOTO_RIDER_Z * sit;
+      frame.rotation.x = forward * (lerp(0.04, 0.24, runK) * w * stand + (hasRig ? 0 : 0.3) * sit);
+      frame.rotation.y = !hasRig ? sin * 0.07 * w * stand : 0;
+      frame.rotation.z = !hasRig ? sin * 0.06 * w * stand : 0;
       frame.scale.y = 1 + Math.sin(t * 2.2) * (moving ? 0.004 : 0.012);
 
       if (!hasRig) return;
@@ -309,8 +328,36 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
             ang = (forward * w * lerp(0.2, 0.32, runK) * sin) / spineCount;
             break;
         }
+        // Pose de piloto (mistura com o andar pelo `sit`): coxas à frente, joelhos dobrados, braços no guidão, tronco inclinado.
+        if (sit > 0.001) {
+          let seated = 0;
+          switch (l.role) {
+            case "thigh":
+              seated = 1.1;
+              break;
+            case "knee":
+              seated = -1.35;
+              break;
+            case "foot":
+              seated = -0.8 * (1.1 - 1.35);
+              break;
+            case "arm":
+              seated = 1.05;
+              break;
+            case "forearm":
+              seated = 0.25;
+              break;
+          }
+          ang = ang * stand + seated * sit;
+        }
         // ângulo positivo no eixo = balança para a frente
-        rot.setFromAxisAngle(l.axis, ang).multiply(l.rest);
+        if (l.role === "spine") {
+          rotTwist.setFromAxisAngle(l.axis, ang); // `ang` já vem misturado com a pose
+          rotLean.setFromAxisAngle(leanAxis, (-forward * 0.6 * sit) / spineCount); // para cima, o mesmo eixo inclina o tronco ao contrário das pernas
+          rot.copy(rotLean).multiply(rotTwist).multiply(l.rest);
+        } else {
+          rot.setFromAxisAngle(l.axis, ang).multiply(l.rest);
+        }
         // local = P⁻¹ · R · P · restLocal (R no referencial do avatar, P = mundo atual do pai)
         const parent = l.bone.parent;
         if (parent) {
@@ -325,6 +372,7 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
     dispose() {
       for (const l of limbs) l.bone.quaternion.copy(l.restLocal);
       frame.position.y = baseY;
+      frame.position.z = baseZ;
       frame.rotation.set(0, 0, 0);
       frame.scale.y = 1;
     },
