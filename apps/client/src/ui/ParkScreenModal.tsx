@@ -1,4 +1,4 @@
-import { closeParkScreen, embedUrl, parseScreenMedia, useParkScreen, useParkScreenOpen } from "../config/parkScreen.js";
+import { closeParkScreen, embedUrl, parseScreenMedia, useParkScreen, useParkScreenOpen, type ScreenConfig } from "../config/parkScreen.js";
 import { useModal } from "./useModal.js";
 
 const btn: React.CSSProperties = {
@@ -15,10 +15,11 @@ const btn: React.CSSProperties = {
   alignItems: "center",
 };
 
-function Dialog({ url, title }: { url: string; title: string }) {
+function Dialog({ cfg }: { cfg: ScreenConfig }) {
+  const { url, title } = cfg;
   const ref = useModal<HTMLDivElement>(closeParkScreen);
   const media = parseScreenMedia(url);
-  const src = embedUrl(media, url);
+  const src = embedUrl(media, cfg);
   return (
     <div
       onClick={(e) => e.target === e.currentTarget && closeParkScreen()}
@@ -80,5 +81,5 @@ export function ParkScreenModal() {
   const cfg = useParkScreen();
   const open = useParkScreenOpen();
   if (!open || !cfg) return null;
-  return <Dialog url={cfg.url} title={cfg.title} />;
+  return <Dialog cfg={cfg} />;
 }

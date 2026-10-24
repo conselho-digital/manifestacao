@@ -11,7 +11,17 @@ const URL_MAX = 500;
 export interface ScreenConfig {
   url: string;
   title: string;
+  /** Opções do player do YouTube (ignoradas em páginas comuns). */
+  autoplay: boolean;
+  /** Mostra os controles do player (pausar, volume, tela cheia). */
+  controls: boolean;
+  /** Repete o vídeo ao terminar. */
+  loop: boolean;
+  /** Começa sem som (alguns celulares só tocam sozinhos assim). */
+  mute: boolean;
 }
+
+export const DEFAULT_SCREEN_OPTIONS = { autoplay: true, controls: true, loop: false, mute: false } as const;
 
 export type ScreenMedia = { kind: "youtube"; id: string } | { kind: "page" };
 
@@ -51,11 +61,25 @@ export function cleanScreen(v: unknown): ScreenConfig | null {
   }
   if (u.protocol !== "https:" || u.username || u.password) return null;
   const title = typeof o.title === "string" ? o.title.replace(/[\p{Cf}\p{Cc}]/gu, "").trim().slice(0, SCREEN_TITLE_MAX) : "";
-  return { url: u.href, title };
+  const flag = (k: keyof typeof DEFAULT_SCREEN_OPTIONS) => (typeof o[k] === "boolean" ? (o[k] as boolean) : DEFAULT_SCREEN_OPTIONS[k]);
+  return { url: u.href, title, autoplay: flag("autoplay"), controls: flag("controls"), loop: flag("loop"), mute: flag("mute") };
 }
 
-export function embedUrl(media: ScreenMedia, url: string): string {
-  return media.kind === "youtube" ? `https://www.youtube-nocookie.com/embed/${media.id}?autoplay=1&rel=0&playsinline=1` : url;
+export function embedUrl(media: ScreenMedia, cfg: ScreenConfig): string {
+  if (media.kind !== "youtube") return cfg.url;
+  const p = new URLSearchParams({
+    autoplay: cfg.autoplay ? "1" : "0",
+    controls: cfg.controls ? "1" : "0",
+    mute: cfg.mute ? "1" : "0",
+    rel: "0",
+    playsinline: "1",
+    modestbranding: "1",
+  });
+  if (cfg.loop) {
+    p.set("loop", "1");
+    p.set("playlist", media.id); // o YouTube só repete com a lista do próprio vídeo
+  }
+  return `https://www.youtube-nocookie.com/embed/${media.id}?${p.toString()}`;
 }
 
 export function thumbnailUrl(media: ScreenMedia): string | null {

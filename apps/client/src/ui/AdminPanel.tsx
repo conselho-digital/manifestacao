@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useModal } from "./useModal.js";
 import { AdminPhoto3d } from "./AdminPhoto3d.js";
 import { RigEditor } from "./RigEditor.js";
-import { SCREEN_TITLE_MAX, cleanScreen, currentParkScreen, parseScreenMedia } from "../config/parkScreen.js";
+import { DEFAULT_SCREEN_OPTIONS, SCREEN_TITLE_MAX, cleanScreen, currentParkScreen, parseScreenMedia } from "../config/parkScreen.js";
 import type { Object3D } from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { currentRigs, type RigMarks } from "../config/rigs.js";
@@ -400,8 +400,20 @@ function ScreenTab({ busy, run }: TabProps) {
   const saved = currentParkScreen();
   const [url, setUrl] = useState(saved?.url ?? "");
   const [title, setTitle] = useState(saved?.title ?? "");
-  const parsed = cleanScreen({ url, title });
+  const [opts, setOpts] = useState({
+    autoplay: saved?.autoplay ?? DEFAULT_SCREEN_OPTIONS.autoplay,
+    controls: saved?.controls ?? DEFAULT_SCREEN_OPTIONS.controls,
+    loop: saved?.loop ?? DEFAULT_SCREEN_OPTIONS.loop,
+    mute: saved?.mute ?? DEFAULT_SCREEN_OPTIONS.mute,
+  });
+  const parsed = cleanScreen({ url, title, ...opts });
   const media = parsed ? parseScreenMedia(parsed.url) : null;
+  const optionRows: { key: keyof typeof opts; label: string; help: string }[] = [
+    { key: "autoplay", label: "Tocar automaticamente", help: "O vídeo começa assim que a pessoa abre o outdoor." },
+    { key: "controls", label: "Mostrar os controles do player", help: "Pausar, volume, barra de tempo e tela cheia." },
+    { key: "mute", label: "Começar sem som", help: "Alguns celulares só tocam sozinhos assim; a pessoa liga o som nos controles." },
+    { key: "loop", label: "Repetir o vídeo", help: "Volta ao início quando termina." },
+  ];
 
   return (
     <>
@@ -421,6 +433,29 @@ function ScreenTab({ busy, run }: TabProps) {
       <p style={hint}>
         {url.trim() === "" ? "Sem link: o outdoor mostra “Em breve”." : !parsed ? "Link inválido: use https." : media?.kind === "youtube" ? "Vídeo do YouTube detectado." : "Página da internet."}
       </p>
+      {media?.kind === "youtube" && (
+        <fieldset style={{ margin: 0, padding: "8px 12px", border: "1px solid var(--line)", borderRadius: "var(--r-md)", display: "flex", flexDirection: "column", gap: 8 }}>
+          <legend style={{ fontSize: "var(--t-ui)", color: "var(--ink-dim)", padding: "0 6px" }}>Player do YouTube</legend>
+          {optionRows.map((o) => (
+            <label key={o.key} style={{ display: "flex", gap: 10, alignItems: "flex-start", fontSize: "var(--t-ui)" }}>
+              <input
+                type="checkbox"
+                checked={opts[o.key]}
+                onChange={(e) => setOpts((p) => ({ ...p, [o.key]: e.target.checked }))}
+                style={{ width: 22, height: 22, flexShrink: 0 }}
+              />
+              <span>
+                <strong>{o.label}</strong>
+                <br />
+                <span style={{ color: "var(--ink-dim)" }}>{o.help}</span>
+              </span>
+            </label>
+          ))}
+          {!opts.controls && opts.mute && (
+            <p style={{ ...hint, color: "var(--danger)" }}>Sem controles e sem som, ninguém consegue ligar o som. Ligue os controles.</p>
+          )}
+        </fieldset>
+      )}
       <button
         type="button"
         disabled={busy || !parsed}
