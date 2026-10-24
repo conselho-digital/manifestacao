@@ -224,6 +224,7 @@ const smooth = (a: number, b: number, v: number) => {
 export const BONE_NAMES = [
   "Hips",
   "Spine",
+  "Neck",
   "Head",
   "LeftUpLeg",
   "LeftLeg",
@@ -245,7 +246,8 @@ export const B = Object.fromEntries(BONE_NAMES.map((n, i) => [n, i])) as Record<
 
 const BONE_PARENT: Partial<Record<BoneName, BoneName>> = {
   Spine: "Hips",
-  Head: "Spine",
+  Neck: "Spine",
+  Head: "Neck",
   LeftUpLeg: "Hips",
   LeftLeg: "LeftUpLeg",
   LeftFoot: "LeftLeg",
@@ -447,7 +449,8 @@ export function buildCharacter(cut: Cutout): Group {
   const world: Record<BoneName, [number, number, number]> = {
     Hips: [0, 0.5 * H, 0],
     Spine: [0, 0.58 * H, 0],
-    Head: [0, 0.84 * H, 0],
+    Neck: [0, 0.8 * H, 0],
+    Head: [0, 0.86 * H, 0],
     LeftUpLeg: [0.07 * H, 0.5 * H, 0],
     LeftLeg: [0.07 * H, 0.27 * H, 0],
     LeftFoot: [0.07 * H, 0.05 * H, 0],

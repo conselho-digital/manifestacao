@@ -15,8 +15,8 @@ import { CAMERA_SHOULDER_RATIO, CAMERA_DISTANCE_MOBILE, CAMERA_DISTANCE_DESKTOP,
 import { useDailySprays } from "./useDailySprays.js";
 import { useFlagTime } from "./useFlagTime.js";
 import { HitButton } from "../ui/HitButton.js";
-import { STRIKE_SECONDS, strikeProgress } from "./strike.js";
-import { STRIKE_IMPACT_AT, fallSeconds, findStrikeTarget } from "./knock.js";
+import { activeStrike, newStrikeRefs, strikeSeconds, type StrikeKind } from "./strike.js";
+import { PUNCH_IMPACT_AT, PUNCH_RANGE, STRIKE_IMPACT_AT, STRIKE_RANGE, fallSeconds, findStrikeTarget } from "./knock.js";
 import { FlagButton } from "../ui/FlagButton.js";
 import type { SprayAim } from "./spray.js";
 import { sprayImageFor } from "./models.js";
@@ -161,7 +161,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
   // Direção: botões na tela escrevem em driveRef; wheelieRef (moto empinada) é só leitura do desenho.
   const driveRef = useRef<DriveInput>(NO_DRIVE_INPUT);
   const wheelieRef = useRef(0);
-  const hitRef = useRef(0);
+  const hitRef = useRef(newStrikeRefs());
   const cameraTouchedAtRef = useRef(0);
   const vehicleKind = VEHICLES[vehicle]?.kind ?? "foot";
   const driving = vehicleKind !== "foot";
@@ -262,21 +262,26 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     const t = window.setInterval(() => setFallenNow(fallSeconds(net.selfKnock.fallAt.current) >= 0), 200);
     return () => window.clearInterval(t);
   }, [net]);
-  const canHit = flagShown && !driving && !fallenNow;
+  const canHit = !driving && !fallenNow;
   const [hitBusy, setHitBusy] = useState(false);
   const doHit = useCallback(() => {
-    if (!canHit || strikeProgress(hitRef.current) >= 0) return;
-    hitRef.current = performance.now();
-    net.sendHit();
-    // No instante em que a bandeira acerta (35% dos 0,7 s), quem estiver à frente, perto, leva o golpe.
-    window.setTimeout(() => {
-      const me = transformRef.current;
-      const target = findStrikeTarget(me, net.playersRef.current);
-      if (target) net.sendImpact(target);
-    }, STRIKE_SECONDS * 1000 * STRIKE_IMPACT_AT);
+    if (!canHit || activeStrike(hitRef.current)) return;
+    // Com bandeira na mão: golpe de bandeira (0,7 s). Sem bandeira: soco (0,5 s).
+    const kind: StrikeKind = flagShown ? "flag" : "punch";
+    hitRef.current.kind.current = kind;
+    hitRef.current.at.current = performance.now();
+    net.sendHit(kind);
+    // No instante em que acerta, quem estiver à frente, perto, leva o golpe.
+    window.setTimeout(
+      () => {
+        const target = findStrikeTarget(transformRef.current, net.playersRef.current, kind === "punch" ? PUNCH_RANGE : STRIKE_RANGE);
+        if (target) net.sendImpact(target, kind);
+      },
+      strikeSeconds(kind) * 1000 * (kind === "punch" ? PUNCH_IMPACT_AT : STRIKE_IMPACT_AT),
+    );
     setHitBusy(true);
-    window.setTimeout(() => setHitBusy(false), STRIKE_SECONDS * 1000);
-  }, [canHit, net]);
+    window.setTimeout(() => setHitBusy(false), strikeSeconds(kind) * 1000);
+  }, [canHit, flagShown, net]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat || e.key.toLowerCase() !== "f" || isTypingTarget(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
@@ -377,7 +382,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           onMove={net.sendMove}
           driveRef={driveRef}
           wheelieRef={wheelieRef}
-          hitRef={hitRef}
+          hitRef={hitRef.current}
           knock={net.selfKnock}
           cameraTouchedAtRef={cameraTouchedAtRef}
           transformRef={transformRef}

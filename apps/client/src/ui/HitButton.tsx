@@ -1,11 +1,11 @@
-/** Botão "Bater": golpe de 0,7 s com a bandeira (só aparece com a bandeira à mostra, a pé). Atalho no PC: F. */
+/** Botão "Bater": golpe com a bandeira (0,7 s) ou, sem bandeira, soco (0,5 s). Só a pé. Atalho no PC: F. */
 export function HitButton({ onHit, busy }: { onHit: () => void; busy: boolean }) {
   return (
     <button
       type="button"
       onClick={onHit}
       disabled={busy}
-      aria-label="Bater com a bandeira (tecla F)"
+      aria-label="Bater (tecla F)"
       style={{
         minWidth: 92,
         minHeight: 44,

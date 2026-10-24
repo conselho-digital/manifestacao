@@ -82,7 +82,6 @@ export interface RigLayout {
   segments: Segment[];
 }
 
-const mid = (a: Pt, b: Pt): Pt => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
 const lerp = (a: Pt, b: Pt, t: number): Pt => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
 
 /** Posição dos ossos e segmentos de influência a partir das marcações. */
@@ -95,38 +94,47 @@ export function layoutFromMarks(rig: RigMarks, height: number): RigLayout {
 
   const pelvis: Pt = [cx, rig.pelvis[1]];
   const neck: Pt = [cx, rig.neck[1]];
-  const spine = lerp(pelvis, neck, 0.35);
-  const top = Math.max(height, neck[1] + 0.1);
-  const toe = Math.max(0.1, height * 0.07);
+  const spine = lerp(pelvis, neck, 0.4);
+  const top: Pt = [cx, Math.max(rig.head[1], neck[1] + 0.08, Math.min(height, rig.head[1] + 0.05))];
+  const headBase = lerp(neck, top, 0.3);
+  const neckLow = lerp(spine, neck, 0.7);
 
   const world = {} as Record<BoneName, [number, number, number]>;
   const segments: Segment[] = [];
   const put = (n: BoneName, p: Pt, z = 0) => (world[n] = [p[0], p[1], z]);
   put("Hips", pelvis);
   put("Spine", spine);
-  put("Head", neck);
+  put("Neck", neckLow);
+  put("Head", headBase);
   segments.push({ bone: B.Hips, a: pelvis, b: spine });
-  segments.push({ bone: B.Spine, a: spine, b: neck });
-  segments.push({ bone: B.Head, a: neck, b: [cx, top] });
+  segments.push({ bone: B.Spine, a: spine, b: neckLow });
+  segments.push({ bone: B.Neck, a: neckLow, b: headBase });
+  segments.push({ bone: B.Head, a: headBase, b: top });
 
   for (const left of [true, false]) {
     const p = left ? "Left" : "Right";
     const hip = side(rig.hip, left);
+    const thigh = side(rig.thigh, left);
+    const knee = side(rig.knee, left);
     const ankle = side(rig.ankle, left);
-    const knee = mid(hip, ankle);
+    const toe = side(rig.toe, left);
     const shoulder = side(rig.shoulder, left);
+    const elbow = side(rig.elbow, left);
     const hand = side(rig.hand, left);
-    const elbow = mid(shoulder, hand);
+    // Comprimento do pé (para frente): vem da ponta do pé marcada.
+    const footLen = Math.max(0.08, Math.min(0.4, Math.abs(toe[0] - ankle[0]) + Math.abs(toe[1] - ankle[1]) + 0.1));
     put(`${p}UpLeg` as BoneName, hip);
     put(`${p}Leg` as BoneName, knee);
     put(`${p}Foot` as BoneName, ankle);
-    put(`${p}ToeBase` as BoneName, [ankle[0], Math.max(0, ankle[1] * 0.3)], toe);
+    put(`${p}ToeBase` as BoneName, [ankle[0], Math.max(0, Math.min(ankle[1], toe[1] + (ankle[1] - toe[1]) * 0.3))], footLen);
     put(`${p}Arm` as BoneName, shoulder);
     put(`${p}ForeArm` as BoneName, elbow);
     put(`${p}Hand` as BoneName, hand);
-    segments.push({ bone: B[`${p}UpLeg` as BoneName], a: hip, b: knee });
+    // A coxa passa pelo ponto do meio (pernas curvas); o resto segue direto.
+    segments.push({ bone: B[`${p}UpLeg` as BoneName], a: hip, b: thigh });
+    segments.push({ bone: B[`${p}UpLeg` as BoneName], a: thigh, b: knee });
     segments.push({ bone: B[`${p}Leg` as BoneName], a: knee, b: ankle });
-    segments.push({ bone: B[`${p}Foot` as BoneName], a: ankle, b: [ankle[0], 0] });
+    segments.push({ bone: B[`${p}Foot` as BoneName], a: ankle, b: [toe[0], Math.max(0, toe[1])] });
     segments.push({ bone: B[`${p}Arm` as BoneName], a: shoulder, b: elbow });
     segments.push({ bone: B[`${p}ForeArm` as BoneName], a: elbow, b: hand });
     segments.push({ bone: B[`${p}Hand` as BoneName], a: hand, b: lerp(elbow, hand, 1.5) });
@@ -153,7 +161,13 @@ export function skinGeometry(geometry: BufferGeometry, segments: Segment[]): voi
     const x = pos.getX(i);
     const y = pos.getY(i);
     cand.length = 0;
-    for (const s of segments) cand.push([s.bone, segDist(x, y, s)]);
+    // Um osso pode ter mais de um segmento (coxa): vale o mais próximo.
+    for (const s of segments) {
+      const d = segDist(x, y, s);
+      const prev = cand.findIndex((c) => c[0] === s.bone);
+      if (prev < 0) cand.push([s.bone, d]);
+      else if (d < cand[prev]![1]) cand[prev]![1] = d;
+    }
     cand.sort((a, b) => a[1] - b[1]);
     // Peso ~ 1/d⁴: o osso mais próximo domina; perto da junta, dois osos se misturam.
     const d0 = Math.max(cand[0]![1], 1e-4);

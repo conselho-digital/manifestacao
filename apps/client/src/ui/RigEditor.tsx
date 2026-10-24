@@ -18,12 +18,17 @@ import { createAutoAnimator } from "../game/autoAnimate.js";
 const VIEW_W = 320;
 const VIEW_H = 420;
 const COLORS: Record<RigKey, string> = {
+  head: "#e599f7",
   neck: "#ffd43b",
-  pelvis: "#ff922b",
   shoulder: "#4dabf7",
+  elbow: "#339af0",
   hand: "#74c0fc",
+  pelvis: "#ff922b",
   hip: "#51cf66",
+  thigh: "#40c057",
+  knee: "#69db7c",
   ankle: "#8ce99a",
+  toe: "#b2f2bb",
 };
 
 const ghost: React.CSSProperties = {
@@ -53,14 +58,25 @@ type Marks = Record<RigKey, Pt>;
 /** Chute inicial pelas proporções do modelo: o admin só arrasta o que estiver fora do lugar. */
 function guessMarks(size: { x: number; y: number }): Marks {
   const H = size.y;
-  const armX = Math.min(size.x / 2 * 0.95, 0.26 * H);
+  const armX = Math.min((size.x / 2) * 0.95, 0.26 * H);
+  const shoulder: Pt = [Math.min(0.17 * H, armX), 0.82 * H];
+  const hand: Pt = [armX, 0.46 * H];
+  const hip: Pt = [0.07 * H, 0.5 * H];
+  const ankle: Pt = [0.07 * H, 0.05 * H];
+  const mid = (a: Pt, b: Pt): Pt => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  const knee = mid(hip, ankle);
   return {
+    head: [0, 0.97 * H],
     neck: [0, 0.84 * H],
+    shoulder,
+    elbow: mid(shoulder, hand),
+    hand,
     pelvis: [0, 0.52 * H],
-    shoulder: [Math.min(0.17 * H, armX), 0.82 * H],
-    hand: [armX, 0.46 * H],
-    hip: [0.07 * H, 0.5 * H],
-    ankle: [0.07 * H, 0.05 * H],
+    hip,
+    thigh: mid(hip, knee),
+    knee,
+    ankle,
+    toe: [0.07 * H, 0.02 * H],
   };
 }
 
@@ -156,7 +172,9 @@ export function RigEditor({ scene, title, initial, busy, onSave, onSkip, onCance
   useEffect(() => () => oriented.pieces.forEach((p) => p.geometry.dispose()), [oriented]);
 
   const [marks, setMarks] = useState<Marks>(() =>
-    initial ? { neck: initial.neck, pelvis: initial.pelvis, shoulder: initial.shoulder, hand: initial.hand, hip: initial.hip, ankle: initial.ankle } : guessMarks(oriented.size),
+    initial
+      ? { head: initial.head, neck: initial.neck, shoulder: initial.shoulder, elbow: initial.elbow, hand: initial.hand, pelvis: initial.pelvis, hip: initial.hip, thigh: initial.thigh, knee: initial.knee, ankle: initial.ankle, toe: initial.toe }
+      : guessMarks(oriented.size),
   );
   const [touched, setTouched] = useState(Boolean(initial));
   const [selected, setSelected] = useState<RigKey>("neck");
@@ -229,11 +247,20 @@ export function RigEditor({ scene, title, initial, busy, onSave, onSkip, onCance
 
   const rig: RigMarks = { yaw, ...marks };
   const lines: [Pt, Pt][] = [
+    [marks.head, marks.neck],
     [marks.neck, marks.pelvis],
-    [marks.shoulder, marks.hand],
-    [mirror(marks.shoulder), mirror(marks.hand)],
-    [marks.hip, marks.ankle],
-    [mirror(marks.hip), mirror(marks.ankle)],
+    [marks.shoulder, marks.elbow],
+    [marks.elbow, marks.hand],
+    [mirror(marks.shoulder), mirror(marks.elbow)],
+    [mirror(marks.elbow), mirror(marks.hand)],
+    [marks.hip, marks.thigh],
+    [marks.thigh, marks.knee],
+    [marks.knee, marks.ankle],
+    [marks.ankle, marks.toe],
+    [mirror(marks.hip), mirror(marks.thigh)],
+    [mirror(marks.thigh), mirror(marks.knee)],
+    [mirror(marks.knee), mirror(marks.ankle)],
+    [mirror(marks.ankle), mirror(marks.toe)],
     [marks.shoulder, mirror(marks.shoulder)],
   ];
   const svg = (p: Pt) => ({ x: (0.5 + p[0] / view.w) * 100, y: (0.5 - (p[1] - view.cy) / view.h) * 100 });
@@ -273,7 +300,7 @@ export function RigEditor({ scene, title, initial, busy, onSave, onSkip, onCance
               <line key={i} x1={svg(a).x} y1={svg(a).y} x2={svg(b).x} y2={svg(b).y} stroke="#fff" strokeOpacity={0.55} strokeWidth={0.5} vectorEffect="non-scaling-stroke" />
             ))}
           </svg>
-          {(["shoulder", "hand", "hip", "ankle"] as RigKey[]).map((k) => (
+          {(["shoulder", "elbow", "hand", "hip", "thigh", "knee", "ankle", "toe"] as RigKey[]).map((k) => (
             <span
               key={`m-${k}`}
               aria-hidden="true"

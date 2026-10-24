@@ -1,3 +1,4 @@
+import { newStrikeRefs, type StrikeRefs } from "./strike.js";
 import { newKnockRefs, type KnockRefs } from "./knock.js";
 import { useRef } from "react";
 import { Group } from "three";
@@ -34,11 +35,11 @@ export function RemotePlayers({ ids, playersRef, signs }: RemotePlayersProps) {
   };
 
   // Início do último golpe com a bandeira de cada jogador (lido pelo Avatar a cada frame).
-  const hits = useRef<Map<string, { current: number }>>(new Map());
+  const hits = useRef<Map<string, StrikeRefs>>(new Map());
   const hitRefFor = (id: string) => {
     let r = hits.current.get(id);
     if (!r) {
-      r = { current: 0 };
+      r = newStrikeRefs();
       hits.current.set(id, r);
     }
     return r;
@@ -82,7 +83,9 @@ export function RemotePlayers({ ids, playersRef, signs }: RemotePlayersProps) {
       }
       const w = wheelieRefFor(id);
       w.current += (p.wheelie - w.current) * t;
-      hitRefFor(id).current = p.hitAt ?? 0;
+      const hr = hitRefFor(id);
+      hr.at.current = p.hitAt ?? 0;
+      hr.kind.current = p.hitKind ?? "flag";
       const k = knockFor(id);
       k.reactAt.current = p.reactAt ?? 0;
       k.fallAt.current = p.fallAt ?? 0;

@@ -6,8 +6,8 @@ export const AVENUE_LENGTH = 500; // eixo X (2,5x o tamanho anterior)
 export const AVENUE_WIDTH = 40; // eixo Z
 export const WALK_SPEED = 6; // unidades/segundo (base dos veículos: ver driving.ts)
 /** A pé: andar e correr (mais rápidos que a base dos veículos). */
-export const FOOT_WALK_SPEED = 7.5;
-export const RUN_MULTIPLIER = 1.9;
+export const FOOT_WALK_SPEED = 4.2;
+export const RUN_MULTIPLIER = 2.7;
 export const AVATAR_RADIUS = 0.5;
 
 // ── Câmera de terceira pessoa (livre: gira e inclina em torno do personagem) ──

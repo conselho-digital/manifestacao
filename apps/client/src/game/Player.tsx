@@ -1,3 +1,4 @@
+import type { StrikeRefs } from "./strike.js";
 import { useRef } from "react";
 import { Group, Vector3 } from "three";
 import { useFrame, useThree } from "@react-three/fiber";
@@ -64,7 +65,7 @@ interface PlayerProps {
   /** Quanto a moto está empinada (0..1) — lido pelo Avatar para inclinar o desenho. */
   wheelieRef: { current: number };
   /** Início (performance.now) do golpe com a bandeira em andamento. */
-  hitRef?: { current: number };
+  hitRef?: StrikeRefs;
   /** Reação a golpe e queda do jogador local: caído, ele não anda. */
   knock?: KnockRefs;
   /** Instante (ms) do último arrasto de câmera — a câmera só se alinha ao veículo sozinha se faz tempo. */

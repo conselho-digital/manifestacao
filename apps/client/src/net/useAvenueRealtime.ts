@@ -37,7 +37,7 @@ import {
   type SprayMark,
 } from "../game/spray.js";
 import { clampToAvenue } from "../game/world.js";
-import { STRIKE_SECONDS } from "../game/strike.js";
+import { strikeSeconds, type StrikeKind } from "../game/strike.js";
 import { FALL_SECONDS, newKnockRefs, registerHit } from "../game/knock.js";
 import { DEFAULT_SPRAY_ID, SPRAY_SLUG_RE, sprayOptions } from "../config/sprays.js";
 
@@ -72,6 +72,7 @@ export interface RemotePlayer extends PresenceState {
   vehicle: VehicleId;
   /** Quando (performance.now deste aparelho) o jogador deu o último golpe com a bandeira; 0 = nenhum. */
   hitAt?: number;
+  hitKind?: StrikeKind;
   /** Início (performance.now) da última reação a golpe e da última queda deste jogador. */
   reactAt?: number;
   fallAt?: number;
@@ -312,11 +313,14 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
         const h = payload as HitBroadcast;
         if (typeof h?.senderId !== "string" || h.senderId === selfId || h.senderId.length > 64) return;
         const who = playersRef.current.get(h.senderId);
-        if (!who || who.vehicle !== "nenhum" || who.flag === "nenhuma") return; // só quem está a pé com bandeira
+        const kind: StrikeKind = h.kind === "punch" ? "punch" : "flag";
+        // Só quem está a pé; o golpe de bandeira exige a bandeira, o soco não.
+        if (!who || who.vehicle !== "nenhum" || (kind === "flag" && who.flag === "nenhuma")) return;
         const nowHit = performance.now();
         // No máximo um golpe por duração da animação (anti-flood).
-        if (who.hitAt && nowHit - who.hitAt < STRIKE_SECONDS * 1000 * 0.9) return;
+        if (who.hitAt && nowHit - who.hitAt < strikeSeconds(kind) * 1000 * 0.9) return;
         who.hitAt = nowHit;
+        who.hitKind = kind;
       })
       .on("broadcast", { event: BROADCAST.impact }, ({ payload }) => {
         const h = payload as ImpactBroadcast;
@@ -327,7 +331,7 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
         lastImpactBySenderRef.current.set(h.senderId, nowImpact);
         capMap(lastImpactBySenderRef.current, 500);
         const attacker = playersRef.current.get(h.senderId);
-        if (!attacker || attacker.vehicle !== "nenhum" || attacker.flag === "nenhuma") return; // só quem bate com bandeira, a pé
+        if (!attacker || attacker.vehicle !== "nenhum" || (h.kind !== "punch" && attacker.flag === "nenhuma")) return; // a pé; golpe de bandeira exige bandeira
         applyImpact(h.targetId);
       })
       .on("broadcast", { event: BROADCAST.chat }, ({ payload }) => {
@@ -485,21 +489,21 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
 
   /** Meu golpe acertou `targetId`: aplica aqui e avisa os outros. */
   const sendImpact = useCallback(
-    (targetId: string) => {
+    (targetId: string, kind: StrikeKind) => {
       applyImpact(targetId);
       const channel = channelRef.current;
       if (channel && channel.state === "joined") {
-        const payload: ImpactBroadcast = { senderId: selfId, targetId };
+        const payload: ImpactBroadcast = { senderId: selfId, targetId, kind };
         void channel.send({ type: "broadcast", event: BROADCAST.impact, payload });
       }
     },
     [selfId, applyImpact],
   );
 
-  const sendHit = useCallback(() => {
+  const sendHit = useCallback((kind: StrikeKind) => {
     const channel = channelRef.current;
     if (channel && channel.state === "joined") {
-      const payload: HitBroadcast = { senderId: selfId };
+      const payload: HitBroadcast = { senderId: selfId, kind };
       void channel.send({ type: "broadcast", event: BROADCAST.hit, payload });
     }
   }, [selfId]);

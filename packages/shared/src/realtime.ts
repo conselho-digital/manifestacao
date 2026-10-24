@@ -88,9 +88,12 @@ export interface ImpactBroadcast {
   senderId: string;
   /** Chave de presence de quem levou o golpe. */
   targetId: string;
+  kind?: "flag" | "punch";
 }
 
 export interface HitBroadcast {
   /** Chave de presence de quem bateu. */
   senderId: string;
+  /** "flag" = golpe com a bandeira; "punch" = soco (sem bandeira). Ausente = "flag". */
+  kind?: "flag" | "punch";
 }

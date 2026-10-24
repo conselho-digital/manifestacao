@@ -7,8 +7,8 @@ import { lookOf } from "./characterLook.js";
 import { WHEELIE_MAX_ANGLE } from "./driving.js";
 import { Flag3D, Vehicle3D, GlbModel } from "./props3d.js";
 import { teamImageUrl } from "./models.js";
-import { fallBody, fallSeconds, reactBody, reactProgress, type KnockRefs } from "./knock.js";
-import { flagTilt, handPosition, strikeArm, strikeEnvelope, strikeProgress } from "./strike.js";
+import { HIP_HEIGHT, fallBody, fallSeconds, reactBody, reactProgress, type KnockRefs } from "./knock.js";
+import { CARRY_LEFT, CARRY_RIGHT, activeStrike, punchPose, flagTilt, handPosition, strikeArms, strikeEnvelope, type StrikeRefs } from "./strike.js";
 import { SignProp } from "./SignProp.js";
 import type { SignData } from "./useSigns.js";
 
@@ -29,10 +29,14 @@ interface AvatarProps {
   /** Quanto a moto está empinada (0..1), lido a cada frame (sem re-render). */
   wheelieRef?: { current: number };
   /** Início (performance.now) do golpe com a bandeira em andamento; 0 = nenhum. Lido a cada frame. */
-  hitRef?: { current: number };
+  hitRef?: StrikeRefs;
   /** Reação a golpe e queda (o corpo recua, ou cai para trás, fica deitado e levanta). */
   knock?: KnockRefs;
 }
+
+const lerpN = (a: number, b: number, k: number) => a + (b - a) * k;
+/** Onde fica a mão que segura a haste (altura, à frente): a haste passa por aqui. */
+const CARRY_HAND = handPosition(CARRY_LEFT.arm, CARRY_LEFT.forearm);
 
 /** Eixo traseiro da moto: a roda da frente sobe girando em torno daqui. */
 const MOTO_REAR_AXLE_Z = -0.7;
@@ -125,23 +129,33 @@ export function ProceduralBody({
   character,
   riding = false,
   hitRef,
+  carry = false,
 }: {
   color: number;
   arms?: boolean;
   character?: CharacterId;
   riding?: boolean;
-  hitRef?: { current: number };
+  hitRef?: StrikeRefs;
+  carry?: boolean;
 }) {
   const look = lookOf(character);
   const armRefs = useRef<(Group | null)[]>([null, null]);
-  // Golpe com a bandeira: o braço da bandeira (esquerdo, +x) levanta e desce; o outro acompanha um pouco.
+  // Braços do boneco geométrico: segurando a bandeira, golpe de bandeira e soco.
   useFrame(() => {
-    const p = hitRef ? strikeProgress(hitRef.current) : -1;
+    const st = activeStrike(hitRef);
     armRefs.current.forEach((g, i) => {
       if (!g) return;
-      const side = i === 0 ? -1 : 1;
-      const base = riding ? -1.05 : 0;
-      g.rotation.x = p >= 0 ? base * (1 - strikeEnvelope(p)) - strikeArm(p) * (side > 0 ? 1 : 0.6) * strikeEnvelope(p) : base;
+      const isLeft = i === 1;
+      let a = riding ? 1.05 : carry ? (isLeft ? CARRY_LEFT.arm : CARRY_RIGHT.arm) : 0.1;
+      if (st) {
+        const env = strikeEnvelope(st.p);
+        if (st.kind === "flag") a = lerpN(a, strikeArms(st.p).arm * (isLeft ? 1 : 0.6), env);
+        else {
+          const pp = punchPose(st.p);
+          a = lerpN(a, isLeft ? pp.lArm : pp.rArm, env);
+        }
+      }
+      g.rotation.x = -a; // para a frente = rotação negativa em X
     });
   });
   return (
@@ -210,9 +224,10 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
       const fs = knock ? fallSeconds(knock.fallAt.current) : -1;
       const rp = knock ? reactProgress(knock.reactAt.current) : -1;
       if (fs >= 0) {
+        // Gira em torno do quadril (P): posição = P − R·P − descida; os pés escorregam para a frente e a cabeça vai para trás.
         const b = fallBody(fs);
         kg.rotation.x = b.tilt;
-        kg.position.set(0, b.lift, b.shift);
+        kg.position.set(0, HIP_HEIGHT - HIP_HEIGHT * Math.cos(b.tilt) - b.drop, -HIP_HEIGHT * Math.sin(b.tilt));
       } else if (rp >= 0) {
         const b = reactBody(rp);
         kg.rotation.x = b.tilt;
@@ -225,11 +240,13 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
     // Golpe com a bandeira: ela gira em torno da mão, que acompanha o braço.
     const pivot = flagPivotRef.current;
     if (pivot) {
-      const p = hitRef ? strikeProgress(hitRef.current) : -1;
-      const env = p >= 0 ? strikeEnvelope(p) : 0;
-      const hand = handPosition(p >= 0 ? strikeArm(p) * env : 0);
+      const st = activeStrike(hitRef);
+      const flagStrike = st && st.kind === "flag" ? st : null;
+      const env = flagStrike ? strikeEnvelope(flagStrike.p) : 0;
+      const arms = flagStrike ? strikeArms(flagStrike.p) : CARRY_LEFT;
+      const hand = handPosition(lerpN(CARRY_LEFT.arm, arms.arm, env), lerpN(CARRY_LEFT.forearm, arms.forearm, env));
       pivot.position.set(0, hand.y, hand.z);
-      pivot.rotation.x = p >= 0 ? flagTilt(p) * env : 0;
+      pivot.rotation.x = flagStrike ? flagTilt(flagStrike.p) * env : 0;
     }
   });
   return (
@@ -240,25 +257,26 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
       {/* Moto: o personagem vai sentado de piloto. Carro, caminhão e carro de som: só o veículo aparece. */}
       {!hideBody &&
         (modelUrl ? (
-          <Suspense fallback={<ProceduralBody color={color} arms riding={isMoto} character={character} hitRef={hitRef} />}>
+          <Suspense fallback={<ProceduralBody color={color} arms riding={isMoto} character={character} hitRef={hitRef} carry={flag !== "nenhuma" && vehicle === "nenhum"} />}>
             <GlbModel
               url={modelUrl}
               animated
               walking={vehicle === "nenhum"}
               pose={isMoto ? "moto" : null}
-              strikeRef={hitRef}
+              strike={hitRef}
               knock={knock}
+              carry={flag !== "nenhuma" && vehicle === "nenhum"}
               fallback={<ProceduralBody color={color} arms riding={isMoto} character={character} />}
             />
           </Suspense>
         ) : (
-          <ProceduralBody color={color} arms={vehicle === "nenhum" || isMoto} riding={isMoto} character={character} hitRef={hitRef} />
+          <ProceduralBody color={color} arms={vehicle === "nenhum" || isMoto} riding={isMoto} character={character} hitRef={hitRef} carry={flag !== "nenhuma" && vehicle === "nenhum"} />
         ))}
 
       {/* Bandeira só a pé: em veículo as mãos estão ocupadas. */}
       {flag !== "nenhuma" && vehicle === "nenhum" && (
-        <group ref={flagPivotRef} position={[0, handPosition(0).y, 0]}>
-          <group position={[0, -handPosition(0).y, 0]}>
+        <group ref={flagPivotRef} position={[0, CARRY_HAND.y, CARRY_HAND.z]}>
+          <group position={[-0.13, -CARRY_HAND.y, 0]}>
             <FlagProp flag={flag} color={color} team={team} />
           </group>
         </group>

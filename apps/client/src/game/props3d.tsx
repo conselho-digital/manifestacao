@@ -11,7 +11,7 @@ import { ModelBoundary } from "./ModelBoundary.js";
 import { createAutoAnimator, type AutoAnimator, type AutoPose } from "./autoAnimate.js";
 import { getBakedRig, instantiateRig } from "./autoRig.js";
 import { rigForUrl } from "../config/rigs.js";
-import { strikeProgress } from "./strike.js";
+import { activeStrike, type StrikeRefs } from "./strike.js";
 import { fallSeconds, reactProgress, type KnockRefs } from "./knock.js";
 
 export type FlagEmblem = "star-burst" | "ring" | "stripe";
@@ -247,8 +247,9 @@ export function GlbModel({
   animated = false,
   walking = true,
   pose = null,
-  strikeRef,
+  strike,
   knock,
+  carry = false,
 }: {
   url: string;
   fallback?: ReactNode;
@@ -256,19 +257,21 @@ export function GlbModel({
   walking?: boolean;
   /** "moto": o personagem aparece sentado, de piloto. */
   pose?: AutoPose;
-  /** Início (performance.now) do golpe com a bandeira em andamento; 0 = nenhum. */
-  strikeRef?: { current: number };
+  /** Golpe em andamento (bandeira ou soco). */
+  strike?: StrikeRefs;
+  /** Segurando a bandeira (a pé). */
+  carry?: boolean;
   /** Reação a golpe e queda (início de cada uma, em performance.now). */
   knock?: KnockRefs;
 }) {
   return (
     <ModelBoundary key={url} fallback={fallback}>
-      <GlbModelInner url={url} animated={animated} walking={walking} pose={pose} strikeRef={strikeRef} knock={knock} />
+      <GlbModelInner url={url} animated={animated} walking={walking} pose={pose} strike={strike} knock={knock} carry={carry} />
     </ModelBoundary>
   );
 }
 
-function GlbModelInner({ url, animated, walking, pose, strikeRef, knock }: { url: string; animated: boolean; walking: boolean; pose: AutoPose; strikeRef?: { current: number }; knock?: KnockRefs }) {
+function GlbModelInner({ url, animated, walking, pose, strike, knock, carry }: { url: string; animated: boolean; walking: boolean; pose: AutoPose; strike?: StrikeRefs; knock?: KnockRefs; carry: boolean }) {
   const { scene, animations } = useGLTF(url);
   // Clone por uso: o cache do useGLTF devolve a MESMA cena; sem clonar, o
   // mesmo modelo em dois jogadores brigaria pelo mesmo pai (só um aparece).
@@ -311,9 +314,11 @@ function GlbModelInner({ url, animated, walking, pose, strikeRef, knock }: { url
   }, [animated, instance, animations, rig]);
   useFrame((_, dt) => {
     try {
-      animRef.current?.update(Math.min(dt, 0.1), walking, pose, strikeRef ? strikeProgress(strikeRef.current) : -1, {
-        react: knock ? reactProgress(knock.reactAt.current) : -1,
-        fall: knock ? fallSeconds(knock.fallAt.current) : -1,
+      animRef.current?.update(Math.min(dt, 0.1), walking, {
+        pose,
+        strike: activeStrike(strike),
+        knock: { react: knock ? reactProgress(knock.reactAt.current) : -1, fall: knock ? fallSeconds(knock.fallAt.current) : -1 },
+        carry,
       });
     } catch {
       animRef.current = null;

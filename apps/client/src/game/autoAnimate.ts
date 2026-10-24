@@ -1,13 +1,14 @@
 import { FOOT_WALK_SPEED } from "./world.js";
-import { strikeArm, strikeEnvelope, strikeLean, strikeTwist } from "./strike.js";
+import { CARRY_LEFT, CARRY_RIGHT, punchPose, strikeArms, strikeEnvelope, strikeLean, strikeTwist, type StrikeKind } from "./strike.js";
 import { fallEnvelope, fallLimbs, reactBody } from "./knock.js";
 import { AnimationAction, AnimationClip, AnimationMixer, Bone, Group, Object3D, Quaternion, Vector3 } from "three";
 
 /**
  * Animação automática de personagens enviados no admin (.glb): funciona com qualquer modelo, sem preparar nada.
  *  1. Se o arquivo traz clipes (parado/andar/correr, por nome), toca esses, misturando pela velocidade.
- *  2. Senão, anima por código: esqueleto humanoide reconhecido pelos nomes dos ossos (coxas, joelhos, braços) balança
- *     como numa caminhada; modelo sem esqueleto (malha estática) ganha balanço do corpo todo (quique, inclinação, passo).
+ *  2. Senão, anima por código, pelos nomes dos ossos (ou pelo esqueleto do editor): parado com respiração e peso mudando
+ *     de perna, andar devagar, correr (corpo inclinado, cotovelos fechados), segurar bandeira, sentar na moto, bater
+ *     (golpe de bandeira ou soco), levar golpe e cair.
  * A velocidade vem do deslocamento do próprio modelo no mundo, então vale para o jogador local e para os remotos.
  */
 
@@ -17,7 +18,7 @@ const IDLE_RE = /idle|stand|parad|respir|breath/i;
 
 const DOWN = new Vector3(0, -1, 0);
 
-type Role = "thigh" | "knee" | "foot" | "arm" | "forearm" | "hips" | "spine";
+type Role = "thigh" | "knee" | "foot" | "toe" | "arm" | "forearm" | "hips" | "spine" | "neck" | "head";
 
 interface Limb {
   bone: Bone;
@@ -46,12 +47,14 @@ function sideOf(name: string): 1 | -1 | 0 {
 }
 
 function roleOf(name: string): Role | null {
-  if (/toe/.test(name)) return null;
+  if (/toe/.test(name)) return /end$|tip/.test(name) ? null : "toe";
   if (/thigh|upleg|upperleg|upper leg/.test(name)) return "thigh";
   if (/(foot|ankle)$/.test(name)) return "foot";
   if (/forearm|lowerarm|lower arm|elbow/.test(name)) return "forearm";
   if (/hips?$/.test(name) && !/ground/.test(name)) return "hips";
   if (/spine/.test(name)) return "spine";
+  if (/neck/.test(name)) return "neck";
+  if (/head/.test(name) && !/top|end|eye|jaw|brow|mouth|lip/.test(name)) return "head";
   if (/knee|calf|shin|lowerleg|lower leg/.test(name) || /(left|right)leg$/.test(name) || /^leg (left|right)$/.test(name)) return "knee";
   if (/(left|right)arm$/.test(name) || /upperarm|upper arm|shoulder 2/.test(name)) return "arm";
   return null;
@@ -77,10 +80,21 @@ export const MOTO_RIDER_Z = -0.05;
 
 export type AutoPose = "moto" | null;
 
+/** O que está acontecendo com o personagem neste quadro (além de andar). */
+export interface AnimContext {
+  /** Sentado na moto. */
+  pose?: AutoPose;
+  /** Golpe em andamento: tipo e progresso 0..1. */
+  strike?: { kind: StrikeKind; p: number } | null;
+  /** Reação a golpe (0..1, -1 = nenhuma) e segundos de queda (-1 = em pé). */
+  knock?: { react: number; fall: number };
+  /** Segurando a bandeira (a pé). */
+  carry?: boolean;
+}
+
 export interface AutoAnimator {
-  /** Avança um quadro. `walking` = a pé (em veículo o personagem não anda); `pose` = sentado na moto. */
-  /** `knock`: reação a golpe (0..1, -1 = nenhuma) e segundos de queda (-1 = em pé). */
-  update(dt: number, walking: boolean, pose?: AutoPose, strike?: number, knock?: { react: number; fall: number }): void;
+  /** Avança um quadro. `walking` = a pé (em veículo o personagem não anda). */
+  update(dt: number, walking: boolean, ctx?: AnimContext): void;
   dispose(): void;
 }
 
@@ -119,7 +133,7 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
     const run = runClip && runClip !== walkClip ? play(runClip) : null;
     const idle = play(idleClip);
     return {
-      update(dt, walking, _pose, _strike, _knock) {
+      update(dt, walking) {
         (frame.parent ?? frame).getWorldPosition(pos);
         if (havePos && dt > 0) speed += (Math.min(24, pos.distanceTo(lastPos) / dt) - speed) * Math.min(1, dt * 10);
         lastPos.copy(pos);
@@ -180,13 +194,13 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
     const role = roleOf(n);
     if (!role) continue;
     const side = sideOf(n);
-    const sided = role !== "hips" && role !== "spine";
+    const sided = role !== "hips" && role !== "spine" && role !== "neck" && role !== "head";
     if (sided && side === 0) continue;
     const rest = new Quaternion();
     const axis = new Vector3();
-    if (role === "hips" || role === "spine") {
+    if (!sided) {
       axis.copy(UP); // torção em torno do eixo vertical
-    } else if (role === "foot" || role === "forearm") {
+    } else if (role === "foot" || role === "forearm" || role === "toe") {
       axis.set(0, 0, 0); // vem do osso de cima (coxa/braço do mesmo lado), abaixo
     } else {
       const child = bone.children.find((c) => (c as Bone).isBone);
@@ -210,17 +224,19 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
     }
     limbs.push({ bone, role, side: side === 0 ? 1 : (side as 1 | -1), restLocal: bone.quaternion.clone(), rest, axis, depth: depthOf(bone) });
   }
-  // Cotovelo e pé giram no mesmo eixo do braço/coxa do mesmo lado.
+  // Cotovelo, pé e dedos giram no mesmo eixo do braço/coxa do mesmo lado.
   for (const l of limbs) {
-    if (l.role !== "foot" && l.role !== "forearm") continue;
-    const src = limbs.find((o) => o.side === l.side && o.role === (l.role === "foot" ? "thigh" : "arm"));
+    if (l.role !== "foot" && l.role !== "forearm" && l.role !== "toe") continue;
+    const src = limbs.find((o) => o.side === l.side && o.role === (l.role === "forearm" ? "arm" : "thigh"));
     if (src) l.axis.copy(src.axis);
   }
   const usable = limbs.filter((l) => l.axis.lengthSq() > 0.5);
   limbs.length = 0;
   limbs.push(...usable);
   limbs.sort((a, b) => a.depth - b.depth);
-  const spineCount = Math.max(1, limbs.filter((l) => l.role === "spine").length);
+  const count = (r: Role) => Math.max(1, limbs.filter((l) => l.role === r).length);
+  const spineCount = count("spine");
+  const neckCount = count("neck");
   // Comprimento da perna (quadril → tornozelo): para baixar o corpo quando as pernas se abrem e os pés não flutuarem.
   {
     const hip = limbs.find((l) => l.role === "thigh");
@@ -230,19 +246,19 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
       if (d > 0.2 && d < 3) legLen = d;
     }
   }
-
-  // Altura do quadril em repouso (para sentar na moto) e eixo de inclinação do tronco (o mesmo que balança as pernas).
+  // Altura do quadril em repouso (para sentar na moto) e eixo de inclinação (o mesmo que balança as pernas).
   const hipsLimb = limbs.find((l) => l.role === "hips");
   const hipY = hipsLimb ? worldPos(hipsLimb.bone, new Vector3()).y : 0.9;
   const leanAxis = (limbs.find((l) => l.role === "thigh") ?? { axis: new Vector3(1, 0, 0) }).axis;
-  const rotTwist = new Quaternion();
-  const rotLean = new Quaternion();
+
   const rot = new Quaternion();
+  const rotA = new Quaternion();
+  const rotB = new Quaternion();
+  const rotC = new Quaternion();
   const parentQ = new Quaternion();
   const parentInv = new Quaternion();
   const baseY = frame.position.y;
   const baseZ = frame.position.z;
-  let sit = 0; // 0 em pé → 1 sentado na moto
   const lerp = (a: number, b: number, k: number) => a + (b - a) * k;
   const smooth = (a: number, b: number, v: number) => {
     const x = Math.max(0, Math.min(1, (v - a) / (b - a)));
@@ -250,11 +266,20 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
   };
   let w = 0; // 0 parado → 1 em movimento
   let runK = 0; // 0 andando → 1 correndo
+  let sit = 0; // 0 em pé → 1 sentado na moto
+  let carryK = 0; // 0 mãos livres → 1 segurando a bandeira
+
+  /** Pitch de um osso que aponta para cima (tronco, pescoço): o mesmo eixo que balança as pernas inclina ao contrário. */
+  const pitchAxisAngle = (lean: number) => -forward * lean;
 
   return {
-    update(dt, walking, pose = null, strike = -1, knock = { react: -1, fall: -1 }) {
+    update(dt, walking, ctx = {}) {
+      const pose = ctx.pose ?? null;
+      const strike = ctx.strike ?? null;
+      const knock = ctx.knock ?? { react: -1, fall: -1 };
       t += dt;
       sit += ((pose === "moto" ? 1 : 0) - sit) * Math.min(1, dt * 9);
+      carryK += ((ctx.carry && pose === null ? 1 : 0) - carryK) * Math.min(1, dt * 8);
       const stand = 1 - sit;
       // Velocidade do avatar (pai do grupo): o balanço do próprio corpo não conta.
       (frame.parent ?? frame).getWorldPosition(pos);
@@ -264,76 +289,128 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
       const moving = walking && speed > 0.4;
       const k = Math.min(1, dt * 9);
       w += ((moving ? 1 : 0) - w) * k;
-      runK += ((moving ? smooth(FOOT_WALK_SPEED * 1.12, FOOT_WALK_SPEED * 1.5, speed) : 0) - runK) * k;
-      // Cadência (ciclos/s): corre com passos mais rápidos; o ciclo completo = dois passos.
-      const freq = lerp(1.0 + 0.1 * speed, 1.5 + 0.05 * speed, runK);
+      runK += ((moving ? smooth(FOOT_WALK_SPEED * 1.25, FOOT_WALK_SPEED * 1.9, speed) : 0) - runK) * k;
+      // Cadência (ciclos/s): andar devagar (~2 passos/s); correr com passos mais rápidos. O ciclo completo = dois passos.
+      const freq = lerp(0.62 + 0.1 * speed, 1.35 + 0.05 * speed, runK);
       if (moving) phase += dt * Math.PI * 2 * freq;
-      else phase += (Math.round(phase / Math.PI) * Math.PI - phase) * Math.min(1, dt * 8);
+      else phase += (Math.round(phase / Math.PI) * Math.PI - phase) * Math.min(1, dt * 6);
       const sin = Math.sin(phase);
       const cos = Math.cos(phase);
 
       const hasRig = limbs.length > 0;
-      // Parâmetros da marcha (andar → correr).
-      const thighAmp = lerp(0.62, 1.05, runK);
+      const idle = (1 - w) * stand;
+      // Amplitudes da marcha (andar → correr).
+      const thighAmp = lerp(0.46, 1.0, runK);
+      const armAmp = lerp(0.4, 0.9, runK);
       const bob = hasRig
         ? // O quadril desce quando as pernas se abrem (pés no chão) e sobe no apoio; na corrida ainda há um impulso.
           -legLen * (1 - Math.cos(0.5 * thighAmp * Math.abs(sin))) * w + runK * 0.05 * (0.5 + 0.5 * Math.cos(2 * phase)) * w
-        : (Math.abs(sin) * lerp(0.07, 0.12, runK)) * w;
+        : (Math.abs(sin) * lerp(0.05, 0.12, runK)) * w;
       // Sentado na moto: o quadril desce até o banco e vai um pouco para trás; sem esqueleto, o corpo todo afunda e inclina.
-      const seatDrop = hasRig ? MOTO_RIDER_HIP_Y - hipY : -0.3;
+      const seatDrop = hasRig ? 0.82 - hipY : -0.3;
       frame.position.y = baseY + bob * stand + seatDrop * sit;
-      frame.position.z = baseZ + MOTO_RIDER_Z * sit;
-      frame.rotation.x = forward * (lerp(0.04, 0.24, runK) * w * stand + (hasRig ? 0 : 0.3) * sit);
+      frame.position.z = baseZ + -0.05 * sit;
+      frame.rotation.x = forward * (lerp(0.03, 0.24, runK) * w * stand + (hasRig ? 0 : 0.3) * sit);
       frame.rotation.y = !hasRig ? sin * 0.07 * w * stand : 0;
-      frame.rotation.z = !hasRig ? sin * 0.06 * w * stand : 0;
-      frame.scale.y = 1 + Math.sin(t * 2.2) * (moving ? 0.004 : 0.012);
+      // Parado: o corpo todo balança de leve, como respirando e mudando o peso de perna.
+      frame.rotation.z = !hasRig ? sin * 0.06 * w * stand + Math.sin(t * 0.7) * 0.012 * idle : 0;
+      frame.scale.y = 1 + Math.sin(t * 2.2) * (moving ? 0.003 : 0.008);
 
       if (!hasRig) return;
       frame.updateWorldMatrix(true, true);
       // O avatar gira com a direção em que anda: os balanços são sempre medidos no referencial ATUAL dele.
       frame.getWorldQuaternion(frameQ);
       frameInv.copy(frameQ).invert();
+
+      const sp = strike ? strikeEnvelope(strike.p) : 0;
+      const flagHit = strike && strike.kind === "flag" ? strike : null;
+      const punch = strike && strike.kind === "punch" ? punchPose(strike.p) : null;
+      const sArms = flagHit ? strikeArms(flagHit.p) : null;
+      const react = knock.react >= 0 ? reactBody(knock.react) : null;
+      const fallEnv = knock.fall >= 0 ? fallEnvelope(knock.fall) : 0;
+      const fall = knock.fall >= 0 ? fallLimbs(knock.fall) : null;
+      const breathe = Math.sin(t * 2.2);
+      const sway = Math.sin(t * 0.55); // peso passando de uma perna para a outra
+      const look = Math.sin(t * 0.31);
+
       for (const l of limbs) {
-        // Fase da perna deste lado: a esquerda vai à frente quando sin > 0; o outro lado está meio ciclo adiante.
-        const sl = l.side > 0 ? sin : -sin;
+        const sl = l.side > 0 ? sin : -sin; // a esquerda vai à frente quando sin > 0
         const cl = l.side > 0 ? cos : -cos;
+        const isLeft = l.side > 0;
+        // ── ângulo principal (positivo = para a frente) e, nos ossos do tronco, torção/inclinação/giro lateral ──
         let ang = 0;
+        let twist = 0;
+        let lean = 0;
+        let roll = 0;
         switch (l.role) {
-          case "thigh":
-            ang = w * (thighAmp * sl + lerp(0.03, 0.12, runK));
+          case "thigh": {
+            const idleA = 0.03 + 0.025 * (isLeft ? sway : -sway);
+            ang = idleA * (1 - w) + w * (thighAmp * sl + lerp(0.02, 0.12, runK));
             break;
-          case "knee":
-            // Dobra (para trás) com a perna passando à frente; na corrida o calcanhar sobe bem mais.
-            ang = -w * (lerp(0.1, 0.3, runK) + lerp(0.75, 1.6, runK) * Math.pow(Math.max(0, cl), 1.3));
+          }
+          case "knee": {
+            const idleA = -(0.05 + 0.03 * Math.max(0, isLeft ? sway : -sway));
+            const gait = -(lerp(0.08, 0.3, runK) + lerp(0.6, 1.6, runK) * Math.pow(Math.max(0, cl), 1.3));
+            ang = idleA * (1 - w) + w * gait;
             break;
+          }
           case "foot": {
-            // O pé compensa a coxa e o joelho (que o inclinam junto) para ficar quase paralelo ao chão, com a ponta
-            // um pouco para cima ao tocar o chão e para baixo na impulsão.
-            const thigh = thighAmp * sl + lerp(0.03, 0.12, runK);
-            const knee = -(lerp(0.1, 0.3, runK) + lerp(0.75, 1.6, runK) * Math.pow(Math.max(0, cl), 1.3));
+            const thigh = thighAmp * sl + lerp(0.02, 0.12, runK);
+            const knee = -(lerp(0.08, 0.3, runK) + lerp(0.6, 1.6, runK) * Math.pow(Math.max(0, cl), 1.3));
             ang = w * (-0.78 * (thigh + knee) + lerp(0.08, 0.12, runK) * sl);
             break;
           }
-          case "arm":
-            // Braço oposto à perna do mesmo lado.
-            ang = -w * lerp(0.5, 0.95, runK) * sl;
+          case "toe":
+            // Os dedos dobram na impulsão (perna atrás).
+            ang = w * lerp(0.35, 0.55, runK) * Math.max(0, -sl);
             break;
-          case "forearm":
-            // Cotovelo sempre um pouco dobrado; na corrida, perto de 90°, fechando mais com o braço à frente.
-            ang = w * (lerp(0.22, 1.35, runK) + lerp(0.35, 0.3, runK) * Math.max(0, sl));
+          case "arm": {
+            const idleA = 0.1 + 0.015 * Math.sin(t * 1.6 + l.side);
+            ang = idleA * (1 - w) + w * (-armAmp * sl + 0.06);
             break;
+          }
+          case "forearm": {
+            const idleA = 0.3 + 0.02 * Math.sin(t * 1.9 + l.side);
+            const gait = lerp(0.2, 1.35, runK) + lerp(0.3, 0.3, runK) * Math.max(0, sl);
+            ang = idleA * (1 - w) + w * gait;
+            break;
+          }
           case "hips":
-            // Quadril gira com a perna que avança (esquerda à frente = giro para o lado negativo).
-            ang = -forward * w * lerp(0.14, 0.22, runK) * sin;
+            // Quadril gira com a perna que avança e pende para o lado do apoio; parado, muda o peso devagar.
+            twist = -forward * (w * lerp(0.1, 0.2, runK) * sin + 0.035 * Math.sin(t * 0.4) * (1 - w));
+            roll = w * 0.045 * sin + 0.03 * sway * (1 - w);
             break;
           case "spine":
-            // Coluna contra-gira para o tronco ficar mais estável que o quadril.
-            ang = (forward * w * lerp(0.2, 0.32, runK) * sin) / spineCount;
+            // Coluna contra-gira e respira.
+            twist = (forward * w * lerp(0.16, 0.3, runK) * sin) / spineCount;
+            lean = (0.025 + 0.012 * breathe * (1 - w * 0.5)) / spineCount;
+            roll = (-0.02 * sway * (1 - w)) / spineCount;
+            break;
+          case "neck":
+            twist = (0.09 * look * (1 - w) - 0.35 * forward * w * lerp(0.16, 0.3, runK) * sin) / neckCount;
+            lean = (0.03 + 0.02 * Math.cos(2 * phase) * w) / neckCount;
+            roll = (0.02 * Math.sin(t * 0.35) * (1 - w)) / neckCount;
+            break;
+          case "head":
+            twist = 0.05 * look * (1 - w);
+            lean = 0.015 + 0.015 * Math.cos(2 * phase) * w;
             break;
         }
-        // Pose de piloto (mistura com o andar pelo `sit`): coxas à frente, joelhos dobrados, braços no guidão, tronco inclinado.
+
+        // ── segurar a bandeira: braço esquerdo na haste (quase parado), direito relaxado e meio dobrado ──
+        if (carryK > 0.001) {
+          if (l.role === "arm") {
+            const c = isLeft ? CARRY_LEFT.arm + 0.03 * Math.sin(2 * phase) * w : lerp(ang, CARRY_RIGHT.arm - armAmp * 0.5 * sl * w, 0.6);
+            ang = lerp(ang, c, carryK);
+          } else if (l.role === "forearm") {
+            const c = isLeft ? CARRY_LEFT.forearm : CARRY_RIGHT.forearm + 0.25 * Math.max(0, sl) * w;
+            ang = lerp(ang, c, carryK);
+          }
+        }
+
+        // ── sentado na moto (mistura com o andar): coxas à frente, joelhos dobrados, braços no guidão, tronco inclinado ──
         if (sit > 0.001) {
-          let seated = 0;
+          let seated = ang;
           switch (l.role) {
             case "thigh":
               seated = 1.1;
@@ -344,6 +421,9 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
             case "foot":
               seated = -0.8 * (1.1 - 1.35);
               break;
+            case "toe":
+              seated = 0;
+              break;
             case "arm":
               seated = 1.05;
               break;
@@ -351,51 +431,84 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
               seated = 0.25;
               break;
           }
-          ang = ang * stand + seated * sit;
+          ang = lerp(ang, seated, sit);
+          if (l.role === "spine") lean = lerp(lean, 0.6 / spineCount, sit);
+          if (l.role === "neck") lean = lerp(lean, -0.25 / neckCount, sit);
+          if (l.role === "hips") {
+            twist *= stand;
+            roll *= stand;
+          }
         }
-        // Golpe com a bandeira: o braço da bandeira (esquerdo, lado +x) leva a bandeira; o outro ajuda um pouco.
-        const hit = strike >= 0 ? strikeEnvelope(strike) : 0;
-        if (hit > 0) {
-          if (l.role === "arm") ang = ang * (1 - hit) + strikeArm(strike) * (l.side > 0 ? 1 : 0.6) * hit;
-          else if (l.role === "forearm") ang = ang * (1 - hit) + (l.side > 0 ? 0.35 : 0.5) * hit;
-          else if (l.role === "hips") ang += -forward * strikeTwist(strike) * hit;
+
+        // ── golpe com a bandeira ──
+        if (flagHit && sArms) {
+          if (l.role === "arm") ang = lerp(ang, sArms.arm * (isLeft ? 1 : 0.6), sp);
+          else if (l.role === "forearm") ang = lerp(ang, isLeft ? sArms.forearm : 0.5, sp);
+          else if (l.role === "hips") twist += -forward * strikeTwist(flagHit.p) * sp;
+          else if (l.role === "spine") {
+            twist += (forward * strikeTwist(flagHit.p) * sp * 0.6) / spineCount;
+            lean += (strikeLean(flagHit.p) * sp) / spineCount;
+          }
         }
-        // Levar golpe (recuo) e cair no chão: os membros seguem a pose, que domina o andar.
-        const react = knock.react >= 0 ? reactBody(knock.react) : null;
-        const fallEnv = knock.fall >= 0 ? fallEnvelope(knock.fall) : 0;
-        const fall = knock.fall >= 0 ? fallLimbs(knock.fall) : null;
-        let knockLean = 0;
+        // ── soco (sem bandeira): braço direito soca, esquerdo na guarda, corpo gira e a perna esquerda dá um passo ──
+        if (punch) {
+          if (l.role === "arm") ang = lerp(ang, isLeft ? punch.lArm : punch.rArm, sp);
+          else if (l.role === "forearm") ang = lerp(ang, isLeft ? punch.lFore : punch.rFore, sp);
+          else if (l.role === "hips") twist += forward * punch.twist * 0.6 * sp;
+          else if (l.role === "spine") {
+            twist += (forward * punch.twist * 0.7 * sp) / spineCount;
+            lean += (punch.lean * sp) / spineCount;
+          } else if (l.role === "thigh") ang += (isLeft ? punch.step : -punch.step * 0.4) * sp;
+          else if (l.role === "knee") ang += (isLeft ? -punch.step * 0.5 : 0) * sp;
+        }
+
+        // ── levar golpe (recuo) e cair no chão ──
         if (react) {
           if (l.role === "arm") ang += react.arms;
-          knockLean += react.tilt;
+          if (l.role === "spine") lean += react.tilt / spineCount;
+          if (l.role === "neck") lean += react.tilt * 0.5;
         }
         if (fall && fallEnv > 0) {
           switch (l.role) {
             case "arm":
-              ang = ang * (1 - fallEnv) + fall.arm * fallEnv;
+              ang = lerp(ang, fall.arm, fallEnv);
               break;
             case "forearm":
-              ang = ang * (1 - fallEnv) + fall.forearm * fallEnv;
+              ang = lerp(ang, fall.forearm, fallEnv);
               break;
             case "thigh":
-              ang = ang * (1 - fallEnv) + fall.thigh * fallEnv;
+              ang = lerp(ang, fall.thigh, fallEnv);
               break;
             case "knee":
-              ang = ang * (1 - fallEnv) + fall.knee * fallEnv;
+              ang = lerp(ang, fall.knee, fallEnv);
               break;
             case "foot":
-              ang = ang * (1 - fallEnv);
+            case "toe":
+              ang = lerp(ang, 0, fallEnv);
+              break;
+            case "spine":
+              lean = lerp(lean, fall.lean / spineCount, fallEnv);
+              twist *= 1 - fallEnv;
+              roll *= 1 - fallEnv;
+              break;
+            case "neck":
+              lean = lerp(lean, fall.head / neckCount, fallEnv);
+              break;
+            case "hips":
+              twist *= 1 - fallEnv;
+              roll *= 1 - fallEnv;
               break;
           }
-          knockLean += fall.lean * fallEnv;
         }
-        // ângulo positivo no eixo = balança para a frente
-        if (l.role === "spine") {
-          rotTwist.setFromAxisAngle(l.axis, ang + (strike >= 0 ? forward * strikeTwist(strike) * hit * 0.6 : 0)); // `ang` já vem misturado com a pose
-          const lean = 0.6 * sit + (strike >= 0 ? strikeLean(strike) * hit : 0) + knockLean;
-          rotLean.setFromAxisAngle(leanAxis, (-forward * lean) / spineCount); // para cima, o mesmo eixo inclina o tronco ao contrário das pernas
-          rot.copy(rotLean).multiply(rotTwist).multiply(l.rest);
+
+        // ── monta a rotação no referencial do avatar ──
+        if (l.role === "hips" || l.role === "spine" || l.role === "neck" || l.role === "head") {
+          rotA.setFromAxisAngle(l.axis, twist); // torção (eixo vertical)
+          rotB.setFromAxisAngle(leanAxis, pitchAxisAngle(lean)); // inclinação para a frente/trás
+          rotC.setFromAxisAngle(fwd, roll); // inclinação para os lados
+          rot.copy(rotC).multiply(rotB).multiply(rotA).multiply(l.rest);
         } else {
+          // ângulo positivo no eixo = balança para a frente
           rot.setFromAxisAngle(l.axis, ang).multiply(l.rest);
         }
         // local = P⁻¹ · R · P · restLocal (R no referencial do avatar, P = mundo atual do pai)
