@@ -146,7 +146,7 @@ export function ProceduralBody({
     armRefs.current.forEach((g, i) => {
       if (!g) return;
       const isLeft = i === 1;
-      let a = riding ? 1.05 : carry ? (isLeft ? CARRY_LEFT.arm : CARRY_RIGHT.arm) : 0.1;
+      let a = riding ? 1.05 : carry ? (isLeft ? CARRY_LEFT.arm : CARRY_RIGHT.arm) : 0.16;
       if (st) {
         const env = strikeEnvelope(st.p);
         if (st.kind === "flag") a = lerpN(a, strikeArms(st.p).arm * (isLeft ? 1 : 0.6), env);
@@ -164,14 +164,21 @@ export function ProceduralBody({
       {/* Braços: manga na cor da camisa e mão na cor da pele, caindo dos ombros com leve abertura. */}
       {arms && [-1, 1].map((side) => (
         <group key={side} ref={(g) => (armRefs.current[side < 0 ? 0 : 1] = g)} position={[side * 0.46, 1.32, 0]} rotation={riding ? [-1.05, 0, side * 0.12] : [0, 0, side * 0.12]}>
-          <mesh position={[0, -0.32, 0]} castShadow>
-            <capsuleGeometry args={[0.11, 0.42, 4, 8]} />
+          {/* Braço dobrado no cotovelo: parado, os antebraços ficam levemente à frente, não esticados. */}
+          <mesh position={[0, -0.2, 0]} castShadow>
+            <capsuleGeometry args={[0.105, 0.2, 4, 8]} />
             <meshStandardMaterial color={color} />
           </mesh>
-          <mesh position={[0, -0.74, 0]} castShadow>
-            <sphereGeometry args={[0.1, 10, 10]} />
-            <meshStandardMaterial color={0xf2d2b6} />
-          </mesh>
+          <group position={[0, -0.4, 0]} rotation={[riding ? -0.3 : carry ? -0.7 : -0.5, 0, 0]}>
+            <mesh position={[0, -0.2, 0]} castShadow>
+              <capsuleGeometry args={[0.095, 0.2, 4, 8]} />
+              <meshStandardMaterial color={color} />
+            </mesh>
+            <mesh position={[0, -0.42, 0]} castShadow>
+              <sphereGeometry args={[0.1, 10, 10]} />
+              <meshStandardMaterial color={0xf2d2b6} />
+            </mesh>
+          </group>
         </group>
       ))}
       <mesh position={[0, 0.9, 0]} castShadow>
