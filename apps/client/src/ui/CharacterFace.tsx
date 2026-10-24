@@ -107,7 +107,7 @@ export function CharacterFace({ color, character, size = 64 }: { color: string; 
   const uploaded = modelUrlFor(character);
   const border = `3px solid ${color}`;
   if (uploaded && !uploaded.startsWith("/models/")) {
-    return <Portrait character={character} url={uploaded} size={size} border={border} />;
+    return <Portrait key={`${character}|${uploaded}`} character={character} url={uploaded} size={size} border={border} />;
   }
   if (failed) return <AvatarGlyph color={color} character={character} size={size} />;
   return (

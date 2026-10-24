@@ -207,7 +207,7 @@ function Park() {
       const crownY = TRUNK_HEIGHT + radius * 0.35;
       m.compose(new Vector3(t.x, crownY, t.z), q, new Vector3(cw, cw * CROWN_STRETCH, cw));
       crowns.current!.setMatrixAt(i, m);
-      colliders.push(new Sphere(new Vector3(t.x, crownY, t.z), radius));
+      colliders.push(new Sphere(new Vector3(t.x, crownY, t.z), radius * 1.2)); // copa tem blobs além da esfera base
       crowns.current!.setColorAt(i, color.setHSL(0.3 + t.hue * 0.06, 0.55, 0.2 + t.hue * 0.12));
     });
     trunks.current.instanceMatrix.needsUpdate = true;

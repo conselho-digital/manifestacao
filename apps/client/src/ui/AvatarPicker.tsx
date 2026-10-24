@@ -128,6 +128,7 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
         position: "fixed",
         inset: 0,
         overflowY: "auto",
+        paddingBottom: "calc(130px + env(safe-area-inset-bottom))",
         display: "flex",
         flexDirection: "column",
       }}

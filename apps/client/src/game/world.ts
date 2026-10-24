@@ -61,7 +61,7 @@ export const PLAZA_MAX_Z = 44;
  * da rede (ver useAvenueRealtime).
  */
 export const CITY_HALF_X = AVENUE_LENGTH / 2 + 27;
-export const CITY_HALF_Z = 112;
+export const CITY_HALF_Z = 122;
 
 export function clampToAvenue(
   x: number,

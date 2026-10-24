@@ -38,7 +38,7 @@ import {
 } from "../game/spray.js";
 import { clampToAvenue } from "../game/world.js";
 import { strikeSeconds, type StrikeKind } from "../game/strike.js";
-import { FALL_SECONDS, newKnockRefs, registerHit } from "../game/knock.js";
+import { FALL_SECONDS, newKnockRefs, registerHit, STRIKE_RANGE } from "../game/knock.js";
 import { DEFAULT_SPRAY_ID, SPRAY_SLUG_RE, sprayOptions } from "../config/sprays.js";
 
 /** `typeof === "number"` deixa passar NaN/Infinity; isto não. */
@@ -332,6 +332,10 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
         capMap(lastImpactBySenderRef.current, 500);
         const attacker = playersRef.current.get(h.senderId);
         if (!attacker || attacker.vehicle !== "nenhum" || (h.kind !== "punch" && attacker.flag === "nenhuma")) return; // a pé; golpe de bandeira exige bandeira
+        // Só vale se o alvo está perto de quem bateu (o id do remetente é declarado pelo cliente: sem isto, um cliente
+        // adulterado derrubaria qualquer um do mapa).
+        const victim = h.targetId === selfId ? lastMoveRef.current : playersRef.current.get(h.targetId);
+        if (!victim || Math.hypot(victim.x - attacker.x, victim.z - attacker.z) > STRIKE_RANGE + 2) return;
         applyImpact(h.targetId);
       })
       .on("broadcast", { event: BROADCAST.chat }, ({ payload }) => {

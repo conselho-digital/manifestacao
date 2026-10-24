@@ -11,6 +11,7 @@ import { useIsAdmin } from "./auth/useIsAdmin.js";
 import { useSanctions } from "./auth/useSanctions.js";
 import { loadAndApplyGameConfig } from "./config/gameConfig.js";
 import { clearProductThumbs } from "./shop/ProductThumb.js";
+import { clearFacePortraits } from "./ui/CharacterFace.js";
 
 /**
  * Raiz do app: escolhe o avatar e então entra na avenida.
@@ -46,12 +47,18 @@ export function App() {
   const [configReady, setConfigReady] = useState(false);
   const reloadConfig = useCallback(async () => {
     try {
-      await Promise.race([loadAndApplyGameConfig(), new Promise((r) => setTimeout(r, 8000))]);
+      const loading = loadAndApplyGameConfig();
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      await Promise.race([loading, new Promise((r) => (timer = setTimeout(r, 8000)))]);
+      clearTimeout(timer);
+      // Se passou do prazo, quando a carga terminar o que lê a config é atualizado.
+      void loading.then(() => setConfigVersion((v) => v + 1)).catch(() => {});
     } catch {
       /* sem rede/Supabase: segue com os padrões */
     }
     setConfigReady(true);
     clearProductThumbs();
+    clearFacePortraits();
     setConfigVersion((v) => v + 1);
   }, []);
   useEffect(() => {

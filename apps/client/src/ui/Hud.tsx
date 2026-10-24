@@ -172,6 +172,7 @@ export function Hud({ online, scores, chatLog, onChat, chatOpen, onChatOpenChang
             key={id}
             style={{
               padding: "4px 10px",
+              whiteSpace: "nowrap",
               borderRadius: "var(--r-sm)",
               background: "var(--scrim)",
               borderLeft: `3px solid ${hexColor(TEAMS[id].color)}`,

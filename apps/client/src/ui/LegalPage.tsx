@@ -197,7 +197,7 @@ export function LegalPage({ kind }: { kind: LegalKind }) {
           lineHeight: 1.6,
         }}
       >
-        <a href="/" style={{ color: "var(--accent)", fontSize: "var(--t-ui)", fontWeight: 700, display: "inline-flex", alignItems: "center", minHeight: 44 }}>
+        <a href="/" style={{ color: "var(--accent)", fontSize: "var(--t-ui)", fontWeight: 700, display: "inline-flex", alignItems: "center", minHeight: 44, minWidth: 44, padding: "0 6px" }}>
           ← Voltar ao jogo
         </a>
         <h1 style={{ fontFamily: "var(--font-display)", fontWeight: 400, textTransform: "uppercase", fontSize: 34, margin: "16px 0" }}>

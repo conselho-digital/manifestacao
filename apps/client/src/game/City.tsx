@@ -81,6 +81,7 @@ function buildCity(): Building[] {
         const w = 9 + rand() * 8;
         const d = 12 + rand() * 8;
         const cx = x + w / 2;
+        if (cx + w / 2 > CITY_HALF_X - 1) break; // não passa do limite da cidade
         const zNear = front;
         const zFar = front + d;
         x += w + 1.5 + rand() * 3;
@@ -551,9 +552,18 @@ export function City() {
     setCameraColliders("city", [], boxes);
     // Personagem e veículos: só vidros, colunas, balcões e prateleiras (a cidade é toda andável).
     setSolids("city", shops.rects);
+    // Viaturas e cavaletes nas pontas da avenida: bloqueiam a faixa toda (rua + calçadas).
+    const band = AVENUE_WIDTH / 2 + SIDEWALK_WIDTH;
+    setSolids("blockade", [-1, 1].map((end) => ({
+      minX: Math.min(end * (CITY_HALF_X - 5.2), end * (CITY_HALF_X - 1.6)),
+      maxX: Math.max(end * (CITY_HALF_X - 5.2), end * (CITY_HALF_X - 1.6)),
+      minZ: -band,
+      maxZ: band,
+    })));
     return () => {
       clearCameraColliders("city");
       clearSolids("city");
+      clearSolids("blockade");
     };
   }, [buildings, shops]);
   useEffect(

@@ -28,7 +28,7 @@ export function subscribePlayback(onChange: (pb: ScreenPlayback | null) => void)
   const supabase = getSupabase();
   if (!supabase) return () => {};
   const channel: RealtimeChannel = supabase
-    .channel("outdoor-playback")
+    .channel(`outdoor-playback-${Math.random().toString(36).slice(2)}`)
     .on("postgres_changes", { event: "*", schema: "public", table: "game_config", filter: "key=eq.screen_playback" }, (p) => {
       const row = p.new as { value?: unknown } | null;
       const pb = cleanPlayback(row?.value);
