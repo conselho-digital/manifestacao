@@ -10,13 +10,8 @@ import { modelOverride } from "../config/gameConfig.js";
  */
 export const CHARACTER_MODELS: Record<CharacterId, string | null> = {
   homem_comum: null,
-  homem_alternativo: null,
-  menino: null,
-  // Comum: "Sophia" (Renderpeople); alternativa: "Mia" (Mixamo). Os dois trazem esqueleto humanoide, reconhecido sozinho.
+  // "Sophia" (Renderpeople), com esqueleto humanoide reconhecido sozinho.
   mulher_comum: "/models/characters/mulher_comum.glb",
-  mulher_alternativa: "/models/characters/mulher_alternativa.glb",
-  menina: null,
-  policial: null,
 };
 
 /** Prioridade: modelo do personagem NA equipe → modelo do personagem → padrão estático. */
