@@ -5,6 +5,7 @@ import { Box3, CanvasTexture, SRGBColorSpace, Vector3 } from "three";
 import { clearCameraColliders, setCameraColliders } from "./colliders.js";
 import { clearSolids, setSolids } from "./solids.js";
 import {
+  currentLocalVolume,
   currentPlayback,
   embedUrl,
   expectedPosition,
@@ -13,7 +14,6 @@ import {
   setPlayback,
   thumbnailUrl,
   useParkScreen,
-  useParkScreenOpen,
   usePlayback,
   type ScreenConfig,
 } from "../config/parkScreen.js";
@@ -174,7 +174,7 @@ function OutdoorVideo({ cfg, videoId, cy, x, z }: { cfg: ScreenConfig; videoId: 
   useFrame(() => {
     if (!readyRef.current) return;
     const d = Math.hypot(camera.position.x - x, camera.position.z - z);
-    const master = (currentPlayback()?.volume ?? 100) / 100;
+    const master = ((currentPlayback()?.volume ?? 100) / 100) * (currentLocalVolume() / 100);
     const v = cfg.mute ? 0 : Math.round(100 * master * Math.max(0, Math.min(1, (VIDEO_RANGE - d) / (VIDEO_RANGE - FULL_VOLUME_RANGE))));
     if (Math.abs(v - volumeRef.current) >= 4 || (v === 0) !== (volumeRef.current === 0)) {
       volumeRef.current = v;
@@ -220,7 +220,6 @@ function OutdoorVideo({ cfg, videoId, cy, x, z }: { cfg: ScreenConfig; videoId: 
 export function ParkScreen({ x, z }: { x: number; z: number }) {
   const cfg = useParkScreen();
   const playback = usePlayback();
-  const modalOpen = useParkScreenOpen();
   const [loaded, setLoaded] = useState(false);
   const [hover, setHover] = useState(false);
   const media = cfg ? parseScreenMedia(cfg.url) : null;
@@ -253,8 +252,7 @@ export function ParkScreen({ x, z }: { x: number; z: number }) {
       setLive(next);
     }
   });
-  // Com a janela do outdoor aberta o vídeo do mapa sai (senão tocariam dois ao mesmo tempo).
-  const showVideo = Boolean(cfg && videoId && live && loaded && !modalOpen && (playback ? playback.state !== "stopped" : cfg.autoplay));
+  const showVideo = Boolean(cfg && videoId && live && loaded && (playback ? playback.state !== "stopped" : cfg.autoplay));
 
   const { canvas, tex } = useMemo(() => {
     const c = document.createElement("canvas");
@@ -329,8 +327,8 @@ export function ParkScreen({ x, z }: { x: number; z: number }) {
         position={[0, cy, 0.02]}
         onClick={(e) => {
           e.stopPropagation();
-          // Vídeo ao vivo toca no próprio outdoor; parado ou longe, tocar abre a janela do player.
-          if (!showVideo) openParkScreen();
+          // Tocar no outdoor abre a janela (vídeo: só controles; página: a página).
+          openParkScreen();
         }}
         onPointerOver={() => {
           if (cfg) {

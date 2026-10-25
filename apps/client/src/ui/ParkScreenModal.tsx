@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   closeParkScreen,
-  currentPlayback,
-  embedUrl,
   expectedPosition,
   parseScreenMedia,
+  setLocalVolume,
   setPlayback,
+  useLocalVolume,
   useParkScreen,
   useParkScreenOpen,
   usePlayback,
@@ -13,8 +13,6 @@ import {
 } from "../config/parkScreen.js";
 import { fetchPlayback, subscribePlayback, syncServerClock } from "../net/screenSync.js";
 import { useModal } from "./useModal.js";
-
-const YT_ORIGIN = "https://www.youtube-nocookie.com";
 
 const btn: React.CSSProperties = {
   minHeight: 44,
@@ -30,60 +28,82 @@ const btn: React.CSSProperties = {
   alignItems: "center",
 };
 
-function Dialog({ cfg }: { cfg: ScreenConfig }) {
-  const { url, title } = cfg;
-  const ref = useModal<HTMLDivElement>(closeParkScreen);
-  const media = parseScreenMedia(url);
+const clock = (sec: number) => {
+  const t = Math.max(0, Math.floor(Number.isFinite(sec) ? sec : 0));
+  const h = Math.floor(t / 3600);
+  const m = Math.floor((t % 3600) / 60);
+  const s2 = String(t % 60).padStart(2, "0");
+  return h > 0 ? `${h}:${String(m).padStart(2, "0")}:${s2}` : `${m}:${s2}`;
+};
+
+/** Vídeo do outdoor: o vídeo toca NO outdoor do mapa; aqui ficam só o estado e o volume deste aparelho. */
+function VideoControls() {
   const playback = usePlayback();
-  const frameRef = useRef<HTMLIFrameElement>(null);
-  const readyRef = useRef(false);
-  // O endereço do player fica fixo (se mudasse, o vídeo recarregaria): começa já no estado que o admin deixou.
-  const [src] = useState(() => {
-    const pb = currentPlayback();
-    return embedUrl(media, pb ? { ...cfg, autoplay: pb.state === "playing" } : cfg, true);
-  });
-
-  const send = (func: string, args: unknown[] = []) =>
-    frameRef.current?.contentWindow?.postMessage(JSON.stringify({ event: "command", func, args }), YT_ORIGIN);
-  /** Coloca o vídeo onde o admin deixou: tocando (na posição de agora), pausado ou parado. */
-  const apply = useCallback(() => {
-    const pb = currentPlayback();
-    if (!pb || !readyRef.current) return;
-    if (pb.state === "stopped") {
-      send("seekTo", [0, true]);
-      send("pauseVideo");
-      return;
-    }
-    send("seekTo", [expectedPosition(pb), true]);
-    send(pb.state === "playing" ? "playVideo" : "pauseVideo");
-  }, []);
-
-  // Hora do servidor, estado atual e comandos novos do admin (Realtime) enquanto a janela está aberta.
+  const volume = useLocalVolume();
+  const [, tick] = useState(0);
   useEffect(() => {
     void syncServerClock().then(() => fetchPlayback()).then((pb) => {
       if (pb) setPlayback(pb);
     });
-    return subscribePlayback(() => {});
-  }, []);
-  useEffect(() => {
-    if (media.kind !== "youtube") return;
-    const onMessage = (e: MessageEvent) => {
-      if (e.origin !== YT_ORIGIN || e.source !== frameRef.current?.contentWindow || typeof e.data !== "string") return;
-      try {
-        if ((JSON.parse(e.data) as { event?: string }).event === "onReady") {
-          readyRef.current = true;
-          apply();
-        }
-      } catch {
-        /* mensagem que não é JSON */
-      }
+    const off = subscribePlayback(() => {});
+    const id = window.setInterval(() => tick((n) => n + 1), 500);
+    return () => {
+      off();
+      window.clearInterval(id);
     };
-    window.addEventListener("message", onMessage);
-    return () => window.removeEventListener("message", onMessage);
-  }, [media.kind, apply]);
-  useEffect(() => {
-    apply();
-  }, [playback, apply]);
+  }, []);
+  const status = !playback || playback.state === "stopped" ? "Parado" : playback.state === "playing" ? "Tocando" : "Pausado";
+  const time = playback ? expectedPosition(playback) : 0;
+  const [prevVolume, setPrevVolume] = useState(100);
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      <p style={{ margin: 0, fontSize: "var(--t-ui)", color: "var(--ink-dim)" }}>
+        O vídeo passa no outdoor do parque. Chegue perto e olhe para a tela para assistir.
+      </p>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", fontSize: "var(--t-body)" }}>
+        <strong aria-live="polite">{status}</strong>
+        <span style={{ fontVariantNumeric: "tabular-nums", color: "var(--ink-dim)" }}>{playback && playback.state !== "stopped" ? clock(time) : "0:00"}</span>
+      </div>
+      <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "var(--t-ui)" }}>
+        <span style={{ display: "flex", justifyContent: "space-between", color: "var(--ink-dim)" }}>
+          <span>Volume (só aqui)</span>
+          <span>{volume}%</span>
+        </span>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          value={volume}
+          aria-valuetext={`${volume}%`}
+          onChange={(e) => setLocalVolume(Number(e.target.value))}
+          style={{ width: "100%", minHeight: 32 }}
+        />
+      </label>
+      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+        <button
+          type="button"
+          style={btn}
+          aria-pressed={volume === 0}
+          onClick={() => {
+            if (volume === 0) setLocalVolume(prevVolume || 100);
+            else {
+              setPrevVolume(volume);
+              setLocalVolume(0);
+            }
+          }}
+        >
+          {volume === 0 ? "🔇 Ligar o som" : "🔊 Silenciar"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function Dialog({ cfg }: { cfg: ScreenConfig }) {
+  const { url, title } = cfg;
+  const ref = useModal<HTMLDivElement>(closeParkScreen);
+  const media = parseScreenMedia(url);
   return (
     <div
       onClick={(e) => e.target === e.currentTarget && closeParkScreen()}
@@ -98,6 +118,7 @@ function Dialog({ cfg }: { cfg: ScreenConfig }) {
         style={{
           width: "min(960px, 100%)",
           maxHeight: "100%",
+          overflowY: "auto",
           display: "flex",
           flexDirection: "column",
           gap: 10,
@@ -114,36 +135,29 @@ function Dialog({ cfg }: { cfg: ScreenConfig }) {
             Fechar
           </button>
         </div>
-        <div style={{ position: "relative", width: "100%", aspectRatio: "16 / 9", maxHeight: "70dvh", background: "#000", borderRadius: 8, overflow: "hidden" }}>
-          <iframe
-            ref={frameRef}
-            title={title || "Outdoor do parque"}
-            src={src}
-            onLoad={() => {
-              frameRef.current?.contentWindow?.postMessage(JSON.stringify({ event: "listening", id: 1, channel: "widget" }), YT_ORIGIN);
-              // Se o "pronto" do player se perder, tenta de novo um pouco depois.
-              window.setTimeout(() => {
-                readyRef.current = true;
-                apply();
-              }, 2500);
-            }}
-            allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-            allowFullScreen
-            referrerPolicy="strict-origin-when-cross-origin"
-            sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"
-            style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 }}
-          />
-        </div>
-        {media.kind === "page" && (
-          <p style={{ margin: 0, fontSize: "var(--t-ui)", color: "var(--ink-dim)" }}>
-            Alguns sites não deixam ser abertos aqui dentro. Se a página ficar em branco, abra em outra aba.
-          </p>
+        {media.kind === "youtube" ? (
+          <VideoControls />
+        ) : (
+          <>
+            <div style={{ position: "relative", width: "100%", aspectRatio: "16 / 9", maxHeight: "70dvh", background: "#000", borderRadius: 8, overflow: "hidden" }}>
+              <iframe
+                title={title || "Outdoor do parque"}
+                src={url}
+                referrerPolicy="strict-origin-when-cross-origin"
+                sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-presentation"
+                style={{ position: "absolute", inset: 0, width: "100%", height: "100%", border: 0 }}
+              />
+            </div>
+            <p style={{ margin: 0, fontSize: "var(--t-ui)", color: "var(--ink-dim)" }}>
+              Alguns sites não deixam ser abertos aqui dentro. Se a página ficar em branco, abra em outra aba.
+            </p>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              <a href={url} target="_blank" rel="noopener noreferrer" style={btn}>
+                Abrir em outra aba
+              </a>
+            </div>
+          </>
         )}
-        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-          <a href={url} target="_blank" rel="noopener noreferrer" style={btn}>
-            Abrir em outra aba
-          </a>
-        </div>
       </div>
     </div>
   );

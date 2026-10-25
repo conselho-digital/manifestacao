@@ -144,6 +144,31 @@ function subscribe(l: Listener) {
   return () => listeners.delete(l);
 }
 
+// Volume só deste aparelho (0 a 100): vale por cima do volume geral do operador e da distância.
+let localVolume = (() => {
+  try {
+    const v = Number(localStorage.getItem("manifestacao.outdoorVolume"));
+    return Number.isFinite(v) && localStorage.getItem("manifestacao.outdoorVolume") !== null ? Math.max(0, Math.min(100, v)) : 100;
+  } catch {
+    return 100;
+  }
+})();
+export function currentLocalVolume(): number {
+  return localVolume;
+}
+export function setLocalVolume(v: number): void {
+  localVolume = Math.max(0, Math.min(100, Math.round(v)));
+  try {
+    localStorage.setItem("manifestacao.outdoorVolume", String(localVolume));
+  } catch {
+    /* modo privado: vale só nesta sessão */
+  }
+  emit();
+}
+export function useLocalVolume(): number {
+  return useSyncExternalStore(subscribe, () => localVolume);
+}
+
 export function setParkScreen(next: ScreenConfig | null): void {
   screen = next;
   if (!next) open = false;
