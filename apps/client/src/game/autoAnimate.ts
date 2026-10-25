@@ -1,5 +1,5 @@
 import { FOOT_WALK_SPEED } from "./world.js";
-import { GRIP_ADDUCT, gripArms, punchPose, strikeArms, strikeEnvelope, strikeLean, strikeTwist, type StrikeKind } from "./strike.js";
+import { GRIP_ADDUCT, GRIP_YAW, gripArms, punchPose, strikeArms, strikeEnvelope, strikeLean, strikeTwist, type StrikeKind } from "./strike.js";
 import { fallEnvelope, fallLimbs, reactBody } from "./knock.js";
 import { AnimationAction, AnimationClip, AnimationMixer, Bone, Group, Object3D, Quaternion, Vector3 } from "three";
 
@@ -489,11 +489,13 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
 
         // ── segurar a bandeira com as duas mãos: a direita onde a esquerda segurava, a esquerda desliza haste abaixo ──
         let adduct = 0;
+        let yaw = 0;
         if (carryK > 0.001 && (l.role === "arm" || l.role === "forearm")) {
           const g = grips ?? gripArms(null, 0);
           const t = l.role === "arm" ? (isLeft ? g.lower.arm : g.upper.arm) : isLeft ? g.lower.forearm : g.upper.forearm;
           ang = lerp(ang, t + (l.role === "arm" ? 0.03 * Math.sin(2 * phase) * w : 0), carryK);
           if (l.role === "arm") adduct = GRIP_ADDUCT * carryK;
+          else yaw = GRIP_YAW * carryK; // antebraço gira para dentro: as mãos se encontram na haste sem o braço entrar no corpo
         }
 
         // ── sentado na moto (mistura com o andar): coxas à frente, joelhos dobrados, braços no guidão, tronco inclinado ──
@@ -601,6 +603,10 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
             // Fecha o braço primeiro e balança depois (rot = balanço · fechar · repouso): vale em qualquer altura do braço.
             rotC.setFromAxisAngle(fwd, -l.side * adduct);
             rot.setFromAxisAngle(l.axis, ang).multiply(rotC).multiply(l.rest);
+          }
+          if (yaw > 0) {
+            rotC.setFromAxisAngle(UP, -l.side * yaw);
+            rot.premultiply(rotC);
           }
         }
         // local = P⁻¹ · R · P · restLocal (R no referencial do avatar, P = mundo atual do pai)

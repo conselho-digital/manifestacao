@@ -44,7 +44,7 @@ export function strikeEnvelope(p: number): number {
 
 // ── Segurar a bandeira ─────────────────────────────────────────────────────────────────────────
 /** Braço da bandeira (esquerdo) segurando a haste: ombro à frente e cotovelo dobrado, mão na altura do peito. */
-export const CARRY_LEFT = { arm: 0.1, forearm: 1.7 };
+export const CARRY_LEFT = { arm: 0.3, forearm: 1.55 };
 /** Outro braço, relaxado e meio dobrado. */
 export const CARRY_RIGHT = { arm: 0.2, forearm: 0.8 };
 
@@ -184,7 +184,9 @@ export function handPosition(arm: number, forearm: number): { y: number; z: numb
 /** Quanto a mão de baixo (esquerda) desliza haste abaixo, em metros. */
 export const GRIP_SLIDE = 0.18;
 /** Abertura lateral (rad) que aproxima os braços da haste, no centro do corpo. */
-export const GRIP_ADDUCT = 0.5;
+export const GRIP_ADDUCT = 0.1;
+/** Antebraços giram para dentro (em torno da vertical) para as duas mãos se encontrarem na haste, sem o braço atravessar o corpo. */
+export const GRIP_YAW = 0.62;
 
 /** Braço de dois ossos (ombro e cotovelo): ângulos que levam a mão a `target` (altura, distância à frente). */
 export function solveArm(target: { y: number; z: number }): { arm: number; forearm: number } {
