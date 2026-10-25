@@ -24,7 +24,7 @@ export function modelUrlFor(character: CharacterId, team: TeamId = TEAM_IDS[0]!)
 }
 
 /** Veículos que já vêm no jogo (frente em +Z, chão em y=0, eixo traseiro em z≈-0,7). */
-const SHIPPED_VEHICLES: Partial<Record<VehicleId, string>> = { moto: "/models/vehicles/moto.glb" };
+const SHIPPED_VEHICLES: Partial<Record<VehicleId, string>> = { moto: "/models/vehicles/moto.glb", moto2: "/models/vehicles/moto2.glb" };
 
 /** Modelo do veículo: o enviado no admin → o que já vem no jogo → o geométrico. */
 export function vehicleModelUrl(vehicle: VehicleId): string | null {
