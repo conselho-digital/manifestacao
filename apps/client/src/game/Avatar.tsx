@@ -8,6 +8,7 @@ import { WHEELIE_MAX_ANGLE } from "./driving.js";
 import { Flag3D, Vehicle3D, GlbModel } from "./props3d.js";
 import { teamImageUrl } from "./models.js";
 import { HIP_HEIGHT, fallBody, fallSeconds, reactBody, reactProgress, type KnockRefs } from "./knock.js";
+import { MOTO_SEATS } from "./autoAnimate.js";
 import { CARRY_LEFT, activeStrike, punchPose, flagTilt, gripArms, handPosition, strikeArms, strikeEnvelope, type StrikeRefs } from "./strike.js";
 import { SignProp } from "./SignProp.js";
 import type { SignData } from "./useSigns.js";
@@ -293,6 +294,7 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
               animated
               walking={vehicle === "nenhum"}
               pose={isMoto ? "moto" : null}
+              seat={MOTO_SEATS[vehicle]}
               strike={hitRef}
               knock={knock}
               carry={flag !== "nenhuma" && vehicle === "nenhum"}
@@ -312,7 +314,7 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
         </group>
       )}
       {sign && !hideBody && <SignProp sign={sign} />}
-      <Vehicle3D vehicle={vehicle} />
+      <Vehicle3D vehicle={vehicle} team={team} />
       </group>
       </group>
 

@@ -1,3 +1,4 @@
+import type { VehicleId } from "@manifestacao/shared";
 import { FOOT_WALK_SPEED } from "./world.js";
 import { GRIP_ADDUCT, GRIP_YAW, gripArms, punchPose, strikeArms, strikeEnvelope, strikeLean, strikeTwist, type StrikeKind } from "./strike.js";
 import { fallEnvelope, fallLimbs, reactBody } from "./knock.js";
@@ -106,9 +107,26 @@ function bonesOf(root: Object3D): Bone[] {
   return out;
 }
 
-/** Posição do quadril do piloto na moto (m, a partir da origem da moto; z para a frente). */
-export const MOTO_RIDER_HIP_Y = 0.82;
-export const MOTO_RIDER_Z = -0.05;
+/**
+ * Como o piloto senta: posição do quadril (m, a partir da origem da moto; z para a frente), inclinação do tronco,
+ * pernas (pés nas pedaleiras) e braços (mãos no guidão). Cada modelo de moto tem o seu (ver MOTO_SEATS).
+ */
+export interface MotoSeat {
+  hipY: number;
+  z: number;
+  lean: number;
+  thigh: number;
+  knee: number;
+  arm: number;
+  forearm: number;
+}
+export const DEFAULT_MOTO_SEAT: MotoSeat = { hipY: 0.82, z: -0.05, lean: 0.6, thigh: 1.1, knee: -1.35, arm: 1.05, forearm: 0.25 };
+export const MOTO_SEATS: Partial<Record<VehicleId, MotoSeat>> = {
+  // Custom (cruzador): banco baixo e atrás, guidão alto e recuado.
+  moto: { hipY: 0.84, z: -0.5, lean: 0.35, thigh: 1.1, knee: -1.35, arm: 0.8, forearm: 0.5 },
+  // Esportiva: banco atrás, tronco deitado sobre o tanque, mãos nos semiguidões baixos.
+  moto2: { hipY: 0.85, z: -0.5, lean: 1.1, thigh: 0.95, knee: -1.6, arm: 1.2, forearm: 0.1 },
+};
 
 export type AutoPose = "moto" | null;
 
@@ -116,6 +134,8 @@ export type AutoPose = "moto" | null;
 export interface AnimContext {
   /** Sentado na moto. */
   pose?: AutoPose;
+  /** Como senta na moto (padrão: DEFAULT_MOTO_SEAT). */
+  seat?: MotoSeat;
   /** Golpe em andamento: tipo e progresso 0..1. */
   strike?: { kind: StrikeKind; p: number } | null;
   /** Reação a golpe (0..1, -1 = nenhuma) e segundos de queda (-1 = em pé). */
@@ -350,6 +370,7 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
   return {
     update(dt, walking, ctx = {}) {
       const pose = ctx.pose ?? null;
+      const seat = ctx.seat ?? DEFAULT_MOTO_SEAT;
       const strike = ctx.strike ?? null;
       const knock = ctx.knock ?? { react: -1, fall: -1 };
       t += dt;
@@ -382,9 +403,9 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
           -legLen * (1 - Math.cos(0.5 * thighAmp * Math.abs(sin))) * w + runK * 0.05 * (0.5 + 0.5 * Math.cos(2 * phase)) * w
         : (Math.abs(sin) * lerp(0.05, 0.12, runK)) * w;
       // Sentado na moto: o quadril desce até o banco e vai um pouco para trás; sem esqueleto, o corpo todo afunda e inclina.
-      const seatDrop = hasRig ? 0.82 - hipY : -0.3;
+      const seatDrop = hasRig ? seat.hipY - hipY : -0.3;
       frame.position.y = baseY + bob * stand + seatDrop * sit;
-      frame.position.z = baseZ + -0.05 * sit;
+      frame.position.z = baseZ + seat.z * sit;
       frame.position.x = baseX + 0.025 * Math.sin(phase) * w * stand * (hasRig ? 1 : 0);
       frame.rotation.x = forward * (lerp(0.03, 0.24, runK) * w * stand + (hasRig ? 0 : 0.3) * sit);
       frame.rotation.y = !hasRig ? sin * 0.07 * w * stand : 0;
@@ -503,26 +524,26 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
           let seated = ang;
           switch (l.role) {
             case "thigh":
-              seated = 1.1;
+              seated = seat.thigh;
               break;
             case "knee":
-              seated = -1.35;
+              seated = seat.knee;
               break;
             case "foot":
-              seated = -0.8 * (1.1 - 1.35);
+              seated = -0.8 * (seat.thigh + seat.knee);
               break;
             case "toe":
               seated = 0;
               break;
             case "arm":
-              seated = 1.05;
+              seated = seat.arm;
               break;
             case "forearm":
-              seated = 0.25;
+              seated = seat.forearm;
               break;
           }
           ang = lerp(ang, seated, sit);
-          if (l.role === "spine") lean = lerp(lean, 0.6 / spineCount, sit);
+          if (l.role === "spine") lean = lerp(lean, seat.lean / spineCount, sit);
           if (l.role === "neck") lean = lerp(lean, -0.25 / neckCount, sit);
           if (l.role === "hips") {
             twist *= stand;

@@ -3,12 +3,12 @@ import { Shape, type Group, type SkinnedMesh } from "three";
 import { useFrame } from "@react-three/fiber";
 import { useGLTF, useTexture } from "@react-three/drei";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
-import type { VehicleId } from "@manifestacao/shared";
+import type { TeamId, VehicleId } from "@manifestacao/shared";
 import { useProximitySound } from "./ProximitySound.js";
 import { useUserGestureUnlocked } from "./useUserGesture.js";
 import { vehicleModelUrl } from "./models.js";
 import { ModelBoundary } from "./ModelBoundary.js";
-import { createAutoAnimator, hasHumanoidSkeleton, type AutoAnimator, type AutoPose } from "./autoAnimate.js";
+import { createAutoAnimator, hasHumanoidSkeleton, type AutoAnimator, type AutoPose, type MotoSeat } from "./autoAnimate.js";
 import { getBakedRig, instantiateRig } from "./autoRig.js";
 import { rigForUrl } from "../config/rigs.js";
 import { activeStrike, type StrikeRefs } from "./strike.js";
@@ -117,9 +117,9 @@ export function Flag3D({ color, emblem, imageUrl }: { color: number; emblem?: Fl
 }
 
 /** Veículo: modelo .glb do admin quando houver; senão a forma geométrica. */
-export function Vehicle3D({ vehicle }: { vehicle: VehicleId }) {
+export function Vehicle3D({ vehicle, team }: { vehicle: VehicleId; team?: TeamId }) {
   if (vehicle === "nenhum") return null;
-  const url = vehicleModelUrl(vehicle);
+  const url = vehicleModelUrl(vehicle, team);
   if (!url) return <ProceduralVehicle vehicle={vehicle} />;
   return (
     <Suspense fallback={<ProceduralVehicle vehicle={vehicle} />}>
@@ -247,6 +247,7 @@ export function GlbModel({
   animated = false,
   walking = true,
   pose = null,
+  seat,
   strike,
   knock,
   carry = false,
@@ -257,6 +258,8 @@ export function GlbModel({
   walking?: boolean;
   /** "moto": o personagem aparece sentado, de piloto. */
   pose?: AutoPose;
+  /** Como senta na moto (por modelo de moto). */
+  seat?: MotoSeat;
   /** Golpe em andamento (bandeira ou soco). */
   strike?: StrikeRefs;
   /** Segurando a bandeira (a pé). */
@@ -266,12 +269,12 @@ export function GlbModel({
 }) {
   return (
     <ModelBoundary key={url} fallback={fallback}>
-      <GlbModelInner url={url} animated={animated} walking={walking} pose={pose} strike={strike} knock={knock} carry={carry} />
+      <GlbModelInner url={url} animated={animated} walking={walking} pose={pose} seat={seat} strike={strike} knock={knock} carry={carry} />
     </ModelBoundary>
   );
 }
 
-function GlbModelInner({ url, animated, walking, pose, strike, knock, carry }: { url: string; animated: boolean; walking: boolean; pose: AutoPose; strike?: StrikeRefs; knock?: KnockRefs; carry: boolean }) {
+function GlbModelInner({ url, animated, walking, pose, seat, strike, knock, carry }: { url: string; animated: boolean; walking: boolean; pose: AutoPose; seat?: MotoSeat; strike?: StrikeRefs; knock?: KnockRefs; carry: boolean }) {
   const { scene, animations } = useGLTF(url);
   // Clone por uso: o cache do useGLTF devolve a MESMA cena; sem clonar, o
   // mesmo modelo em dois jogadores brigaria pelo mesmo pai (só um aparece).
@@ -319,6 +322,7 @@ function GlbModelInner({ url, animated, walking, pose, strike, knock, carry }: {
     try {
       animRef.current?.update(Math.min(dt, 0.1), walking, {
         pose,
+        seat,
         strike: activeStrike(strike),
         knock: { react: knock ? reactProgress(knock.reactAt.current) : -1, fall: knock ? fallSeconds(knock.fallAt.current) : -1 },
         carry,
