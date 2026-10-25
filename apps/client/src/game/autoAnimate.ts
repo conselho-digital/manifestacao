@@ -217,7 +217,7 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
         const lower = new Vector3().crossVectors(dir, DOWN);
         if (lower.lengthSq() > 1e-6) {
           lower.normalize();
-          rest.setFromAxisAngle(lower, Math.min(1.2, dir.angleTo(DOWN) - 0.15));
+          rest.setFromAxisAngle(lower, Math.min(1.45, dir.angleTo(DOWN) - 0.06));
           dir.applyQuaternion(rest);
         }
       }
@@ -374,12 +374,12 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
             ang = w * lerp(0.5, 0.6, runK) * Math.max(0, -sl);
             break;
           case "arm": {
-            const idleA = 0.17 + 0.015 * Math.sin(t * 1.6 + l.side);
+            const idleA = 0.05 + 0.012 * Math.sin(t * 1.6 + l.side);
             ang = idleA * (1 - w) + w * (-armAmp * sl + 0.06);
             break;
           }
           case "forearm": {
-            const idleA = 0.62 + 0.03 * Math.sin(t * 1.9 + l.side);
+            const idleA = 0.3 + 0.025 * Math.sin(t * 1.9 + l.side);
             const gait = lerp(0.2, 1.35, runK) + lerp(0.3, 0.3, runK) * Math.max(0, sl);
             ang = idleA * (1 - w) + w * gait;
             break;
