@@ -263,6 +263,8 @@ interface ProductDraft {
   /** Produto ainda não salvo no banco. */
   isNew?: boolean;
   kind?: string;
+  /** Estado já salvo no banco: decide em qual lista o produto aparece (não muda ao marcar/desmarcar "Ativo" antes de salvar). */
+  savedActive?: boolean;
 }
 
 function ProductsTab({ busy, run }: TabProps) {
@@ -274,7 +276,7 @@ function ProductsTab({ busy, run }: TabProps) {
       .then((list: AdminCatalogRow[]) =>
         setRows(list
           .filter((r) => !r.id.startsWith("spray:"))
-          .map((r) => ({ id: r.id, label: r.label, price: (r.price_cents / 100).toFixed(2), active: r.active }))),
+          .map((r) => ({ id: r.id, label: r.label, price: (r.price_cents / 100).toFixed(2), active: r.active, savedActive: r.active }))),
       )
       .catch((e: unknown) => setLoadError(e instanceof Error ? e.message : "Erro ao carregar produtos."));
   }, []);
@@ -308,6 +310,7 @@ function ProductsTab({ busy, run }: TabProps) {
         setRows((cur) => (cur ?? []).map((x) => (x.id === r.id ? { ...x, id, isNew: false } : x)));
       } else {
         await saveCatalogItem({ ...row, kind: "" });
+        setRows((cur) => (cur ?? []).map((x) => (x.id === r.id ? { ...x, savedActive: r.active } : x)));
       }
     }, `"${r.label}" salvo.`);
 
@@ -323,22 +326,13 @@ function ProductsTab({ busy, run }: TabProps) {
         setRows((cur) => (cur ?? []).filter((x) => x.id !== r.id));
         return;
       }
-      setRows((cur) => (cur ?? []).map((x) => (x.id === r.id ? { ...x, active: false } : x)));
-      return `"${r.label}" já tem compras: foi desativado (some da loja) em vez de apagado.`;
+      setRows((cur) => (cur ?? []).map((x) => (x.id === r.id ? { ...x, active: false, savedActive: false } : x)));
+      return `"${r.label}" já tem compras: não dá para apagar (perderia o histórico). Foi desativado e saiu da loja; ele fica na lista "Desativados" lá embaixo.`;
     }, `"${r.label}" apagado.`);
   };
 
-  return (
-    <>
-      <p style={hint}>
-        Nome, preço (R$) e disponibilidade na loja. O preço cobrado no Pix é o daqui. Produto novo entra na loja como
-        item avulso (a posse fica registrada; efeito no jogo depende de o jogo usar esse item).
-      </p>
-      <button type="button" disabled={busy} onClick={add} style={primaryBtn}>
-        Adicionar produto
-      </button>
-      {rows.map((r) => (
-        <div key={r.id} style={{ ...row, flexWrap: "wrap" }}>
+  const renderRow = (r: ProductDraft) => (
+    <div key={r.id} style={{ ...row, flexWrap: "wrap" }}>
           <span style={{ ...hint, width: "100%" }}>{r.isNew ? "Novo produto (ainda não salvo)" : r.id}</span>
           <input
             aria-label={`Nome de ${r.id}`}
@@ -379,7 +373,26 @@ function ProductsTab({ busy, run }: TabProps) {
             Apagar
           </button>
         </div>
-      ))}
+  );
+
+  return (
+    <>
+      <p style={hint}>
+        Nome, preço (R$) e disponibilidade na loja. O preço cobrado no Pix é o daqui. Produto novo entra na loja como
+        item avulso (a posse fica registrada; efeito no jogo depende de o jogo usar esse item).
+      </p>
+      <button type="button" disabled={busy} onClick={add} style={primaryBtn}>
+        Adicionar produto
+      </button>
+      {rows.filter((r) => r.isNew || r.savedActive !== false).map(renderRow)}
+      {rows.some((r) => !r.isNew && r.savedActive === false) && (
+        <details style={{ marginTop: 8 }}>
+          <summary style={{ ...hint, cursor: "pointer", minHeight: 44, display: "flex", alignItems: "center" }}>
+            Desativados ({rows.filter((r) => !r.isNew && r.savedActive === false).length}) — fora da loja; quem já comprou mantém o item
+          </summary>
+          {rows.filter((r) => !r.isNew && r.savedActive === false).map(renderRow)}
+        </details>
+      )}
     </>
   );
 }
