@@ -157,6 +157,14 @@ export async function deleteCatalogItem(id: string): Promise<"deleted" | "deacti
   return "deactivated";
 }
 
+/** Apaga o produto de vez, junto com os pedidos e os direitos dos jogadores (só admin; fica registro em moderation_log). */
+export async function hardDeleteCatalogItem(id: string): Promise<{ orders: number; paid: number; entitlements: number }> {
+  const { data, error } = await db().rpc("admin_hard_delete_product", { p_id: id });
+  if (error) throw new Error(error.message);
+  const d = (data ?? {}) as { orders?: number; paid?: number; entitlements?: number };
+  return { orders: d.orders ?? 0, paid: d.paid ?? 0, entitlements: d.entitlements ?? 0 };
+}
+
 /** Lado máximo da imagem enviada (px): bandeira/spray não precisam de mais, e o WebP fica leve. */
 const MAX_IMAGE_SIDE = 1024;
 const WEBP_QUALITY = 0.9;

@@ -31,6 +31,7 @@ import {
   createCatalogItem,
   mergeModels,
   deleteCatalogItem,
+  hardDeleteCatalogItem,
   newProductId,
   NEW_PRODUCT_KINDS,
   fetchSuperchatQueue,
@@ -319,7 +320,7 @@ function ProductsTab({ busy, run }: TabProps) {
       setRows(rows.filter((x) => x.id !== r.id));
       return;
     }
-    if (!window.confirm(`Apagar o produto "${r.label}"? Se já foi comprado, ele só é desativado (some da loja) para não perder o histórico.`)) return;
+    if (!window.confirm(`Apagar o produto "${r.label}"? Se já foi comprado, vou perguntar se você quer apagar de vez, com as compras.`)) return;
     void run(async () => {
       const result = await deleteCatalogItem(r.id);
       if (result === "deleted") {
@@ -327,7 +328,14 @@ function ProductsTab({ busy, run }: TabProps) {
         return;
       }
       setRows((cur) => (cur ?? []).map((x) => (x.id === r.id ? { ...x, active: false, savedActive: false } : x)));
-      return `"${r.label}" já tem compras: não dá para apagar (perderia o histórico). Foi desativado e saiu da loja; ele fica na lista "Desativados" lá embaixo.`;
+      // Tem compras: oferece apagar de vez (com os pedidos e os itens dos jogadores), com confirmação digitada.
+      const typed = window.prompt(
+        `"${r.label}" já tem compras. Foi desativado (saiu da loja).\n\nPara APAGAR DE VEZ, incluindo os pedidos e os itens que os jogadores compraram, digite APAGAR. Isso não pode ser desfeito e remove o registro das cobranças (guarde seus comprovantes se precisar para a contabilidade). Para só manter desativado, cancele.`,
+      );
+      if (typed?.trim().toUpperCase() !== "APAGAR") return `"${r.label}" ficou desativado (lista "Desativados").`;
+      const gone = await hardDeleteCatalogItem(r.id);
+      setRows((cur) => (cur ?? []).filter((x) => x.id !== r.id));
+      return `"${r.label}" apagado de vez: ${gone.orders} pedidos (${gone.paid} pagos) e ${gone.entitlements} itens de jogadores removidos.`;
     }, `"${r.label}" apagado.`);
   };
 
