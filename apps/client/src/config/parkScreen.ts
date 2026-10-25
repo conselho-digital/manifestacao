@@ -99,6 +99,8 @@ export interface ScreenPlayback {
   position: number;
   /** Hora do servidor (ms desde 1970) em que o admin apertou o botão. */
   at: number;
+  /** Volume geral (0 a 100) definido pelo admin; o jogo ainda reduz com a distância. Ausente = 100. */
+  volume?: number;
 }
 
 export function cleanPlayback(v: unknown): ScreenPlayback | null {
@@ -107,7 +109,8 @@ export function cleanPlayback(v: unknown): ScreenPlayback | null {
   if (o.state !== "playing" && o.state !== "paused" && o.state !== "stopped") return null;
   if (typeof o.position !== "number" || !Number.isFinite(o.position) || o.position < 0 || o.position > 86_400) return null;
   if (typeof o.at !== "number" || !Number.isFinite(o.at)) return null;
-  return { state: o.state, position: o.position, at: o.at };
+  const volume = typeof o.volume === "number" && Number.isFinite(o.volume) ? Math.max(0, Math.min(100, Math.round(o.volume))) : undefined;
+  return { state: o.state, position: o.position, at: o.at, ...(volume !== undefined ? { volume } : {}) };
 }
 
 let clockOffset = 0;

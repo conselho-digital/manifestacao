@@ -116,7 +116,7 @@ function OutdoorVideo({ cfg, videoId, cy, x, z }: { cfg: ScreenConfig; videoId: 
   const playback = usePlayback();
   const [src] = useState(() => {
     const pb = currentPlayback();
-    return embedUrl({ kind: "youtube", id: videoId }, { ...cfg, controls: false, autoplay: pb ? pb.state === "playing" : cfg.autoplay }, true);
+    return embedUrl({ kind: "youtube", id: videoId }, { ...cfg, controls: false, mute: true, autoplay: pb ? pb.state === "playing" : cfg.autoplay }, true);
   });
   const send = useCallback((func: string, args: unknown[] = []) => {
     frameRef.current?.contentWindow?.postMessage(JSON.stringify({ event: "command", func, args }), YT_ORIGIN);
@@ -134,6 +134,7 @@ function OutdoorVideo({ cfg, videoId, cy, x, z }: { cfg: ScreenConfig; videoId: 
       try {
         if ((JSON.parse(e.data) as { event?: string }).event === "onReady") {
           readyRef.current = true;
+          volumeRef.current = -1; // o player começa mudo: reaplica o volume
           apply();
         }
       } catch {
@@ -152,8 +153,9 @@ function OutdoorVideo({ cfg, videoId, cy, x, z }: { cfg: ScreenConfig; videoId: 
   useFrame(() => {
     if (!readyRef.current) return;
     const d = Math.hypot(camera.position.x - x, camera.position.z - z);
-    const v = cfg.mute ? 0 : Math.round(100 * Math.max(0, Math.min(1, (VIDEO_RANGE - d) / (VIDEO_RANGE - FULL_VOLUME_RANGE))));
-    if (Math.abs(v - volumeRef.current) >= 4) {
+    const master = (currentPlayback()?.volume ?? 100) / 100;
+    const v = cfg.mute ? 0 : Math.round(100 * master * Math.max(0, Math.min(1, (VIDEO_RANGE - d) / (VIDEO_RANGE - FULL_VOLUME_RANGE))));
+    if (Math.abs(v - volumeRef.current) >= 4 || (v === 0) !== (volumeRef.current === 0)) {
       volumeRef.current = v;
       send("setVolume", [v]);
       send(v === 0 ? "mute" : "unMute");
@@ -175,6 +177,7 @@ function OutdoorVideo({ cfg, videoId, cy, x, z }: { cfg: ScreenConfig; videoId: 
           frameRef.current?.contentWindow?.postMessage(JSON.stringify({ event: "listening", id: 1, channel: "widget" }), YT_ORIGIN);
           window.setTimeout(() => {
             readyRef.current = true;
+            volumeRef.current = -1;
             apply();
           }, 2500);
         }}

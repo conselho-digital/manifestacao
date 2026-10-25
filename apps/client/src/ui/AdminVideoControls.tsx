@@ -50,9 +50,11 @@ export function AdminVideoControls({ videoId }: { videoId: string | null }) {
     return () => window.clearInterval(id);
   }, []);
 
-  const publish = (state: PlaybackState, position: number) => {
+  const volume = playback?.volume ?? 100;
+  const [volDrag, setVolDrag] = useState<number | null>(null);
+  const publish = (state: PlaybackState, position: number, vol: number = volume) => {
     setPubError(null);
-    publishPlayback(state, position).catch((e: unknown) => setPubError(e instanceof Error ? e.message : "Não consegui avisar os jogadores."));
+    publishPlayback(state, position, vol).catch((e: unknown) => setPubError(e instanceof Error ? e.message : "Não consegui avisar os jogadores."));
   };
 
   const listen = () => ref.current?.contentWindow?.postMessage(JSON.stringify({ event: "listening", id: 1, channel: "widget" }), YT_ORIGIN);
@@ -142,6 +144,27 @@ export function AdminVideoControls({ videoId }: { videoId: string | null }) {
           onKeyUp={() => {
             if (dragging !== null) publish(playing ? "playing" : "paused", dragging);
             setDragging(null);
+          }}
+          style={{ width: "100%", minHeight: 32 }}
+        />
+      </label>
+      <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "var(--t-ui)" }}>
+        <span style={{ color: "var(--ink-dim)" }}>Volume do outdoor: {Math.round(volDrag ?? volume)}%</span>
+        <input
+          type="range"
+          min={0}
+          max={100}
+          step={1}
+          value={Math.round(volDrag ?? volume)}
+          disabled={!enabled}
+          onChange={(e) => setVolDrag(Number(e.target.value))}
+          onPointerUp={() => {
+            if (volDrag !== null) publish(playback?.state ?? "stopped", playing ? time : (playback?.position ?? 0), volDrag);
+            setVolDrag(null);
+          }}
+          onKeyUp={() => {
+            if (volDrag !== null) publish(playback?.state ?? "stopped", playing ? time : (playback?.position ?? 0), volDrag);
+            setVolDrag(null);
           }}
           style={{ width: "100%", minHeight: 32 }}
         />
