@@ -178,3 +178,36 @@ export function handPosition(arm: number, forearm: number): { y: number; z: numb
     z: UPPER * Math.sin(arm) + LOWER * Math.sin(arm + forearm),
   };
 }
+
+// ── Segurar com as duas mãos ────────────────────────────────────────────────────────────────────
+/** Quanto a mão de baixo (esquerda) desliza haste abaixo, em metros. */
+export const GRIP_SLIDE = 0.24;
+/** Abertura lateral (rad) que aproxima os braços da haste, no centro do corpo. */
+export const GRIP_ADDUCT = 1.0;
+/** Só uma abertura leve para a mão de baixo (esquerda), que já está do lado da haste. */
+export const GRIP_ADDUCT_NEAR = 0.1;
+
+/** Braço de dois ossos (ombro e cotovelo): ângulos que levam a mão a `target` (altura, distância à frente). */
+export function solveArm(target: { y: number; z: number }): { arm: number; forearm: number } {
+  const dy = SHOULDER_Y - target.y;
+  const dz = target.z;
+  const d = Math.min(UPPER + LOWER - 1e-4, Math.max(Math.abs(UPPER - LOWER) + 1e-4, Math.hypot(dy, dz)));
+  const c = Math.max(-1, Math.min(1, (d * d - UPPER * UPPER - LOWER * LOWER) / (2 * UPPER * LOWER)));
+  const forearm = Math.acos(c);
+  const arm = Math.atan2(dz, dy) - Math.atan2(LOWER * Math.sin(forearm), UPPER + LOWER * Math.cos(forearm));
+  return { arm, forearm };
+}
+
+/**
+ * Braços ao segurar a bandeira com as duas mãos. A mão de cima (direita) fica onde a mão esquerda segurava; a de baixo
+ * (esquerda) desliza haste abaixo. `p` = progresso do golpe (ou null parado) e `env` = quanto o golpe domina a pose.
+ */
+export function gripArms(p: number | null, env: number): { upper: { arm: number; forearm: number }; lower: { arm: number; forearm: number } } {
+  const strike = p === null ? CARRY_LEFT : strikeArms(p);
+  const arm = lerp(CARRY_LEFT.arm, strike.arm, env);
+  const forearm = lerp(CARRY_LEFT.forearm, strike.forearm, env);
+  const hand = handPosition(arm, forearm);
+  const tilt = p === null ? 0 : flagTilt(p) * env;
+  const lowerTarget = { y: hand.y - GRIP_SLIDE * Math.cos(tilt), z: hand.z - GRIP_SLIDE * Math.sin(tilt) };
+  return { upper: solveArm(hand), lower: solveArm(lowerTarget) };
+}

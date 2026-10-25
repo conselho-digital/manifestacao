@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Box3, Group, Vector3 } from "three";
-import type { CharacterId } from "@manifestacao/shared";
+import type { CharacterId, TeamId } from "@manifestacao/shared";
 import { AvatarGlyph } from "./AvatarGlyph.js";
 import { GlbModel } from "../game/props3d.js";
 import { modelUrlFor } from "../game/models.js";
@@ -80,7 +80,7 @@ function Portrait({ character, url, size, border }: { character: CharacterId; ur
           <Boundary onError={() => setFailed(true)}>
             <Suspense fallback={null}>
               <group ref={group}>
-                <GlbModel url={url} />
+                <GlbModel url={url} animated />
               </group>
               <HeadShot
                 group={group}
@@ -102,9 +102,10 @@ function Portrait({ character, url, size, border }: { character: CharacterId; ur
  * Foto do rosto do personagem. Se o admin enviou um modelo 3D para ele, o retrato é tirado desse modelo (o que
  * vale é o enviado); senão usa a foto padrão (public/faces) e, faltando o arquivo, o ícone desenhado.
  */
-export function CharacterFace({ color, character, size = 64 }: { color: string; character: CharacterId; size?: number }) {
+export function CharacterFace({ color, character, team, size = 64 }: { color: string; character: CharacterId; team?: TeamId; size?: number }) {
   const [failed, setFailed] = useState(false);
-  const uploaded = modelUrlFor(character);
+  // Vale o modelo enviado para este personagem NA equipe escolhida (senão o geral do personagem).
+  const uploaded = modelUrlFor(character, team);
   const border = `3px solid ${color}`;
   if (uploaded && !uploaded.startsWith("/models/")) {
     return <Portrait key={`${character}|${uploaded}`} character={character} url={uploaded} size={size} border={border} />;

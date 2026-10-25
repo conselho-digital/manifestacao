@@ -1,5 +1,5 @@
 import { FOOT_WALK_SPEED } from "./world.js";
-import { CARRY_LEFT, CARRY_RIGHT, punchPose, strikeArms, strikeEnvelope, strikeLean, strikeTwist, type StrikeKind } from "./strike.js";
+import { GRIP_ADDUCT, GRIP_ADDUCT_NEAR, gripArms, punchPose, strikeArms, strikeEnvelope, strikeLean, strikeTwist, type StrikeKind } from "./strike.js";
 import { fallEnvelope, fallLimbs, reactBody } from "./knock.js";
 import { AnimationAction, AnimationClip, AnimationMixer, Bone, Group, Object3D, Quaternion, Vector3 } from "three";
 
@@ -331,6 +331,7 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
       const flagHit = strike && strike.kind === "flag" ? strike : null;
       const punch = strike && strike.kind === "punch" ? punchPose(strike.p) : null;
       const sArms = flagHit ? strikeArms(flagHit.p) : null;
+      const grips = carryK > 0.001 ? gripArms(flagHit ? flagHit.p : null, sp) : null;
       const react = knock.react >= 0 ? reactBody(knock.react) : null;
       const fallEnv = knock.fall >= 0 ? fallEnvelope(knock.fall) : 0;
       const fall = knock.fall >= 0 ? fallLimbs(knock.fall) : null;
@@ -405,15 +406,13 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
             break;
         }
 
-        // ── segurar a bandeira: braço esquerdo na haste (quase parado), direito relaxado e meio dobrado ──
-        if (carryK > 0.001) {
-          if (l.role === "arm") {
-            const c = isLeft ? CARRY_LEFT.arm + 0.03 * Math.sin(2 * phase) * w : lerp(ang, CARRY_RIGHT.arm - armAmp * 0.5 * sl * w, 0.6);
-            ang = lerp(ang, c, carryK);
-          } else if (l.role === "forearm") {
-            const c = isLeft ? CARRY_LEFT.forearm : CARRY_RIGHT.forearm + 0.25 * Math.max(0, sl) * w;
-            ang = lerp(ang, c, carryK);
-          }
+        // ── segurar a bandeira com as duas mãos: a direita onde a esquerda segurava, a esquerda desliza haste abaixo ──
+        let adduct = 0;
+        if (carryK > 0.001 && (l.role === "arm" || l.role === "forearm")) {
+          const g = grips ?? gripArms(null, 0);
+          const t = l.role === "arm" ? (isLeft ? g.lower.arm : g.upper.arm) : isLeft ? g.lower.forearm : g.upper.forearm;
+          ang = lerp(ang, t + (l.role === "arm" ? 0.03 * Math.sin(2 * phase) * w : 0), carryK);
+          if (l.role === "arm") adduct = (isLeft ? GRIP_ADDUCT_NEAR : GRIP_ADDUCT) * carryK;
         }
 
         // ── sentado na moto (mistura com o andar): coxas à frente, joelhos dobrados, braços no guidão, tronco inclinado ──
@@ -450,9 +449,7 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
 
         // ── golpe com a bandeira ──
         if (flagHit && sArms) {
-          if (l.role === "arm") ang = lerp(ang, sArms.arm * (isLeft ? 1 : 0.6), sp);
-          else if (l.role === "forearm") ang = lerp(ang, isLeft ? sArms.forearm : 0.5, sp);
-          else if (l.role === "hips") twist += -forward * strikeTwist(flagHit.p) * sp;
+          if (l.role === "hips") twist += -forward * strikeTwist(flagHit.p) * sp;
           else if (l.role === "spine") {
             twist += (forward * strikeTwist(flagHit.p) * sp * 0.6) / spineCount;
             lean += (strikeLean(flagHit.p) * sp) / spineCount;
@@ -518,6 +515,11 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
         } else {
           // ângulo positivo no eixo = balança para a frente
           rot.setFromAxisAngle(l.axis, ang).multiply(l.rest);
+          // Braços se fecham para o centro (as duas mãos na haste): giro em torno do eixo da frente, antes do balanço.
+          if (adduct > 0) {
+            rotC.setFromAxisAngle(fwd, -l.side * adduct);
+            rot.premultiply(rotC);
+          }
         }
         // local = P⁻¹ · R · P · restLocal (R no referencial do avatar, P = mundo atual do pai)
         const parent = l.bone.parent;

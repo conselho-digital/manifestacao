@@ -8,7 +8,7 @@ import { WHEELIE_MAX_ANGLE } from "./driving.js";
 import { Flag3D, Vehicle3D, GlbModel } from "./props3d.js";
 import { teamImageUrl } from "./models.js";
 import { HIP_HEIGHT, fallBody, fallSeconds, reactBody, reactProgress, type KnockRefs } from "./knock.js";
-import { CARRY_LEFT, CARRY_RIGHT, activeStrike, punchPose, flagTilt, handPosition, strikeArms, strikeEnvelope, type StrikeRefs } from "./strike.js";
+import { CARRY_LEFT, activeStrike, punchPose, flagTilt, gripArms, handPosition, strikeArms, strikeEnvelope, type StrikeRefs } from "./strike.js";
 import { SignProp } from "./SignProp.js";
 import type { SignData } from "./useSigns.js";
 
@@ -140,22 +140,34 @@ export function ProceduralBody({
 }) {
   const look = lookOf(character);
   const armRefs = useRef<(Group | null)[]>([null, null]);
-  // Braços do boneco geométrico: segurando a bandeira, golpe de bandeira e soco.
+  const foreRefs = useRef<(Group | null)[]>([null, null]);
+  // Braços do boneco geométrico: segurando a bandeira com as duas mãos, golpe de bandeira e soco.
   useFrame(() => {
     const st = activeStrike(hitRef);
+    const flagStrike = st && st.kind === "flag" ? st : null;
+    const env = st ? strikeEnvelope(st.p) : 0;
+    const grips = carry && !riding ? gripArms(flagStrike ? flagStrike.p : null, flagStrike ? env : 0) : null;
     armRefs.current.forEach((g, i) => {
       if (!g) return;
       const isLeft = i === 1;
-      let a = riding ? 1.05 : carry ? (isLeft ? CARRY_LEFT.arm : CARRY_RIGHT.arm) : 0.16;
-      if (st) {
-        const env = strikeEnvelope(st.p);
-        if (st.kind === "flag") a = lerpN(a, strikeArms(st.p).arm * (isLeft ? 1 : 0.6), env);
-        else {
-          const pp = punchPose(st.p);
-          a = lerpN(a, isLeft ? pp.lArm : pp.rArm, env);
-        }
+      let a = riding ? 1.05 : 0.16;
+      let f = riding ? 0.3 : 0.5;
+      let adduct = 0;
+      if (grips) {
+        const t = isLeft ? grips.lower : grips.upper;
+        a = t.arm;
+        f = t.forearm;
+        adduct = isLeft ? 0.2 : 0.9; // a haste fica do lado esquerdo: o braço direito atravessa o corpo até ela
+      }
+      if (st && st.kind === "punch") {
+        const pp = punchPose(st.p);
+        a = lerpN(a, isLeft ? pp.lArm : pp.rArm, env);
+        f = lerpN(f, isLeft ? pp.lFore : pp.rFore, env);
       }
       g.rotation.x = -a; // para a frente = rotação negativa em X
+      g.rotation.z = riding ? (isLeft ? 1 : -1) * 0.12 : (isLeft ? 1 : -1) * (0.12 - adduct);
+      const fg = foreRefs.current[i];
+      if (fg) fg.rotation.x = -f;
     });
   });
   return (
@@ -169,7 +181,7 @@ export function ProceduralBody({
             <capsuleGeometry args={[0.105, 0.2, 4, 8]} />
             <meshStandardMaterial color={color} />
           </mesh>
-          <group position={[0, -0.4, 0]} rotation={[riding ? -0.3 : carry ? -0.7 : -0.5, 0, 0]}>
+          <group ref={(g) => (foreRefs.current[side < 0 ? 0 : 1] = g)} position={[0, -0.4, 0]} rotation={[riding ? -0.3 : carry ? -0.7 : -0.5, 0, 0]}>
             <mesh position={[0, -0.2, 0]} castShadow>
               <capsuleGeometry args={[0.095, 0.2, 4, 8]} />
               <meshStandardMaterial color={color} />
