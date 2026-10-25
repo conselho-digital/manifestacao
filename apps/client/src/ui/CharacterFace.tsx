@@ -1,10 +1,11 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
-import { Box3, Group, Vector3 } from "three";
+import { Box3, type Bone, type Group, type Object3D, Vector3 } from "three";
 import type { CharacterId, TeamId } from "@manifestacao/shared";
 import { AvatarGlyph } from "./AvatarGlyph.js";
 import { GlbModel } from "../game/props3d.js";
 import { modelUrlFor } from "../game/models.js";
+import { TEAM_IDS } from "@manifestacao/shared";
 import { Boundary, acquire } from "../shop/ProductThumb.js";
 
 const portraits = new Map<string, string>();
@@ -14,20 +15,56 @@ export function clearFacePortraits(): void {
   portraits.clear();
 }
 
-/** Enquadra a cabeça do modelo (topo ~13% da altura) e tira a foto uma vez. */
+const lowName = (o: Object3D) => o.name.replace(/[^a-z]/gi, "").toLowerCase();
+
+/**
+ * Acha sozinho onde está o rosto e para que lado ele olha: a cabeça vem do osso "head" e a frente, da direção
+ * calcanhar → ponta do pé (os pés apontam para onde o personagem olha). Sem esqueleto, usa o topo do modelo, de frente (+Z).
+ */
+function locateFace(root: Object3D): { target: Vector3; forward: Vector3; height: number } | null {
+  root.updateWorldMatrix(true, true);
+  const bones: Object3D[] = [];
+  root.traverse((o) => {
+    if ((o as Bone).isBone) bones.push(o);
+  });
+  const head = bones.find((b) => /head$/.test(lowName(b))) ?? bones.find((b) => lowName(b).includes("head") && !/top|end/.test(lowName(b)));
+  if (!head) return null;
+  const hp = head.getWorldPosition(new Vector3());
+  const feet = bones.filter((b) => /foot$/.test(lowName(b)));
+  const toes = bones.filter((b) => /toe/.test(lowName(b)) && !/end|top/.test(lowName(b)));
+  const forward = new Vector3();
+  for (const t of toes) {
+    const tp = t.getWorldPosition(new Vector3());
+    const f = feet.reduce<Object3D | null>((best, c) => (!best || c.getWorldPosition(new Vector3()).distanceTo(tp) < best.getWorldPosition(new Vector3()).distanceTo(tp) ? c : best), null);
+    if (f) forward.add(tp.sub(f.getWorldPosition(new Vector3())).setY(0));
+  }
+  if (forward.lengthSq() < 1e-8) forward.set(0, 0, 1);
+  forward.normalize();
+  const box = new Box3().setFromObject(root);
+  const height = Math.max(0.5, hp.y / 0.92, Math.min(3, box.max.y - box.min.y));
+  return { target: new Vector3(hp.x, hp.y + 0.05 * height, hp.z), forward, height: hp.y / 0.92 };
+}
+
+/** Enquadra o rosto do modelo (achado automaticamente) e tira a foto uma vez. */
 function HeadShot({ group, onShot }: { group: React.RefObject<Group>; onShot: (url: string) => void }) {
   const { camera, gl } = useThree();
   const frames = useRef(0);
   useFrame(() => {
     frames.current += 1;
     if (frames.current === 8 && group.current) {
-      const box = new Box3().setFromObject(group.current);
-      const h = box.max.y - box.min.y;
-      if (h > 0.1) {
-        const c = box.getCenter(new Vector3());
-        const target = new Vector3(c.x, box.max.y - h * 0.075, c.z);
-        camera.position.set(target.x, target.y + h * 0.01, target.z + h * 0.42);
-        camera.lookAt(target);
+      const face = locateFace(group.current);
+      if (face) {
+        camera.position.copy(face.target).addScaledVector(face.forward, face.height * 0.3);
+        camera.lookAt(face.target);
+      } else {
+        const box = new Box3().setFromObject(group.current);
+        const h = box.max.y - box.min.y;
+        if (h > 0.1) {
+          const c = box.getCenter(new Vector3());
+          const target = new Vector3(c.x, box.max.y - h * 0.075, c.z);
+          camera.position.set(target.x, target.y + h * 0.01, target.z + h * 0.42);
+          camera.lookAt(target);
+        }
       }
     }
     if (frames.current === 14) onShot(gl.domElement.toDataURL("image/png"));
@@ -105,7 +142,8 @@ function Portrait({ character, url, size, border }: { character: CharacterId; ur
 export function CharacterFace({ color, character, team, size = 64 }: { color: string; character: CharacterId; team?: TeamId; size?: number }) {
   const [failed, setFailed] = useState(false);
   // Vale o modelo enviado para este personagem NA equipe escolhida (senão o geral do personagem).
-  const uploaded = modelUrlFor(character, team);
+  // Sem modelo para esta equipe nem geral, mas enviado para outra equipe: o rosto vem dele (o jogador não vê a diferença na escolha).
+  const uploaded = modelUrlFor(character, team) ?? TEAM_IDS.map((t) => modelUrlFor(character, t)).find((u) => u && !u.startsWith("/models/")) ?? null;
   const border = `3px solid ${color}`;
   if (uploaded && !uploaded.startsWith("/models/")) {
     return <Portrait key={`${character}|${uploaded}`} character={character} url={uploaded} size={size} border={border} />;
