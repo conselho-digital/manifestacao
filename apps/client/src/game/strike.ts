@@ -54,7 +54,7 @@ export const CARRY_RIGHT = { arm: 0.2, forearm: 0.8 };
 // volta amortecida para a posição de segurar.
 type Ease = "in" | "out" | "io";
 const EASE: Record<Ease, (t: number) => number> = {
-  in: (t) => t * t * (1.2 + 0 * t) - 0.2 * t * t * t, // arranca devagar e termina em velocidade máxima
+  in: (t) => 1.2 * t * t - 0.2 * t * t * t, // arranca devagar e termina em velocidade máxima
   out: (t) => 1 - (1 - t) * (1 - t),
   io: (t) => t * t * (3 - 2 * t),
 };

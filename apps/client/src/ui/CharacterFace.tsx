@@ -1,11 +1,10 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Box3, type Bone, type Group, type Object3D, Vector3 } from "three";
-import type { CharacterId, TeamId } from "@manifestacao/shared";
+import { TEAM_IDS, type CharacterId, type TeamId } from "@manifestacao/shared";
 import { AvatarGlyph } from "./AvatarGlyph.js";
 import { GlbModel } from "../game/props3d.js";
 import { modelUrlFor } from "../game/models.js";
-import { TEAM_IDS } from "@manifestacao/shared";
 import { Boundary, acquire } from "../shop/ProductThumb.js";
 
 const portraits = new Map<string, string>();
@@ -40,9 +39,8 @@ function locateFace(root: Object3D): { target: Vector3; forward: Vector3; height
   }
   if (forward.lengthSq() < 1e-8) forward.set(0, 0, 1);
   forward.normalize();
-  const box = new Box3().setFromObject(root);
-  const height = Math.max(0.5, hp.y / 0.92, Math.min(3, box.max.y - box.min.y));
-  return { target: new Vector3(hp.x, hp.y + 0.05 * height, hp.z), forward, height: hp.y / 0.92 };
+  const height = Math.max(0.5, hp.y / 0.92); // a cabeça fica a ~92% da altura
+  return { target: new Vector3(hp.x, hp.y + 0.05 * height, hp.z), forward, height };
 }
 
 /** Enquadra o rosto do modelo (achado automaticamente) e tira a foto uma vez. */

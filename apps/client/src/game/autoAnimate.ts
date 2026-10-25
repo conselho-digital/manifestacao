@@ -42,7 +42,14 @@ interface Limb {
  * tira o sufixo de índice "_034", troca separadores por espaço e põe em minúsculas.
  */
 function cleanName(name: string): string {
-  return name.replace(/_\d+$/, "").replace(/[_:\s]+/g, " ").trim().toLowerCase();
+  // "upperarmL" (o three tira o "." de "upperarm.L") vira "upperarm l"; "hand.001" (duplicata) perde o ".001".
+  return name
+    .replace(/\.\d+$/, "")
+    .replace(/([a-z0-9])([LR])$/, "$1 $2")
+    .replace(/_\d+$/, "")
+    .replace(/[_:\s]+/g, " ")
+    .trim()
+    .toLowerCase();
 }
 
 function sideOf(name: string): 1 | -1 | 0 {
@@ -56,7 +63,7 @@ function sideOf(name: string): 1 | -1 | 0 {
 function roleOf(raw: string): Role | null {
   const name = raw.replace(/ (l|r)$/, "").replace(/^(l|r) /, "");
   // Dedos, rosto e ossos auxiliares (torção, correção) não são movidos: o osso principal já leva a pele.
-  if (/(thumb|index|middle|ring|pinky|finger)|eye|jaw|brow|lid|mouth|tongue|twist|roll|helper|corrective|\bik\b|\bpole\b/.test(name)) return null;
+  if (/(?:^|\s|hand)(?:thumb|index|middle|ring|pinky)|finger|\beye|jaw|brow|\blid\b|eyelid|mouth|tongue|twist|\broll\b|helper|corrective|\bik\b|\bpole\b/.test(name)) return null;
   if (/toe|ball/.test(name)) return /end$|tip/.test(name) ? null : "toe";
   if (/thigh|upleg|upperleg|upper leg/.test(name)) return "thigh";
   if (/(foot|ankle)$/.test(name)) return "foot";
@@ -262,7 +269,7 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
     const hipsX = hipsB ? worldPos(hipsB, new Vector3()).x : 0;
     const info = (b: Bone) => {
       const n = cleanName(b.name);
-      const m = /(thumb|index|middle|ring|pinky)/.exec(n);
+      const m = /(?:^|\s|hand)(thumb|index|middle|ring|pinky)/.exec(n);
       const lvl = /(\d+)(?: [lr])?$/.exec(n);
       const side = sideOf(n);
       if (!m || !lvl || m[1] === "thumb" || side === 0 || !b.children.some((c) => (c as Bone).isBone)) return null;
@@ -414,8 +421,8 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
           const closed = [0, 1.25, 1.55, 1.05][l.level!] ?? 1.2;
           const a = (relaxed + (closed - relaxed) * fist) * (l.curlK ?? 1);
           l.bone.quaternion.copy(l.restLocal).multiply(rotA.setFromAxisAngle(l.localAxis!, a));
-          l.bone.updateWorldMatrix(false, true);
-          continue;
+          continue; // as matrizes do mundo se atualizam na cadeia dos pais / ao desenhar
+
         }
         const sl = l.side > 0 ? sin : -sin; // a esquerda vai à frente quando sin > 0
         const cl = l.side > 0 ? cos : -cos;
@@ -591,8 +598,9 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
           rot.setFromAxisAngle(l.axis, ang).multiply(l.rest);
           // Braços se fecham para o centro (as duas mãos na haste): giro em torno do eixo da frente, antes do balanço.
           if (adduct > 0) {
+            // Fecha o braço primeiro e balança depois (rot = balanço · fechar · repouso): vale em qualquer altura do braço.
             rotC.setFromAxisAngle(fwd, -l.side * adduct);
-            rot.premultiply(rotC);
+            rot.setFromAxisAngle(l.axis, ang).multiply(rotC).multiply(l.rest);
           }
         }
         // local = P⁻¹ · R · P · restLocal (R no referencial do avatar, P = mundo atual do pai)

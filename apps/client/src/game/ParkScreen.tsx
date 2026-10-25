@@ -227,7 +227,6 @@ export function ParkScreen({ x, z }: { x: number; z: number }) {
 
   // Relógio do servidor, estado atual e comandos do admin (Realtime) enquanto o outdoor existe no mapa.
   useEffect(() => {
-    if (!videoId) return;
     let alive = true;
     void syncServerClock().then(() => fetchPlayback()).then((pb) => {
       if (pb) setPlayback(pb);
@@ -238,7 +237,7 @@ export function ParkScreen({ x, z }: { x: number; z: number }) {
       alive = false;
       off();
     };
-  }, [videoId]);
+  }, []);
 
   // O vídeo só existe perto da tela e de frente para ela (o iframe é pesado e, por trás, apareceria espelhado).
   const [live, setLive] = useState(false);

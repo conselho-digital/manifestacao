@@ -429,11 +429,10 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
   useEffect(() => {
     const channel = channelRef.current;
     const base = presenceRef.current;
-    if (!channel || !base || channel.state !== "joined") return;
-    if (base.shirt === self.shirt && base.flag === self.flag) return;
+    if (!base || (base.shirt === self.shirt && base.flag === self.flag)) return;
     const next: PresenceState = { ...base, shirt: self.shirt, flag: self.flag };
-    presenceRef.current = next;
-    void channel.track(next);
+    presenceRef.current = next; // sempre: se o canal ainda não entrou, o subscribe usa este valor
+    if (channel && channel.state === "joined") void channel.track(next);
   }, [self.shirt, self.flag]);
 
   // Trocar de cartaz só atualiza o presence (não derruba o canal).
