@@ -39,7 +39,7 @@ export function strikeProgress(at: number, kind: StrikeKind = "flag", now = perf
 
 /** Quanto o golpe domina a pose (0..1): entra e sai suave, para não "dar tranco" na caminhada. */
 export function strikeEnvelope(p: number): number {
-  return smooth(0, 0.12, p) * (1 - smooth(0.88, 1, p));
+  return smooth(0, 0.08, p) * (1 - smooth(0.92, 1, p));
 }
 
 // ── Segurar a bandeira ─────────────────────────────────────────────────────────────────────────
@@ -49,37 +49,89 @@ export const CARRY_LEFT = { arm: 0.45, forearm: 1.25 };
 export const CARRY_RIGHT = { arm: 0.2, forearm: 0.8 };
 
 // ── Golpe com a bandeira ───────────────────────────────────────────────────────────────────────
-/** Braço (ombro e cotovelo) do lado da bandeira durante o golpe: do "segurar" para cima/atrás, desce, volta. */
-export function strikeArms(p: number): { arm: number; forearm: number } {
-  if (p < 0.3) {
-    const k = smooth(0, 0.3, p);
-    return { arm: lerp(CARRY_LEFT.arm, 2.0, k), forearm: lerp(CARRY_LEFT.forearm, 0.7, k) };
+// 0,7 s no total (a duração não muda). Fases: preparação (pequeno recuo), levantada para trás com a bandeira, instante
+// de pausa no alto, descida que ACELERA até o contato (p = 0,5), continuação do movimento (passa um pouco do ponto) e
+// volta amortecida para a posição de segurar.
+type Ease = "in" | "out" | "io";
+const EASE: Record<Ease, (t: number) => number> = {
+  in: (t) => t * t * (1.2 + 0 * t) - 0.2 * t * t * t, // arranca devagar e termina em velocidade máxima
+  out: (t) => 1 - (1 - t) * (1 - t),
+  io: (t) => t * t * (3 - 2 * t),
+};
+/** Interpola entre quadros-chave [p, valor]; o `ease` de cada quadro vale para o trecho que CHEGA nele. */
+function keyed(p: number, keys: readonly (readonly [number, number, Ease])[]): number {
+  if (p <= keys[0]![0]) return keys[0]![1];
+  for (let i = 1; i < keys.length; i++) {
+    const [p1, v1, e] = keys[i]!;
+    const [p0, v0] = keys[i - 1]!;
+    if (p <= p1) return lerp(v0, v1, EASE[e]((p - p0) / (p1 - p0)));
   }
-  if (p < 0.52) {
-    const k = smooth(0.3, 0.52, p);
-    return { arm: lerp(2.0, 0.85, k), forearm: lerp(0.7, 0.35, k) };
-  }
-  const k = smooth(0.52, 1, p);
-  return { arm: lerp(0.85, CARRY_LEFT.arm, k), forearm: lerp(0.35, CARRY_LEFT.forearm, k) };
+  return keys[keys.length - 1]![1];
 }
 
-/** Inclinação do tronco para a frente (rad): um pouco para trás ao levantar, bastante para a frente no golpe. */
+const ARM_KEYS = [
+  [0, CARRY_LEFT.arm, "io"],
+  [0.1, 0.3, "out"], // prepara: a bandeira desce um pouco
+  [0.36, 2.1, "out"], // levanta para trás/cima
+  [0.42, 2.18, "io"], // pausa no alto
+  [0.52, 0.8, "in"], // desce acelerando até o contato
+  [0.62, 0.52, "out"], // continua um pouco depois do contato
+  [1, CARRY_LEFT.arm, "io"],
+] as const;
+const FORE_KEYS = [
+  [0, CARRY_LEFT.forearm, "io"],
+  [0.1, 1.4, "out"],
+  [0.36, 0.55, "out"],
+  [0.42, 0.5, "io"],
+  [0.52, 0.28, "in"],
+  [0.62, 0.22, "out"],
+  [1, CARRY_LEFT.forearm, "io"],
+] as const;
+const LEAN_KEYS = [
+  [0, 0, "io"],
+  [0.1, 0.06, "out"], // agacha de leve ao preparar
+  [0.38, -0.24, "out"], // peito para trás ao levantar
+  [0.42, -0.26, "io"],
+  [0.54, 0.52, "in"], // joga o peso para a frente no golpe
+  [0.64, 0.6, "out"],
+  [1, 0, "io"],
+] as const;
+const TWIST_KEYS = [
+  [0, 0, "io"],
+  [0.1, 0.03, "out"],
+  [0.4, -0.28, "out"], // quadril e ombros giram para trás
+  [0.56, 0.42, "in"], // e vêm junto com a descida
+  [0.66, 0.44, "out"],
+  [1, 0, "io"],
+] as const;
+const TILT_KEYS = [
+  [0, 0, "io"],
+  [0.1, 0.1, "out"],
+  [0.36, -0.95, "out"],
+  [0.42, -1.0, "io"],
+  [0.52, 1.5, "in"],
+  [0.62, 1.78, "out"],
+  [1, 0, "io"],
+] as const;
+
+/** Braço (ombro e cotovelo) do lado da bandeira durante o golpe: do "segurar" para cima/atrás, desce, volta. */
+export function strikeArms(p: number): { arm: number; forearm: number } {
+  return { arm: keyed(p, ARM_KEYS), forearm: keyed(p, FORE_KEYS) };
+}
+
+/** Inclinação do tronco para a frente (rad): para trás ao levantar, bastante para a frente no golpe. */
 export function strikeLean(p: number): number {
-  if (p < 0.3) return -0.2 * smooth(0, 0.3, p);
-  if (p < 0.52) return -0.2 + 0.75 * smooth(0.3, 0.52, p);
-  return 0.55 * (1 - smooth(0.52, 1, p));
+  return keyed(p, LEAN_KEYS);
 }
 
 /** Giro do quadril/tronco (rad) acompanhando o golpe com a bandeira. */
 export function strikeTwist(p: number): number {
-  return 0.3 * Math.sin(Math.PI * smooth(0.15, 0.7, p));
+  return keyed(p, TWIST_KEYS);
 }
 
 /** Inclinação da própria bandeira em torno da mão (rad; positivo = ponta para a frente). */
 export function flagTilt(p: number): number {
-  if (p < 0.3) return -0.9 * smooth(0, 0.3, p);
-  if (p < 0.52) return -0.9 + 2.45 * smooth(0.3, 0.52, p);
-  return 1.55 * (1 - smooth(0.52, 1, p));
+  return keyed(p, TILT_KEYS);
 }
 
 // ── Soco ───────────────────────────────────────────────────────────────────────────────────────

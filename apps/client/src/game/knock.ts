@@ -14,7 +14,7 @@ export const STRIKE_RANGE = 2.8;
 export const PUNCH_RANGE = 1.7;
 export const STRIKE_HALF_ANGLE = (70 * Math.PI) / 180;
 /** Momento do golpe em que acerta (fração da duração). */
-export const STRIKE_IMPACT_AT = 0.35;
+export const STRIKE_IMPACT_AT = 0.5; // instante do contato na animação de bandeira (strike.ts)
 export const PUNCH_IMPACT_AT = 0.42;
 /** Altura do quadril em pé (m): o corpo gira em torno dele ao cair. */
 export const HIP_HEIGHT = 0.95;
