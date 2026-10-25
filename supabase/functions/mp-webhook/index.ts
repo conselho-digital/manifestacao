@@ -307,6 +307,17 @@ Deno.serve(async (req) => {
       return new Response("amount_mismatch", { status: 200 });
     }
 
+    // Pedido já descartado (o usuário gerou outro Pix depois): se ele já tem o item, esse pagamento é cobrança em dobro.
+    if (order.status === "failed") {
+      const { data: owned } = await admin
+        .from("entitlements")
+        .select("item_id")
+        .eq("user_id", order.user_id)
+        .eq("item_id", order.item_id)
+        .maybeSingle();
+      if (owned) return await refundOrphan(admin, payment, externalReference);
+    }
+
     // Garante o item SEMPRE (idempotente): mesmo se uma tentativa anterior
     // marcou 'paid' mas falhou ao conceder, o reenvio recria aqui.
     await admin
