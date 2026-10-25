@@ -31,7 +31,7 @@ const clock = (s: number) => {
  * Tocar, pausar, parar e pular viram o estado compartilhado (game_config.screen_playback) que todos os jogadores seguem.
  * Um player invisível, mudo e parado serve só para descobrir a duração do vídeo.
  */
-export function AdminVideoControls({ videoId, defaultAutoplay = false }: { videoId: string | null; defaultAutoplay?: boolean }) {
+export function AdminVideoControls({ videoId, defaultAutoplay = false, live = false }: { videoId: string | null; defaultAutoplay?: boolean; live?: boolean }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const playback = usePlayback();
   const [duration, setDuration] = useState(0);
@@ -124,6 +124,16 @@ export function AdminVideoControls({ videoId, defaultAutoplay = false }: { video
         </button>
       </div>
 
+      {live ? (
+        <p style={{ margin: 0, fontSize: "var(--t-ui)", color: "var(--ink-dim)" }}>
+          <strong style={{ color: "var(--danger)" }}>● AO VIVO</strong> — transmissão sem linha do tempo: o jogo toca no ponto atual da live. Tocar e pausar
+          valem para todos; ao tocar de novo, entra direto no ao vivo.
+        </p>
+      ) : duration <= 0 && enabled ? (
+        <p style={{ margin: 0, fontSize: "var(--t-ui)", color: "var(--ink-dim)" }}>
+          Linha do tempo indisponível (o YouTube não informou a duração). Se este link é uma live, marque "É uma transmissão ao vivo" abaixo e salve.
+        </p>
+      ) : (
       <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "var(--t-ui)" }}>
         <span style={{ display: "flex", justifyContent: "space-between", color: "var(--ink-dim)" }}>
           <span>Linha do tempo</span>
@@ -152,6 +162,7 @@ export function AdminVideoControls({ videoId, defaultAutoplay = false }: { video
           style={{ width: "100%", minHeight: 32 }}
         />
       </label>
+      )}
       <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "var(--t-ui)" }}>
         <span style={{ color: "var(--ink-dim)" }}>Volume do outdoor: {Math.round(volDrag ?? volume)}%</span>
         <input

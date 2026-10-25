@@ -308,7 +308,7 @@ function ProductsTab({ busy, run }: TabProps) {
         // O id nasce do nome ao salvar (o nome inicial é só um rascunho).
         const id = newProductId(r.label);
         await createCatalogItem({ ...row, id });
-        setRows((cur) => (cur ?? []).map((x) => (x.id === r.id ? { ...x, id, isNew: false } : x)));
+        setRows((cur) => (cur ?? []).map((x) => (x.id === r.id ? { ...x, id, isNew: false, savedActive: r.active } : x)));
       } else {
         await saveCatalogItem({ ...row, kind: "" });
         setRows((cur) => (cur ?? []).map((x) => (x.id === r.id ? { ...x, savedActive: r.active } : x)));
@@ -447,10 +447,12 @@ function ScreenTab({ busy, run }: TabProps) {
     controls: saved?.controls ?? DEFAULT_SCREEN_OPTIONS.controls,
     loop: saved?.loop ?? DEFAULT_SCREEN_OPTIONS.loop,
     mute: saved?.mute ?? DEFAULT_SCREEN_OPTIONS.mute,
+    live: saved?.live ?? DEFAULT_SCREEN_OPTIONS.live,
   });
   const parsed = cleanScreen({ url, title, ...opts });
   const media = parsed ? parseScreenMedia(parsed.url) : null;
   const optionRows: { key: keyof typeof opts; label: string; help: string }[] = [
+    { key: "live", label: "É uma transmissão ao vivo", help: "Para lives do YouTube: não tem linha do tempo; toca no ponto atual da transmissão." },
     { key: "autoplay", label: "Tocar automaticamente", help: "O vídeo começa assim que a pessoa abre o outdoor." },
     { key: "controls", label: "Mostrar os controles do player", help: "Pausar, volume, barra de tempo e tela cheia." },
     { key: "mute", label: "Começar sem som", help: "Alguns celulares só tocam sozinhos assim; a pessoa liga o som nos controles." },
@@ -464,7 +466,7 @@ function ScreenTab({ busy, run }: TabProps) {
         janela (alguns sites não permitem ser abertos assim; a janela tem o botão "Abrir em outra aba"). O conteúdo é de responsabilidade do
         operador.
       </p>
-      <AdminVideoControls videoId={media?.kind === "youtube" ? media.id : null} defaultAutoplay={saved?.autoplay ?? DEFAULT_SCREEN_OPTIONS.autoplay} />
+      <AdminVideoControls videoId={media?.kind === "youtube" ? media.id : null} defaultAutoplay={saved?.autoplay ?? DEFAULT_SCREEN_OPTIONS.autoplay} live={opts.live} />
       <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "var(--t-ui)" }}>
         Link (https://…)
         <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://www.youtube.com/watch?v=…" inputMode="url" maxLength={500} style={input} />
@@ -696,7 +698,7 @@ function ModelsTab({ busy, run }: TabProps) {
           <strong style={{ fontSize: "var(--t-ui)" }}>{CHARACTERS[c].label}</strong>
           {/* Cada equipe já tem a sua roupa pronta no jogo; enviar um modelo aqui substitui a roupa daquela equipe. */}
           {TEAM_IDS.map((t) => renderSlot(`character:${c}:${t}`, `Equipe ${TEAMS[t].label}`))}
-          {renderSlot(`character:${c}`, "Todas as equipes (só vale onde a equipe não tem modelo próprio)")}
+          {renderSlot(`character:${c}`, "Todas as equipes (substitui a roupa embutida de todas as equipes que não têm modelo próprio)")}
         </div>
       ))}
 

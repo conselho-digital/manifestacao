@@ -125,6 +125,7 @@ function OutdoorVideo({ cfg, videoId, cy, x, z }: { cfg: ScreenConfig; videoId: 
     frameRef.current?.contentWindow?.postMessage(JSON.stringify({ event: "command", func, args }), YT_ORIGIN);
   }, []);
   const appliedRef = useRef("");
+  const prevLiveState = useRef("");
   const apply = useCallback(() => {
     const pb = currentPlayback();
     if (!pb || !readyRef.current) return;
@@ -132,9 +133,13 @@ function OutdoorVideo({ cfg, videoId, cy, x, z }: { cfg: ScreenConfig; videoId: 
     const key = `${pb.state}|${pb.position}|${pb.at}`;
     if (key === appliedRef.current) return;
     appliedRef.current = key;
-    send("seekTo", [pb.state === "stopped" ? 0 : expectedPosition(pb), true]);
+    if (cfg.live) {
+      // Ao vivo não tem posição: ao voltar de pausa/parada, vai para o ponto atual da transmissão (o player limita ao fim).
+      if (pb.state === "playing" && prevLiveState.current !== "playing" && prevLiveState.current !== "") send("seekTo", [1e9, true]);
+      prevLiveState.current = pb.state;
+    } else send("seekTo", [pb.state === "stopped" ? 0 : expectedPosition(pb), true]);
     send(pb.state === "playing" ? "playVideo" : "pauseVideo");
-  }, [send]);
+  }, [send, cfg.live]);
 
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {

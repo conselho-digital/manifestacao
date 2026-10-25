@@ -19,9 +19,11 @@ export interface ScreenConfig {
   loop: boolean;
   /** Começa sem som (alguns celulares só tocam sozinhos assim). */
   mute: boolean;
+  /** Transmissão ao vivo do YouTube: sem linha do tempo; toca no ponto atual da transmissão. */
+  live: boolean;
 }
 
-export const DEFAULT_SCREEN_OPTIONS = { autoplay: true, controls: true, loop: false, mute: false } as const;
+export const DEFAULT_SCREEN_OPTIONS = { autoplay: true, controls: true, loop: false, mute: false, live: false } as const;
 
 export type ScreenMedia = { kind: "youtube"; id: string } | { kind: "page" };
 
@@ -62,7 +64,7 @@ export function cleanScreen(v: unknown): ScreenConfig | null {
   if (u.protocol !== "https:" || u.username || u.password) return null;
   const title = typeof o.title === "string" ? o.title.replace(/[\p{Cf}\p{Cc}]/gu, "").trim().slice(0, SCREEN_TITLE_MAX) : "";
   const flag = (k: keyof typeof DEFAULT_SCREEN_OPTIONS) => (typeof o[k] === "boolean" ? (o[k] as boolean) : DEFAULT_SCREEN_OPTIONS[k]);
-  return { url: u.href, title, autoplay: flag("autoplay"), controls: flag("controls"), loop: flag("loop"), mute: flag("mute") };
+  return { url: u.href, title, autoplay: flag("autoplay"), controls: flag("controls"), loop: flag("loop"), mute: flag("mute"), live: flag("live") };
 }
 
 export function embedUrl(media: ScreenMedia, cfg: ScreenConfig, api = false): string {

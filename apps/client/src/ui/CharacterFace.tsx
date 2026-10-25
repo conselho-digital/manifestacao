@@ -44,7 +44,7 @@ function locateFace(root: Object3D): { target: Vector3; forward: Vector3; height
 }
 
 /** Enquadra o rosto do modelo (achado automaticamente) e tira a foto uma vez. */
-function HeadShot({ group, onShot, variant }: { group: React.RefObject<Group>; onShot: (url: string) => void; variant: "face" | "body" }) {
+function HeadShot({ group, onShot, onEmpty, variant }: { group: React.RefObject<Group>; onShot: (url: string) => void; onEmpty: () => void; variant: "face" | "body" }) {
   const { camera, gl } = useThree();
   const frames = useRef(0);
   useFrame(() => {
@@ -62,15 +62,24 @@ function HeadShot({ group, onShot, variant }: { group: React.RefObject<Group>; o
       } else {
         const box = new Box3().setFromObject(group.current);
         const h = box.max.y - box.min.y;
+        if (box.isEmpty()) return onEmpty(); // o modelo não carregou: não guarda uma foto em branco
         if (h > 0.1) {
           const c = box.getCenter(new Vector3());
-          const target = new Vector3(c.x, box.max.y - h * 0.075, c.z);
-          camera.position.set(target.x, target.y + h * 0.01, target.z + h * 0.42);
-          camera.lookAt(target);
+          if (variant === "body") {
+            camera.position.set(c.x, c.y, c.z + h * 2.35);
+            camera.lookAt(c);
+          } else {
+            const target = new Vector3(c.x, box.max.y - h * 0.075, c.z);
+            camera.position.set(target.x, target.y + h * 0.01, target.z + h * 0.42);
+            camera.lookAt(target);
+          }
         }
       }
     }
-    if (frames.current === 14) onShot(gl.domElement.toDataURL("image/png"));
+    if (frames.current === 14) {
+      if (group.current && new Box3().setFromObject(group.current).isEmpty()) return onEmpty();
+      onShot(gl.domElement.toDataURL("image/png"));
+    }
   });
   return null;
 }
@@ -97,6 +106,7 @@ function Portrait({ character, url, size, border, variant = "face", height }: { 
   const [active, setActive] = useState(false);
   const [failed, setFailed] = useState(false);
   const group = useRef<Group>(null);
+  const finishRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     if (src) return;
@@ -109,6 +119,7 @@ function Portrait({ character, url, size, border, variant = "face", height }: { 
       rel?.();
       rel = null;
     };
+    finishRef.current = finish;
     void acquire().then((release) => {
       rel = release;
       if (cancelled) return finish();
@@ -116,7 +127,7 @@ function Portrait({ character, url, size, border, variant = "face", height }: { 
       timer = setTimeout(() => {
         finish();
         setFailed(true);
-      }, 15000);
+      }, 40000);
     });
     return () => {
       cancelled = true;
@@ -135,13 +146,14 @@ function Portrait({ character, url, size, border, variant = "face", height }: { 
         <Canvas dpr={body ? Math.min(2, window.devicePixelRatio || 1) : 1} gl={{ preserveDrawingBuffer: true, alpha: true, antialias: true }} camera={{ position: [0, 1.6, 0.8], fov: 28 }}>
           <ambientLight intensity={1.1} />
           <directionalLight position={[2, 3, 4]} intensity={1.8} />
-          <Boundary onError={() => setFailed(true)}>
+          <Boundary onError={() => { finishRef.current(); setFailed(true); }}>
             <Suspense fallback={null}>
               <group ref={group}>
                 <GlbModel url={url} animated />
               </group>
               <HeadShot
                 variant={variant}
+                onEmpty={() => { finishRef.current(); setFailed(true); }}
                 group={group}
                 onShot={(data) => {
                   portraits.set(key, data);
