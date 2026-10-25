@@ -405,11 +405,11 @@ export async function fetchMediaUrls(ids: string[]): Promise<Record<string, stri
 }
 
 /** Comando do admin para o vídeo do outdoor: chega na hora a quem está com ele aberto. */
-export async function publishPlayback(state: PlaybackState, position: number, volume?: number): Promise<void> {
+export async function publishPlayback(state: PlaybackState, position: number, volume?: number, at?: number): Promise<void> {
   await saveConfigKey("screen_playback", {
     state,
     position: Math.max(0, Math.round(position * 10) / 10),
-    at: serverNow(),
+    at: at ?? serverNow(),
     ...(volume !== undefined ? { volume: Math.max(0, Math.min(100, Math.round(volume))) } : {}),
   });
 }

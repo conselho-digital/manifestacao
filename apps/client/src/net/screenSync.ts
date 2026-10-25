@@ -1,5 +1,5 @@
 import type { RealtimeChannel } from "@supabase/supabase-js";
-import { cleanPlayback, setClockOffset, setPlayback, type ScreenPlayback } from "../config/parkScreen.js";
+import { cleanPlayback, cleanScreen, setClockOffset, setParkScreen, setPlayback, type ScreenPlayback } from "../config/parkScreen.js";
 import { getSupabase } from "./supabase.js";
 
 /** Acerta o relógio com o do servidor (para o "onde o vídeo deveria estar agora" bater entre aparelhos). */
@@ -28,6 +28,10 @@ let shared: { channel: RealtimeChannel; count: number } | null = null;
 const listeners = new Set<(pb: ScreenPlayback | null) => void>();
 
 function refetch(): void {
+  const supabase = getSupabase();
+  void supabase?.from("game_config").select("value").eq("key", "screen").maybeSingle().then(({ data, error }) => {
+    if (!error) setParkScreen(cleanScreen(data?.value));
+  });
   void fetchPlayback().then((pb) => {
     if (pb) {
       setPlayback(pb);
@@ -45,8 +49,13 @@ export function subscribePlayback(onChange: (pb: ScreenPlayback | null) => void)
     let first = true;
     const channel: RealtimeChannel = supabase
       .channel(`outdoor-playback-${Math.random().toString(36).slice(2)}`)
-      .on("postgres_changes", { event: "*", schema: "public", table: "game_config", filter: "key=eq.screen_playback" }, (p) => {
-        const row = p.new as { value?: unknown } | null;
+      .on("postgres_changes", { event: "*", schema: "public", table: "game_config", filter: "key=in.(screen,screen_playback)" }, (p) => {
+        const row = p.new as { key?: unknown; value?: unknown } | null;
+        // Link do outdoor trocado pelo admin: vale na hora para quem já está jogando.
+        if (row?.key === "screen" || (p.eventType === "DELETE" && (p.old as { key?: unknown } | null)?.key === "screen")) {
+          setParkScreen(p.eventType === "DELETE" ? null : cleanScreen(row?.value));
+          return;
+        }
         const pb = cleanPlayback(row?.value);
         setPlayback(pb);
         for (const l of listeners) l(pb);

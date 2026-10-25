@@ -261,7 +261,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
   useEffect(() => {
     const t = window.setInterval(() => setFallenNow(fallSeconds(net.selfKnock.fallAt.current) >= 0), 200);
     return () => window.clearInterval(t);
-  }, [net]);
+  }, [net.selfKnock]);
   const canHit = !driving && !fallenNow;
   const [hitBusy, setHitBusy] = useState(false);
   const doHit = useCallback(() => {
@@ -281,7 +281,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     );
     setHitBusy(true);
     window.setTimeout(() => setHitBusy(false), strikeSeconds(kind) * 1000);
-  }, [canHit, flagShown, net]);
+  }, [canHit, flagShown, net.sendHit, net.sendImpact, net.playersRef]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.repeat || e.key.toLowerCase() !== "f" || isTypingTarget(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;

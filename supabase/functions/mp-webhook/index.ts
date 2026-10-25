@@ -333,7 +333,7 @@ Deno.serve(async (req) => {
       .from("orders")
       .update({ status: "paid", paid_at: new Date().toISOString() })
       .eq("id", order.id)
-      .eq("status", "pending")
+      .in("status", ["pending", "failed"]) // 'failed' = Pix antigo pago depois: vira 'paid' para estorno/chargeback revogar o item
       .select("id");
 
     if (transitioned && transitioned.length > 0) {

@@ -93,7 +93,7 @@ function draw(ctx: CanvasRenderingContext2D, cfg: ScreenConfig | null, img: HTML
   lines.forEach((l, i) => ctx.fillText(l, TEX_W / 2, startY + i * 84));
   ctx.font = "600 40px system-ui, sans-serif";
   ctx.fillStyle = "rgba(255,255,255,0.85)";
-  ctx.fillText(video ? "Toque para assistir" : "Toque para abrir a página", TEX_W / 2, video ? TEX_H - 50 : startY + lines.length * 84 + 40);
+  ctx.fillText(video ? "Aguardando o vídeo" : "Abra pelo menu Ações", TEX_W / 2, video ? TEX_H - 50 : startY + lines.length * 84 + 40);
 }
 
 const YT_ORIGIN = "https://www.youtube-nocookie.com";

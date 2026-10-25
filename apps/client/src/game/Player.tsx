@@ -213,11 +213,16 @@ export function Player({
       const worldX = input.x * cos - input.z * sin;
       const worldZ = -input.x * sin - input.z * cos;
       const step = (speed * delta) / len;
-      const clamped = clampToAvenue(g.position.x + worldX * step, g.position.z + worldZ * step, g.position);
-      const solid = resolveSolids(clamped.x, clamped.z, AVATAR_RADIUS);
-      const next = clampToAvenue(solid.x, solid.z, clamped);
-      g.position.x = next.x;
-      g.position.z = next.z;
+      // Em fatias de até 0,2 m: a parede de vidro tem 0,2 m e, com FPS baixo, um passo inteiro a atravessaria.
+      const total = Math.hypot(worldX, worldZ) * step;
+      const slices = Math.max(1, Math.ceil(total / 0.2));
+      for (let i = 0; i < slices; i++) {
+        const clamped = clampToAvenue(g.position.x + (worldX * step) / slices, g.position.z + (worldZ * step) / slices, g.position);
+        const solid = resolveSolids(clamped.x, clamped.z, AVATAR_RADIUS);
+        const next = clampToAvenue(solid.x, solid.z, clamped);
+        g.position.x = next.x;
+        g.position.z = next.z;
+      }
       facing.current = facingOf(worldX, worldZ, facing.current);
       // Sem arrastar a câmera (dedo/mouse soltos faz um instante), ela passa para as costas do personagem enquanto ele
       // anda para a frente, como nos veículos. Só a parte "para a frente" do joystick conta: andar de lado ou de ré

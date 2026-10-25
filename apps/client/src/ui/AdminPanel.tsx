@@ -481,9 +481,9 @@ function ScreenTab({ busy, run }: TabProps) {
         style={{ ...primaryBtn, opacity: !parsed ? 0.5 : 1 }}
         onClick={() =>
           void run(async () => {
+            // Vídeo novo começa parado: o estado de reprodução do vídeo anterior não vale mais (para antes de trocar o link).
+            if (saved?.url !== parsed?.url) await publishPlayback("stopped", 0);
             await saveConfigKey("screen", parsed);
-            // Vídeo novo começa parado: o estado de reprodução do vídeo anterior não vale mais.
-            if (saved?.url !== parsed?.url) await publishPlayback("stopped", 0).catch(() => {});
           }, "Outdoor atualizado.")
         }
       >

@@ -60,8 +60,12 @@ export function RemotePlayers({ ids, playersRef, signs }: RemotePlayersProps) {
     let fn = refCallbacks.current.get(id);
     if (!fn) {
       fn = (g) => {
-        if (g) groups.current.set(id, g);
-        else groups.current.delete(id);
+        if (g) {
+          // Já nasce na posição informada (senão voava da origem até ela).
+          const p = playersRef.current.get(id);
+          if (p && !groups.current.has(id)) g.position.set(p.x, 0, p.z);
+          groups.current.set(id, g);
+        } else groups.current.delete(id);
       };
       refCallbacks.current.set(id, fn);
     }
@@ -76,8 +80,8 @@ export function RemotePlayers({ ids, playersRef, signs }: RemotePlayersProps) {
       if (!g || !p) continue;
       g.position.x += (p.x - g.position.x) * t;
       g.position.z += (p.z - g.position.z) * t;
-      // Dirigindo: o veículo gira para a direção que o dono informou (pelo menor ângulo).
-      if (p.vehicle !== "nenhum") {
+      // Gira para a direção que o dono informou (a pé ou dirigindo), pelo menor ângulo.
+      {
         const diff = ((((p.heading - g.rotation.y + Math.PI) % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2)) - Math.PI;
         g.rotation.y += diff * t;
       }

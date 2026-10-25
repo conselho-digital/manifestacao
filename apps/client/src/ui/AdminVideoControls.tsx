@@ -52,10 +52,10 @@ export function AdminVideoControls({ videoId, defaultAutoplay = false }: { video
 
   const volume = playback?.volume ?? 100;
   const [volDrag, setVolDrag] = useState<number | null>(null);
-  const publish = (state: PlaybackState, position: number, vol: number = volume) => {
+  const publish = (state: PlaybackState, position: number, vol: number = volume, at?: number) => {
     setPubError(null);
-    publishPlayback(state, position, vol)
-      .then(() => setPlayback({ state, position, at: serverNow(), volume: vol }))
+    publishPlayback(state, position, vol, at)
+      .then(() => setPlayback({ state, position, at: at ?? serverNow(), volume: vol }))
       .catch((e: unknown) => setPubError(e instanceof Error ? e.message : "Não consegui avisar os jogadores."));
   };
 
@@ -163,11 +163,19 @@ export function AdminVideoControls({ videoId, defaultAutoplay = false }: { video
           disabled={!enabled}
           onChange={(e) => setVolDrag(Number(e.target.value))}
           onPointerUp={() => {
-            if (volDrag !== null) publish(playback?.state ?? (defaultAutoplay ? "playing" : "stopped"), playing || !playback ? time : playback.position, volDrag);
+            if (volDrag !== null) {
+              // Só o volume muda: repete posição e hora do último comando, para ninguém dar seek.
+              if (playback) publish(playback.state, playback.position, volDrag, playback.at);
+              else publish(defaultAutoplay ? "playing" : "stopped", 0, volDrag);
+            }
             setVolDrag(null);
           }}
           onKeyUp={() => {
-            if (volDrag !== null) publish(playback?.state ?? (defaultAutoplay ? "playing" : "stopped"), playing || !playback ? time : playback.position, volDrag);
+            if (volDrag !== null) {
+              // Só o volume muda: repete posição e hora do último comando, para ninguém dar seek.
+              if (playback) publish(playback.state, playback.position, volDrag, playback.at);
+              else publish(defaultAutoplay ? "playing" : "stopped", 0, volDrag);
+            }
             setVolDrag(null);
           }}
           style={{ width: "100%", minHeight: 32 }}

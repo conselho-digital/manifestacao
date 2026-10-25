@@ -423,7 +423,18 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
       void supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [selfId, signedIn, self.nickname, self.team, self.shirt, self.character, self.flag]);
+  }, [selfId, signedIn, self.nickname, self.team, self.character]);
+
+  // Camisa e bandeira mudam só o presence (não derrubam o canal nem somem com os outros jogadores).
+  useEffect(() => {
+    const channel = channelRef.current;
+    const base = presenceRef.current;
+    if (!channel || !base || channel.state !== "joined") return;
+    if (base.shirt === self.shirt && base.flag === self.flag) return;
+    const next: PresenceState = { ...base, shirt: self.shirt, flag: self.flag };
+    presenceRef.current = next;
+    void channel.track(next);
+  }, [self.shirt, self.flag]);
 
   // Trocar de cartaz só atualiza o presence (não derruba o canal).
   useEffect(() => {
