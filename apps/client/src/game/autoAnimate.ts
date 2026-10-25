@@ -547,7 +547,9 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
           ang = lerp(ang, seated, sit);
           // Costas retas: o tronco inclina inteiro a partir do quadril (a coluna quase não curva) e a cabeça acompanha.
           if (l.role === "spine") lean = lerp(lean, (seat.lean * SPINE_SHARE) / spineCount, sit);
-          if (l.role === "neck") lean = lerp(lean, -0.1 / neckCount, sit);
+          // Cabeça olhando para a frente: pescoço e cabeça desfazem a inclinação do tronco.
+          if (l.role === "neck") lean = lerp(lean, (-seat.lean * 0.6) / neckCount, sit);
+          if (l.role === "head") lean = lerp(lean, -seat.lean * 0.35, sit);
           if (l.role === "hips") {
             lean = lerp(lean, seat.lean * (1 - SPINE_SHARE), sit);
             twist *= stand;
