@@ -242,7 +242,8 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
   const knockGroupRef = useRef<Group>(null);
   const kind = VEHICLES[vehicle]?.kind ?? "foot";
   const isMoto = kind === "moto";
-  const hideBody = kind !== "foot" && kind !== "moto";
+  const seated = isMoto || vehicle === "carro_som"; // quem dirige aparece sentado
+  const hideBody = kind !== "foot" && !seated;
   // Empinar: inclina corpo + moto em torno do eixo traseiro (frente +Z sobe com rotação negativa em X).
   useFrame(() => {
     const g = tiltRef.current;
@@ -293,7 +294,7 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
               url={modelUrl}
               animated
               walking={vehicle === "nenhum"}
-              pose={isMoto ? "moto" : null}
+              pose={isMoto ? "moto" : seated ? "car" : null}
               seat={MOTO_SEATS[vehicle]}
               strike={hitRef}
               knock={knock}

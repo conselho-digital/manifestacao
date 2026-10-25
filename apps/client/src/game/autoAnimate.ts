@@ -112,6 +112,8 @@ function bonesOf(root: Object3D): Bone[] {
  * pernas (pés nas pedaleiras) e braços (mãos no guidão). Cada modelo de moto tem o seu (ver MOTO_SEATS).
  */
 export interface MotoSeat {
+  /** Deslocamento lateral do quadril (m; + = lado esquerdo de quem olha para a frente) — o banco do motorista no carro. */
+  x?: number;
   hipY: number;
   z: number;
   lean: number;
@@ -123,14 +125,17 @@ export interface MotoSeat {
 /** Parte da inclinação do piloto que fica na coluna (o resto é do quadril: quanto menor, mais reta a coluna). */
 const SPINE_SHARE = 0.2;
 export const DEFAULT_MOTO_SEAT: MotoSeat = { hipY: 0.82, z: -0.05, lean: 0.6, thigh: 1.1, knee: -1.35, arm: 1.05, forearm: 0.25 };
+/** Assento do piloto/motorista por veículo (moto: guidão; carro: volante). */
 export const MOTO_SEATS: Partial<Record<VehicleId, MotoSeat>> = {
   // Custom (cruzador): banco baixo e atrás, guidão alto e recuado.
   moto: { hipY: 0.84, z: -0.5, lean: 0.45, thigh: 1.1, knee: -1.35, arm: 0.85, forearm: 0.45 },
   // Esportiva: banco atrás, tronco deitado sobre o tanque, mãos nos semiguidões baixos.
   moto2: { hipY: 0.85, z: -0.5, lean: 0.95, thigh: 0.95, knee: -1.6, arm: 1.4, forearm: 0.0 },
+  // Caminhão de som: motorista no banco da esquerda, costas retas, mãos no volante.
+  carro_som: { x: 0.35, hipY: 0.68, z: 0.7, lean: 0.18, thigh: 1.45, knee: -1.4, arm: 0.85, forearm: 0.75 },
 };
 
-export type AutoPose = "moto" | null;
+export type AutoPose = "moto" | "car" | null;
 
 /** O que está acontecendo com o personagem neste quadro (além de andar). */
 export interface AnimContext {
@@ -376,7 +381,7 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
       const strike = ctx.strike ?? null;
       const knock = ctx.knock ?? { react: -1, fall: -1 };
       t += dt;
-      sit += ((pose === "moto" ? 1 : 0) - sit) * Math.min(1, dt * 9);
+      sit += ((pose !== null ? 1 : 0) - sit) * Math.min(1, dt * 9);
       carryK += ((ctx.carry && pose === null ? 1 : 0) - carryK) * Math.min(1, dt * 8);
       const stand = 1 - sit;
       // Velocidade do avatar (pai do grupo): o balanço do próprio corpo não conta.
@@ -408,7 +413,7 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
       const seatDrop = hasRig ? seat.hipY - hipY : -0.3;
       frame.position.y = baseY + bob * stand + seatDrop * sit;
       frame.position.z = baseZ + seat.z * sit;
-      frame.position.x = baseX + 0.025 * Math.sin(phase) * w * stand * (hasRig ? 1 : 0);
+      frame.position.x = baseX + (seat.x ?? 0) * sit + 0.025 * Math.sin(phase) * w * stand * (hasRig ? 1 : 0);
       frame.rotation.x = forward * (lerp(0.03, 0.24, runK) * w * stand + (hasRig ? 0 : 0.3) * sit);
       frame.rotation.y = !hasRig ? sin * 0.07 * w * stand : 0;
       // Parado: o corpo todo balança de leve, como respirando e mudando o peso de perna.

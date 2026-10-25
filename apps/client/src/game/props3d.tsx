@@ -1,5 +1,5 @@
 import { Suspense, useEffect, useMemo, useRef, type ReactNode } from "react";
-import { Shape, type Group, type SkinnedMesh } from "three";
+import { Quaternion, Shape, Vector3, type Group, type Object3D, type SkinnedMesh } from "three";
 import { useFrame } from "@react-three/fiber";
 import { useGLTF, useTexture } from "@react-three/drei";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
@@ -123,7 +123,7 @@ export function Vehicle3D({ vehicle, team }: { vehicle: VehicleId; team?: TeamId
   if (!url) return <ProceduralVehicle vehicle={vehicle} />;
   return (
     <Suspense fallback={<ProceduralVehicle vehicle={vehicle} />}>
-      <GlbModel url={url} fallback={<ProceduralVehicle vehicle={vehicle} />} />
+      <GlbModel url={url} spinWheels fallback={<ProceduralVehicle vehicle={vehicle} />} />
     </Suspense>
   );
 }
@@ -238,6 +238,42 @@ export function ProceduralVehicle({ vehicle }: { vehicle: VehicleId }) {
 }
 
 /**
+ * Rodas que giram: os nós "wheel…" do modelo (pivô no centro da roda, raio em userData.radius) rolam em torno de X
+ * conforme o deslocamento do veículo para a frente (+Z do modelo), medido no mundo — vale para jogador local e remotos.
+ */
+function useWheelSpin(root: Object3D | null, frameRef: { current: Group | null }) {
+  const wheels = useMemo(() => {
+    const out: { node: Object3D; radius: number }[] = [];
+    root?.traverse((o) => {
+      if (o.name.startsWith("wheel")) out.push({ node: o, radius: Math.max(0.1, Number(o.userData?.radius) || 0.3) });
+    });
+    return out;
+  }, [root]);
+  const last = useRef(new Vector3());
+  const has = useRef(false);
+  const cur = useMemo(() => new Vector3(), []);
+  const fwd = useMemo(() => new Vector3(), []);
+  const q = useMemo(() => new Quaternion(), []);
+  useFrame(() => {
+    const g = frameRef.current;
+    if (!g || !wheels.length) return;
+    g.getWorldPosition(cur);
+    if (has.current) {
+      const dx = cur.x - last.current.x;
+      const dz = cur.z - last.current.z;
+      if (dx * dx + dz * dz < 25) {
+        g.getWorldQuaternion(q);
+        fwd.set(0, 0, 1).applyQuaternion(q);
+        const d = dx * fwd.x + dz * fwd.z;
+        for (const w of wheels) w.node.rotation.x += d / w.radius;
+      }
+    }
+    last.current.copy(cur);
+    has.current = true;
+  });
+}
+
+/**
  * Modelo glTF (personagem ou objeto). Com `animated`, ganha animação automática (clipes do arquivo ou balanço por
  * código, ver autoAnimate.ts); `walking` falso (de veículo) deixa o personagem parado.
  */
@@ -248,6 +284,7 @@ export function GlbModel({
   walking = true,
   pose = null,
   seat,
+  spinWheels = false,
   strike,
   knock,
   carry = false,
@@ -258,8 +295,10 @@ export function GlbModel({
   walking?: boolean;
   /** "moto": o personagem aparece sentado, de piloto. */
   pose?: AutoPose;
-  /** Como senta na moto (por modelo de moto). */
+  /** Como senta no veículo (por modelo). */
   seat?: MotoSeat;
+  /** Veículo: as rodas (nós "wheel…") giram conforme ele anda. */
+  spinWheels?: boolean;
   /** Golpe em andamento (bandeira ou soco). */
   strike?: StrikeRefs;
   /** Segurando a bandeira (a pé). */
@@ -269,12 +308,12 @@ export function GlbModel({
 }) {
   return (
     <ModelBoundary key={url} fallback={fallback}>
-      <GlbModelInner url={url} animated={animated} walking={walking} pose={pose} seat={seat} strike={strike} knock={knock} carry={carry} />
+      <GlbModelInner url={url} animated={animated} walking={walking} pose={pose} seat={seat} spinWheels={spinWheels} strike={strike} knock={knock} carry={carry} />
     </ModelBoundary>
   );
 }
 
-function GlbModelInner({ url, animated, walking, pose, seat, strike, knock, carry }: { url: string; animated: boolean; walking: boolean; pose: AutoPose; seat?: MotoSeat; strike?: StrikeRefs; knock?: KnockRefs; carry: boolean }) {
+function GlbModelInner({ url, animated, walking, pose, seat, spinWheels, strike, knock, carry }: { url: string; animated: boolean; walking: boolean; pose: AutoPose; seat?: MotoSeat; spinWheels: boolean; strike?: StrikeRefs; knock?: KnockRefs; carry: boolean }) {
   const { scene, animations } = useGLTF(url);
   // Clone por uso: o cache do useGLTF devolve a MESMA cena; sem clonar, o
   // mesmo modelo em dois jogadores brigaria pelo mesmo pai (só um aparece).
@@ -302,6 +341,7 @@ function GlbModelInner({ url, animated, walking, pose, seat, strike, knock, carr
     [instance],
   );
   const frameRef = useRef<Group>(null);
+  useWheelSpin(spinWheels ? instance : null, frameRef);
   const animRef = useRef<AutoAnimator | null>(null);
   useEffect(() => {
     const frame = frameRef.current;
