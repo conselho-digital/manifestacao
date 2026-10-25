@@ -43,11 +43,16 @@ function cleanName(name: string): string {
 function sideOf(name: string): 1 | -1 | 0 {
   if (name.includes("left")) return 1;
   if (name.includes("right")) return -1;
-  return 0;
+  // Sufixo/prefixo curto, como "upperarm_l", "hand.R", "l_foot" (o three troca "." e "_" por espaço aqui).
+  const m = / (l|r)$/.exec(name) ?? /^(l|r) /.exec(name);
+  return m ? (m[1] === "l" ? 1 : -1) : 0;
 }
 
-function roleOf(name: string): Role | null {
-  if (/toe/.test(name)) return /end$|tip/.test(name) ? null : "toe";
+function roleOf(raw: string): Role | null {
+  const name = raw.replace(/ (l|r)$/, "").replace(/^(l|r) /, "");
+  // Dedos, rosto e ossos auxiliares (torção, correção) não são movidos: o osso principal já leva a pele.
+  if (/\b(thumb|index|middle|ring|pinky|finger)\b|eye|jaw|brow|lid|mouth|tongue|twist|roll|helper|corrective|ik|pole/.test(name)) return null;
+  if (/toe|ball/.test(name)) return /end$|tip/.test(name) ? null : "toe";
   if (/thigh|upleg|upperleg|upper leg/.test(name)) return "thigh";
   if (/(foot|ankle)$/.test(name)) return "foot";
   if (/forearm|lowerarm|lower arm|elbow/.test(name)) return "forearm";
@@ -58,6 +63,21 @@ function roleOf(name: string): Role | null {
   if (/knee|calf|shin|lowerleg|lower leg/.test(name) || /(left|right)leg$/.test(name) || /^leg (left|right)$/.test(name)) return "knee";
   if (/(left|right)arm$/.test(name) || /upperarm|upper arm|shoulder 2/.test(name)) return "arm";
   return null;
+}
+
+/**
+ * O arquivo já traz um esqueleto humanoide que o jogo entende (braços, antebraços, coxas, joelhos e pés dos dois lados)?
+ * Se sim, esse esqueleto e a pele já feitos no arquivo valem mais que os pontos marcados à mão.
+ */
+export function hasHumanoidSkeleton(root: Object3D): boolean {
+  const seen = new Set<string>();
+  for (const b of bonesOf(root)) {
+    const n = cleanName(b.name);
+    const role = roleOf(n);
+    const side = sideOf(n);
+    if (role && side !== 0 && ["arm", "forearm", "thigh", "knee", "foot"].includes(role)) seen.add(`${role}${side}`);
+  }
+  return ["arm", "forearm", "thigh", "knee", "foot"].every((r) => seen.has(`${r}1`) && seen.has(`${r}-1`));
 }
 
 function depthOf(o: Object3D): number {

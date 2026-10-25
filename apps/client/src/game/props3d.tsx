@@ -8,7 +8,7 @@ import { useProximitySound } from "./ProximitySound.js";
 import { useUserGestureUnlocked } from "./useUserGesture.js";
 import { vehicleModelUrl } from "./models.js";
 import { ModelBoundary } from "./ModelBoundary.js";
-import { createAutoAnimator, type AutoAnimator, type AutoPose } from "./autoAnimate.js";
+import { createAutoAnimator, hasHumanoidSkeleton, type AutoAnimator, type AutoPose } from "./autoAnimate.js";
 import { getBakedRig, instantiateRig } from "./autoRig.js";
 import { rigForUrl } from "../config/rigs.js";
 import { activeStrike, type StrikeRefs } from "./strike.js";
@@ -276,7 +276,10 @@ function GlbModelInner({ url, animated, walking, pose, strike, knock, carry }: {
   // Clone por uso: o cache do useGLTF devolve a MESMA cena; sem clonar, o
   // mesmo modelo em dois jogadores brigaria pelo mesmo pai (só um aparece).
   // Com marcações do editor do admin, o esqueleto é montado por código (autoRig.ts); senão, usa o do arquivo.
-  const rig = animated ? rigForUrl(url) : null;
+  // Esqueleto do arquivo (reconhecido sozinho) vale mais que pontos marcados à mão, salvo se o admin pediu os dele ("own").
+  const saved = animated ? rigForUrl(url) : null;
+  const native = useMemo(() => hasHumanoidSkeleton(scene), [scene]);
+  const rig = saved && (!native || saved.own) ? saved : null;
   const instance = useMemo(() => {
     if (rig) {
       try {

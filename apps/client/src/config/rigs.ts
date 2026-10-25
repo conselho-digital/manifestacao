@@ -37,6 +37,8 @@ export interface RigMarks {
   knee: Pt;
   ankle: Pt;
   toe: Pt;
+  /** Usar estes pontos mesmo que o arquivo já tenha esqueleto próprio. */
+  own?: boolean;
 }
 
 const MAX = 100;
@@ -80,7 +82,8 @@ export function cleanRig(v: unknown): RigMarks | null {
   const ankle = cleanPt(o.ankle);
   if (!neck || !pelvis || !shoulder || !hand || !hip || !ankle) return null;
   const opt = (k: string) => (o[k] === undefined ? undefined : (cleanPt(o[k]) ?? undefined));
-  return fillRig({ yaw, neck, pelvis, shoulder, hand, hip, ankle, head: opt("head"), elbow: opt("elbow"), thigh: opt("thigh"), knee: opt("knee"), toe: opt("toe") });
+  const rig = fillRig({ yaw, neck, pelvis, shoulder, hand, hip, ankle, head: opt("head"), elbow: opt("elbow"), thigh: opt("thigh"), knee: opt("knee"), toe: opt("toe") });
+  return o.own === true ? { ...rig, own: true } : rig;
 }
 
 let rigs: Record<string, RigMarks> = {};

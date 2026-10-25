@@ -16,7 +16,8 @@ import {
 } from "three";
 import { RIG_POINTS, type RigKey, type RigMarks, type RigYaw, type Pt } from "../config/rigs.js";
 import { bakeRig, instantiateRig, orientModel } from "../game/autoRig.js";
-import { createAutoAnimator } from "../game/autoAnimate.js";
+import { createAutoAnimator, hasHumanoidSkeleton } from "../game/autoAnimate.js";
+import { autoMarks } from "../game/autoMarks.js";
 
 const COLORS: Record<RigKey, string> = {
   head: "#e599f7",
@@ -259,11 +260,13 @@ export function RigEditor({ scene, title, initial, busy, onSave, onSkip, onCance
   const [marks, setMarks] = useState<Marks>(() =>
     initial
       ? { head: initial.head, neck: initial.neck, shoulder: initial.shoulder, elbow: initial.elbow, hand: initial.hand, pelvis: initial.pelvis, hip: initial.hip, knee: initial.knee, ankle: initial.ankle, toe: initial.toe }
-      : guessMarks(oriented.size),
+      : (autoMarks(oriented) ?? guessMarks(oriented.size)),
   );
   const [touched, setTouched] = useState(Boolean(initial));
   const [selected, setSelected] = useState<RigKey>("neck");
   const [testing, setTesting] = useState(false);
+  const native = useMemo(() => hasHumanoidSkeleton(scene), [scene]);
+  const [own, setOwn] = useState(Boolean(initial?.own));
   const [glError, setGlError] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const boxRef = useRef<HTMLDivElement>(null);
@@ -280,7 +283,7 @@ export function RigEditor({ scene, title, initial, busy, onSave, onSkip, onCance
 
   // Ao girar sem ter mexido nos pontos, refaz o chute (o modelo muda de largura/profundidade).
   useEffect(() => {
-    if (!touched) setMarks(guessMarks(oriented.size));
+    if (!touched) setMarks((autoMarks(oriented) ?? guessMarks(oriented.size)));
   }, [oriented, touched]);
 
   // Enquadramento: vista frontal ortográfica com o modelo inteiro, na proporção do palco.
@@ -345,7 +348,7 @@ export function RigEditor({ scene, title, initial, busy, onSave, onSkip, onCance
   };
 
   // A coxa não é marcada: fica no meio entre quadril e joelho.
-  const rig: RigMarks = useMemo(() => ({ yaw, ...marks, thigh: mid(marks.hip, marks.knee) }), [yaw, marks]);
+  const rig: RigMarks = useMemo(() => ({ yaw, ...marks, thigh: mid(marks.hip, marks.knee), ...(native && own ? { own: true } : {}) }), [yaw, marks, native, own]);
   const lines: [Pt, Pt][] = [
     [marks.head, marks.neck],
     [marks.neck, marks.pelvis],
@@ -462,7 +465,7 @@ export function RigEditor({ scene, title, initial, busy, onSave, onSkip, onCance
             style={{ ...corner, bottom: 10, left: 10 }}
             onClick={() => {
               setTouched(false);
-              setMarks(guessMarks(oriented.size));
+              setMarks((autoMarks(oriented) ?? guessMarks(oriented.size)));
             }}
           >
             Refazer chute
@@ -477,6 +480,14 @@ export function RigEditor({ scene, title, initial, busy, onSave, onSkip, onCance
       </div>
 
       <footer style={{ flexShrink: 0, padding: "8px 14px max(10px, env(safe-area-inset-bottom))", display: "flex", flexDirection: "column", gap: 8 }}>
+        {native && (
+          <label style={{ display: "flex", gap: 8, alignItems: "flex-start", fontSize: "var(--t-ui)" }}>
+            <input type="checkbox" checked={own} onChange={(e) => setOwn(e.target.checked)} style={{ width: 22, height: 22, flexShrink: 0 }} />
+            <span>
+              Este arquivo já tem esqueleto próprio, que o jogo usa sozinho. Marque para usar estes pontos no lugar.
+            </span>
+          </label>
+        )}
         {!testing && (
           <div style={{ display: "flex", gap: 6, overflowX: "auto", paddingBottom: 2 }}>
             {RIG_POINTS.map((pt, i) => (

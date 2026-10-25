@@ -20,6 +20,7 @@ import {
   type TeamId,
 } from "@manifestacao/shared";
 import { CHARACTER_MODELS } from "../game/models.js";
+import { hasHumanoidSkeleton } from "../game/autoAnimate.js";
 import {
   MAX_LABEL_LENGTH,
   currentModelOverrides,
@@ -522,14 +523,22 @@ function ModelsTab({ busy, run }: TabProps) {
   const [rigs, setRigs] = useState<Record<string, RigMarks>>(() => currentRigs());
   const [session, setSession] = useState<RigSession | null>(null);
   const [editorError, setEditorError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
 
   /** Personagem novo: antes de enviar, abre o editor para marcar frente, pernas, braços e cabeça. */
   const startUpload = async (slot: string, title: string, file: File) => {
     setEditorError(null);
+    setNotice(null);
     try {
       const copy = await snapshotFile(file);
       if (!slot.startsWith("character:")) return void setSlot(slot, copy);
-      setSession({ slot, title, scene: await parseGlb(await copy.arrayBuffer()), file: copy, url: null });
+      const scene = await parseGlb(await copy.arrayBuffer());
+      // Esqueleto humanoide já no arquivo (braços, mãos, pernas...): reconhecido sozinho, sem marcar pontos.
+      if (hasHumanoidSkeleton(scene)) {
+        setNotice("Esqueleto reconhecido automaticamente no arquivo: não precisa marcar pontos. (Dá para criar um esqueleto manual no botão ao lado, se preferir.)");
+        return void setSlot(slot, copy);
+      }
+      setSession({ slot, title, scene, file: copy, url: null });
     } catch (e) {
       setEditorError(e instanceof Error ? e.message : "Falha ao ler o arquivo.");
     }
@@ -656,6 +665,7 @@ function ModelsTab({ busy, run }: TabProps) {
       </p>
 
       {editorError && <p style={{ ...hint, color: "var(--danger)" }}>{editorError}</p>}
+      {notice && <p style={{ ...hint, color: "var(--accent)" }}>{notice}</p>}
       <h3 style={sectionTitle}>Personagens</h3>
       <p style={hint}>Ao enviar um personagem, abre o editor para marcar a frente, a cabeça, os braços e as pernas.</p>
       {CHARACTER_IDS.map((c) => (
