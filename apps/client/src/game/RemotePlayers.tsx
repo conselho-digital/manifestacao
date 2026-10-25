@@ -115,7 +115,7 @@ export function RemotePlayers({ ids, playersRef, signs }: RemotePlayersProps) {
             hitRef={hitRefFor(id)}
             knock={knockFor(id)}
             sign={p.signId ? signs.get(p.signId) ?? null : null}
-            modelUrl={modelUrlFor(p.character)}
+            modelUrl={modelUrlFor(p.character, p.team)}
           />
         );
       })}

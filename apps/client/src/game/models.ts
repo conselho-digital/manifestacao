@@ -8,27 +8,19 @@ import { modelOverride } from "../config/gameConfig.js";
  *
  * Fontes CC0 recomendadas (ver CLAUDE.md §6 e CREDITS.md): KayKit, Quaternius.
  */
-export const CHARACTER_MODELS: Record<CharacterId, string | null> = {
-  homem_comum: null,
-  // "Sophia" (Renderpeople), com esqueleto humanoide reconhecido sozinho.
-  mulher_comum: "/models/characters/mulher_comum.glb",
-};
+/** Modelos que já vêm no jogo: um por personagem e por equipe (roupa da equipe), com esqueleto humanoide reconhecido sozinho. */
+const SHIPPED_PREFIX: Record<CharacterId, string> = { homem_comum: "homem", mulher_comum: "mulher" };
+export function shippedModel(character: CharacterId, team: TeamId): string | null {
+  return Object.hasOwn(SHIPPED_PREFIX, character) ? `/models/characters/${SHIPPED_PREFIX[character]}_${team}.glb` : null;
+}
 
 /**
- * Modelo do personagem (igual para qualquer equipe): o enviado no admin, senão o que já vem no jogo, senão o boneco geométrico.
- * Modelos antigos enviados por equipe só valem se não houver o geral.
+ * Modelo do personagem na equipe: o enviado no admin para a equipe → o enviado para todas → o que já vem no jogo
+ * (camisa da equipe) → o boneco geométrico.
  */
-export function modelUrlFor(character: CharacterId): string | null {
-  // Defesa em profundidade: só lê se for chave própria do registro (evita
-  // resolver para algo herdado do prototype caso o valor não tenha passado
-  // por isCharacterId antes de chegar aqui).
-  if (!Object.hasOwn(CHARACTER_MODELS, character)) return null;
-  return (
-    modelOverride(`character:${character}`) ??
-    CHARACTER_MODELS[character] ??
-    TEAM_IDS.map((t) => modelOverride(`character:${character}:${t}`)).find(Boolean) ??
-    null
-  );
+export function modelUrlFor(character: CharacterId, team: TeamId = TEAM_IDS[0]!): string | null {
+  if (!Object.hasOwn(SHIPPED_PREFIX, character)) return null;
+  return modelOverride(`character:${character}:${team}`) ?? modelOverride(`character:${character}`) ?? shippedModel(character, team);
 }
 
 export function vehicleModelUrl(vehicle: VehicleId): string | null {

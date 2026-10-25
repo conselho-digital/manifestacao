@@ -19,7 +19,7 @@ import {
   isCharacterId,
   type TeamId,
 } from "@manifestacao/shared";
-import { CHARACTER_MODELS } from "../game/models.js";
+import { shippedModel } from "../game/models.js";
 import { hasHumanoidSkeleton } from "../game/autoAnimate.js";
 import {
   MAX_LABEL_LENGTH,
@@ -533,10 +533,12 @@ function ScreenTab({ busy, run }: TabProps) {
   );
 }
 
-/** Modelo que já acompanha o jogo para um slot geral de personagem (ex.: "character:mulher_comum"), se houver. */
-function shippedModel(slot: string): string | null {
-  const m = /^character:([a-z_]+)$/.exec(slot);
-  return m && isCharacterId(m[1]) ? (CHARACTER_MODELS[m[1]] ?? null) : null;
+/** Modelo que já acompanha o jogo para um slot de personagem ("character:<id>" ou "character:<id>:<equipe>"), se houver. */
+function shippedForSlot(slot: string): string | null {
+  const m = /^character:([a-z_]+)(?::([a-z]+))?$/.exec(slot);
+  if (!m || !isCharacterId(m[1])) return null;
+  const team = m[2] && (TEAM_IDS as string[]).includes(m[2]) ? (m[2] as TeamId) : TEAM_IDS[0]!;
+  return shippedModel(m[1], team);
 }
 
 function ModelsTab({ busy, run }: TabProps) {
@@ -566,7 +568,7 @@ function ModelsTab({ busy, run }: TabProps) {
   };
 
   const editExisting = async (slot: string, title: string) => {
-    const url = models[slot] ?? shippedModel(slot);
+    const url = models[slot] ?? shippedForSlot(slot);
     if (!url) return;
     setEditorError(null);
     try {
@@ -619,7 +621,7 @@ function ModelsTab({ busy, run }: TabProps) {
     if (!isModelSlot(slot)) return null;
     const has = Boolean(models[slot]);
     // Personagem que já vem no jogo (ex.: as mulheres): dá para editar o esqueleto dele sem enviar arquivo.
-    const shipped = has ? null : shippedModel(slot);
+    const shipped = has ? null : shippedForSlot(slot);
     const rigUrl = models[slot] ?? shipped;
     return (
       <div key={slot} style={{ display: "flex", flexDirection: "column", gap: 6, padding: "6px 0" }}>
@@ -688,14 +690,13 @@ function ModelsTab({ busy, run }: TabProps) {
       {editorError && <p style={{ ...hint, color: "var(--danger)" }}>{editorError}</p>}
       {notice && <p style={{ ...hint, color: "var(--accent)" }}>{notice}</p>}
       <h3 style={sectionTitle}>Personagens</h3>
-      <p style={hint}>Só Homem e Mulher, iguais em qualquer equipe. Se o arquivo já tiver esqueleto, ele é reconhecido sozinho; senão, abre o editor para marcar frente, cabeça, braços e pernas.</p>
+      <p style={hint}>Homem e Mulher, com a roupa de cada equipe já pronta no jogo. Enviar um arquivo substitui a roupa. Se o arquivo já tiver esqueleto, ele é reconhecido sozinho; senão, abre o editor para marcar frente, cabeça, braços e pernas.</p>
       {CHARACTER_IDS.map((c) => (
         <div key={c} style={{ display: "flex", flexDirection: "column", gap: 4, padding: "8px 0" }}>
           <strong style={{ fontSize: "var(--t-ui)" }}>{CHARACTERS[c].label}</strong>
-          {/* O modelo é o mesmo para qualquer equipe. */}
-          {renderSlot(`character:${c}`, "Modelo (vale para todas as equipes)")}
-          {/* Modelos antigos por equipe: só valem se não houver o modelo geral; dá para remover. */}
-          {TEAM_IDS.filter((t) => models[`character:${c}:${t}`]).map((t) => renderSlot(`character:${c}:${t}`, `Antigo da equipe ${TEAMS[t].label} (usado só se não houver o modelo acima)`))}
+          {/* Cada equipe já tem a sua roupa pronta no jogo; enviar um modelo aqui substitui a roupa daquela equipe. */}
+          {TEAM_IDS.map((t) => renderSlot(`character:${c}:${t}`, `Equipe ${TEAMS[t].label}`))}
+          {renderSlot(`character:${c}`, "Todas as equipes (só vale onde a equipe não tem modelo próprio)")}
         </div>
       ))}
 

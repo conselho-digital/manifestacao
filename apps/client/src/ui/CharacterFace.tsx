@@ -1,7 +1,7 @@
 import { Suspense, useEffect, useRef, useState } from "react";
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { Box3, type Bone, type Group, type Object3D, Vector3 } from "three";
-import type { CharacterId } from "@manifestacao/shared";
+import type { CharacterId, TeamId } from "@manifestacao/shared";
 import { AvatarGlyph } from "./AvatarGlyph.js";
 import { GlbModel } from "../game/props3d.js";
 import { modelUrlFor } from "../game/models.js";
@@ -161,10 +161,9 @@ function Portrait({ character, url, size, border, variant = "face", height }: { 
  * Foto do rosto do personagem. Se o admin enviou um modelo 3D para ele, o retrato é tirado desse modelo (o que
  * vale é o enviado); senão usa a foto padrão (public/faces) e, faltando o arquivo, o ícone desenhado.
  */
-export function CharacterFace({ color, character, size = 64 }: { color: string; character: CharacterId; size?: number }) {
+export function CharacterFace({ color, character, team, size = 64 }: { color: string; character: CharacterId; team?: TeamId; size?: number }) {
   const [failed, setFailed] = useState(false);
-  // O modelo é o mesmo para qualquer equipe.
-  const uploaded = modelUrlFor(character);
+  const uploaded = modelUrlFor(character, team);
   const border = `3px solid ${color}`;
   // Qualquer personagem com modelo 3D (enviado ou que já vem no jogo) tem o retrato tirado do próprio modelo: assim a foto
   // sempre acompanha o modelo atual. A foto padrão (public/faces) só vale para os bonecos geométricos.
@@ -186,8 +185,8 @@ export function CharacterFace({ color, character, size = 64 }: { color: string; 
 }
 
 /** Foto de corpo inteiro do personagem (tirada do modelo 3D; sem modelo, a silhueta desenhada). */
-export function CharacterBody({ color, character, width = 120, height = 190 }: { color: string; character: CharacterId; width?: number; height?: number }) {
-  const url = modelUrlFor(character);
+export function CharacterBody({ color, character, team, width = 120, height = 190 }: { color: string; character: CharacterId; team?: TeamId; width?: number; height?: number }) {
+  const url = modelUrlFor(character, team);
   if (url) return <Portrait key={`${character}|${url}|body`} character={character} url={url} size={width} height={height} border="none" variant="body" />;
   return (
     <div style={{ width, height, display: "flex", alignItems: "center", justifyContent: "center" }}>

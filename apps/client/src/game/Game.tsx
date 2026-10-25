@@ -372,7 +372,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           character={avatar.character}
           sign={signId ? signs.get(signId) ?? null : null}
           vehicle={vehicle}
-          modelUrl={modelUrlFor(avatar.character)}
+          modelUrl={modelUrlFor(avatar.character, avatar.team)}
           inputRef={inputRef}
           cameraYawRef={cameraYawRef}
           cameraPitchRef={cameraPitchRef}
