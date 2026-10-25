@@ -359,19 +359,19 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
           }
           case "knee": {
             const idleA = -(0.05 + 0.03 * Math.max(0, isLeft ? sway : -sway));
-            const gait = -(lerp(0.08, 0.3, runK) + lerp(0.6, 1.6, runK) * Math.pow(Math.max(0, cl), 1.3));
+            const gait = -(lerp(0.1, 0.3, runK) + lerp(0.95, 1.6, runK) * Math.pow(Math.max(0, cl), 1.3));
             ang = idleA * (1 - w) + w * gait;
             break;
           }
           case "foot": {
             const thigh = thighAmp * sl + lerp(0.02, 0.12, runK);
-            const knee = -(lerp(0.08, 0.3, runK) + lerp(0.6, 1.6, runK) * Math.pow(Math.max(0, cl), 1.3));
+            const knee = -(lerp(0.1, 0.3, runK) + lerp(0.95, 1.6, runK) * Math.pow(Math.max(0, cl), 1.3));
             ang = w * (-0.78 * (thigh + knee) + lerp(0.08, 0.12, runK) * sl);
             break;
           }
           case "toe":
             // Os dedos dobram na impulsão (perna atrás).
-            ang = w * lerp(0.35, 0.55, runK) * Math.max(0, -sl);
+            ang = w * lerp(0.5, 0.6, runK) * Math.max(0, -sl);
             break;
           case "arm": {
             const idleA = 0.17 + 0.015 * Math.sin(t * 1.6 + l.side);
@@ -386,17 +386,17 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
           }
           case "hips":
             // Quadril gira com a perna que avança e pende para o lado do apoio; parado, muda o peso devagar.
-            twist = -forward * (w * lerp(0.1, 0.2, runK) * sin + 0.035 * Math.sin(t * 0.4) * (1 - w));
+            twist = -forward * (w * lerp(0.08, 0.2, runK) * sin + 0.035 * Math.sin(t * 0.4) * (1 - w));
             roll = w * 0.045 * sin + 0.03 * sway * (1 - w);
             break;
           case "spine":
             // Coluna contra-gira e respira.
-            twist = (forward * w * lerp(0.16, 0.3, runK) * sin) / spineCount;
+            twist = (forward * w * lerp(0.07, 0.3, runK) * sin) / spineCount;
             lean = (0.025 + 0.012 * breathe * (1 - w * 0.5)) / spineCount;
             roll = (-0.02 * sway * (1 - w)) / spineCount;
             break;
           case "neck":
-            twist = (0.09 * look * (1 - w) - 0.35 * forward * w * lerp(0.16, 0.3, runK) * sin) / neckCount;
+            twist = (0.09 * look * (1 - w) - 0.35 * forward * w * lerp(0.07, 0.3, runK) * sin) / neckCount;
             lean = (0.03 + 0.02 * Math.cos(2 * phase) * w) / neckCount;
             roll = (0.02 * Math.sin(t * 0.35) * (1 - w)) / neckCount;
             break;
