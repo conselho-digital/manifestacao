@@ -320,7 +320,7 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
         <Html
           position={[0, sign ? 3.2 : 2.2, 0]}
           center
-          distanceFactor={14}
+          distanceFactor={8}
           // Sem `occlude`: ele lança um raio contra a cena inteira por etiqueta a cada frame (pesa com muita gente).
           // O padrão do drei é um z-index enorme, que passava por cima de loja/opções.
           zIndexRange={[3, 0]}
@@ -332,6 +332,12 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
             fontWeight: 700,
             color: "#f5f6f7",
             textShadow: "0 1px 2px #000",
+            background: "rgba(0,0,0,.4)",
+            padding: "2px 8px",
+            borderRadius: 10,
+            maxWidth: 140,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
           }}
         >
           {name}

@@ -320,12 +320,17 @@ Deno.serve(async (req) => {
 
     // Garante o item SEMPRE (idempotente): mesmo se uma tentativa anterior
     // marcou 'paid' mas falhou ao conceder, o reenvio recria aqui.
-    await admin
+    const { error: grantErr } = await admin
       .from("entitlements")
       .upsert(
         { user_id: order.user_id, item_id: order.item_id, source: "purchase" },
         { onConflict: "user_id,item_id", ignoreDuplicates: true },
       );
+    // Falha ao conceder: não marca como pago; o Mercado Pago reenvia o aviso e tentamos de novo.
+    if (grantErr) {
+      console.error("entitlement_upsert_failed", grantErr.code);
+      return new Response("db_error", { status: 500 });
+    }
 
     // Transição atômica pending -> paid. Só quem efetivamente transicionou
     // (linhas retornadas) envia o recibo, evitando e-mail duplicado em reenvios.
