@@ -1,4 +1,4 @@
-import type { CharacterId, TeamId, VehicleId } from "@manifestacao/shared";
+import { TEAM_IDS, type CharacterId, type TeamId, type VehicleId } from "@manifestacao/shared";
 import { modelOverride } from "../config/gameConfig.js";
 
 /**
@@ -14,16 +14,19 @@ export const CHARACTER_MODELS: Record<CharacterId, string | null> = {
   mulher_comum: "/models/characters/mulher_comum.glb",
 };
 
-/** Prioridade: modelo do personagem NA equipe → modelo do personagem → padrão estático. */
-export function modelUrlFor(character: CharacterId, team?: TeamId): string | null {
+/**
+ * Modelo do personagem (igual para qualquer equipe): o enviado no admin, senão o que já vem no jogo, senão o boneco geométrico.
+ * Modelos antigos enviados por equipe só valem se não houver o geral.
+ */
+export function modelUrlFor(character: CharacterId): string | null {
   // Defesa em profundidade: só lê se for chave própria do registro (evita
   // resolver para algo herdado do prototype caso o valor não tenha passado
   // por isCharacterId antes de chegar aqui).
   if (!Object.hasOwn(CHARACTER_MODELS, character)) return null;
   return (
-    (team ? modelOverride(`character:${character}:${team}`) : null) ??
     modelOverride(`character:${character}`) ??
     CHARACTER_MODELS[character] ??
+    TEAM_IDS.map((t) => modelOverride(`character:${character}:${t}`)).find(Boolean) ??
     null
   );
 }

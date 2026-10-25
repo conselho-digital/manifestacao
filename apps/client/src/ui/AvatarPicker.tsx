@@ -338,7 +338,7 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
                       </svg>
                     </span>
                   )}
-                  <CharacterFace color={teamColorHex} character={id} team={team} />
+                  <CharacterFace color={teamColorHex} character={id} />
                   <span style={{ fontSize: "var(--t-ui)", fontWeight: 700, color: "var(--ink)", textAlign: "center" }}>
                     {CHARACTERS[id].label}
                   </span>

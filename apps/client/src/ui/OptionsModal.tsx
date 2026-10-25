@@ -222,7 +222,7 @@ export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin, onD
                     cursor: "pointer",
                   }}
                 >
-                  <CharacterFace color={teamColorHex} character={id} team={team} />
+                  <CharacterFace color={teamColorHex} character={id} />
                   <span style={{ fontSize: "var(--t-ui)", fontWeight: 700, color: "var(--ink)", textAlign: "center" }}>
                     {CHARACTERS[id].label}
                   </span>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AmbientLight, Color, DirectionalLight, Group, PerspectiveCamera, Scene, WebGLRenderer } from "three";
-import { CHARACTERS, CHARACTER_IDS, TEAMS, TEAM_IDS, type CharacterId, type TeamId } from "@manifestacao/shared";
+import { CHARACTERS, CHARACTER_IDS, type CharacterId } from "@manifestacao/shared";
 import { mergeModels, snapshotFile, uploadModel } from "../config/adminApi.js";
 import { buildCharacter, exportGlb, loadPhoto, makeCutout, type Cutout, type LoadedPhoto } from "../config/photoTo3d.js";
 
@@ -93,7 +93,6 @@ export function AdminPhoto3d({ busy, run }: Props) {
   const [model, setModel] = useState<Group | null>(null);
   const [glb, setGlb] = useState<Blob | null>(null);
   const [character, setCharacter] = useState<CharacterId>(CHARACTER_IDS[0]!);
-  const [team, setTeam] = useState<TeamId | "">("");
   const cutRef = useRef<HTMLCanvasElement>(null);
 
   // Refaz o recorte ao trocar a foto ou a tolerância (rápido: a foto já está em memória).
@@ -153,7 +152,7 @@ export function AdminPhoto3d({ busy, run }: Props) {
   const glbUrl = useMemo(() => (glb ? URL.createObjectURL(glb) : null), [glb]);
   useEffect(() => () => (glbUrl ? URL.revokeObjectURL(glbUrl) : undefined), [glbUrl]);
 
-  const slot = useMemo(() => (team ? `character:${character}:${team}` : `character:${character}`), [character, team]);
+  const slot = useMemo(() => `character:${character}`, [character]);
   const use = () => {
     if (!glb) return;
     void run(async () => {
@@ -235,14 +234,6 @@ export function AdminPhoto3d({ busy, run }: Props) {
               {CHARACTER_IDS.map((c) => (
                 <option key={c} value={c}>
                   {CHARACTERS[c].label}
-                </option>
-              ))}
-            </select>
-            <select aria-label="Equipe" value={team} onChange={(e) => setTeam(e.target.value as TeamId | "")} style={{ ...field, flex: "1 1 160px" }}>
-              <option value="">Todas as equipes</option>
-              {TEAM_IDS.map((t) => (
-                <option key={t} value={t}>
-                  {TEAMS[t].label}
                 </option>
               ))}
             </select>

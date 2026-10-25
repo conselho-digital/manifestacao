@@ -688,14 +688,14 @@ function ModelsTab({ busy, run }: TabProps) {
       {editorError && <p style={{ ...hint, color: "var(--danger)" }}>{editorError}</p>}
       {notice && <p style={{ ...hint, color: "var(--accent)" }}>{notice}</p>}
       <h3 style={sectionTitle}>Personagens</h3>
-      <p style={hint}>Ao enviar um personagem, abre o editor para marcar a frente, a cabeça, os braços e as pernas.</p>
+      <p style={hint}>Só Homem e Mulher, iguais em qualquer equipe. Se o arquivo já tiver esqueleto, ele é reconhecido sozinho; senão, abre o editor para marcar frente, cabeça, braços e pernas.</p>
       {CHARACTER_IDS.map((c) => (
         <div key={c} style={{ display: "flex", flexDirection: "column", gap: 4, padding: "8px 0" }}>
           <strong style={{ fontSize: "var(--t-ui)" }}>{CHARACTERS[c].label}</strong>
-          {renderSlot(`character:${c}`, "Geral (todas as equipes)")}
-          {TEAM_IDS.map((t) => (
-            renderSlot(`character:${c}:${t}`, `Equipe ${TEAMS[t].label}`)
-          ))}
+          {/* O modelo é o mesmo para qualquer equipe. */}
+          {renderSlot(`character:${c}`, "Modelo (vale para todas as equipes)")}
+          {/* Modelos antigos por equipe: só valem se não houver o modelo geral; dá para remover. */}
+          {TEAM_IDS.filter((t) => models[`character:${c}:${t}`]).map((t) => renderSlot(`character:${c}:${t}`, `Antigo da equipe ${TEAMS[t].label} (usado só se não houver o modelo acima)`))}
         </div>
       ))}
 
