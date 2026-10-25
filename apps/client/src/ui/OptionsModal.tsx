@@ -13,7 +13,7 @@ import {
   type TeamId,
 } from "@manifestacao/shared";
 import { GRAPHICS_LEVELS, type GraphicsLevel } from "../config/graphics.js";
-import { CharacterFace } from "./CharacterFace.js";
+import { CharacterBody } from "./CharacterFace.js";
 import { TeamFlagIcon } from "./TeamFlagIcon.js";
 import { LegalLinks } from "./LegalPage.js";
 
@@ -198,7 +198,7 @@ export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin, onD
             style={{
               marginTop: 6,
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
               gap: 10,
             }}
           >
@@ -222,7 +222,7 @@ export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin, onD
                     cursor: "pointer",
                   }}
                 >
-                  <CharacterFace color={teamColorHex} character={id} />
+                  <CharacterBody color={teamColorHex} character={id} width={132} height={200} />
                   <span style={{ fontSize: "var(--t-ui)", fontWeight: 700, color: "var(--ink)", textAlign: "center" }}>
                     {CHARACTERS[id].label}
                   </span>

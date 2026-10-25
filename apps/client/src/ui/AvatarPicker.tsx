@@ -26,7 +26,7 @@ import { consumePendingGoogleRedirect, signInWithGoogle, signOut } from "../auth
 import { GoogleSignInButton } from "../auth/GoogleSignInButton.js";
 import { isOnlineEnabled } from "../config/env.js";
 import { TeamFlagIcon } from "./TeamFlagIcon.js";
-import { CharacterFace } from "./CharacterFace.js";
+import { CharacterBody } from "./CharacterFace.js";
 
 export const AVATAR_STORAGE_KEY = "manifestacao.avatar";
 const STORAGE_KEY = AVATAR_STORAGE_KEY;
@@ -286,7 +286,7 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
             style={{
               marginTop: 14,
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fill, minmax(96px, 1fr))",
+              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
               gap: 10,
             }}
           >
@@ -338,7 +338,7 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
                       </svg>
                     </span>
                   )}
-                  <CharacterFace color={teamColorHex} character={id} />
+                  <CharacterBody color={teamColorHex} character={id} width={132} height={200} />
                   <span style={{ fontSize: "var(--t-ui)", fontWeight: 700, color: "var(--ink)", textAlign: "center" }}>
                     {CHARACTERS[id].label}
                   </span>
@@ -351,12 +351,14 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
                 type="button"
                 onClick={onOpenStore}
                 style={{
+                  gridColumn: "1 / -1",
                   display: "flex",
-                  flexDirection: "column",
+                  flexDirection: "row",
                   alignItems: "center",
                   justifyContent: "center",
-                  gap: 4,
-                  padding: "12px 6px",
+                  gap: 8,
+                  minHeight: 44,
+                  padding: "8px 6px",
                   borderRadius: "var(--r-md)",
                   border: "2px dashed var(--line)",
                   background: "transparent",

@@ -44,14 +44,19 @@ function locateFace(root: Object3D): { target: Vector3; forward: Vector3; height
 }
 
 /** Enquadra o rosto do modelo (achado automaticamente) e tira a foto uma vez. */
-function HeadShot({ group, onShot }: { group: React.RefObject<Group>; onShot: (url: string) => void }) {
+function HeadShot({ group, onShot, variant }: { group: React.RefObject<Group>; onShot: (url: string) => void; variant: "face" | "body" }) {
   const { camera, gl } = useThree();
   const frames = useRef(0);
   useFrame(() => {
     frames.current += 1;
     if (frames.current === 8 && group.current) {
       const face = locateFace(group.current);
-      if (face) {
+      if (face && variant === "body") {
+        // Corpo inteiro, de frente: centro do corpo no meio e distância para caber a altura toda.
+        const center = new Vector3(face.target.x, face.height * 0.5, face.target.z);
+        camera.position.copy(center).addScaledVector(face.forward, face.height * 2.35);
+        camera.lookAt(center);
+      } else if (face) {
         camera.position.copy(face.target).addScaledVector(face.forward, face.height * 0.37);
         camera.lookAt(face.target);
       } else {
@@ -85,8 +90,9 @@ function StaticFace({ character, size, border }: { character: CharacterId; size:
   );
 }
 
-function Portrait({ character, url, size, border }: { character: CharacterId; url: string; size: number; border: string }) {
-  const key = `${character}|${url}`;
+function Portrait({ character, url, size, border, variant = "face", height }: { character: CharacterId; url: string; size: number; border: string; variant?: "face" | "body"; height?: number }) {
+  const key = `${character}|${url}|${variant}`;
+  const hpx = height ?? size;
   const [src, setSrc] = useState<string | null>(portraits.get(key) ?? null);
   const [active, setActive] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -118,14 +124,15 @@ function Portrait({ character, url, size, border }: { character: CharacterId; ur
     };
   }, [src, key]);
 
-  const box: React.CSSProperties = { width: size, height: size, borderRadius: "50%", overflow: "hidden", border, background: "var(--surface-2)" };
+  const body = variant === "body";
+  const box: React.CSSProperties = { width: size, height: hpx, borderRadius: body ? 12 : "50%", overflow: "hidden", border: body ? "none" : border, background: body ? "transparent" : "var(--surface-2)" };
   // Falhou ao montar o retrato do modelo: cai na foto padrão do personagem.
-  if (failed) return <StaticFace character={character} size={size} border={border} />;
-  if (src) return <img src={src} alt="" width={size} height={size} style={{ ...box, objectFit: "cover" }} />;
+  if (failed) return body ? <AvatarGlyph color="#888" character={character} size={Math.min(size, hpx)} /> : <StaticFace character={character} size={size} border={border} />;
+  if (src) return <img src={src} alt="" width={size} height={hpx} style={{ ...box, objectFit: body ? "contain" : "cover" }} />;
   return (
     <div style={box} aria-hidden>
       {active && (
-        <Canvas dpr={1} gl={{ preserveDrawingBuffer: true, alpha: true, antialias: true }} camera={{ position: [0, 1.6, 0.8], fov: 28 }}>
+        <Canvas dpr={body ? Math.min(2, window.devicePixelRatio || 1) : 1} gl={{ preserveDrawingBuffer: true, alpha: true, antialias: true }} camera={{ position: [0, 1.6, 0.8], fov: 28 }}>
           <ambientLight intensity={1.1} />
           <directionalLight position={[2, 3, 4]} intensity={1.8} />
           <Boundary onError={() => setFailed(true)}>
@@ -134,6 +141,7 @@ function Portrait({ character, url, size, border }: { character: CharacterId; ur
                 <GlbModel url={url} animated />
               </group>
               <HeadShot
+                variant={variant}
                 group={group}
                 onShot={(data) => {
                   portraits.set(key, data);
@@ -174,5 +182,16 @@ export function CharacterFace({ color, character, size = 64 }: { color: string; 
       onError={() => setFailed(true)}
       style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", border, background: "var(--surface-2)" }}
     />
+  );
+}
+
+/** Foto de corpo inteiro do personagem (tirada do modelo 3D; sem modelo, a silhueta desenhada). */
+export function CharacterBody({ color, character, width = 120, height = 190 }: { color: string; character: CharacterId; width?: number; height?: number }) {
+  const url = modelUrlFor(character);
+  if (url) return <Portrait key={`${character}|${url}|body`} character={character} url={url} size={width} height={height} border="none" variant="body" />;
+  return (
+    <div style={{ width, height, display: "flex", alignItems: "center", justifyContent: "center" }}>
+      <AvatarGlyph color={color} character={character} size={Math.min(width, height)} />
+    </div>
   );
 }
