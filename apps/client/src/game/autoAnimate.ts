@@ -123,9 +123,9 @@ export interface MotoSeat {
 export const DEFAULT_MOTO_SEAT: MotoSeat = { hipY: 0.82, z: -0.05, lean: 0.6, thigh: 1.1, knee: -1.35, arm: 1.05, forearm: 0.25 };
 export const MOTO_SEATS: Partial<Record<VehicleId, MotoSeat>> = {
   // Custom (cruzador): banco baixo e atrás, guidão alto e recuado.
-  moto: { hipY: 0.84, z: -0.5, lean: 0.35, thigh: 1.1, knee: -1.35, arm: 0.8, forearm: 0.5 },
+  moto: { hipY: 0.84, z: -0.5, lean: 0.75, thigh: 1.1, knee: -1.35, arm: 0.65, forearm: 0.45 },
   // Esportiva: banco atrás, tronco deitado sobre o tanque, mãos nos semiguidões baixos.
-  moto2: { hipY: 0.85, z: -0.5, lean: 1.1, thigh: 0.95, knee: -1.6, arm: 1.2, forearm: 0.1 },
+  moto2: { hipY: 0.85, z: -0.5, lean: 1.3, thigh: 0.95, knee: -1.6, arm: 1.25, forearm: 0.0 },
 };
 
 export type AutoPose = "moto" | null;

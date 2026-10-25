@@ -2,7 +2,7 @@
  * Catálogo de conteúdo: personagens, bandeiras, veículos e passes.
  *
  * A partir da Fase 3 a posse paga (entitlements) passa a ser exigida de
- * verdade para os itens com preço (hoje: carro de som e o passe Premium).
+ * verdade para os itens com preço (hoje: caminhão de som e o passe Premium).
  * Personagens/bandeiras seguem de seleção livre por enquanto — o preço é
  * só referência até a Fase 4 cobrir moderação/posse de conteúdo cosmético.
  */
@@ -88,7 +88,7 @@ export const VEHICLES: Record<VehicleId, Vehicle> = {
   carro: { id: "carro", label: "Carro", kind: "car", speedMul: 2.6, playsMusic: false, priceCents: 4990 },
   carro_som: {
     id: "carro_som",
-    label: "Carro de som",
+    label: "Caminhão de som",
     kind: "car",
     speedMul: 2.0,
     playsMusic: true,
@@ -123,7 +123,7 @@ export const PASSES: Record<PassId, Pass> = {
     id: "premium",
     label: "Premium",
     description:
-      "Moto, carro, caixa de som básica inclusa (libera o carro de som), spray ilimitado e 5 cartazes.",
+      "Moto, carro, caixa de som básica inclusa (libera o caminhão de som), spray ilimitado e 5 cartazes.",
     priceCents: 1000,
   },
 };
@@ -134,7 +134,7 @@ export function isPassId(v: unknown): v is PassId {
   return typeof v === "string" && Object.hasOwn(PASSES, v);
 }
 
-/** O passe Premium inclui moto, carro e o carro de som (caixa de som básica). */
+/** O passe Premium inclui moto, carro e o caminhão de som (caixa de som básica). */
 export function hasVehicleViaPremium(vehicle: VehicleId, owned: ReadonlySet<string>): boolean {
   return vehicle !== "nenhum" && owned.has("pass:premium");
 }

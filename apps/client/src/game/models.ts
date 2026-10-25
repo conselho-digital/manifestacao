@@ -27,7 +27,7 @@ export function modelUrlFor(character: CharacterId, team: TeamId = TEAM_IDS[0]!)
 const SHIPPED_VEHICLES: Partial<Record<VehicleId, { url?: string; byTeam?: boolean }>> = {
   moto: { url: "/models/vehicles/moto.glb" },
   moto2: { url: "/models/vehicles/moto2.glb" },
-  caminhao: { byTeam: true },
+  carro_som: { byTeam: true },
 };
 
 function shippedVehicle(vehicle: VehicleId, team: TeamId): string | null {
