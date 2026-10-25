@@ -120,12 +120,14 @@ export interface MotoSeat {
   arm: number;
   forearm: number;
 }
+/** Parte da inclinação do piloto que fica na coluna (o resto é do quadril: quanto menor, mais reta a coluna). */
+const SPINE_SHARE = 0.2;
 export const DEFAULT_MOTO_SEAT: MotoSeat = { hipY: 0.82, z: -0.05, lean: 0.6, thigh: 1.1, knee: -1.35, arm: 1.05, forearm: 0.25 };
 export const MOTO_SEATS: Partial<Record<VehicleId, MotoSeat>> = {
   // Custom (cruzador): banco baixo e atrás, guidão alto e recuado.
-  moto: { hipY: 0.84, z: -0.5, lean: 0.75, thigh: 1.1, knee: -1.35, arm: 0.65, forearm: 0.45 },
+  moto: { hipY: 0.84, z: -0.5, lean: 0.45, thigh: 1.1, knee: -1.35, arm: 0.85, forearm: 0.45 },
   // Esportiva: banco atrás, tronco deitado sobre o tanque, mãos nos semiguidões baixos.
-  moto2: { hipY: 0.85, z: -0.5, lean: 1.3, thigh: 0.95, knee: -1.6, arm: 1.25, forearm: 0.0 },
+  moto2: { hipY: 0.85, z: -0.5, lean: 0.95, thigh: 0.95, knee: -1.6, arm: 1.4, forearm: 0.0 },
 };
 
 export type AutoPose = "moto" | null;
@@ -524,7 +526,7 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
           let seated = ang;
           switch (l.role) {
             case "thigh":
-              seated = seat.thigh;
+              seated = seat.thigh + seat.lean * (1 - SPINE_SHARE); // o quadril inclinado leva as pernas junto: compensa
               break;
             case "knee":
               seated = seat.knee;
@@ -543,9 +545,11 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
               break;
           }
           ang = lerp(ang, seated, sit);
-          if (l.role === "spine") lean = lerp(lean, seat.lean / spineCount, sit);
-          if (l.role === "neck") lean = lerp(lean, -0.25 / neckCount, sit);
+          // Costas retas: o tronco inclina inteiro a partir do quadril (a coluna quase não curva) e a cabeça acompanha.
+          if (l.role === "spine") lean = lerp(lean, (seat.lean * SPINE_SHARE) / spineCount, sit);
+          if (l.role === "neck") lean = lerp(lean, -0.1 / neckCount, sit);
           if (l.role === "hips") {
+            lean = lerp(lean, seat.lean * (1 - SPINE_SHARE), sit);
             twist *= stand;
             roll *= stand;
           }
