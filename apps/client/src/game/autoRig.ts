@@ -135,6 +135,8 @@ export function layoutFromMarks(rig: RigMarks, height: number): RigLayout {
     segments.push({ bone: B[`${p}UpLeg` as BoneName], a: thigh, b: knee });
     segments.push({ bone: B[`${p}Leg` as BoneName], a: knee, b: ankle });
     segments.push({ bone: B[`${p}Foot` as BoneName], a: ankle, b: [toe[0], Math.max(0, toe[1])] });
+    // Clavícula: do pescoço ao ombro, presa à coluna. Mantém o topo do ombro no tronco quando o braço baixa (sem "ombro de cogumelo").
+    segments.push({ bone: B.Spine, a: neckLow, b: shoulder });
     segments.push({ bone: B[`${p}Arm` as BoneName], a: shoulder, b: elbow });
     segments.push({ bone: B[`${p}ForeArm` as BoneName], a: elbow, b: hand });
     segments.push({ bone: B[`${p}Hand` as BoneName], a: hand, b: lerp(elbow, hand, 1.5) });

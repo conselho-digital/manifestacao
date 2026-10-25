@@ -127,6 +127,8 @@ function WalkTest({ scene, rig, w, h: vh }: { scene: Object3D; rig: RigMarks; w:
   const camRef = useRef<PerspectiveCamera | null>(null);
   const rendererRef = useRef<WebGLRenderer | null>(null);
   const [error, setError] = useState<string | null>(null);
+  // Câmera orbital: arrastar gira em torno do personagem (horizontal) e sobe/desce (vertical).
+  const orbit = useRef({ az: Math.PI / 2, el: 0.12, dragging: false, x: 0, y: 0 });
 
   useEffect(() => {
     const canvas = ref.current;
@@ -179,7 +181,9 @@ function WalkTest({ scene, rig, w, h: vh }: { scene: Object3D; rig: RigMarks; w:
           dir = 1;
         }
         avatar.position.z = z;
-        cam.position.z = z;
+        const o = orbit.current;
+        const R = h * 2.9;
+        cam.position.set(Math.sin(o.az) * R, h * (0.5 + 2.9 * Math.sin(o.el)), z + Math.cos(o.az) * R);
         cam.lookAt(0, h * 0.5, z);
         avatar.rotation.y = dir > 0 ? 0 : Math.PI;
         anim.update(dt, true);
@@ -213,7 +217,27 @@ function WalkTest({ scene, rig, w, h: vh }: { scene: Object3D; rig: RigMarks; w:
 
   return (
     <>
-      <canvas ref={ref} aria-label="Prévia andando" style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block" }} />
+      <canvas
+        ref={ref}
+        aria-label="Prévia andando: arraste para girar a câmera"
+        onPointerDown={(e) => {
+          e.currentTarget.setPointerCapture(e.pointerId);
+          orbit.current.dragging = true;
+          orbit.current.x = e.clientX;
+          orbit.current.y = e.clientY;
+        }}
+        onPointerMove={(e) => {
+          const o = orbit.current;
+          if (!o.dragging) return;
+          o.az -= (e.clientX - o.x) * 0.01;
+          o.el = Math.max(-0.2, Math.min(0.5, o.el + (e.clientY - o.y) * 0.005));
+          o.x = e.clientX;
+          o.y = e.clientY;
+        }}
+        onPointerUp={() => (orbit.current.dragging = false)}
+        onPointerCancel={() => (orbit.current.dragging = false)}
+        style={{ position: "absolute", inset: 0, width: "100%", height: "100%", display: "block", touchAction: "none", cursor: "grab" }}
+      />
       {error && (
         <p role="alert" style={{ position: "absolute", left: 12, right: 12, top: 60, margin: 0, color: "var(--danger)", fontSize: "var(--t-ui)" }}>
           {error}
@@ -348,7 +372,7 @@ export function RigEditor({ scene, title, initial, busy, onSave, onSkip, onCance
     >
       <header style={{ padding: "max(10px, env(safe-area-inset-top)) 14px 8px", display: "flex", alignItems: "baseline", gap: 10, flexShrink: 0 }}>
         <h3 style={{ margin: 0, fontSize: "var(--t-body)", flex: "0 1 auto", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>Esqueleto: {title}</h3>
-        <span style={{ fontSize: "var(--t-ui)", color: "var(--ink-dim)" }}>{testing ? "Veja se a caminhada está natural." : "Gire até olhar para você e arraste os pontos."}</span>
+        <span style={{ fontSize: "var(--t-ui)", color: "var(--ink-dim)" }}>{testing ? "Arraste para girar a câmera e veja se a caminhada está natural." : "Gire até olhar para você e arraste os pontos."}</span>
       </header>
 
       {/* Palco: ocupa todo o espaço entre o topo e a barra de baixo */}

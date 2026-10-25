@@ -16,8 +16,10 @@ import {
   VEHICLES,
   VEHICLE_IDS,
   hexColor,
+  isCharacterId,
   type TeamId,
 } from "@manifestacao/shared";
+import { CHARACTER_MODELS } from "../game/models.js";
 import {
   MAX_LABEL_LENGTH,
   currentModelOverrides,
@@ -509,6 +511,12 @@ function ScreenTab({ busy, run }: TabProps) {
   );
 }
 
+/** Modelo que já acompanha o jogo para um slot geral de personagem (ex.: "character:mulher_comum"), se houver. */
+function shippedModel(slot: string): string | null {
+  const m = /^character:([a-z_]+)$/.exec(slot);
+  return m && isCharacterId(m[1]) ? (CHARACTER_MODELS[m[1]] ?? null) : null;
+}
+
 function ModelsTab({ busy, run }: TabProps) {
   const [models, setModels] = useState<Record<string, string>>(() => currentModelOverrides());
   const [rigs, setRigs] = useState<Record<string, RigMarks>>(() => currentRigs());
@@ -528,7 +536,7 @@ function ModelsTab({ busy, run }: TabProps) {
   };
 
   const editExisting = async (slot: string, title: string) => {
-    const url = models[slot];
+    const url = models[slot] ?? shippedModel(slot);
     if (!url) return;
     setEditorError(null);
     try {
@@ -580,6 +588,9 @@ function ModelsTab({ busy, run }: TabProps) {
   const renderSlot = (slot: string, label: string) => {
     if (!isModelSlot(slot)) return null;
     const has = Boolean(models[slot]);
+    // Personagem que já vem no jogo (ex.: as mulheres): dá para editar o esqueleto dele sem enviar arquivo.
+    const shipped = has ? null : shippedModel(slot);
+    const rigUrl = models[slot] ?? shipped;
     return (
       <div key={slot} style={{ display: "flex", flexDirection: "column", gap: 6, padding: "6px 0" }}>
         <span style={{ fontSize: "var(--t-ui)", minWidth: 0, overflowWrap: "anywhere" }}>
@@ -604,13 +615,13 @@ function ModelsTab({ busy, run }: TabProps) {
             }}
           />
         </label>
-        {has && slot.startsWith("character:") && (
+        {rigUrl && slot.startsWith("character:") && (
           <button type="button" disabled={busy} onClick={() => void editExisting(slot, label)} style={ghostBtn}>
-            {rigs[models[slot]!] ? "Editar esqueleto" : "Criar esqueleto"}
+            {rigs[rigUrl] ? "Editar esqueleto" : "Criar esqueleto"}
           </button>
         )}
-        {has && rigs[models[slot]!] && (
-          <button type="button" disabled={busy} onClick={() => void removeRig(models[slot]!)} style={ghostBtn}>
+        {rigUrl && rigs[rigUrl] && (
+          <button type="button" disabled={busy} onClick={() => void removeRig(rigUrl)} style={ghostBtn}>
             Tirar esqueleto
           </button>
         )}
