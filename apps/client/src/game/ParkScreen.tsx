@@ -13,6 +13,7 @@ import {
   setPlayback,
   thumbnailUrl,
   useParkScreen,
+  useParkScreenOpen,
   usePlayback,
   type ScreenConfig,
 } from "../config/parkScreen.js";
@@ -97,10 +98,12 @@ function draw(ctx: CanvasRenderingContext2D, cfg: ScreenConfig | null, img: HTML
 
 const YT_ORIGIN = "https://www.youtube-nocookie.com";
 /** Pixels do iframe (16:9); a escala abaixo faz ele cobrir exatamente a tela do outdoor. */
-const FRAME_PX_W = 1280;
-const FRAME_PX_H = 720;
+const FRAME_PX_W = 854;
+const FRAME_PX_H = 480;
 /** A partir daqui o vídeo some (e o áudio zera); perto, toca com o volume caindo com a distância. */
-const VIDEO_RANGE = 150;
+const VIDEO_RANGE = 90;
+/** Histerese: liga a menos de VIDEO_ON e só desliga além de VIDEO_RANGE (o iframe não pisca no limite). */
+const VIDEO_ON = 70;
 const FULL_VOLUME_RANGE = 25;
 /** O Html do drei em modo "transform" usa 40 px por unidade do mundo (400 / distanceFactor 10). */
 const HTML_PX_PER_UNIT = 40;
@@ -121,9 +124,14 @@ function OutdoorVideo({ cfg, videoId, cy, x, z }: { cfg: ScreenConfig; videoId: 
   const send = useCallback((func: string, args: unknown[] = []) => {
     frameRef.current?.contentWindow?.postMessage(JSON.stringify({ event: "command", func, args }), YT_ORIGIN);
   }, []);
+  const appliedRef = useRef("");
   const apply = useCallback(() => {
     const pb = currentPlayback();
     if (!pb || !readyRef.current) return;
+    // Só reaplica quando o admin mudou estado/posição/hora do comando (mudar só o volume não dá seek em ninguém).
+    const key = `${pb.state}|${pb.position}|${pb.at}`;
+    if (key === appliedRef.current) return;
+    appliedRef.current = key;
     send("seekTo", [pb.state === "stopped" ? 0 : expectedPosition(pb), true]);
     send(pb.state === "playing" ? "playVideo" : "pauseVideo");
   }, [send]);
@@ -135,6 +143,7 @@ function OutdoorVideo({ cfg, videoId, cy, x, z }: { cfg: ScreenConfig; videoId: 
         if ((JSON.parse(e.data) as { event?: string }).event === "onReady") {
           readyRef.current = true;
           volumeRef.current = -1; // o player começa mudo: reaplica o volume
+          appliedRef.current = "";
           apply();
         }
       } catch {
@@ -148,8 +157,20 @@ function OutdoorVideo({ cfg, videoId, cy, x, z }: { cfg: ScreenConfig; videoId: 
     apply();
   }, [playback, apply]);
 
+  // O Html do drei (occlude="blending") deixa o canvas com estilo próprio e não desfaz: ao sair, restaura.
+  const { camera, gl } = useThree();
+  const readyTimer = useRef<number | undefined>(undefined);
+  useEffect(
+    () => () => {
+      window.clearTimeout(readyTimer.current);
+      const el = gl.domElement;
+      el.style.position = "";
+      el.style.pointerEvents = "";
+      el.style.zIndex = "";
+    },
+    [gl],
+  );
   // Volume pela distância (e mudo se o operador marcou "sem som").
-  const { camera } = useThree();
   useFrame(() => {
     if (!readyRef.current) return;
     const d = Math.hypot(camera.position.x - x, camera.position.z - z);
@@ -178,9 +199,11 @@ function OutdoorVideo({ cfg, videoId, cy, x, z }: { cfg: ScreenConfig; videoId: 
         src={src}
         onLoad={() => {
           frameRef.current?.contentWindow?.postMessage(JSON.stringify({ event: "listening", id: 1, channel: "widget" }), YT_ORIGIN);
-          window.setTimeout(() => {
+          window.clearTimeout(readyTimer.current);
+          readyTimer.current = window.setTimeout(() => {
             readyRef.current = true;
             volumeRef.current = -1;
+            appliedRef.current = "";
             apply();
           }, 2500);
         }}
@@ -197,6 +220,8 @@ function OutdoorVideo({ cfg, videoId, cy, x, z }: { cfg: ScreenConfig; videoId: 
 export function ParkScreen({ x, z }: { x: number; z: number }) {
   const cfg = useParkScreen();
   const playback = usePlayback();
+  const modalOpen = useParkScreenOpen();
+  const [loaded, setLoaded] = useState(false);
   const [hover, setHover] = useState(false);
   const media = cfg ? parseScreenMedia(cfg.url) : null;
   const videoId = media?.kind === "youtube" ? media.id : null;
@@ -204,20 +229,32 @@ export function ParkScreen({ x, z }: { x: number; z: number }) {
   // Relógio do servidor, estado atual e comandos do admin (Realtime) enquanto o outdoor existe no mapa.
   useEffect(() => {
     if (!videoId) return;
+    let alive = true;
     void syncServerClock().then(() => fetchPlayback()).then((pb) => {
       if (pb) setPlayback(pb);
+      if (alive) setLoaded(true);
     });
-    return subscribePlayback(() => {});
+    const off = subscribePlayback(() => {});
+    return () => {
+      alive = false;
+      off();
+    };
   }, [videoId]);
 
   // O vídeo só existe perto da tela e de frente para ela (o iframe é pesado e, por trás, apareceria espelhado).
   const [live, setLive] = useState(false);
+  const liveRef = useRef(false);
   useFrame(({ camera }) => {
     const d = Math.hypot(camera.position.x - x, camera.position.z - z);
-    const next = d < VIDEO_RANGE && camera.position.z > z + 0.5;
-    setLive((p) => (p === next ? p : next));
+    const front = liveRef.current ? camera.position.z > z - 1 : camera.position.z > z + 1;
+    const next = liveRef.current ? d < VIDEO_RANGE && front : d < VIDEO_ON && front;
+    if (next !== liveRef.current) {
+      liveRef.current = next;
+      setLive(next);
+    }
   });
-  const showVideo = Boolean(cfg && videoId && live && (playback ? playback.state !== "stopped" : cfg.autoplay));
+  // Com a janela do outdoor aberta o vídeo do mapa sai (senão tocariam dois ao mesmo tempo).
+  const showVideo = Boolean(cfg && videoId && live && loaded && !modalOpen && (playback ? playback.state !== "stopped" : cfg.autoplay));
 
   const { canvas, tex } = useMemo(() => {
     const c = document.createElement("canvas");
@@ -292,8 +329,8 @@ export function ParkScreen({ x, z }: { x: number; z: number }) {
         position={[0, cy, 0.02]}
         onClick={(e) => {
           e.stopPropagation();
-          // Vídeo toca no próprio outdoor; só páginas da internet abrem numa janela.
-          if (!videoId) openParkScreen();
+          // Vídeo ao vivo toca no próprio outdoor; parado ou longe, tocar abre a janela do player.
+          if (!showVideo) openParkScreen();
         }}
         onPointerOver={() => {
           if (cfg) {
@@ -309,7 +346,7 @@ export function ParkScreen({ x, z }: { x: number; z: number }) {
         <planeGeometry args={[SCREEN_W, SCREEN_H]} />
         <meshBasicMaterial map={tex} toneMapped={false} color={hover ? 0xffffff : 0xe6e6e6} />
       </mesh>
-      {showVideo && cfg && videoId && <OutdoorVideo cfg={cfg} videoId={videoId} cy={cy} x={x} z={z} />}
+      {showVideo && cfg && videoId && <OutdoorVideo key={videoId} cfg={cfg} videoId={videoId} cy={cy} x={x} z={z} />}
       {/* Refletores no topo */}
       {[-8, 0, 8].map((dx) => (
         <mesh key={dx} position={[dx, SCREEN_BOTTOM + SCREEN_H + FRAME + 0.25, 0.4]}>

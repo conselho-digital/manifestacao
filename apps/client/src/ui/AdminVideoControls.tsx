@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { publishPlayback } from "../config/adminApi.js";
-import { expectedPosition, setPlayback, usePlayback, type PlaybackState } from "../config/parkScreen.js";
+import { expectedPosition, serverNow, setPlayback, usePlayback, type PlaybackState } from "../config/parkScreen.js";
 import { fetchPlayback, subscribePlayback, syncServerClock } from "../net/screenSync.js";
 
 const YT_ORIGIN = "https://www.youtube-nocookie.com";
@@ -31,7 +31,7 @@ const clock = (s: number) => {
  * Tocar, pausar, parar e pular viram o estado compartilhado (game_config.screen_playback) que todos os jogadores seguem.
  * Um player invisível, mudo e parado serve só para descobrir a duração do vídeo.
  */
-export function AdminVideoControls({ videoId }: { videoId: string | null }) {
+export function AdminVideoControls({ videoId, defaultAutoplay = false }: { videoId: string | null; defaultAutoplay?: boolean }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const playback = usePlayback();
   const [duration, setDuration] = useState(0);
@@ -54,7 +54,9 @@ export function AdminVideoControls({ videoId }: { videoId: string | null }) {
   const [volDrag, setVolDrag] = useState<number | null>(null);
   const publish = (state: PlaybackState, position: number, vol: number = volume) => {
     setPubError(null);
-    publishPlayback(state, position, vol).catch((e: unknown) => setPubError(e instanceof Error ? e.message : "Não consegui avisar os jogadores."));
+    publishPlayback(state, position, vol)
+      .then(() => setPlayback({ state, position, at: serverNow(), volume: vol }))
+      .catch((e: unknown) => setPubError(e instanceof Error ? e.message : "Não consegui avisar os jogadores."));
   };
 
   const listen = () => ref.current?.contentWindow?.postMessage(JSON.stringify({ event: "listening", id: 1, channel: "widget" }), YT_ORIGIN);
@@ -141,6 +143,8 @@ export function AdminVideoControls({ videoId }: { videoId: string | null }) {
             if (dragging !== null) publish(playing ? "playing" : "paused", dragging);
             setDragging(null);
           }}
+          onPointerCancel={() => setDragging(null)}
+          onBlur={() => setDragging(null)}
           onKeyUp={() => {
             if (dragging !== null) publish(playing ? "playing" : "paused", dragging);
             setDragging(null);
@@ -159,11 +163,11 @@ export function AdminVideoControls({ videoId }: { videoId: string | null }) {
           disabled={!enabled}
           onChange={(e) => setVolDrag(Number(e.target.value))}
           onPointerUp={() => {
-            if (volDrag !== null) publish(playback?.state ?? "stopped", playing ? time : (playback?.position ?? 0), volDrag);
+            if (volDrag !== null) publish(playback?.state ?? (defaultAutoplay ? "playing" : "stopped"), playing || !playback ? time : playback.position, volDrag);
             setVolDrag(null);
           }}
           onKeyUp={() => {
-            if (volDrag !== null) publish(playback?.state ?? "stopped", playing ? time : (playback?.position ?? 0), volDrag);
+            if (volDrag !== null) publish(playback?.state ?? (defaultAutoplay ? "playing" : "stopped"), playing || !playback ? time : playback.position, volDrag);
             setVolDrag(null);
           }}
           style={{ width: "100%", minHeight: 32 }}

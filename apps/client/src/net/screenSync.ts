@@ -23,20 +23,51 @@ export async function fetchPlayback(): Promise<ScreenPlayback | null> {
   return error ? null : cleanPlayback(data?.value);
 }
 
-/** Realtime: cada comando do admin chega na hora. Devolve a função que cancela. */
+// Um único canal Realtime para todos que acompanham o outdoor (mapa, janela e painel do admin), com contagem de usos.
+let shared: { channel: RealtimeChannel; count: number } | null = null;
+const listeners = new Set<(pb: ScreenPlayback | null) => void>();
+
+function refetch(): void {
+  void fetchPlayback().then((pb) => {
+    if (pb) {
+      setPlayback(pb);
+      for (const l of listeners) l(pb);
+    }
+  });
+}
+
+/** Realtime: cada comando do admin chega na hora; ao reconectar, relê o estado. Devolve a função que cancela. */
 export function subscribePlayback(onChange: (pb: ScreenPlayback | null) => void): () => void {
   const supabase = getSupabase();
   if (!supabase) return () => {};
-  const channel: RealtimeChannel = supabase
-    .channel(`outdoor-playback-${Math.random().toString(36).slice(2)}`)
-    .on("postgres_changes", { event: "*", schema: "public", table: "game_config", filter: "key=eq.screen_playback" }, (p) => {
-      const row = p.new as { value?: unknown } | null;
-      const pb = cleanPlayback(row?.value);
-      setPlayback(pb);
-      onChange(pb);
-    })
-    .subscribe();
+  listeners.add(onChange);
+  if (!shared) {
+    let first = true;
+    const channel: RealtimeChannel = supabase
+      .channel(`outdoor-playback-${Math.random().toString(36).slice(2)}`)
+      .on("postgres_changes", { event: "*", schema: "public", table: "game_config", filter: "key=eq.screen_playback" }, (p) => {
+        const row = p.new as { value?: unknown } | null;
+        const pb = cleanPlayback(row?.value);
+        setPlayback(pb);
+        for (const l of listeners) l(pb);
+      })
+      .subscribe((status) => {
+        // Voltou de uma queda: o que o admin mandou nesse meio-tempo não chegou, então lê de novo.
+        if (status === "SUBSCRIBED") {
+          if (!first) refetch();
+          first = false;
+        }
+      });
+    shared = { channel, count: 0 };
+  }
+  shared.count += 1;
   return () => {
-    void supabase.removeChannel(channel);
+    listeners.delete(onChange);
+    if (!shared) return;
+    shared.count -= 1;
+    if (shared.count <= 0) {
+      void supabase.removeChannel(shared.channel);
+      shared = null;
+    }
   };
 }

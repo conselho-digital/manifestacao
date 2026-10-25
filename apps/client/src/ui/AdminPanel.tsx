@@ -440,7 +440,7 @@ function ScreenTab({ busy, run }: TabProps) {
         janela (alguns sites não permitem ser abertos assim; a janela tem o botão "Abrir em outra aba"). O conteúdo é de responsabilidade do
         operador.
       </p>
-      <AdminVideoControls videoId={media?.kind === "youtube" ? media.id : null} />
+      <AdminVideoControls videoId={media?.kind === "youtube" ? media.id : null} defaultAutoplay={saved?.autoplay ?? DEFAULT_SCREEN_OPTIONS.autoplay} />
       <label style={{ display: "flex", flexDirection: "column", gap: 4, fontSize: "var(--t-ui)" }}>
         Link (https://…)
         <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://www.youtube.com/watch?v=…" inputMode="url" maxLength={500} style={input} />
