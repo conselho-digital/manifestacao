@@ -44,7 +44,7 @@ export function strikeEnvelope(p: number): number {
 
 // ── Segurar a bandeira ─────────────────────────────────────────────────────────────────────────
 /** Braço da bandeira (esquerdo) segurando a haste: ombro à frente e cotovelo dobrado, mão na altura do peito. */
-export const CARRY_LEFT = { arm: 0.45, forearm: 1.25 };
+export const CARRY_LEFT = { arm: 0.1, forearm: 1.7 };
 /** Outro braço, relaxado e meio dobrado. */
 export const CARRY_RIGHT = { arm: 0.2, forearm: 0.8 };
 
@@ -157,14 +157,15 @@ export function punchPose(p: number): PunchPose {
   const guard = { arm: 0.6, fore: 1.9 };
   let rArm = lerp(guard.arm, -0.3, wind);
   let rFore = lerp(guard.fore, 2.0, wind);
-  rArm = lerp(rArm, 1.55, hit);
-  rFore = lerp(rFore, 0.12, hit);
+  rArm = lerp(rArm, 1.6, hit); // braço na horizontal: o punho chega na altura do rosto (ombro ~1,45 m)
+  rFore = lerp(rFore, 0.04, hit);
   rArm = lerp(rArm, guard.arm, back);
   rFore = lerp(rFore, guard.fore, back);
-  const twist = lerp(lerp(0, -0.3, wind), 0.4, hit) * (1 - back);
-  const lean = lerp(lerp(0, -0.05, wind), 0.35, hit) * (1 - back);
+  const twist = lerp(lerp(0, -0.08, wind), 0.1, hit) * (1 - back);
+  const lean = lerp(lerp(0, -0.02, wind), 0.06, hit) * (1 - back);
   const step = lerp(0, 0.45, hit) * (1 - back);
-  return { rArm, rFore, lArm: 0.85, lFore: 1.9, twist, lean, step };
+  // Guarda: a mão esquerda fica junto do rosto.
+  return { rArm, rFore, lArm: 1.0, lFore: 2.1, twist, lean, step };
 }
 
 // ── Mão no espaço (para a bandeira acompanhar o braço) ──────────────────────────────────────────
@@ -181,11 +182,9 @@ export function handPosition(arm: number, forearm: number): { y: number; z: numb
 
 // ── Segurar com as duas mãos ────────────────────────────────────────────────────────────────────
 /** Quanto a mão de baixo (esquerda) desliza haste abaixo, em metros. */
-export const GRIP_SLIDE = 0.24;
+export const GRIP_SLIDE = 0.18;
 /** Abertura lateral (rad) que aproxima os braços da haste, no centro do corpo. */
-export const GRIP_ADDUCT = 1.0;
-/** Só uma abertura leve para a mão de baixo (esquerda), que já está do lado da haste. */
-export const GRIP_ADDUCT_NEAR = 0.1;
+export const GRIP_ADDUCT = 0.5;
 
 /** Braço de dois ossos (ombro e cotovelo): ângulos que levam a mão a `target` (altura, distância à frente). */
 export function solveArm(target: { y: number; z: number }): { arm: number; forearm: number } {

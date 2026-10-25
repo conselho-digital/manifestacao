@@ -1,5 +1,5 @@
 import { FOOT_WALK_SPEED } from "./world.js";
-import { GRIP_ADDUCT, GRIP_ADDUCT_NEAR, gripArms, punchPose, strikeArms, strikeEnvelope, strikeLean, strikeTwist, type StrikeKind } from "./strike.js";
+import { GRIP_ADDUCT, gripArms, punchPose, strikeArms, strikeEnvelope, strikeLean, strikeTwist, type StrikeKind } from "./strike.js";
 import { fallEnvelope, fallLimbs, reactBody } from "./knock.js";
 import { AnimationAction, AnimationClip, AnimationMixer, Bone, Group, Object3D, Quaternion, Vector3 } from "three";
 
@@ -18,7 +18,7 @@ const IDLE_RE = /idle|stand|parad|respir|breath/i;
 
 const DOWN = new Vector3(0, -1, 0);
 
-type Role = "thigh" | "knee" | "foot" | "toe" | "arm" | "forearm" | "hips" | "spine" | "neck" | "head";
+type Role = "thigh" | "knee" | "foot" | "toe" | "arm" | "forearm" | "hips" | "spine" | "neck" | "head" | "finger";
 
 interface Limb {
   bone: Bone;
@@ -30,6 +30,11 @@ interface Limb {
   rest: Quaternion;
   axis: Vector3;
   depth: number;
+  /** Dedos: eixo de dobra no espaço do próprio osso (já com o sinal que fecha a mão) e falange (1 = base). */
+  localAxis?: Vector3;
+  level?: number;
+  /** Dedos de cada lado: quanto mais para fora do polegar, mais fecha (mindinho fecha mais). */
+  curlK?: number;
 }
 
 /**
@@ -51,7 +56,7 @@ function sideOf(name: string): 1 | -1 | 0 {
 function roleOf(raw: string): Role | null {
   const name = raw.replace(/ (l|r)$/, "").replace(/^(l|r) /, "");
   // Dedos, rosto e ossos auxiliares (torção, correção) não são movidos: o osso principal já leva a pele.
-  if (/\b(thumb|index|middle|ring|pinky|finger)\b|eye|jaw|brow|lid|mouth|tongue|twist|roll|helper|corrective|ik|pole/.test(name)) return null;
+  if (/(thumb|index|middle|ring|pinky|finger)|eye|jaw|brow|lid|mouth|tongue|twist|roll|helper|corrective|\bik\b|\bpole\b/.test(name)) return null;
   if (/toe|ball/.test(name)) return /end$|tip/.test(name) ? null : "toe";
   if (/thigh|upleg|upperleg|upper leg/.test(name)) return "thigh";
   if (/(foot|ankle)$/.test(name)) return "foot";
@@ -247,6 +252,45 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
     }
     limbs.push({ bone, role, side: side === 0 ? 1 : (side as 1 | -1), restLocal: bone.quaternion.clone(), rest, axis, depth: depthOf(bone) });
   }
+  // ---- Dedos: dobram em torno da linha dos nós dos dedos (índice → mindinho), para o lado da palma ----
+  {
+    const armL = limbs.find((l) => l.role === "arm");
+    const armChild = armL?.bone.children.find((c) => (c as Bone).isBone);
+    // Braço aberto (pose em T) ou caído? No arquivo, antes de baixarmos o braço.
+    const tLike = armL && armChild ? Math.abs(worldPos(armChild, new Vector3()).sub(worldPos(armL.bone, new Vector3())).normalize().y) < 0.6 : true;
+    const hipsB = bones.find((b) => roleOf(cleanName(b.name)) === "hips");
+    const hipsX = hipsB ? worldPos(hipsB, new Vector3()).x : 0;
+    const info = (b: Bone) => {
+      const n = cleanName(b.name);
+      const m = /(thumb|index|middle|ring|pinky)/.exec(n);
+      const lvl = /(\d+)(?: [lr])?$/.exec(n);
+      const side = sideOf(n);
+      if (!m || !lvl || m[1] === "thumb" || side === 0 || !b.children.some((c) => (c as Bone).isBone)) return null;
+      return { finger: m[1]!, level: Number(lvl[1]), side };
+    };
+    for (const side of [1, -1] as const) {
+      const mine = bones.map((b) => ({ b, i: info(b) })).filter((x) => x.i && x.i.side === side && x.i.level >= 1 && x.i.level <= 3);
+      const base = (f: string) => mine.find((x) => x.i!.finger === f && x.i!.level === 1)?.b;
+      const idx = base("index");
+      const pin = base("pinky");
+      if (!idx || !pin) continue;
+      const across = worldPos(idx, new Vector3()).sub(worldPos(pin, new Vector3()));
+      if (across.lengthSq() < 1e-10) continue;
+      across.normalize();
+      for (const { b, i } of mine) {
+        const child = b.children.find((c) => (c as Bone).isBone)!;
+        const d = worldPos(child, new Vector3()).sub(worldPos(b, new Vector3()));
+        if (d.lengthSq() < 1e-10) continue;
+        d.normalize();
+        // Lado da palma: para baixo se o braço está aberto (pose em T); para dentro (rumo ao corpo) se está caído.
+        const palm = tLike ? new Vector3(0, -1, 0) : new Vector3(-Math.sign(worldPos(b, new Vector3()).x - hipsX || side), 0, 0.2);
+        const sign = new Vector3().crossVectors(across, d).dot(palm) >= 0 ? 1 : -1;
+        const local = across.clone().multiplyScalar(sign).applyQuaternion(worldQ(b, new Quaternion()).invert());
+        const k = i!.finger === "pinky" ? 1.2 : i!.finger === "ring" ? 1.1 : i!.finger === "index" ? 0.9 : 1;
+        limbs.push({ bone: b, role: "finger", side, restLocal: b.quaternion.clone(), rest: new Quaternion(), axis: new Vector3(1, 0, 0), depth: depthOf(b), localAxis: local, level: i!.level, curlK: k });
+      }
+    }
+  }
   // Cotovelo, pé e dedos giram no mesmo eixo do braço/coxa do mesmo lado.
   for (const l of limbs) {
     if (l.role !== "foot" && l.role !== "forearm" && l.role !== "toe") continue;
@@ -362,7 +406,17 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
       const glance = lookCycle < 0.18 ? Math.sin((lookCycle / 0.18) * Math.PI) : 0;
       const look = Math.sin(t * 0.31) * 0.5 + glance * (Math.floor(t * 0.22 + gaitFreq * 7) % 2 ? 1 : -1) * 1.6;
 
+      // Mão: levemente fechada ao andar e parado; punho fechado ao socar; fechada na haste da bandeira.
+      const fist = Math.max(punch ? sp : 0, carryK > 0.001 ? 0.75 * carryK : 0);
       for (const l of limbs) {
+        if (l.role === "finger") {
+          const relaxed = [0, 0.3, 0.45, 0.35][l.level!] ?? 0.3;
+          const closed = [0, 1.25, 1.55, 1.05][l.level!] ?? 1.2;
+          const a = (relaxed + (closed - relaxed) * fist) * (l.curlK ?? 1);
+          l.bone.quaternion.copy(l.restLocal).multiply(rotA.setFromAxisAngle(l.localAxis!, a));
+          l.bone.updateWorldMatrix(false, true);
+          continue;
+        }
         const sl = l.side > 0 ? sin : -sin; // a esquerda vai à frente quando sin > 0
         const cl = l.side > 0 ? cos : -cos;
         const isLeft = l.side > 0;
@@ -432,7 +486,7 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
           const g = grips ?? gripArms(null, 0);
           const t = l.role === "arm" ? (isLeft ? g.lower.arm : g.upper.arm) : isLeft ? g.lower.forearm : g.upper.forearm;
           ang = lerp(ang, t + (l.role === "arm" ? 0.03 * Math.sin(2 * phase) * w : 0), carryK);
-          if (l.role === "arm") adduct = (isLeft ? GRIP_ADDUCT_NEAR : GRIP_ADDUCT) * carryK;
+          if (l.role === "arm") adduct = GRIP_ADDUCT * carryK;
         }
 
         // ── sentado na moto (mistura com o andar): coxas à frente, joelhos dobrados, braços no guidão, tronco inclinado ──

@@ -157,7 +157,7 @@ export function ProceduralBody({
         const t = isLeft ? grips.lower : grips.upper;
         a = t.arm;
         f = t.forearm;
-        adduct = isLeft ? 0.2 : 0.9; // a haste fica do lado esquerdo: o braço direito atravessa o corpo até ela
+        adduct = 0.9; // a haste fica no centro, na frente do corpo: os dois braços se fecham até ela
       }
       if (st && st.kind === "punch") {
         const pp = punchPose(st.p);
@@ -306,7 +306,7 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
       {/* Bandeira só a pé: em veículo as mãos estão ocupadas. */}
       {flag !== "nenhuma" && vehicle === "nenhum" && (
         <group ref={flagPivotRef} position={[0, CARRY_HAND.y, CARRY_HAND.z]}>
-          <group position={[-0.13, -CARRY_HAND.y, 0]}>
+          <group position={[-0.45, -CARRY_HAND.y, 0]}>
             <FlagProp flag={flag} color={color} team={team} />
           </group>
         </group>
