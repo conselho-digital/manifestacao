@@ -54,7 +54,7 @@ function HeadShot({ group, onShot }: { group: React.RefObject<Group>; onShot: (u
     if (frames.current === 8 && group.current) {
       const face = locateFace(group.current);
       if (face) {
-        camera.position.copy(face.target).addScaledVector(face.forward, face.height * 0.3);
+        camera.position.copy(face.target).addScaledVector(face.forward, face.height * 0.37);
         camera.lookAt(face.target);
       } else {
         const box = new Box3().setFromObject(group.current);
@@ -70,6 +70,21 @@ function HeadShot({ group, onShot }: { group: React.RefObject<Group>; onShot: (u
     if (frames.current === 14) onShot(gl.domElement.toDataURL("image/png"));
   });
   return null;
+}
+
+function StaticFace({ character, size, border }: { character: CharacterId; size: number; border: string }) {
+  const [bad, setBad] = useState(false);
+  if (bad) return <AvatarGlyph color="#888" character={character} size={size} />;
+  return (
+    <img
+      src={`/faces/${character}.png`}
+      alt=""
+      width={size}
+      height={size}
+      onError={() => setBad(true)}
+      style={{ width: size, height: size, borderRadius: "50%", objectFit: "cover", border, background: "var(--surface-2)" }}
+    />
+  );
 }
 
 function Portrait({ character, url, size, border }: { character: CharacterId; url: string; size: number; border: string }) {
@@ -106,7 +121,8 @@ function Portrait({ character, url, size, border }: { character: CharacterId; ur
   }, [src, key]);
 
   const box: React.CSSProperties = { width: size, height: size, borderRadius: "50%", overflow: "hidden", border, background: "var(--surface-2)" };
-  if (failed) return <AvatarGlyph color="#888" character={character} size={size} />;
+  // Falhou ao montar o retrato do modelo: cai na foto padrão do personagem.
+  if (failed) return <StaticFace character={character} size={size} border={border} />;
   if (src) return <img src={src} alt="" width={size} height={size} style={{ ...box, objectFit: "cover" }} />;
   return (
     <div style={box} aria-hidden>
@@ -143,9 +159,11 @@ export function CharacterFace({ color, character, team, size = 64 }: { color: st
   const [failed, setFailed] = useState(false);
   // Vale o modelo enviado para este personagem NA equipe escolhida (senão o geral do personagem).
   // Sem modelo para esta equipe nem geral, mas enviado para outra equipe: o rosto vem dele (o jogador não vê a diferença na escolha).
-  const uploaded = modelUrlFor(character, team) ?? TEAM_IDS.map((t) => modelUrlFor(character, t)).find((u) => u && !u.startsWith("/models/")) ?? null;
+  const uploaded = modelUrlFor(character, team) ?? TEAM_IDS.map((t) => modelUrlFor(character, t)).find(Boolean) ?? null;
   const border = `3px solid ${color}`;
-  if (uploaded && !uploaded.startsWith("/models/")) {
+  // Qualquer personagem com modelo 3D (enviado ou que já vem no jogo) tem o retrato tirado do próprio modelo: assim a foto
+  // sempre acompanha o modelo atual. A foto padrão (public/faces) só vale para os bonecos geométricos.
+  if (uploaded) {
     return <Portrait key={`${character}|${uploaded}`} character={character} url={uploaded} size={size} border={border} />;
   }
   if (failed) return <AvatarGlyph color={color} character={character} size={size} />;
