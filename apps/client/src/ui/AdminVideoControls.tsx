@@ -31,10 +31,12 @@ const clock = (s: number) => {
  * Tocar, pausar, parar e pular viram o estado compartilhado (game_config.screen_playback) que todos os jogadores seguem.
  * Um player invisível, mudo e parado serve só para descobrir a duração do vídeo.
  */
-export function AdminVideoControls({ videoId, defaultAutoplay = false, live = false }: { videoId: string | null; defaultAutoplay?: boolean; live?: boolean }) {
+export function AdminVideoControls({ videoId, defaultAutoplay = false, live: liveOpt = false }: { videoId: string | null; defaultAutoplay?: boolean; live?: boolean }) {
   const ref = useRef<HTMLIFrameElement>(null);
   const playback = usePlayback();
   const [duration, setDuration] = useState(0);
+  const [autoLive, setAutoLive] = useState(false); // o próprio player avisou que é uma live (ou a duração fica mudando)
+  const lastDur = useRef(0);
   const [dragging, setDragging] = useState<number | null>(null);
   const [pubError, setPubError] = useState<string | null>(null);
   const [, tick] = useState(0);
@@ -62,6 +64,8 @@ export function AdminVideoControls({ videoId, defaultAutoplay = false, live = fa
   const listen = () => ref.current?.contentWindow?.postMessage(JSON.stringify({ event: "listening", id: 1, channel: "widget" }), YT_ORIGIN);
   useEffect(() => {
     setDuration(0);
+    setAutoLive(false);
+    lastDur.current = 0;
     const onMessage = (e: MessageEvent) => {
       if (e.origin !== YT_ORIGIN || e.source !== ref.current?.contentWindow || typeof e.data !== "string") return;
       let data: { event?: string; info?: Record<string, unknown> };
@@ -72,12 +76,20 @@ export function AdminVideoControls({ videoId, defaultAutoplay = false, live = fa
       }
       if (data.event === "onReady") listen();
       const d = data.info?.duration;
-      if (data.event === "infoDelivery" && typeof d === "number" && d > 0) setDuration(d);
+      const vd = data.info?.videoData as { isLive?: unknown } | undefined;
+      if (vd?.isLive === true) setAutoLive(true);
+      if (data.event === "infoDelivery" && typeof d === "number" && d > 0) {
+        // Numa live a "duração" vai crescendo sozinha com o player parado: é o que faz a linha do tempo parecer mudar sozinha.
+        if (lastDur.current > 0 && Math.abs(d - lastDur.current) > 2) setAutoLive(true);
+        lastDur.current = d;
+        setDuration(d);
+      }
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
   }, [videoId]);
 
+  const live = liveOpt || autoLive;
   const enabled = Boolean(videoId);
   const current = playback ? expectedPosition(playback) : 0;
   const time = duration > 0 ? Math.min(current, duration) : current;

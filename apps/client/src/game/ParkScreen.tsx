@@ -126,6 +126,8 @@ function OutdoorVideo({ cfg, videoId, cy, x, z }: { cfg: ScreenConfig; videoId: 
   }, []);
   const appliedRef = useRef("");
   const prevLiveState = useRef("");
+  const detectedLive = useRef(false); // o próprio player avisou que é uma live
+  const curTimeRef = useRef<number | null>(null); // onde o player está (vem dos avisos do YouTube)
   const apply = useCallback(() => {
     const pb = currentPlayback();
     if (!pb || !readyRef.current) return;
@@ -133,11 +135,16 @@ function OutdoorVideo({ cfg, videoId, cy, x, z }: { cfg: ScreenConfig; videoId: 
     const key = `${pb.state}|${pb.position}|${pb.at}`;
     if (key === appliedRef.current) return;
     appliedRef.current = key;
-    if (cfg.live) {
+    if (cfg.live || detectedLive.current) {
       // Ao vivo não tem posição: ao voltar de pausa/parada, vai para o ponto atual da transmissão (o player limita ao fim).
       if (pb.state === "playing" && prevLiveState.current !== "playing" && prevLiveState.current !== "") send("seekTo", [1e9, true]);
       prevLiveState.current = pb.state;
-    } else send("seekTo", [pb.state === "stopped" ? 0 : expectedPosition(pb), true]);
+    } else {
+      // Só pula se o player está longe de onde deveria (evita seeks repetidos que o espectador vê como o tempo "mudando sozinho").
+      const target = pb.state === "stopped" ? 0 : expectedPosition(pb);
+      const cur = curTimeRef.current;
+      if (pb.state !== "playing" || cur === null || Math.abs(cur - target) > 2.5) send("seekTo", [target, true]);
+    }
     send(pb.state === "playing" ? "playVideo" : "pauseVideo");
   }, [send, cfg.live]);
 
@@ -145,7 +152,10 @@ function OutdoorVideo({ cfg, videoId, cy, x, z }: { cfg: ScreenConfig; videoId: 
     const onMessage = (e: MessageEvent) => {
       if (e.origin !== YT_ORIGIN || e.source !== frameRef.current?.contentWindow || typeof e.data !== "string") return;
       try {
-        if ((JSON.parse(e.data) as { event?: string }).event === "onReady") {
+        const msg = JSON.parse(e.data) as { event?: string; info?: { currentTime?: unknown; videoData?: { isLive?: unknown } } };
+        if (msg.info?.videoData?.isLive === true) detectedLive.current = true;
+        if (msg.event === "infoDelivery" && typeof msg.info?.currentTime === "number") curTimeRef.current = msg.info.currentTime;
+        if (msg.event === "onReady") {
           readyRef.current = true;
           volumeRef.current = -1; // o player começa mudo: reaplica o volume
           appliedRef.current = "";
@@ -161,6 +171,18 @@ function OutdoorVideo({ cfg, videoId, cy, x, z }: { cfg: ScreenConfig; videoId: 
   useEffect(() => {
     apply();
   }, [playback, apply]);
+  // De tempos em tempos confere se o vídeo está onde o admin deixou (travou/atrasou): só corrige se a diferença é grande.
+  useEffect(() => {
+    if (cfg.live) return;
+    const id = window.setInterval(() => {
+      const pb = currentPlayback();
+      const cur = curTimeRef.current;
+      if (!pb || pb.state !== "playing" || !readyRef.current || cur === null || detectedLive.current) return;
+      const target = expectedPosition(pb);
+      if (Math.abs(cur - target) > 4) send("seekTo", [target, true]);
+    }, 5000);
+    return () => window.clearInterval(id);
+  }, [cfg.live, send]);
 
   // O Html do drei (occlude="blending") deixa o canvas com estilo próprio e não desfaz: ao sair, restaura.
   const { camera, gl } = useThree();

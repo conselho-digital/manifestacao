@@ -299,7 +299,13 @@ Deno.serve(async (req) => {
       .eq("external_reference", externalReference)
       .maybeSingle();
     if (orderErr) return new Response("db_error", { status: 500 }); // erro de banco nunca vira estorno
-    if (!order) return await refundOrphan(admin, payment, externalReference);
+    if (!order) {
+      // Pedido apagado de vez pelo admin (fica só o arquivo anonimizado): não é "órfão", então não estorna.
+      const { data: archived, error: archErr } = await admin.from("orders_archive").select("external_reference").eq("external_reference", externalReference).maybeSingle();
+      if (archErr) return new Response("db_error", { status: 500 });
+      if (archived) return new Response("archived", { status: 200 });
+      return await refundOrphan(admin, payment, externalReference);
+    }
 
     // Defesa em profundidade: confere o valor pago contra o esperado.
     if (Math.round((payment.transaction_amount ?? 0) * 100) !== order.amount_cents) {
