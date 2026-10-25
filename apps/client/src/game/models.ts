@@ -12,7 +12,7 @@ export const CHARACTER_MODELS: Record<CharacterId, string | null> = {
   homem_comum: null,
   homem_alternativo: null,
   menino: null,
-  // Mia (Mixamo): a comum é a variante de calça jeans e cabelo longo loiro; a alternativa é o modelo original.
+  // Comum: "Sophia" (Renderpeople); alternativa: "Mia" (Mixamo). Os dois trazem esqueleto humanoide, reconhecido sozinho.
   mulher_comum: "/models/characters/mulher_comum.glb",
   mulher_alternativa: "/models/characters/mulher_alternativa.glb",
   menina: null,

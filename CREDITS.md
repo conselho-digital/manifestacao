@@ -11,7 +11,7 @@ exigem crédito, mas registramos mesmo assim como prova de licença; assets CC-B
 |---|---|---|---|
 | `apps/client/public/models/scenery/masp.glb` | MASP (Museu de Arte de São Paulo), simplificado — marco visual do cenário | CC0 (informado pelo usuário) | Prédio de cenário no mapa inicial |
 | `apps/client/public/models/characters/mulher_alternativa.glb` | Personagem "Mia" (Mixamo), enviado pelo operador | Mixamo (Adobe): uso permitido embutido em projetos; arquivo convertido para GLB, não redistribuir cru | Personagem Mulher alternativa |
-| `apps/client/public/models/characters/mulher_comum.glb` | Variante do "Mia": sem saia (calça jeans), cabelo longo loiro (textura e malha editadas por nós) | Mixamo (Adobe), derivado | Personagem Mulher comum |
+| `apps/client/public/models/characters/mulher_comum.glb` | Modelo "Sophia" (Renderpeople, versão gratuita animada), convertido por nós de FBX para GLB (textura reduzida, sem animação, pose neutra) | Licença gratuita do Renderpeople conferida pelo operador; não redistribuir o arquivo original | Personagem Mulher comum |
 
 Os avatares de personagem ainda são geométricos, gerados por código.
 
