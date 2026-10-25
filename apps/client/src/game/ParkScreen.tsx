@@ -166,7 +166,10 @@ function OutdoorVideo({ cfg, videoId, cy, x, z }: { cfg: ScreenConfig; videoId: 
       transform
       position={[0, cy, 0.05]}
       scale={(SCREEN_W / FRAME_PX_W) * HTML_PX_PER_UNIT}
-      zIndexRange={[2, 0]}
+      // "blending": o iframe fica ATRÁS do canvas e a tela vira um buraco nele; o que está na frente da tela (personagem,
+      // árvores, prédios) desenha por cima do vídeo. Z negativo = abaixo do canvas.
+      occlude="blending"
+      zIndexRange={[-1, 0]}
       style={{ pointerEvents: "none" }}
     >
       <iframe
