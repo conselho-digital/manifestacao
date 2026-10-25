@@ -12,6 +12,7 @@ exigem crédito, mas registramos mesmo assim como prova de licença; assets CC-B
 | `apps/client/public/models/scenery/masp.glb` | MASP (Museu de Arte de São Paulo), simplificado — marco visual do cenário | CC0 (informado pelo usuário) | Prédio de cenário no mapa inicial |
 | `apps/client/public/models/characters/mulher_{verde,roxo,neutro}.glb` | Modelo "Sophia" (Renderpeople, versão gratuita animada), convertido por nós de FBX para GLB (textura reduzida, sem animação, pose neutra) com a blusa recolorida nas cores de cada equipe | Licença gratuita do Renderpeople conferida pelo operador; não redistribuir o arquivo original | Personagem Mulher |
 | `apps/client/public/models/characters/homem_{verde,roxo,neutro}.glb` | Modelo "Nathan" (Renderpeople, versão gratuita animada), convertido por nós de FBX para GLB (textura reduzida, sem animação) com a camiseta recolorida nas cores de cada equipe | Licença gratuita do Renderpeople conferida pelo operador; não redistribuir o arquivo original | Personagem Homem |
+| `apps/client/public/models/vehicles/moto.glb` | Moto custom (OBJ enviado pelo operador), convertida por nós para GLB, escalada e orientada para o jogo | Licença do modelo a conferir pelo operador (design inspirado em moto de marca comercial) | Veículo Moto |
 
 Os avatares de personagem ainda são geométricos, gerados por código.
 

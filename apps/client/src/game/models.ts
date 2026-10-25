@@ -23,8 +23,12 @@ export function modelUrlFor(character: CharacterId, team: TeamId = TEAM_IDS[0]!)
   return modelOverride(`character:${character}:${team}`) ?? modelOverride(`character:${character}`) ?? shippedModel(character, team);
 }
 
+/** Veículos que já vêm no jogo (frente em +Z, chão em y=0, eixo traseiro em z≈-0,7). */
+const SHIPPED_VEHICLES: Partial<Record<VehicleId, string>> = { moto: "/models/vehicles/moto.glb" };
+
+/** Modelo do veículo: o enviado no admin → o que já vem no jogo → o geométrico. */
 export function vehicleModelUrl(vehicle: VehicleId): string | null {
-  return vehicle === "nenhum" ? null : modelOverride(`vehicle:${vehicle}`);
+  return vehicle === "nenhum" ? null : modelOverride(`vehicle:${vehicle}`) ?? SHIPPED_VEHICLES[vehicle] ?? null;
 }
 
 /** Modelo 3D do spray: o da opção (spray:<slug>), senão o geral ("spray"), senão nenhum (mancha). */
