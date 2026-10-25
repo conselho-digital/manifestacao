@@ -15,6 +15,7 @@ exigem crédito, mas registramos mesmo assim como prova de licença; assets CC-B
 | `apps/client/public/models/vehicles/moto.glb` | Moto custom (OBJ enviado pelo operador), convertida por nós para GLB, escalada e orientada para o jogo | Licença do modelo a conferir pelo operador (design inspirado em moto de marca comercial) | Veículo Moto |
 | `apps/client/public/models/vehicles/moto2.glb` | Moto esportiva custom (FBX enviado pelo operador), convertida por nós para GLB (cores sólidas) | Licença do modelo a conferir pelo operador (design inspirado em moto de marca comercial) | Veículo Moto esportiva |
 | `apps/client/public/models/vehicles/carro_som_{verde,roxo,neutro}.glb` | Caminhão de som custom (SKP enviado pelo operador), convertido e simplificado por nós para GLB, pintado nas cores de cada equipe | Licença do modelo a conferir pelo operador | Veículo Caminhão de som |
+| `apps/client/public/models/vehicles/carro_{verde,roxo,neutro}.glb` | Carro (Opel Corsa, arquivo GLB enviado pelo operador), pintado por nós nas cores de cada equipe, com adesivo da bandeira do Brasil nas portas | Licença do modelo a conferir pelo operador (design de marca comercial) | Veículo Carro |
 
 Os avatares de personagem ainda são geométricos, gerados por código.
 
