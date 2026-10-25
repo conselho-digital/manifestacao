@@ -14,6 +14,7 @@ exigem crédito, mas registramos mesmo assim como prova de licença; assets CC-B
 | `apps/client/public/models/characters/homem_{verde,roxo,neutro}.glb` | Modelo "Nathan" (Renderpeople, versão gratuita animada), convertido por nós de FBX para GLB (textura reduzida, sem animação) com a camiseta recolorida nas cores de cada equipe | Licença gratuita do Renderpeople conferida pelo operador; não redistribuir o arquivo original | Personagem Homem |
 | `apps/client/public/models/vehicles/moto.glb` | Moto custom (OBJ enviado pelo operador), convertida por nós para GLB, escalada e orientada para o jogo | Licença do modelo a conferir pelo operador (design inspirado em moto de marca comercial) | Veículo Moto |
 | `apps/client/public/models/vehicles/moto2.glb` | Moto esportiva custom (FBX enviado pelo operador), convertida por nós para GLB (cores sólidas) | Licença do modelo a conferir pelo operador (design inspirado em moto de marca comercial) | Veículo Moto esportiva |
+| `apps/client/public/models/vehicles/carro_som.glb` | Caminhão de som custom (SKP enviado pelo operador), convertido e simplificado por nós para GLB | Licença do modelo a conferir pelo operador | Veículo Carro de som |
 
 Os avatares de personagem ainda são geométricos, gerados por código.
 
