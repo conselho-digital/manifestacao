@@ -14,6 +14,8 @@ const SHIPPED_PREFIX: Partial<Record<CharacterId, string>> = { homem_comum: "hom
 const SHIPPED_SINGLE: Partial<Record<CharacterId, string>> = {
   renam_santos: "/models/characters/renam_santos.glb",
   jair_bolsonaro: "/models/characters/jair_bolsonaro.glb",
+  flavio_bolsonaro: "/models/characters/flavio_bolsonaro.glb",
+  lula: "/models/characters/lula.glb",
   eneias: "/models/characters/eneias.glb",
 };
 export function shippedModel(character: CharacterId, team: TeamId): string | null {

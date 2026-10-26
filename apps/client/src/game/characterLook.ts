@@ -17,6 +17,8 @@ export const CHARACTER_LOOKS: Record<CharacterId, CharacterLook> = {
   mulher_comum: { scale: 0.96, hair: "long", hairColor: 0x5a3825 },
   renam_santos: { scale: 1, hair: "short", hairColor: 0x1e1612 },
   jair_bolsonaro: { scale: 1, hair: "short", hairColor: 0x1c1c1c },
+  flavio_bolsonaro: { scale: 1, hair: "short", hairColor: 0x2a2018 },
+  lula: { scale: 1, hair: "short", hairColor: 0xd8d8d8 },
   eneias: { scale: 1, hair: "short", hairColor: 0x2a2a2a },
 };
 

@@ -10,7 +10,7 @@
 import type { TeamId } from "./teams.js";
 
 // ── Personagens ────────────────────────────────────────────────────────────
-export type CharacterId = "homem_comum" | "mulher_comum" | "renam_santos" | "jair_bolsonaro" | "eneias";
+export type CharacterId = "homem_comum" | "mulher_comum" | "renam_santos" | "jair_bolsonaro" | "flavio_bolsonaro" | "lula" | "eneias";
 
 export interface Character {
   id: CharacterId;
@@ -25,13 +25,15 @@ export const CHARACTERS: Record<CharacterId, Character> = {
   mulher_comum: { id: "mulher_comum", label: "Mulher", priceCents: 0 },
   renam_santos: { id: "renam_santos", label: "Renam Santos", priceCents: 0 },
   jair_bolsonaro: { id: "jair_bolsonaro", label: "Jair Bolsonaro", priceCents: 0 },
+  flavio_bolsonaro: { id: "flavio_bolsonaro", label: "Flávio Bolsonaro", priceCents: 0 },
+  lula: { id: "lula", label: "Lula", priceCents: 0 },
   eneias: { id: "eneias", label: "Enéias", priceCents: 0 },
 };
 
 /** Categorias da seleção de personagem: cada uma vira uma fileira (carrossel no celular) com o seu título. */
 export const CHARACTER_GROUPS: { id: string; label: string; ids: CharacterId[] }[] = [
   { id: "pessoas", label: "Personagens", ids: ["homem_comum", "mulher_comum"] },
-  { id: "politicos", label: "Políticos", ids: ["renam_santos", "jair_bolsonaro", "eneias"] },
+  { id: "politicos", label: "Políticos", ids: ["renam_santos", "jair_bolsonaro", "flavio_bolsonaro", "lula", "eneias"] },
 ];
 
 export const CHARACTER_IDS: CharacterId[] = CHARACTER_GROUPS.flatMap((g) => g.ids);
