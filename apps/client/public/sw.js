@@ -1,5 +1,5 @@
 /* Service worker mínimo (PWA): casca do app e modelos 3D em cache; tempo real, API e pagamentos NUNCA passam por aqui. */
-const VERSION = "v2"; // troque ao mudar a estratégia; o cache antigo é apagado no activate
+const VERSION = "v3"; // troque ao mudar a estratégia; o cache antigo é apagado no activate
 const SHELL = `shell-${VERSION}`;
 const MODELS = `models-${VERSION}`;
 

@@ -121,6 +121,8 @@ export interface MotoSeat {
   knee: number;
   arm: number;
   forearm: number;
+  /** Quanto os braços abrem para fora (rad, em torno da vertical) para as mãos chegarem às manoplas, que ficam mais afastadas que os ombros. */
+  spread?: number;
 }
 /** Parte da inclinação do piloto que fica na coluna (o resto é do quadril: quanto menor, mais reta a coluna). */
 const SPINE_SHARE = 0.2;
@@ -128,14 +130,17 @@ export const DEFAULT_MOTO_SEAT: MotoSeat = { hipY: 0.82, z: -0.05, lean: 0.6, th
 /** Assento do piloto/motorista por veículo (moto: guidão; carro: volante). */
 export const MOTO_SEATS: Partial<Record<VehicleId, MotoSeat>> = {
   // Custom (cruzador): banco baixo e atrás, guidão alto e recuado.
-  moto: { hipY: 0.84, z: -0.5, lean: 0.45, thigh: 1.1, knee: -1.35, arm: 0.85, forearm: 0.45 },
+  moto: { hipY: 0.84, z: -0.5, lean: 0.45, thigh: 1.1, knee: -1.35, arm: 0.85, forearm: 0.45, spread: 0.3 },
   // Esportiva: banco atrás, tronco deitado sobre o tanque, mãos nos semiguidões baixos.
-  moto2: { hipY: 0.85, z: -0.5, lean: 0.95, thigh: 0.95, knee: -1.6, arm: 1.4, forearm: 0.0 },
+  moto2: { hipY: 0.85, z: -0.5, lean: 0.95, thigh: 0.95, knee: -1.6, arm: 1.4, forearm: 0.0, spread: 0.12 },
   // Caminhão de som: motorista no banco da esquerda, costas retas, mãos no volante.
   caminhao: { x: 0.35, hipY: 0.68, z: 0.7, lean: 0.18, thigh: 1.45, knee: -0.7, arm: 0.85, forearm: 0.75 },
   // Carro de som (picape): banco baixo, volante perto.
   carro_som: { x: 0.35, hipY: 0.46, z: 0.0, lean: 0.12, thigh: 1.45, knee: -0.35, arm: 0.85, forearm: 0.7 },
 };
+
+/** Quanto a mão fecha ao segurar o guidão/volante (0 = relaxada, 1 = punho). */
+const GRIP_CURL = 0.85;
 
 export type AutoPose = "moto" | "car" | null;
 
@@ -447,8 +452,9 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
       for (const l of limbs) {
         if (l.role === "finger") {
           // Punho fechado ao socar (as duas mãos) e na haste da bandeira (só a mão direita).
-          const fist = Math.max(punch ? sp : 0, carryK > 0.001 && l.side < 0 ? carryK : 0);
-          const relaxed = [0, 0.3, 0.45, 0.35][l.level!] ?? 0.3;
+          // Sentado, as duas mãos fecham na manopla/volante.
+          const fist = Math.max(punch ? sp : 0, carryK > 0.001 && l.side < 0 ? carryK : 0, sit * GRIP_CURL);
+          const relaxed = [0, 0.5, 0.7, 0.5][l.level!] ?? 0.5;
           const closed = [0, 1.25, 1.55, 1.05][l.level!] ?? 1.2;
           const a = (relaxed + (closed - relaxed) * fist) * (l.curlK ?? 1);
           l.bone.quaternion.copy(l.restLocal).multiply(rotA.setFromAxisAngle(l.localAxis!, a));
@@ -551,6 +557,7 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
               break;
           }
           ang = lerp(ang, seated, sit);
+          if (l.role === "arm" && seat.spread) yaw = lerp(yaw, -seat.spread, sit);
           // Costas retas: o tronco inclina inteiro a partir do quadril (a coluna quase não curva) e a cabeça acompanha.
           if (l.role === "spine") lean = lerp(lean, (seat.lean * SPINE_SHARE) / spineCount, sit);
           // Cabeça olhando para a frente: pescoço e cabeça desfazem a inclinação do tronco.
