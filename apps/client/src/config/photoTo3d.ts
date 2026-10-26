@@ -466,6 +466,32 @@ function bleedEdges(canvas: HTMLCanvasElement, alphaMask: Uint8Array, passes = 1
   ctx.putImageData(img, 0, 0);
 }
 
+/** Largura da faixa do contorno (fração da altura) que vira "lateral": ali a frente se mistura com a cor pintada das costas. */
+const SIDE_BAND = 0.035;
+/** Espessura mínima (m, para cada lado) no contorno: a lateral nunca é uma lâmina. */
+const RIM_M = 0.02;
+
+/**
+ * Laterais do boneco: a foto só enxerga a frente, então o contorno (que é o que se vê de lado) ficava com o rosto e a
+ * gravata esticados. Aqui a borda da frente se funde, aos poucos, com a cor pintada das costas (paletó, calça, pele,
+ * cabelo): visto de lado, o boneco tem cor de lateral, e de frente a foto continua intacta.
+ */
+function blendSides(front: HTMLCanvasElement, back: HTMLCanvasElement, mask: Uint8Array, dist: Float32Array, band: number): void {
+  const { width: w, height: h } = front;
+  const fctx = front.getContext("2d")!;
+  const f = fctx.getImageData(0, 0, w, h);
+  const b = back.getContext("2d")!.getImageData(0, 0, w, h).data;
+  for (let i = 0; i < w * h; i++) {
+    if (!mask[i]) continue;
+    const d = dist[i]!;
+    if (d >= band) continue;
+    const t = d / band;
+    const k = 1 - t * t * (3 - 2 * t); // 1 no contorno, 0 a `band` de distância
+    for (let c = 0; c < 3; c++) f.data[i * 4 + c] = f.data[i * 4 + c]! * (1 - k) + b[i * 4 + c]! * k;
+  }
+  fctx.putImageData(f, 0, 0);
+}
+
 export function buildCharacter(cut: Cutout): Group {
   const { w, h, mask } = cut;
   const dist = distanceInside(mask, w, h);
@@ -492,7 +518,9 @@ export function buildCharacter(cut: Cutout): Group {
       if (!inside(gx, gy)) continue;
       isIn[n] = 1;
       active[n] = 1;
-      if (!(inside(gx - 1, gy) && inside(gx + 1, gy) && inside(gx, gy - 1) && inside(gx, gy + 1))) continue; // borda: z = 0
+      let all8 = true;
+      for (let dy = -1; dy <= 1 && all8; dy++) for (let dx = -1; dx <= 1; dx++) if (!inside(gx + dx, gy + dy)) { all8 = false; break; }
+      if (!all8) continue; // borda: só a espessura mínima (a parede fecha a lateral)
       const d = dist[at(gx * step, gy * step)]!;
       const k = Math.min(1, d / dcap);
       zOf[n] = tmax * Math.sqrt(Math.max(0, 1 - (1 - k) * (1 - k))) * s;
@@ -515,6 +543,8 @@ export function buildCharacter(cut: Cutout): Group {
         }
     }
   }
+
+  for (let n = 0; n < zOf.length; n++) if (active[n]) zOf[n] = zOf[n]! + RIM_M;
 
   const positions: number[] = [];
   const uvs: number[] = [];
@@ -542,11 +572,6 @@ export function buildCharacter(cut: Cutout): Group {
   const vert = (gx: number, gy: number, back: boolean): number => {
     const n = gy * (nx + 1) + gx;
     const z = zOf[n]!;
-    if (z < 1e-5) {
-      // Na borda a frente e as costas são o mesmo vértice (sem fresta).
-      if (frontIdx[n]! < 0) frontIdx[n] = addVertex(n, gx, gy, 0, 1);
-      return frontIdx[n]!;
-    }
     if (back) {
       if (backIdx[n]! < 0) backIdx[n] = addVertex(n, gx, gy, -z, 0.9, true);
       return backIdx[n]!;
@@ -576,6 +601,32 @@ export function buildCharacter(cut: Cutout): Group {
     }
   }
 
+  // Parede da lateral: ao longo do contorno liga a frente às costas, com a cor pintada (a mesma das costas).
+  const solid = (gx: number, gy: number) => gx >= 0 && gy >= 0 && gx < nx && gy < ny && isIn[gy * (nx + 1) + gx] && isIn[gy * (nx + 1) + gx + 1] && isIn[(gy + 1) * (nx + 1) + gx] && isIn[(gy + 1) * (nx + 1) + gx + 1];
+  const wallV = (gx: number, gy: number, sign: 1 | -1): number => addVertex(gy * (nx + 1) + gx, gx, gy, sign * zOf[gy * (nx + 1) + gx]!, 0.9, true);
+  const wall = (ax: number, ay: number, bx: number, by: number, ox: number, oy: number) => {
+    const af = wallV(ax, ay, 1), bf = wallV(bx, by, 1), bb = wallV(bx, by, -1), ab = wallV(ax, ay, -1);
+    // (ox, oy) = direção para fora na imagem (y cresce para baixo; no mundo, para cima).
+    const ex = (bx - ax) * s, ey = -(by - ay) * s; // aresta no mundo
+    const dot = -ey * ox + ex * -oy; // normal de (af,bf,bb) = (−ey, ex, 0)
+    if (dot >= 0) index.push(af, bf, bb, af, bb, ab);
+    else index.push(af, bb, bf, af, ab, bb);
+  };
+  for (let gy = 0; gy <= ny; gy++) {
+    for (let gx = 0; gx <= nx; gx++) {
+      // aresta horizontal (gx,gy)-(gx+1,gy): células acima e abaixo
+      if (gx < nx && isIn[gy * (nx + 1) + gx] && isIn[gy * (nx + 1) + gx + 1]) {
+        const up = solid(gx, gy - 1), down = solid(gx, gy);
+        if (up !== down) wall(gx, gy, gx + 1, gy, 0, up ? 1 : -1);
+      }
+      // aresta vertical (gx,gy)-(gx,gy+1): células à esquerda e à direita
+      if (gy < ny && isIn[gy * (nx + 1) + gx] && isIn[(gy + 1) * (nx + 1) + gx]) {
+        const left = solid(gx - 1, gy), right = solid(gx, gy);
+        if (left !== right) wall(gx, gy, gx, gy + 1, left ? 1 : -1, 0);
+      }
+    }
+  }
+
   const geo = new BufferGeometry();
   geo.setAttribute("position", new BufferAttribute(new Float32Array(positions), 3));
   geo.setAttribute("uv", new BufferAttribute(new Float32Array(uvs), 2));
@@ -594,11 +645,12 @@ export function buildCharacter(cut: Cutout): Group {
   frontTex.width = w;
   frontTex.height = h;
   frontTex.getContext("2d")!.drawImage(cut.canvas, 0, 0);
-  bleedEdges(frontTex, mask);
   const backTex = document.createElement("canvas");
   backTex.width = w;
   backTex.height = h;
   backTex.getContext("2d")!.drawImage(cut.back ?? makeBackCanvas(cut), 0, 0, w, h);
+  blendSides(frontTex, backTex, mask, dist, h * SIDE_BAND);
+  bleedEdges(frontTex, mask);
   bleedEdges(backTex, mask);
   actx.drawImage(frontTex, 0, 0);
   actx.drawImage(backTex, w, 0);
