@@ -39,6 +39,13 @@ export function isIos(): boolean {
   return /iPad|iPhone|iPod/.test(ua) || (ua.includes("Mac") && navigator.maxTouchPoints > 1);
 }
 
+/** Celular ou tablet (toque como ponteiro principal, iOS ou Android). No computador o atalho não é oferecido. */
+export function isMobileDevice(): boolean {
+  if (typeof window === "undefined") return false;
+  if (isIos() || /Android/i.test(navigator.userAgent)) return true;
+  return window.matchMedia?.("(pointer: coarse)").matches === true && navigator.maxTouchPoints > 0;
+}
+
 export function canPromptInstall(): boolean {
   return deferred !== null;
 }

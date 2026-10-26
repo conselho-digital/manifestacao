@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { isIos, promptInstall, useInstallState } from "./installPrompt.js";
+import { isIos, isMobileDevice, promptInstall, useInstallState } from "./installPrompt.js";
 
 /** Botão da página inicial: põe um atalho do jogo na tela do celular (aviso nativo, ou passo a passo quando não há). */
 export function InstallShortcut() {
   const state = useInstallState();
   const [help, setHelp] = useState(false);
-  if (state === "installed") return null;
+  if (state === "installed" || !isMobileDevice()) return null;
 
   const onClick = () => {
     if (state === "native") void promptInstall();
