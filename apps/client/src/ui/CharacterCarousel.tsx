@@ -144,7 +144,52 @@ export function WideCarousel({
 }) {
   const ref = useRef<HTMLDivElement>(null);
   const [edge, setEdge] = useState({ start: true, end: ids.length <= visible });
+  const [dragging, setDragging] = useState(false);
+  const drag = useRef<{ x: number; left: number; moved: boolean; id: number } | null>(null);
   void onSelect;
+
+  // Arrastar com o mouse (o dedo já rola sozinho): segura e puxa para o lado; ao soltar, encaixa no cartão mais próximo.
+  const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    suppress.current = false;
+    if (e.pointerType !== "mouse" || e.button !== 0) return;
+    const el = ref.current;
+    if (!el) return;
+    drag.current = { x: e.clientX, left: el.scrollLeft, moved: false, id: e.pointerId };
+  };
+  const onPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    const el = ref.current;
+    if (!d || !el || e.pointerId !== d.id) return;
+    const dx = e.clientX - d.x;
+    if (!d.moved && Math.abs(dx) > 5) {
+      d.moved = true;
+      setDragging(true);
+      el.setPointerCapture(e.pointerId);
+    }
+    if (d.moved) el.scrollLeft = d.left - dx;
+  };
+  const endDrag = (e: React.PointerEvent<HTMLDivElement>) => {
+    const d = drag.current;
+    const el = ref.current;
+    drag.current = null;
+    if (!d || !el) return;
+    if (d.moved) {
+      if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+      setDragging(false);
+      const item = el.children[0] as HTMLElement | undefined;
+      const step = (item?.offsetWidth ?? 160) + gap;
+      el.scrollTo({ left: Math.round(el.scrollLeft / step) * step, behavior: "smooth" });
+    }
+  };
+  // O clique que termina um arrasto não escolhe o cartão onde o mouse foi solto.
+  const onClickCapture = (e: React.MouseEvent) => {
+    if (suppress.current) {
+      e.stopPropagation();
+      e.preventDefault();
+      suppress.current = false;
+    }
+  };
+  const suppress = useRef(false);
 
   const update = () => {
     const el = ref.current;
@@ -196,9 +241,27 @@ export function WideCarousel({
       <div
         ref={ref}
         onScroll={update}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={(e) => {
+          suppress.current = !!drag.current?.moved;
+          endDrag(e);
+        }}
+        onPointerCancel={endDrag}
+        onClickCapture={onClickCapture}
         role="group"
-        aria-label="Políticos (use as setas para ver mais)"
-        style={{ display: "flex", gap, overflowX: "auto", scrollSnapType: "x mandatory", scrollbarWidth: "none", padding: 2 }}
+        aria-label="Políticos (arraste ou use as setas para ver mais)"
+        style={{
+          display: "flex",
+          gap,
+          overflowX: "auto",
+          // Durante o arrasto o encaixe automático sai do caminho; ao soltar, o scrollTo acima encaixa.
+          scrollSnapType: dragging ? "none" : "x mandatory",
+          scrollbarWidth: "none",
+          padding: 2,
+          cursor: dragging ? "grabbing" : "grab",
+          userSelect: "none",
+        }}
       >
         {ids.map((id) => (
           <div key={id} style={{ display: "flex", flex: `0 0 calc((100% - ${(visible - 1) * gap}px) / ${visible})`, scrollSnapAlign: "start", minWidth: 0 }}>
