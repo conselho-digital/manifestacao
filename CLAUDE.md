@@ -155,7 +155,7 @@ Em cada fase: entregar → rodar agentes de bugs/segurança/visual (§7) → cor
 
 ## 9. Riscos e pontos legais
 
-- **Conteúdo é do operador**: nomes de equipes, bandeiras (cor e imagem), produtos e textos são definidos pelo dono do jogo no painel de admin; a plataforma não impõe nomes nem temas. A responsabilidade legal sobre esse conteúdo (direito de imagem, legislação eleitoral/TSE, marcas) é do operador. O código não deve trazer nomes/bandeiras de partidos como padrão — o padrão é neutro e o admin sobrescreve. Personagens (inclusive inspirados em figuras públicas) são conteúdo do operador, que responde por eles.
+- **Conteúdo é do operador**: nomes de equipes, bandeiras (cor e imagem), produtos e textos são definidos pelo dono do jogo no painel de admin; a plataforma não impõe nomes nem temas. A responsabilidade legal sobre esse conteúdo (direito de imagem, legislação eleitoral/TSE, marcas) é do operador. O código não deve trazer nomes/bandeiras de partidos como padrão — o padrão é neutro e o admin sobrescreve.
 - **Marca/arte/código do original**: não reutilizar.
 - **Licença de assets 3D**: só compatível com uso comercial; atribuição em `CREDITS.md`.
 - **LGPD**: controlador/DPO definidos, exclusão de conta, retenção mínima, só dados necessários do Google.

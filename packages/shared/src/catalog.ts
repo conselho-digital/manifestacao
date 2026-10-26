@@ -28,7 +28,13 @@ export const CHARACTERS: Record<CharacterId, Character> = {
   eneias: { id: "eneias", label: "Enéias", priceCents: 0 },
 };
 
-export const CHARACTER_IDS: CharacterId[] = ["homem_comum", "mulher_comum", "renam_santos", "jair_bolsonaro", "eneias"];
+/** Categorias da seleção de personagem: cada uma vira uma fileira (carrossel no celular) com o seu título. */
+export const CHARACTER_GROUPS: { id: string; label: string; ids: CharacterId[] }[] = [
+  { id: "pessoas", label: "Personagens", ids: ["homem_comum", "mulher_comum"] },
+  { id: "politicos", label: "Políticos", ids: ["renam_santos", "jair_bolsonaro", "eneias"] },
+];
+
+export const CHARACTER_IDS: CharacterId[] = CHARACTER_GROUPS.flatMap((g) => g.ids);
 
 /** Personagem inicial (e o que vale quando um valor salvo/recebido é inválido ou de uma versão antiga). */
 export const DEFAULT_CHARACTER: CharacterId = "homem_comum";

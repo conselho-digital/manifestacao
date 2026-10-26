@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { useModal } from "./useModal.js";
 import {
   CHARACTERS,
-  CHARACTER_IDS,
+  CHARACTER_GROUPS,
   MAX_NICKNAME_LENGTH,
   TEAMS,
   TEAM_IDS,
@@ -14,6 +14,7 @@ import {
 } from "@manifestacao/shared";
 import { GRAPHICS_LEVELS, type GraphicsLevel } from "../config/graphics.js";
 import { CharacterBody } from "./CharacterFace.js";
+import { CAROUSEL_CARD_W, CharacterCarousel, useNarrow } from "./CharacterCarousel.js";
 import { TeamFlagIcon } from "./TeamFlagIcon.js";
 import { LegalLinks } from "./LegalPage.js";
 
@@ -45,6 +46,7 @@ export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin, onD
   const [team, setTeam] = useState<TeamId>(avatar.team);
   const [nickname, setNickname] = useState(avatar.nickname);
   const [character, setCharacter] = useState<CharacterId>(avatar.character);
+  const narrow = useNarrow();
 
   const dialogRef = useModal<HTMLFormElement>(onClose);
 
@@ -55,6 +57,35 @@ export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin, onD
   };
 
   const teamColorHex = hexColor(TEAMS[team].color);
+
+  const renderCard = (id: CharacterId, fixedWidth?: number) => {
+    const selected = id === character;
+    return (
+      <button
+        key={id}
+        type="button"
+        aria-pressed={selected}
+        onClick={() => setCharacter(id)}
+        style={{
+          ...(fixedWidth ? { flex: `0 0 ${fixedWidth}px` } : {}),
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          gap: 6,
+          padding: "12px 6px",
+          borderRadius: "var(--r-md)",
+          border: `2px solid ${selected ? "var(--accent)" : "var(--line)"}`,
+          background: selected ? "var(--surface-2)" : "var(--surface)",
+          cursor: "pointer",
+        }}
+      >
+        <CharacterBody color={teamColorHex} character={id} team={team} width={132} height={200} />
+        <span style={{ fontSize: "var(--t-ui)", fontWeight: 700, color: "var(--ink)", textAlign: "center" }}>
+          {CHARACTERS[id].label}
+        </span>
+      </button>
+    );
+  };
 
   return (
     <div
@@ -194,41 +225,21 @@ export function OptionsModal({ avatar, onSave, onClose, onExit, onOpenAdmin, onD
 
         <section>
           <Label>Personagem</Label>
-          <div
-            style={{
-              marginTop: 6,
-              display: "grid",
-              gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
-              gap: 10,
-            }}
-          >
-            {CHARACTER_IDS.map((id) => {
-              const selected = id === character;
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  aria-pressed={selected}
-                  onClick={() => setCharacter(id)}
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    gap: 6,
-                    padding: "12px 6px",
-                    borderRadius: "var(--r-md)",
-                    border: `2px solid ${selected ? "var(--accent)" : "var(--line)"}`,
-                    background: selected ? "var(--surface-2)" : "var(--surface)",
-                    cursor: "pointer",
-                  }}
-                >
-                  <CharacterBody color={teamColorHex} character={id} team={team} width={132} height={200} />
-                  <span style={{ fontSize: "var(--t-ui)", fontWeight: 700, color: "var(--ink)", textAlign: "center" }}>
-                    {CHARACTERS[id].label}
-                  </span>
-                </button>
-              );
-            })}
+          <div style={{ marginTop: 6, display: "flex", flexDirection: "column", gap: 10 }}>
+            {CHARACTER_GROUPS.map((group, gi) => (
+              <div key={group.id} style={{ display: "flex", flexDirection: "column", gap: 8, marginTop: gi === 0 ? 0 : 6 }}>
+                {gi > 0 && (
+                  <div style={{ fontSize: "var(--t-ui)", fontWeight: 700, color: "var(--ink-dim)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                    {group.label}
+                  </div>
+                )}
+                {narrow ? (
+                  <CharacterCarousel ids={group.ids} selected={group.ids.includes(character) ? character : null} onSelect={setCharacter} renderCard={(id) => renderCard(id, CAROUSEL_CARD_W)} />
+                ) : (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>{group.ids.map((id) => renderCard(id))}</div>
+                )}
+              </div>
+            ))}
           </div>
         </section>
 
