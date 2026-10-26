@@ -389,6 +389,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           inputRef={inputRef}
           cameraYawRef={cameraYawRef}
           cameraPitchRef={cameraPitchRef}
+          othersRef={net.playersRef}
           cameraDistance={cameraDistance}
           aimRef={aimRef}
           runRef={runRef}

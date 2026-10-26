@@ -83,7 +83,8 @@ function FlagClothImage({ url }: { url: string }) {
   );
 }
 
-export function Flag3D({ color, emblem, imageUrl }: { color: number; emblem?: FlagEmblem; imageUrl?: string | null }) {
+/** `clothSide`: de que lado da haste o pano fica (1 = +X; -1 = -X, para fora do corpo de quem segura com a mão direita). */
+export function Flag3D({ color, emblem, imageUrl, clothSide = 1 }: { color: number; emblem?: FlagEmblem; imageUrl?: string | null; clothSide?: 1 | -1 }) {
   const plain = (
     <mesh>
       <planeGeometry args={[1, 0.6]} />
@@ -92,11 +93,11 @@ export function Flag3D({ color, emblem, imageUrl }: { color: number; emblem?: Fl
   );
   return (
     <group position={[0.45, 0, 0]}>
-      <mesh position={[0, 1.4, 0]}>
-        <cylinderGeometry args={[0.03, 0.03, 2.8, 6]} />
+      <mesh position={[0, 0.7, 0]}>
+        <cylinderGeometry args={[0.03, 0.03, 1.4, 6]} />
         <meshStandardMaterial color={0x8a8f98} />
       </mesh>
-      <group position={[0.5, 2.3, 0]}>
+      <group position={[0.5 * clothSide, 1.15, 0]}>
         {imageUrl ? (
           <ModelBoundary key={imageUrl} fallback={plain}>
             <Suspense fallback={plain}>

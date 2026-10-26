@@ -43,15 +43,16 @@ export function strikeEnvelope(p: number): number {
 }
 
 // ── Segurar a bandeira ─────────────────────────────────────────────────────────────────────────
-/** Braço da bandeira (esquerdo) segurando a haste: ombro à frente e cotovelo dobrado, mão na altura do peito. */
-export const CARRY_LEFT = { arm: 0.3, forearm: 1.55 };
-/** Outro braço, relaxado e meio dobrado. */
-export const CARRY_RIGHT = { arm: 0.2, forearm: 0.8 };
+/** Só a mão direita segura a haste (a esquerda fica livre): ombro à frente e cotovelo dobrado, mão na altura da cintura/peito. */
+export const HOLD_RIGHT = { arm: 0.4, forearm: 1.25 };
+/** Distância do ombro direito ao eixo do corpo (m) e de quanto da haste fica abaixo da mão (como o cabo de um taco). */
+export const SHOULDER_X = 0.2;
+export const POLE_GRIP = 0.4;
 
-// ── Golpe com a bandeira ───────────────────────────────────────────────────────────────────────
-// 0,7 s no total (a duração não muda). Fases: preparação (pequeno recuo), levantada para trás com a bandeira, instante
-// de pausa no alto, descida que ACELERA até o contato (p = 0,5), continuação do movimento (passa um pouco do ponto) e
-// volta amortecida para a posição de segurar.
+// ── Golpe com a bandeira: tacada de lado, como no beisebol ─────────────────────────────────────
+// 0,7 s no total. Preparação: o braço sobe na horizontal e vai para trás/direita com a haste inclinada para trás; pausa;
+// a tacada varre o braço da direita para a esquerda, na frente do corpo, com a haste deitando até ficar horizontal no
+// contato (p = 0,5); continua até a esquerda e volta amortecida à posição de segurar.
 type Ease = "in" | "out" | "io";
 const EASE: Record<Ease, (t: number) => number> = {
   in: (t) => 1.2 * t * t - 0.2 * t * t * t, // arranca devagar e termina em velocidade máxima
@@ -69,69 +70,79 @@ function keyed(p: number, keys: readonly (readonly [number, number, Ease])[]): n
   return keys[keys.length - 1]![1];
 }
 
+/** Ombro: sobe para a frente até quase a horizontal (altura do ombro). */
 const ARM_KEYS = [
-  [0, CARRY_LEFT.arm, "io"],
-  [0.1, 0.3, "out"], // prepara: a bandeira desce um pouco
-  [0.36, 2.1, "out"], // levanta para trás/cima
-  [0.42, 2.18, "io"], // pausa no alto
-  [0.52, 0.8, "in"], // desce acelerando até o contato
-  [0.62, 0.52, "out"], // continua um pouco depois do contato
-  [1, CARRY_LEFT.arm, "io"],
+  [0, HOLD_RIGHT.arm, "io"],
+  [0.12, 0.9, "out"],
+  [0.3, 1.35, "out"],
+  [0.42, 1.4, "io"],
+  [0.5, 1.4, "in"],
+  [0.66, 1.3, "out"],
+  [1, HOLD_RIGHT.arm, "io"],
 ] as const;
+/** Cotovelo: dobrado na preparação, estica no contato. */
 const FORE_KEYS = [
-  [0, CARRY_LEFT.forearm, "io"],
-  [0.1, 1.4, "out"],
-  [0.36, 0.55, "out"],
-  [0.42, 0.5, "io"],
-  [0.52, 0.28, "in"],
-  [0.62, 0.22, "out"],
-  [1, CARRY_LEFT.forearm, "io"],
+  [0, HOLD_RIGHT.forearm, "io"],
+  [0.12, 1.0, "out"],
+  [0.3, 0.85, "out"],
+  [0.42, 0.8, "io"],
+  [0.5, 0.25, "in"],
+  [0.66, 0.35, "out"],
+  [1, HOLD_RIGHT.forearm, "io"],
+] as const;
+/** Giro do braço na horizontal (rad; positivo = para a esquerda de quem bate): a varredura da tacada. */
+const YAW_KEYS = [
+  [0, 0, "io"],
+  [0.12, -0.4, "out"],
+  [0.3, -1.15, "out"],
+  [0.42, -1.25, "io"], // pausa atrás, à direita
+  [0.5, 0.35, "in"], // varre rápido e acelerando até o contato, na frente
+  [0.66, 1.55, "out"], // continua até a esquerda
+  [1, 0, "io"],
+] as const;
+/** Inclinação da haste a partir da vertical, no sentido da varredura: para trás na preparação, deitada no contato. */
+const TILT_KEYS = [
+  [0, 0, "io"],
+  [0.12, -0.2, "out"],
+  [0.3, -0.55, "out"],
+  [0.42, -0.6, "io"],
+  [0.5, 1.3, "in"],
+  [0.66, 1.45, "out"],
+  [1, 0, "io"],
 ] as const;
 const LEAN_KEYS = [
   [0, 0, "io"],
-  [0.1, 0.06, "out"], // agacha de leve ao preparar
-  [0.38, -0.24, "out"], // peito para trás ao levantar
-  [0.42, -0.26, "io"],
-  [0.54, 0.52, "in"], // joga o peso para a frente no golpe
-  [0.64, 0.6, "out"],
-  [1, 0, "io"],
-] as const;
-const TWIST_KEYS = [
-  [0, 0, "io"],
-  [0.1, 0.03, "out"],
-  [0.4, -0.28, "out"], // quadril e ombros giram para trás
-  [0.56, 0.42, "in"], // e vêm junto com a descida
-  [0.66, 0.44, "out"],
-  [1, 0, "io"],
-] as const;
-const TILT_KEYS = [
-  [0, 0, "io"],
-  [0.1, 0.1, "out"],
-  [0.36, -0.95, "out"],
-  [0.42, -1.0, "io"],
-  [0.52, 1.5, "in"],
-  [0.62, 1.78, "out"],
+  [0.3, -0.05, "out"],
+  [0.5, 0.12, "in"],
+  [0.66, 0.1, "out"],
   [1, 0, "io"],
 ] as const;
 
-/** Braço (ombro e cotovelo) do lado da bandeira durante o golpe: do "segurar" para cima/atrás, desce, volta. */
-export function strikeArms(p: number): { arm: number; forearm: number } {
-  return { arm: keyed(p, ARM_KEYS), forearm: keyed(p, FORE_KEYS) };
+/** Pose da tacada em `p`: ombro, cotovelo, giro do braço e inclinação da haste. */
+export function batSwing(p: number): { arm: number; forearm: number; yaw: number; tilt: number } {
+  return { arm: keyed(p, ARM_KEYS), forearm: keyed(p, FORE_KEYS), yaw: keyed(p, YAW_KEYS), tilt: keyed(p, TILT_KEYS) };
 }
 
-/** Inclinação do tronco para a frente (rad): para trás ao levantar, bastante para a frente no golpe. */
+/** Braço direito da bandeira: parado segurando (p = null) ou na tacada, misturado por `env` (0..1). */
+export function holdArm(p: number | null, env: number): { arm: number; forearm: number; yaw: number; tilt: number } {
+  if (p === null || env <= 0) return { arm: HOLD_RIGHT.arm, forearm: HOLD_RIGHT.forearm, yaw: 0, tilt: 0 };
+  const b = batSwing(p);
+  return {
+    arm: lerp(HOLD_RIGHT.arm, b.arm, env),
+    forearm: lerp(HOLD_RIGHT.forearm, b.forearm, env),
+    yaw: b.yaw * env,
+    tilt: b.tilt * env,
+  };
+}
+
+/** Inclinação do tronco para a frente (rad) na tacada. */
 export function strikeLean(p: number): number {
   return keyed(p, LEAN_KEYS);
 }
 
-/** Giro do quadril/tronco (rad) acompanhando o golpe com a bandeira. */
-export function strikeTwist(p: number): number {
-  return keyed(p, TWIST_KEYS);
-}
-
-/** Inclinação da própria bandeira em torno da mão (rad; positivo = ponta para a frente). */
-export function flagTilt(p: number): number {
-  return keyed(p, TILT_KEYS);
+/** O corpo não gira na tacada: o giro é todo do braço (a haste acompanha a mão sem depender do tronco). */
+export function strikeTwist(_p: number): number {
+  return 0;
 }
 
 // ── Soco ───────────────────────────────────────────────────────────────────────────────────────
@@ -178,37 +189,4 @@ export function handPosition(arm: number, forearm: number): { y: number; z: numb
     y: SHOULDER_Y - UPPER * Math.cos(arm) - LOWER * Math.cos(arm + forearm),
     z: UPPER * Math.sin(arm) + LOWER * Math.sin(arm + forearm),
   };
-}
-
-// ── Segurar com as duas mãos ────────────────────────────────────────────────────────────────────
-/** Quanto a mão de baixo (esquerda) desliza haste abaixo, em metros. */
-export const GRIP_SLIDE = 0.18;
-/** Abertura lateral (rad) que aproxima os braços da haste, no centro do corpo. */
-export const GRIP_ADDUCT = 0.1;
-/** Antebraços giram para dentro (em torno da vertical) para as duas mãos se encontrarem na haste, sem o braço atravessar o corpo. */
-export const GRIP_YAW = 0.62;
-
-/** Braço de dois ossos (ombro e cotovelo): ângulos que levam a mão a `target` (altura, distância à frente). */
-export function solveArm(target: { y: number; z: number }): { arm: number; forearm: number } {
-  const dy = SHOULDER_Y - target.y;
-  const dz = target.z;
-  const d = Math.min(UPPER + LOWER - 1e-4, Math.max(Math.abs(UPPER - LOWER) + 1e-4, Math.hypot(dy, dz)));
-  const c = Math.max(-1, Math.min(1, (d * d - UPPER * UPPER - LOWER * LOWER) / (2 * UPPER * LOWER)));
-  const forearm = Math.acos(c);
-  const arm = Math.atan2(dz, dy) - Math.atan2(LOWER * Math.sin(forearm), UPPER + LOWER * Math.cos(forearm));
-  return { arm, forearm };
-}
-
-/**
- * Braços ao segurar a bandeira com as duas mãos. A mão de cima (direita) fica onde a mão esquerda segurava; a de baixo
- * (esquerda) desliza haste abaixo. `p` = progresso do golpe (ou null parado) e `env` = quanto o golpe domina a pose.
- */
-export function gripArms(p: number | null, env: number): { upper: { arm: number; forearm: number }; lower: { arm: number; forearm: number } } {
-  const strike = p === null ? CARRY_LEFT : strikeArms(p);
-  const arm = lerp(CARRY_LEFT.arm, strike.arm, env);
-  const forearm = lerp(CARRY_LEFT.forearm, strike.forearm, env);
-  const hand = handPosition(arm, forearm);
-  const tilt = p === null ? 0 : flagTilt(p) * env;
-  const lowerTarget = { y: hand.y - GRIP_SLIDE * Math.cos(tilt), z: hand.z - GRIP_SLIDE * Math.sin(tilt) };
-  return { upper: solveArm(hand), lower: solveArm(lowerTarget) };
 }

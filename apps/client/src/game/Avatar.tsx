@@ -9,7 +9,7 @@ import { Flag3D, Vehicle3D, GlbModel } from "./props3d.js";
 import { teamImageUrl } from "./models.js";
 import { HIP_HEIGHT, fallBody, fallSeconds, reactBody, reactProgress, type KnockRefs } from "./knock.js";
 import { MOTO_SEATS } from "./autoAnimate.js";
-import { CARRY_LEFT, activeStrike, punchPose, flagTilt, gripArms, handPosition, strikeArms, strikeEnvelope, type StrikeRefs } from "./strike.js";
+import { HOLD_RIGHT, POLE_GRIP, SHOULDER_X, activeStrike, handPosition, holdArm, punchPose, strikeEnvelope, type StrikeRefs } from "./strike.js";
 import { SignProp } from "./SignProp.js";
 import type { SignData } from "./useSigns.js";
 
@@ -37,7 +37,7 @@ interface AvatarProps {
 
 const lerpN = (a: number, b: number, k: number) => a + (b - a) * k;
 /** Onde fica a mão que segura a haste (altura, à frente): a haste passa por aqui. */
-const CARRY_HAND = handPosition(CARRY_LEFT.arm, CARRY_LEFT.forearm);
+const CARRY_HAND = handPosition(HOLD_RIGHT.arm, HOLD_RIGHT.forearm);
 
 /** Eixo traseiro da moto: a roda da frente sobe girando em torno daqui. */
 const MOTO_REAR_AXLE_Z = -0.7;
@@ -147,18 +147,16 @@ export function ProceduralBody({
     const st = activeStrike(hitRef);
     const flagStrike = st && st.kind === "flag" ? st : null;
     const env = st ? strikeEnvelope(st.p) : 0;
-    const grips = carry && !riding ? gripArms(flagStrike ? flagStrike.p : null, flagStrike ? env : 0) : null;
+    const hold = carry && !riding ? holdArm(flagStrike ? flagStrike.p : null, flagStrike ? env : 0) : null;
     armRefs.current.forEach((g, i) => {
       if (!g) return;
       const isLeft = i === 1;
       let a = riding ? 1.05 : 0.16;
       let f = riding ? 0.3 : 0.5;
       let adduct = 0;
-      if (grips) {
-        const t = isLeft ? grips.lower : grips.upper;
-        a = t.arm;
-        f = t.forearm;
-        adduct = 0.9; // a haste fica no centro, na frente do corpo: os dois braços se fecham até ela
+      if (hold && !isLeft) {
+        a = hold.arm;
+        f = hold.forearm;
       }
       if (st && st.kind === "punch") {
         const pp = punchPose(st.p);
@@ -226,7 +224,7 @@ export function ProceduralBody({
 
 /** Bandeira da equipe: o tecido leva a imagem enviada no admin (Equipes); sem imagem, a cor da equipe. */
 function FlagProp({ flag, color, team }: { flag: FlagId; color: number; team?: TeamId }) {
-  return <Flag3D color={flagColor(flag, color)} imageUrl={teamImageUrl(team)} />;
+  return <Flag3D color={flagColor(flag, color)} imageUrl={teamImageUrl(team)} clothSide={-1} />;
 }
 
 /**
@@ -275,10 +273,11 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
       const st = activeStrike(hitRef);
       const flagStrike = st && st.kind === "flag" ? st : null;
       const env = flagStrike ? strikeEnvelope(flagStrike.p) : 0;
-      const arms = flagStrike ? strikeArms(flagStrike.p) : CARRY_LEFT;
-      const hand = handPosition(lerpN(CARRY_LEFT.arm, arms.arm, env), lerpN(CARRY_LEFT.forearm, arms.forearm, env));
-      pivot.position.set(0, hand.y, hand.z);
-      pivot.rotation.x = flagStrike ? flagTilt(flagStrike.p) * env : 0;
+      const h = holdArm(flagStrike ? flagStrike.p : null, env);
+      const hand = handPosition(h.arm, h.forearm);
+      // A mão (direita) gira com o braço em torno do ombro; a haste acompanha e deita no sentido da varredura.
+      pivot.position.set(-SHOULDER_X + hand.z * Math.sin(h.yaw), hand.y, hand.z * Math.cos(h.yaw));
+      pivot.rotation.set(0, h.yaw, -h.tilt, "YXZ");
     }
   });
   return (
@@ -308,8 +307,8 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
 
       {/* Bandeira só a pé: em veículo as mãos estão ocupadas. */}
       {flag !== "nenhuma" && vehicle === "nenhum" && (
-        <group ref={flagPivotRef} position={[0, CARRY_HAND.y, CARRY_HAND.z]}>
-          <group position={[-0.45, -CARRY_HAND.y, 0]}>
+        <group ref={flagPivotRef} position={[-SHOULDER_X, CARRY_HAND.y, CARRY_HAND.z]}>
+          <group position={[-0.45, -POLE_GRIP, 0]}>
             <FlagProp flag={flag} color={color} team={team} />
           </group>
         </group>

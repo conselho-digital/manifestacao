@@ -74,6 +74,8 @@ interface PlayerProps {
   transformRef?: { current: PlayerTransform };
   /** Marcado true após o primeiro frame — transformRef só é confiável depois disso. */
   transformReadyRef?: { current: boolean };
+  /** Outros jogadores (posição e veículo): o jogador local não os atravessa. */
+  othersRef?: { current: ReadonlyMap<string, { x: number; z: number; vehicle: VehicleId }> };
 }
 
 const SEND_INTERVAL = 1 / 12; // ~12 updates/s
@@ -94,6 +96,41 @@ function facingOf(x: number, z: number, prev: Facing): Facing {
  */
 /** Raio de colisão de qualquer veículo (carro, moto, caminhão). */
 const VEHICLE_RADIUS = 1.2;
+
+/**
+ * Colisão entre jogadores: empurra o círculo do jogador local (x, z, raio r) para fora dos círculos dos outros
+ * (a pé ou de veículo). Cada aparelho empurra só o próprio jogador, então os dois se desviam. Devolve se encostou.
+ */
+function pushOutOfPlayers(
+  pos: { x: number; z: number },
+  r: number,
+  others: ReadonlyMap<string, { x: number; z: number; vehicle: VehicleId }> | undefined,
+): boolean {
+  if (!others) return false;
+  let hit = false;
+  for (const o of others.values()) {
+    if (o.x === 0 && o.z === 0) continue; // ainda sem posição (acabou de entrar): não é um obstáculo na origem
+    const or = (VEHICLES[o.vehicle]?.kind ?? "foot") === "foot" ? AVATAR_RADIUS : VEHICLE_RADIUS;
+    const dx = pos.x - o.x;
+    const dz = pos.z - o.z;
+    const min = r + or;
+    const d2 = dx * dx + dz * dz;
+    if (d2 >= min * min) continue;
+    const d = Math.sqrt(d2);
+    if (d < 0.02) {
+      // Exatamente no mesmo lugar (acabaram de entrar): afasta para um lado, sem travar.
+      pos.x += min * 0.5;
+      hit = true;
+      continue;
+    }
+    // Só resolve parte da sobreposição por quadro: desliza em vez de "grudar" e dá tempo de o outro também se mexer.
+    const push = (min - d) * 0.9;
+    pos.x += (dx / d) * push;
+    pos.z += (dz / d) * push;
+    hit = true;
+  }
+  return hit;
+}
 
 /** Até onde o raio da mira procura superfícies (m, a partir da câmera). */
 const SPRAY_RAY_MAX = 60;
@@ -121,6 +158,7 @@ export function Player({
   cameraTouchedAtRef,
   transformRef,
   transformReadyRef,
+  othersRef,
 }: PlayerProps) {
   const ref = useRef<Group>(null);
   const camera = useThree((s) => s.camera);
@@ -179,7 +217,9 @@ export function Player({
       const clamped = clampToAvenue(wantX, wantZ, g.position);
       // Re-limita depois dos sólidos: um tronco rente à borda do mapa não pode empurrar ninguém para fora dele.
       const solid = resolveSolids(clamped.x, clamped.z, VEHICLE_RADIUS);
+      const touched = pushOutOfPlayers(solid, VEHICLE_RADIUS, othersRef?.current);
       const next = clampToAvenue(solid.x, solid.z, clamped);
+      if (touched) st.speed *= 0.85; // esbarrou em alguém: perde um pouco de velocidade
       // Bateu na borda da avenida, em prédio ou árvore: perde velocidade.
       if (Math.hypot(next.x - wantX, next.z - wantZ) > 1e-3) st.speed *= 0.4;
       g.position.x = next.x;
@@ -219,6 +259,7 @@ export function Player({
       for (let i = 0; i < slices; i++) {
         const clamped = clampToAvenue(g.position.x + (worldX * step) / slices, g.position.z + (worldZ * step) / slices, g.position);
         const solid = resolveSolids(clamped.x, clamped.z, AVATAR_RADIUS);
+        pushOutOfPlayers(solid, AVATAR_RADIUS, othersRef?.current);
         const next = clampToAvenue(solid.x, solid.z, clamped);
         g.position.x = next.x;
         g.position.z = next.z;

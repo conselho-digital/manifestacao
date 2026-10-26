@@ -1,6 +1,6 @@
 import type { VehicleId } from "@manifestacao/shared";
 import { FOOT_WALK_SPEED } from "./world.js";
-import { GRIP_ADDUCT, GRIP_YAW, gripArms, punchPose, strikeArms, strikeEnvelope, strikeLean, strikeTwist, type StrikeKind } from "./strike.js";
+import { holdArm, punchPose, strikeEnvelope, strikeLean, strikeTwist, type StrikeKind } from "./strike.js";
 import { fallEnvelope, fallLimbs, reactBody } from "./knock.js";
 import { AnimationAction, AnimationClip, AnimationMixer, Bone, Group, Object3D, Quaternion, Vector3 } from "three";
 
@@ -431,8 +431,8 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
       const sp = strike ? strikeEnvelope(strike.p) : 0;
       const flagHit = strike && strike.kind === "flag" ? strike : null;
       const punch = strike && strike.kind === "punch" ? punchPose(strike.p) : null;
-      const sArms = flagHit ? strikeArms(flagHit.p) : null;
-      const grips = carryK > 0.001 ? gripArms(flagHit ? flagHit.p : null, sp) : null;
+      const sArms = flagHit ? true : null;
+      const hold = carryK > 0.001 ? holdArm(flagHit ? flagHit.p : null, sp) : null;
       const react = knock.react >= 0 ? reactBody(knock.react) : null;
       const fallEnv = knock.fall >= 0 ? fallEnvelope(knock.fall) : 0;
       const fall = knock.fall >= 0 ? fallLimbs(knock.fall) : null;
@@ -444,9 +444,10 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
       const look = Math.sin(t * 0.31) * 0.5 + glance * (Math.floor(t * 0.22 + gaitFreq * 7) % 2 ? 1 : -1) * 1.6;
 
       // Mão: levemente fechada ao andar e parado; punho fechado ao socar; fechada na haste da bandeira.
-      const fist = Math.max(punch ? sp : 0, carryK > 0.001 ? 0.75 * carryK : 0);
       for (const l of limbs) {
         if (l.role === "finger") {
+          // Punho fechado ao socar (as duas mãos) e na haste da bandeira (só a mão direita).
+          const fist = Math.max(punch ? sp : 0, carryK > 0.001 && l.side < 0 ? 0.75 * carryK : 0);
           const relaxed = [0, 0.3, 0.45, 0.35][l.level!] ?? 0.3;
           const closed = [0, 1.25, 1.55, 1.05][l.level!] ?? 1.2;
           const a = (relaxed + (closed - relaxed) * fist) * (l.curlK ?? 1);
@@ -517,15 +518,13 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
             break;
         }
 
-        // ── segurar a bandeira com as duas mãos: a direita onde a esquerda segurava, a esquerda desliza haste abaixo ──
+        // ── segurar a bandeira só com a mão direita; na tacada o braço sobe na horizontal e varre de lado ──
         let adduct = 0;
         let yaw = 0;
-        if (carryK > 0.001 && (l.role === "arm" || l.role === "forearm")) {
-          const g = grips ?? gripArms(null, 0);
-          const t = l.role === "arm" ? (isLeft ? g.lower.arm : g.upper.arm) : isLeft ? g.lower.forearm : g.upper.forearm;
-          ang = lerp(ang, t + (l.role === "arm" ? 0.03 * Math.sin(2 * phase) * w : 0), carryK);
-          if (l.role === "arm") adduct = GRIP_ADDUCT * carryK;
-          else yaw = GRIP_YAW * carryK; // antebraço gira para dentro: as mãos se encontram na haste sem o braço entrar no corpo
+        if (carryK > 0.001 && !isLeft && hold && (l.role === "arm" || l.role === "forearm")) {
+          const t = l.role === "arm" ? hold.arm : hold.forearm;
+          ang = lerp(ang, t + (l.role === "arm" ? 0.02 * Math.sin(2 * phase) * w : 0), carryK);
+          if (l.role === "arm") yaw = hold.yaw * carryK; // giro do braço em torno da vertical (positivo = para a esquerda)
         }
 
         // ── sentado na moto (mistura com o andar): coxas à frente, joelhos dobrados, braços no guidão, tronco inclinado ──
@@ -638,7 +637,7 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
             rotC.setFromAxisAngle(fwd, -l.side * adduct);
             rot.setFromAxisAngle(l.axis, ang).multiply(rotC).multiply(l.rest);
           }
-          if (yaw > 0) {
+          if (yaw !== 0) {
             rotC.setFromAxisAngle(UP, -l.side * yaw);
             rot.premultiply(rotC);
           }
