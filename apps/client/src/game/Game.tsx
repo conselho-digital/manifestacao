@@ -139,7 +139,11 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     document.body.toggleAttribute("data-modal-open", modalOpen);
     return () => document.body.removeAttribute("data-modal-open");
   }, [modalOpen]);
-  const { inputRef, setJoystick } = useInput(!paused && !optionsOpen && !adminOpen && !superchatOpen && !signOpen && !billboardOpen && !musicOpen);
+  const { inputRef, setJoystick } = useInput(
+    !paused && !optionsOpen && !adminOpen && !superchatOpen && !signOpen && !billboardOpen && !musicOpen,
+    // Na moto as setas empinam, não dirigem.
+    VEHICLES[vehicle]?.kind !== "moto",
+  );
   // Bandeira: grátis por 3 horas por dia (contadas só enquanto aparece no jogo); quem comprou bandeira não tem limite.
   const ownsPaidFlag = useMemo(() => [...owned].some((id) => id.startsWith("flag:")), [owned]);
   const [flagChoice, setFlagChoice] = useState<FlagId>(avatar.flag);
@@ -179,21 +183,33 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
   const cameraTouchedAtRef = useRef(0);
   const vehicleKind = VEHICLES[vehicle]?.kind ?? "foot";
   const driving = vehicleKind !== "foot";
-  // PC: Shift empina e Espaço abaixa a roda da frente da moto (W S A D / setas já vêm do useInput).
+  // PC, moto: ↑ ou Espaço empinam (levantam a roda da frente); ↓ ou Ctrl abaixam.
+  // W A S D dirigem (as setas deixam de dirigir na moto — ver useInput).
   useEffect(() => {
     if (vehicleKind !== "moto") return;
+    const held = new Set<string>();
+    const apply = () => {
+      driveRef.current = {
+        ...driveRef.current,
+        up: held.has("ArrowUp") || held.has(" "),
+        down: held.has("ArrowDown") || held.has("Control"),
+      };
+    };
     const key = (down: boolean) => (e: KeyboardEvent) => {
-      if (isTypingTarget(e.target)) return;
-      if (e.key === "Shift") driveRef.current = { ...driveRef.current, up: down };
-      else if (e.key === " " || e.code === "Space") {
-        e.preventDefault(); // Espaço não rola a página nem aperta o botão focado
-        driveRef.current = { ...driveRef.current, down: down };
-      }
+      if (down && isTypingTarget(e.target)) return;
+      const k = e.code === "Space" ? " " : e.key;
+      if (k !== "ArrowUp" && k !== "ArrowDown" && k !== " " && k !== "Control") return;
+      // Espaço e setas não rolam a página nem apertam o botão focado.
+      if (down && k !== "Control") e.preventDefault();
+      if (down) held.add(k);
+      else held.delete(k);
+      apply();
     };
     const onDown = key(true);
     const onUp = key(false);
     const release = () => {
-      driveRef.current = { ...driveRef.current, up: false, down: false };
+      held.clear();
+      apply();
     };
     window.addEventListener("keydown", onDown);
     window.addEventListener("keyup", onUp);
@@ -461,7 +477,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           {vehicleKind === "moto" && (
             <>
               {" "}
-              · <strong>Shift</strong> empina · <strong>Espaço</strong> abaixa
+              · <strong>↑</strong>/<strong>Espaço</strong> empina · <strong>↓</strong>/<strong>Ctrl</strong> abaixa
             </>
           )}
         </div>

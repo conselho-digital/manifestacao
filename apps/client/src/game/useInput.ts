@@ -23,11 +23,14 @@ export function isTypingTarget(target: EventTarget | null): boolean {
  * fica zerado mesmo que teclas continuem pressionadas — evita que o avatar
  * se mova "por baixo" de um diálogo aberto.
  */
-export function useInput(enabled = true) {
+export function useInput(enabled = true, arrowsMove = true) {
   const inputRef = useRef<InputVector>({ x: 0, z: 0 });
   const keyRef = useRef<InputVector>({ x: 0, z: 0 });
   const joyRef = useRef<InputVector>({ x: 0, z: 0 });
   const pressed = useRef<Set<string>>(new Set());
+  // Na moto as setas empinam (ver Game.tsx), então não andam/dirigem.
+  const arrowsMoveRef = useRef(arrowsMove);
+  arrowsMoveRef.current = arrowsMove;
   const enabledRef = useRef(enabled);
   enabledRef.current = enabled;
 
@@ -58,10 +61,11 @@ export function useInput(enabled = true) {
       let z = 0;
       // Esquerda/direita invertidas de propósito (testado: o mapeamento
       // anterior andava pro lado errado) — vale pra A/D e setas.
-      if (k.has("a") || k.has("arrowleft")) x += 1;
-      if (k.has("d") || k.has("arrowright")) x -= 1;
-      if (k.has("w") || k.has("arrowup")) z -= 1;
-      if (k.has("s") || k.has("arrowdown")) z += 1;
+      const arrows = arrowsMoveRef.current;
+      if (k.has("a") || (arrows && k.has("arrowleft"))) x += 1;
+      if (k.has("d") || (arrows && k.has("arrowright"))) x -= 1;
+      if (k.has("w") || (arrows && k.has("arrowup"))) z -= 1;
+      if (k.has("s") || (arrows && k.has("arrowdown"))) z += 1;
       keyRef.current = { x, z };
       apply();
     };
