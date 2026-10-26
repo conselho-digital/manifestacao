@@ -7,6 +7,16 @@ import { createPixCharge, type PixCharge } from "../net/payments.js";
 import { isOnlineEnabled } from "../config/env.js";
 import { ProductThumb } from "./ProductThumb.js";
 import { useModal } from "../ui/useModal.js";
+import { useWide } from "../ui/CharacterCarousel.js";
+
+/** Seções da loja no computador, na ordem em que aparecem. */
+const GROUPS: [string, string, number][] = [
+  ["pass", "Premium", 1],
+  ["vehicle", "Veículos", 1],
+  ["character", "Personagens", 2],
+  ["flag", "Bandeiras", 1],
+  ["other", "Outros", 1],
+];
 
 function formatBRL(cents: number): string {
   return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -90,6 +100,106 @@ export function Store({ onClose, session, authLoading, owned, refresh }: StorePr
     }
   }
 
+  const wide = useWide();
+  const visible = items.filter((i) => i.kind !== "spray");
+  const renderItem = (item: CatalogItem, wide = false) => {
+              const has = owned.has(item.id);
+              const free = item.price_cents === 0;
+              const description = itemDescription(item);
+
+              const priceLine = (
+                <span
+                  style={{
+                    fontSize: "var(--t-ui)",
+                    color: free ? "var(--ink-dim)" : "var(--ink)",
+                    fontWeight: free ? 400 : 600,
+                  }}
+                >
+                  {free ? "Grátis" : formatBRL(item.price_cents)}
+                </span>
+              );
+
+              const action = has ? (
+                <span style={{ fontSize: "var(--t-ui)", color: "var(--accent)", fontWeight: 700 }}>
+                  Adquirido
+                </span>
+              ) : free ? null : (
+                <button
+                  type="button"
+                  disabled={!session || pendingItem !== null}
+                  onClick={() => void buy(item)}
+                  style={buyBtnStyle}
+                >
+                  {pendingItem === item.id ? "…" : "Comprar"}
+                </button>
+              );
+
+              // Itens com descrição (ex. Premium) ganham layout empilhado,
+              // full-width — um card de uma linha (nome+preço) não cabe uma
+              // frase de benefícios sem ficar espremido contra o botão.
+              if (description) {
+                return (
+                  <li
+                    key={item.id}
+                    style={{
+                      gridColumn: wide ? "1 / -1" : undefined,
+                      padding: "12px",
+                      borderRadius: "var(--r-md)",
+                      background: "var(--surface-2)",
+                      display: "flex",
+                      flexDirection: wide ? "row" : "column",
+                      flexWrap: wide ? "wrap" : undefined,
+                      alignItems: wide ? "center" : undefined,
+                      gap: wide ? 20 : 6,
+                    }}
+                  >
+                    <div style={wide ? { flex: "1 1 240px", display: "flex", flexDirection: "column", gap: 6 } : { display: "contents" }}>
+                      <div style={{ fontWeight: 700, fontSize: "var(--t-body)" }}>{itemLabel(item)}</div>
+                      <div style={{ fontSize: "var(--t-ui)", color: "var(--ink-dim)" }}>{description}</div>
+                    </div>
+                    {item.kind === "pass" && (
+                      // Fotos do que o passe libera (as mesmas miniaturas da loja, com o nome de cada veículo).
+                      <ul style={{ listStyle: "none", margin: "2px 0 0", padding: 0, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        {VEHICLE_IDS.filter((v) => v !== "nenhum").map((v) => (
+                          <li key={v} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, width: 64 }}>
+                            <ProductThumb itemId={`vehicle:${v}`} />
+                            <span style={{ fontSize: 11, lineHeight: 1.2, textAlign: "center", color: "var(--ink-dim)" }}>{VEHICLES[v].label}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 2, gap: wide ? 16 : undefined }}>
+                      {priceLine}
+                      {action}
+                    </div>
+                  </li>
+                );
+              }
+
+              return (
+                <li
+                  key={item.id}
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    padding: "10px 12px",
+                    borderRadius: "var(--r-md)",
+                    background: "var(--surface-2)",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
+                    <ProductThumb itemId={item.id} />
+                    <div>
+                      <div style={{ fontWeight: 700, fontSize: "var(--t-body)" }}>{itemLabel(item)}</div>
+                      {priceLine}
+                    </div>
+                  </div>
+                  {action}
+                </li>
+              );
+  };
+
   const dialogRef = useModal<HTMLDivElement>(onClose);
 
   return (
@@ -115,7 +225,7 @@ export function Store({ onClose, session, authLoading, owned, refresh }: StorePr
         tabIndex={-1}
         style={{
           outline: "none",
-          width: "min(480px, 100%)",
+          width: wide ? "min(1200px, 100%)" : "min(480px, 100%)",
           maxHeight: "calc(100dvh - 32px)",
           overflowY: "auto",
           background: "var(--surface)",
@@ -172,101 +282,44 @@ export function Store({ onClose, session, authLoading, owned, refresh }: StorePr
           <PixPanel charge={charge} onCancel={() => { setCharge(null); setPendingItem(null); }} />
         )}
 
-        {!charge && (
+        {!charge && wide && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            {catalogLoading && <p style={{ margin: 0, color: "var(--ink-dim)", fontSize: "var(--t-ui)" }}>Carregando…</p>}
+            {(() => {
+              const sections = GROUPS.map(([kind, title, cols]) => ({
+                kind,
+                title,
+                cols,
+                list: visible.filter((i) => (kind === "other" ? !GROUPS.some(([k]) => k === i.kind) : i.kind === kind)),
+              })).filter((g) => g.list.length > 0);
+              const premium = sections.find((g) => g.kind === "pass");
+              const rest = sections.filter((g) => g.kind !== "pass");
+              return (
+                <>
+                  {premium && (
+                    <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid" }}>{premium.list.map((item) => renderItem(item, true))}</ul>
+                  )}
+                  {/* Veículos, personagens e bandeiras lado a lado: tudo à vista, sem rolar. */}
+                  <div style={{ display: "grid", gridTemplateColumns: rest.map((g) => `${g.cols}fr`).join(" "), gap: 20, alignItems: "start" }}>
+                    {rest.map((g) => (
+                      <section key={g.kind} style={{ display: "flex", flexDirection: "column", gap: 10, minWidth: 0 }}>
+                        <h3 style={{ margin: 0, fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 400, textTransform: "uppercase", color: "var(--accent)" }}>{g.title}</h3>
+                        <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gridTemplateColumns: `repeat(${g.cols}, minmax(0, 1fr))`, gap: 10 }}>
+                          {g.list.map((item) => renderItem(item, true))}
+                        </ul>
+                      </section>
+                    ))}
+                  </div>
+                </>
+              );
+            })()}
+          </div>
+        )}
+
+        {!charge && !wide && (
           <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "flex", flexDirection: "column", gap: 10 }}>
             {catalogLoading && <li style={{ color: "var(--ink-dim)", fontSize: "var(--t-ui)" }}>Carregando…</li>}
-            {items.filter((i) => i.kind !== "spray").map((item) => {
-              const has = owned.has(item.id);
-              const free = item.price_cents === 0;
-              const description = itemDescription(item);
-
-              const priceLine = (
-                <span
-                  style={{
-                    fontSize: "var(--t-ui)",
-                    color: free ? "var(--ink-dim)" : "var(--ink)",
-                    fontWeight: free ? 400 : 600,
-                  }}
-                >
-                  {free ? "Grátis" : formatBRL(item.price_cents)}
-                </span>
-              );
-
-              const action = has ? (
-                <span style={{ fontSize: "var(--t-ui)", color: "var(--accent)", fontWeight: 700 }}>
-                  Adquirido
-                </span>
-              ) : free ? null : (
-                <button
-                  type="button"
-                  disabled={!session || pendingItem !== null}
-                  onClick={() => void buy(item)}
-                  style={buyBtnStyle}
-                >
-                  {pendingItem === item.id ? "…" : "Comprar"}
-                </button>
-              );
-
-              // Itens com descrição (ex. Premium) ganham layout empilhado,
-              // full-width — um card de uma linha (nome+preço) não cabe uma
-              // frase de benefícios sem ficar espremido contra o botão.
-              if (description) {
-                return (
-                  <li
-                    key={item.id}
-                    style={{
-                      padding: "12px",
-                      borderRadius: "var(--r-md)",
-                      background: "var(--surface-2)",
-                      display: "flex",
-                      flexDirection: "column",
-                      gap: 6,
-                    }}
-                  >
-                    <div style={{ fontWeight: 700, fontSize: "var(--t-body)" }}>{itemLabel(item)}</div>
-                    <div style={{ fontSize: "var(--t-ui)", color: "var(--ink-dim)" }}>{description}</div>
-                    {item.kind === "pass" && (
-                      // Fotos do que o passe libera (as mesmas miniaturas da loja, com o nome de cada veículo).
-                      <ul style={{ listStyle: "none", margin: "2px 0 0", padding: 0, display: "flex", flexWrap: "wrap", gap: 8 }}>
-                        {VEHICLE_IDS.filter((v) => v !== "nenhum").map((v) => (
-                          <li key={v} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, width: 64 }}>
-                            <ProductThumb itemId={`vehicle:${v}`} />
-                            <span style={{ fontSize: 11, lineHeight: 1.2, textAlign: "center", color: "var(--ink-dim)" }}>{VEHICLES[v].label}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 2 }}>
-                      {priceLine}
-                      {action}
-                    </div>
-                  </li>
-                );
-              }
-
-              return (
-                <li
-                  key={item.id}
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    padding: "10px 12px",
-                    borderRadius: "var(--r-md)",
-                    background: "var(--surface-2)",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "center", gap: 12, minWidth: 0 }}>
-                    <ProductThumb itemId={item.id} />
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: "var(--t-body)" }}>{itemLabel(item)}</div>
-                      {priceLine}
-                    </div>
-                  </div>
-                  {action}
-                </li>
-              );
-            })}
+            {visible.map((item) => renderItem(item))}
           </ul>
         )}
 
