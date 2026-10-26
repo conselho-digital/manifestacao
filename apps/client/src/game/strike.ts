@@ -93,21 +93,25 @@ const FORE_KEYS = [
 /** Giro do braço na horizontal (rad; positivo = para a esquerda de quem bate): a varredura da tacada. */
 const YAW_KEYS = [
   [0, 0, "io"],
-  [0.12, -0.4, "out"],
-  [0.3, -1.15, "out"],
-  [0.42, -1.25, "io"], // pausa atrás, à direita
-  [0.5, 0.35, "in"], // varre rápido e acelerando até o contato, na frente
+  [0.12, -0.5, "out"],
+  [0.3, -1.3, "out"],
+  [0.42, -1.45, "io"], // pausa atrás, à direita, com a haste armada para trás
+  [0.5, 0.25, "in"], // varre rápido e acelerando até o contato, na frente
   [0.66, 1.55, "out"], // continua até a esquerda
   [1, 0, "io"],
 ] as const;
-/** Inclinação da haste a partir da vertical, no sentido da varredura: para trás na preparação, deitada no contato. */
+/**
+ * Inclinação da haste a partir da vertical, no sentido da varredura: armada para trás na preparação e depois ela é que
+ * "bate": deita à frente do braço (a haste chega na horizontal um instante ANTES da mão) e vai até o fim da varredura.
+ */
 const TILT_KEYS = [
   [0, 0, "io"],
-  [0.12, -0.2, "out"],
-  [0.3, -0.55, "out"],
-  [0.42, -0.6, "io"],
-  [0.5, 1.3, "in"],
-  [0.66, 1.45, "out"],
+  [0.12, -0.35, "out"],
+  [0.3, -0.95, "out"],
+  [0.42, -1.05, "io"],
+  [0.46, 0.4, "in"], // o taco "chicoteia": a ponta da haste adianta a mão
+  [0.5, 1.45, "in"], // horizontal no contato
+  [0.66, 1.5, "out"],
   [1, 0, "io"],
 ] as const;
 const LEAN_KEYS = [

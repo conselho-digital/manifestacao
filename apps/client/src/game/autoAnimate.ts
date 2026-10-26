@@ -447,7 +447,7 @@ export function createAutoAnimator(model: Object3D, frame: Group, clips: Animati
       for (const l of limbs) {
         if (l.role === "finger") {
           // Punho fechado ao socar (as duas mãos) e na haste da bandeira (só a mão direita).
-          const fist = Math.max(punch ? sp : 0, carryK > 0.001 && l.side < 0 ? 0.75 * carryK : 0);
+          const fist = Math.max(punch ? sp : 0, carryK > 0.001 && l.side < 0 ? carryK : 0);
           const relaxed = [0, 0.3, 0.45, 0.35][l.level!] ?? 0.3;
           const closed = [0, 1.25, 1.55, 1.05][l.level!] ?? 1.2;
           const a = (relaxed + (closed - relaxed) * fist) * (l.curlK ?? 1);
