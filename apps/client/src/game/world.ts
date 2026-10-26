@@ -75,10 +75,57 @@ export function clampToAvenue(
 }
 
 /**
- * Palanque com voz (na praça, à frente do museu). Quem está na zona de fala pode usar o microfone; quem está dentro do
- * alcance de escuta ouve, com volume caindo com a distância.
+ * Palanques com voz: 4 na praça, atrás do museu (a fileira do palanque antigo), e 3 por baixo do museu (entre os pilares).
+ * Cada um tem um círculo de escuta (só quem está dentro ouve o palanque — e, dentro dele, não ouve o outdoor) e, no
+ * centro, uma pequena área de fala com DOIS lugares (dois falantes conversam; o resto só ouve) e uma fila.
  */
-export const STAGE_X = 0;
-export const STAGE_Z = 38;
-export const STAGE_SPEAK_RADIUS = 6;
-export const STAGE_HEAR_RADIUS = 45;
+export interface StageDef {
+  id: number;
+  x: number;
+  z: number;
+  /** Raio do círculo de escuta. */
+  hearR: number;
+  /** Raio da área de fala (plataforma). */
+  talkR: number;
+  /** Onde ficam os dois microfones, relativos ao centro. */
+  seats: [{ dx: number; dz: number }, { dx: number; dz: number }];
+  under: boolean;
+}
+const stage = (id: number, x: number, z: number, hearR: number, under: boolean): StageDef => ({
+  id,
+  x,
+  z,
+  hearR,
+  talkR: 2.2,
+  seats: [{ dx: -0.9, dz: 0 }, { dx: 0.9, dz: 0 }],
+  under,
+});
+export const STAGES: readonly StageDef[] = [
+  stage(0, -24, 38, 6.5, false),
+  stage(1, -8, 38, 6.5, false),
+  stage(2, 8, 38, 6.5, false),
+  stage(3, 24, 38, 6.5, false),
+  stage(4, -12.5, 25.7, 5.4, true),
+  stage(5, 1, 25.7, 5.4, true),
+  stage(6, 14.5, 25.7, 5.4, true),
+];
+
+/** Palanque cujo círculo de escuta contém (x, z), ou -1. */
+export function stageHearAt(x: number, z: number): number {
+  let best = -1;
+  let bestD = Infinity;
+  for (const st of STAGES) {
+    const d = Math.hypot(x - st.x, z - st.z);
+    if (d <= st.hearR && d < bestD) {
+      best = st.id;
+      bestD = d;
+    }
+  }
+  return best;
+}
+
+/** Palanque cuja área de fala contém (x, z), ou -1. */
+export function stageTalkAt(x: number, z: number): number {
+  for (const st of STAGES) if (Math.hypot(x - st.x, z - st.z) <= st.talkR) return st.id;
+  return -1;
+}

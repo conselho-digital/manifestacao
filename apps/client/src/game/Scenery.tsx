@@ -7,7 +7,7 @@ import { clearCameraColliders, setCameraColliders } from "./colliders.js";
 import { clearSolids, setSolids } from "./solids.js";
 import { useGLTF } from "@react-three/drei";
 import { mergeGeometries } from "three/examples/jsm/utils/BufferGeometryUtils.js";
-import { AVENUE_LENGTH, AVENUE_WIDTH, PARK_GAP, PARK_SIZE, PLAZA_HALF_X, PLAZA_MAX_Z, STAGE_SPEAK_RADIUS, STAGE_X, STAGE_Z } from "./world.js";
+import { AVENUE_LENGTH, AVENUE_WIDTH, PARK_GAP, PARK_SIZE, PLAZA_HALF_X, PLAZA_MAX_Z, STAGES } from "./world.js";
 
 const MASP_URL = "/models/scenery/masp.glb";
 // Modelo original (Sketchfab, exportado de FBX) vem em unidades arbitrárias
@@ -263,51 +263,51 @@ function Park() {
   );
 }
 
-/** Palanque da praça: tablado baixo, púlpito e duas caixas de som (sólidos). A voz é em net/useStageVoice. */
-function Stage() {
-  useEffect(() => {
-    setSolids(
-      "stage",
-      [],
-      [
-        { x: STAGE_X, z: STAGE_Z + 2.6, r: 0.55 },
-        { x: STAGE_X - 4.4, z: STAGE_Z + 2.4, r: 0.7 },
-        { x: STAGE_X + 4.4, z: STAGE_Z + 2.4, r: 0.7 },
-      ],
-      [],
-      1.8,
-    );
-    return () => clearSolids("stage");
-  }, []);
+/**
+ * Palanques com voz (ver STAGES em world.ts): círculo de escuta no chão, plataforma de fala no centro e dois microfones.
+ * Sem colisão (anda-se por cima da plataforma). A voz é em net/useStageVoice.
+ */
+function Stages() {
   return (
-    <group position={[STAGE_X, 0, STAGE_Z]}>
-      <mesh position={[0, 0.04, 0]} receiveShadow>
-        <cylinderGeometry args={[STAGE_SPEAK_RADIUS, STAGE_SPEAK_RADIUS, 0.08, 40]} />
-        <meshStandardMaterial color={0x7a2e3a} />
-      </mesh>
-      <mesh position={[0, 0.045, 0]}>
-        <cylinderGeometry args={[STAGE_SPEAK_RADIUS - 0.5, STAGE_SPEAK_RADIUS - 0.5, 0.09, 40]} />
-        <meshStandardMaterial color={0x9a3d4b} />
-      </mesh>
-      {/* Púlpito com microfone */}
-      <mesh position={[0, 0.55, 2.6]} castShadow>
-        <boxGeometry args={[0.9, 1.1, 0.7]} />
-        <meshStandardMaterial color={0x2b2f36} />
-      </mesh>
-      <mesh position={[0, 1.35, 2.6]}>
-        <cylinderGeometry args={[0.03, 0.03, 0.5, 8]} />
-        <meshStandardMaterial color={0x15181c} />
-      </mesh>
-      <mesh position={[0, 1.65, 2.6]}>
-        <sphereGeometry args={[0.1, 12, 12]} />
-        <meshStandardMaterial color={0xcfd3d6} />
-      </mesh>
-      {/* Caixas de som */}
-      {[-4.4, 4.4].map((x) => (
-        <mesh key={x} position={[x, 0.9, 2.4]} castShadow>
-          <boxGeometry args={[1.0, 1.8, 0.9]} />
-          <meshStandardMaterial color={0x1d2025} />
-        </mesh>
+    <group>
+      {STAGES.map((st) => (
+        <group key={st.id} position={[st.x, 0, st.z]}>
+          {/* Círculo de escuta */}
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.012, 0]}>
+            <circleGeometry args={[st.hearR, 48]} />
+            <meshBasicMaterial color={0x3a7bd5} transparent opacity={0.12} depthWrite={false} />
+          </mesh>
+          <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.016, 0]}>
+            <ringGeometry args={[st.hearR - 0.18, st.hearR, 64]} />
+            <meshBasicMaterial color={0x7db3ff} transparent opacity={0.85} depthWrite={false} />
+          </mesh>
+          {/* Plataforma da área de fala */}
+          <mesh position={[0, 0.05, 0]} receiveShadow>
+            <cylinderGeometry args={[st.talkR, st.talkR, 0.1, 40]} />
+            <meshStandardMaterial color={0x7a2e3a} />
+          </mesh>
+          <mesh position={[0, 0.055, 0]}>
+            <cylinderGeometry args={[st.talkR - 0.35, st.talkR - 0.35, 0.11, 40]} />
+            <meshStandardMaterial color={0x9a3d4b} />
+          </mesh>
+          {/* Dois microfones */}
+          {st.seats.map((seat, i) => (
+            <group key={i} position={[seat.dx, 0, seat.dz]}>
+              <mesh position={[0, 0.7, 0]}>
+                <cylinderGeometry args={[0.03, 0.03, 1.2, 8]} />
+                <meshStandardMaterial color={0x15181c} />
+              </mesh>
+              <mesh position={[0, 1.36, 0]}>
+                <sphereGeometry args={[0.1, 12, 12]} />
+                <meshStandardMaterial color={0xcfd3d6} />
+              </mesh>
+              <mesh position={[0, 0.115, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+                <ringGeometry args={[0.28, 0.4, 24]} />
+                <meshBasicMaterial color={0xffd23f} />
+              </mesh>
+            </group>
+          ))}
+        </group>
       ))}
     </group>
   );
@@ -373,7 +373,7 @@ export function Scenery() {
         <meshStandardMaterial color={0x8e8a80} />
       </mesh>
 
-      <Stage />
+      <Stages />
 
       {/* Marco visual: MASP ao lado da avenida. Suspense evita que a cena
           quebre enquanto o glTF (~920KB) ainda está baixando. */}

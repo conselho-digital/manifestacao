@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Html } from "@react-three/drei";
+import { isInStageCircle } from "./stageState.js";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Box3, CanvasTexture, SRGBColorSpace, Vector3 } from "three";
 import { clearCameraColliders, setCameraColliders } from "./colliders.js";
@@ -216,7 +217,7 @@ function OutdoorVideo({ cfg, videoId, cy, x, z }: { cfg: ScreenConfig; videoId: 
     if (!readyRef.current) return;
     const d = Math.hypot(camera.position.x - x, camera.position.z - z);
     const master = ((currentPlayback()?.volume ?? 100) / 100) * (currentLocalVolume() / 100);
-    const v = cfg.mute || !canHearScreen(camera.position.x, camera.position.z, x, z) ? 0 : Math.round(100 * master * Math.max(0, Math.min(1, (VIDEO_RANGE - d) / (VIDEO_RANGE - FULL_VOLUME_RANGE))));
+    const v = cfg.mute || isInStageCircle() || !canHearScreen(camera.position.x, camera.position.z, x, z) ? 0 : Math.round(100 * master * Math.max(0, Math.min(1, (VIDEO_RANGE - d) / (VIDEO_RANGE - FULL_VOLUME_RANGE))));
     if (Math.abs(v - volumeRef.current) >= 4 || (v === 0) !== (volumeRef.current === 0)) {
       volumeRef.current = v;
       send("setVolume", [v]);
