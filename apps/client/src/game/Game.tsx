@@ -4,7 +4,10 @@ import { useStageVoice } from "../net/useStageVoice.js";
 import { StageButton } from "../ui/StageButton.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
-import { TEAMS, VEHICLES, hexColor, type AvatarConfig, type FlagId, type VehicleId } from "@manifestacao/shared";
+import { TEAMS, VEHICLES, hexColor, type AvatarConfig, type FlagId, type VehicleId, type VehicleMusic } from "@manifestacao/shared";
+import { VehicleMusicPlayers } from "./VehicleMusic.js";
+import { MusicModal } from "../ui/MusicModal.js";
+import { serverNow } from "../config/parkScreen.js";
 import { Scenery } from "./Scenery.js";
 import { Player, type PlayerTransform } from "./Player.js";
 import { RemotePlayers } from "./RemotePlayers.js";
@@ -117,15 +120,25 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     }
   };
   const [vehicle, setVehicle] = useState<VehicleId>("nenhum");
+  // Música do veículo de som (link do YouTube escolhido pelo motorista); para ao descer do veículo.
+  const [music, setMusic] = useState<VehicleMusic | null>(null);
+  const [musicOpen, setMusicOpen] = useState(false);
+  const soundVehicle = !!VEHICLES[vehicle]?.playsMusic;
+  useEffect(() => {
+    if (!soundVehicle) {
+      setMusic(null);
+      setMusicOpen(false);
+    }
+  }, [soundVehicle]);
   // Pausa o movimento por teclado enquanto a loja (renderizada por cima,
   // em App.tsx) está aberta. O joystick já fica coberto pelo overlay da
   // loja (zIndex maior), então só o teclado precisa dessa trava explícita.
-  const modalOpen = paused || optionsOpen || adminOpen || superchatOpen || signOpen || billboardOpen;
+  const modalOpen = paused || optionsOpen || adminOpen || superchatOpen || signOpen || billboardOpen || musicOpen;
   useEffect(() => {
     document.body.toggleAttribute("data-modal-open", modalOpen);
     return () => document.body.removeAttribute("data-modal-open");
   }, [modalOpen]);
-  const { inputRef, setJoystick } = useInput(!paused && !optionsOpen && !adminOpen && !superchatOpen && !signOpen && !billboardOpen);
+  const { inputRef, setJoystick } = useInput(!paused && !optionsOpen && !adminOpen && !superchatOpen && !signOpen && !billboardOpen && !musicOpen);
   // Bandeira: grátis por 3 horas por dia (contadas só enquanto aparece no jogo); quem comprou bandeira não tem limite.
   const ownsPaidFlag = useMemo(() => [...owned].some((id) => id.startsWith("flag:")), [owned]);
   const [flagChoice, setFlagChoice] = useState<FlagId>(avatar.flag);
@@ -147,7 +160,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     }, 2500);
     return () => window.clearTimeout(t);
   }, [glLost]);
-  const net = useAvenueRealtime(playAvatar, signedIn, signId);
+  const net = useAvenueRealtime(playAvatar, signedIn, signId, music);
   const isTouch = useIsTouch();
   const signs = useSigns(net.remoteIds, net.playersRef, signId);
   const billboardAds = useBillboards(signedIn);
@@ -456,6 +469,16 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
         <div style={{ display: "flex", gap: 8 }}>
           <ChatButton open={chatOpen} onClick={() => setChatOpen((o) => !o)} />
           <OptionsButton onClick={() => setOptionsOpen(true)} />
+          {soundVehicle && (
+            <button
+              type="button"
+              onClick={() => setMusicOpen(true)}
+              aria-label="Música do veículo"
+              style={{ minHeight: 44, minWidth: 44, padding: "10px 14px", fontSize: "var(--t-ui)", fontWeight: 700, borderRadius: "var(--r-sm)", border: `1px solid ${music ? "var(--accent)" : "var(--line)"}`, background: "var(--surface)", color: music ? "var(--accent)" : "var(--ink)", cursor: "pointer" }}
+            >
+              ♪ Música
+            </button>
+          )}
           <StoreButton onClick={onOpenStore} />
         </div>
         <ActionsMenu
@@ -517,11 +540,15 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
       {superchatOpen && signedIn && <SuperchatModal defaultName={avatar.nickname} isAdmin={isAdmin} onClose={() => setSuperchatOpen(false)} />}
       <ParkScreenModal />
       {billboardOpen && signedIn && <BillboardModal ads={billboardAds} isAdmin={isAdmin} onClose={() => setBillboardOpen(false)} />}
+      <VehicleMusicPlayers playersRef={net.playersRef} posRef={transformRef} selfMusic={music} selfVehicle={vehicle} />
+      {musicOpen && soundVehicle && (
+        <MusicModal current={music} onPlay={(id) => setMusic({ id, t: serverNow() })} onStop={() => setMusic(null)} onClose={() => setMusicOpen(false)} />
+      )}
       {signOpen && signedIn && <SignModal equippedId={signId} onEquip={equipSign} isAdmin={isAdmin} onClose={() => setSignOpen(false)} />}
       <SuperchatBanner enabled={signedIn} />
       {adminOpen && isAdmin && <AdminPanel onClose={() => setAdminOpen(false)} onChanged={onConfigChanged} />}
       <Hud
-        enterFocusesChat={!paused && !optionsOpen && !adminOpen && !superchatOpen && !signOpen && !billboardOpen}
+        enterFocusesChat={!paused && !optionsOpen && !adminOpen && !superchatOpen && !signOpen && !billboardOpen && !musicOpen}
         online={net.online}
         scores={net.scores}
         chatLog={net.chatLog}

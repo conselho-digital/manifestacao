@@ -13,6 +13,8 @@ import {
   isVehicleId,
   type AvatarConfig,
   SIGN_ID_RE,
+  MUSIC_ID_RE,
+  type VehicleMusic,
   type ChatBroadcast,
   type Facing,
   type FlagId,
@@ -107,6 +109,20 @@ function emptyScores(): Record<TeamId, number> {
   return Object.fromEntries(TEAM_IDS.map((t) => [t, 0])) as Record<TeamId, number>;
 }
 
+/** Texto vindo da rede sem caracteres de controle/invisíveis (inverter texto, zero-width, quebras) e cortado por caractere. */
+function plainText(v: unknown, max: number): string {
+  return Array.from(String(v).normalize("NFKC").replace(/[\p{Cc}\p{Cf}]/gu, "")).slice(0, max).join("");
+}
+
+/** Música vinda da rede: só id de vídeo válido e hora de início plausível (nunca confiar no formato). */
+export function cleanMusic(v: unknown): VehicleMusic | undefined {
+  if (!v || typeof v !== "object") return undefined;
+  const o = v as Record<string, unknown>;
+  if (typeof o.id !== "string" || !MUSIC_ID_RE.test(o.id)) return undefined;
+  if (typeof o.t !== "number" || !Number.isFinite(o.t) || Math.abs(o.t - Date.now()) > 48 * 3600 * 1000) return undefined;
+  return { id: o.id, t: Math.round(o.t) };
+}
+
 /**
  * Sanitiza um PresenceState vindo da rede: outro cliente conectado ao canal
  * (chave anônima pública) pode enviar `channel.track()` com qualquer payload,
@@ -118,12 +134,13 @@ function sanitizePresence(id: string, p: unknown): PresenceState {
   const raw = (p ?? {}) as Partial<Record<keyof PresenceState, unknown>>;
   return {
     id,
-    nickname: String(raw.nickname ?? "Anônimo").slice(0, MAX_NICKNAME_LENGTH),
+    nickname: plainText(raw.nickname ?? "Anônimo", MAX_NICKNAME_LENGTH) || "Anônimo",
     team: isTeamId(raw.team) ? raw.team : "neutro",
     shirt: typeof raw.shirt === "number" && Number.isInteger(raw.shirt) && raw.shirt >= 0 && raw.shirt <= 0xffffff ? raw.shirt : 0x8b97a3,
     character: isCharacterId(raw.character) ? raw.character : DEFAULT_CHARACTER,
     flag: isFlagId(raw.flag) ? raw.flag : "nenhuma",
     signId: typeof raw.signId === "string" && SIGN_ID_RE.test(raw.signId) ? raw.signId : undefined,
+    music: cleanMusic(raw.music),
   };
 }
 
@@ -132,7 +149,7 @@ function sanitizePresence(id: string, p: unknown): PresenceState {
  * time) + broadcast (movimento e chat). Não autoritativo (CLAUDE.md §4).
  * Em modo offline (sem credenciais) vira no-op e o jogo roda só local.
  */
-export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId: string | null = null) {
+export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId: string | null = null, music: VehicleMusic | null = null) {
   const selfId = useMemo(
     () => (crypto.randomUUID ? crypto.randomUUID() : String(Math.random())),
     [],
@@ -149,6 +166,8 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
   selfTeamRef.current = self.team;
   const signIdRef = useRef(signId);
   signIdRef.current = signId;
+  const musicRef = useRef(music);
+  musicRef.current = music;
 
   const [online, setOnline] = useState(false);
   const [scores, setScores] = useState<Record<TeamId, number>>(emptyScores);
@@ -186,9 +205,9 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
   const pushChat = useCallback((c: ChatBroadcast) => {
     const safe: ChatEntry = {
       id: String(c.id ?? ""),
-      nickname: String(c.nickname ?? "").slice(0, 40),
+      nickname: plainText(c.nickname ?? "", 40),
       team: isTeamId(c.team) ? c.team : "neutro",
-      text: String(c.text ?? "").slice(0, MAX_CHAT_LENGTH),
+      text: plainText(c.text ?? "", MAX_CHAT_LENGTH),
       key: chatKey.current++,
     };
     setChatLog((log) => [...log.slice(-(MAX_CHAT - 1)), safe]);
@@ -208,6 +227,7 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
       character: self.character,
       flag: self.flag,
       signId: signIdRef.current && SIGN_ID_RE.test(signIdRef.current) ? signIdRef.current : undefined,
+      music: cleanMusic(musicRef.current),
     };
     presenceRef.current = presence;
 
@@ -444,6 +464,17 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
     presenceRef.current = next;
     void channel.track(next);
   }, [signId]);
+
+  // Música do veículo de som: só atualiza o presence (cada cliente perto toca o vídeo por conta própria).
+  const musicKey = music ? `${music.id}@${music.t}` : "";
+  useEffect(() => {
+    const channel = channelRef.current;
+    const base = presenceRef.current;
+    if (!channel || !base || channel.state !== "joined") return;
+    const next: PresenceState = { ...base, music: cleanMusic(musicRef.current) };
+    presenceRef.current = next;
+    void channel.track(next);
+  }, [musicKey]);
 
   const sendMove = useCallback(
     (x: number, z: number, facing: Facing, vehicle: VehicleId, flag: FlagId, heading?: number, wheelie?: number) => {

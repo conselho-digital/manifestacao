@@ -12,6 +12,17 @@ import type { Facing } from "./world.js";
 /** Nome do canal Realtime da avenida. */
 export const AVENUE_CHANNEL = "avenue";
 
+/** Id de vídeo do YouTube (11 caracteres) — a música do carro/caminhão de som. */
+export const MUSIC_ID_RE = /^[A-Za-z0-9_-]{11}$/;
+/** Até que distância (u) se ouve a música de um veículo de som. */
+export const MUSIC_RADIUS = 32;
+
+/** Música tocando num veículo de som: o vídeo e quando ela começou (relógio do servidor, ms) — todo mundo perto toca no mesmo ponto. */
+export interface VehicleMusic {
+  id: string;
+  t: number;
+}
+
 /** Estado publicado via presence (quem está na avenida). */
 export interface PresenceState {
   id: string;
@@ -22,6 +33,8 @@ export interface PresenceState {
   flag: FlagId;
   /** Cartaz ativo que o jogador carrega (só o ID; o texto vem do banco). */
   signId?: string;
+  /** Música do veículo de som (só vale enquanto o jogador está num veículo que toca música). */
+  music?: VehicleMusic;
 }
 
 /** Evento de broadcast: movimento + estado dinâmico de um jogador. */
