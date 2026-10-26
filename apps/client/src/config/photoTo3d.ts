@@ -337,6 +337,72 @@ function weightsAt(t: number, u: number): [number, number][] {
 }
 
 /** Monta o personagem (malha com volume + esqueleto) a partir do recorte. */
+/**
+ * Costas do boneco: a foto só mostra a frente, então as costas são PINTADAS a partir dela — paletó e calça na cor
+ * dominante (sem gravata, botões nem rosto), nuca com a cor do cabelo/chapéu, pescoço com a cor da pele, mãos e sapatos
+ * como na frente. Proporções de uma pessoa de pé, de corpo inteiro (cabeça nos ~14% de cima).
+ */
+function makeBackCanvas(cut: Cutout): HTMLCanvasElement {
+  const { w, h, mask } = cut;
+  const src = cut.canvas.getContext("2d")!.getImageData(0, 0, w, h).data;
+  const out = document.createElement("canvas");
+  out.width = w;
+  out.height = h;
+  const ctx = out.getContext("2d")!;
+  const img = ctx.createImageData(w, h);
+  const cx = w / 2;
+  const yHead = 0.145 * h;
+  const yNeck = 0.18 * h;
+  const yHip = 0.56 * h;
+  const yFoot = 0.94 * h;
+  const skin = (i: number) => {
+    const r = src[i * 4]!;
+    const g = src[i * 4 + 1]!;
+    const b = src[i * 4 + 2]!;
+    return r > 85 && g > 40 && b > 25 && r > g && g >= b * 0.9 && r - b > 18 && r - g < 90 && r < 250;
+  };
+  const median = (idx: number[], fallback: [number, number, number]): [number, number, number] => {
+    if (idx.length < 20) return fallback;
+    const ch = (c: number) => idx.map((i) => src[i * 4 + c]!).sort((a, b) => a - b)[idx.length >> 1]!;
+    return [ch(0), ch(1), ch(2)];
+  };
+  const collect = (y0: number, y1: number, ok: (i: number, x: number) => boolean) => {
+    const v: number[] = [];
+    for (let y = Math.max(0, Math.floor(y0)); y < Math.min(h, Math.ceil(y1)); y++)
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        if (mask[i] && ok(i, x)) v.push(i);
+      }
+    return v;
+  };
+  const skinColor = median(collect(0.04 * h, yHead, (i) => skin(i)), [200, 150, 120]);
+  const topColor = median(collect(0, 0.04 * h, () => true), [60, 45, 35]);
+  const hairColor = median(collect(0.5 * yHead, yHead, (i) => !skin(i)), topColor);
+  const jacket = median(collect(0.3 * h, 0.5 * h, (i, x) => !skin(i) && Math.abs(x - cx) > 0.12 * w), [30, 40, 70]);
+  const trousers = median(collect(0.62 * h, 0.88 * h, () => true), jacket);
+  const noise = (i: number) => (((i * 2654435761) >>> 0) % 13) - 6;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      if (!mask[i]) continue;
+      let c: [number, number, number] | null = null;
+      if (y < yHead) c = y < yHead * 0.3 ? topColor : hairColor;
+      else if (y < yNeck) c = skinColor;
+      else if (y < yHip) c = skin(i) ? null : jacket;
+      else if (y < yFoot) c = skin(i) ? null : trousers;
+      if (c && y >= yNeck && y < yHip && Math.abs(x - cx) < 0.05 * w && y < yNeck + 0.014 * h) c = [235, 235, 235]; // colarinho
+      if (c && y > yNeck + 0.02 * h && y < yHip && Math.abs(x - cx) < 1.2) c = [c[0] * 0.8, c[1] * 0.8, c[2] * 0.8]; // costura central
+      const n = c ? noise(i) : 0;
+      img.data[i * 4] = c ? Math.max(0, Math.min(255, c[0] + n)) : src[i * 4]!;
+      img.data[i * 4 + 1] = c ? Math.max(0, Math.min(255, c[1] + n)) : src[i * 4 + 1]!;
+      img.data[i * 4 + 2] = c ? Math.max(0, Math.min(255, c[2] + n)) : src[i * 4 + 2]!;
+      img.data[i * 4 + 3] = 255;
+    }
+  }
+  ctx.putImageData(img, 0, 0);
+  return out;
+}
+
 export function buildCharacter(cut: Cutout): Group {
   const { w, h, mask } = cut;
   const dist = distanceInside(mask, w, h);
@@ -375,13 +441,13 @@ export function buildCharacter(cut: Cutout): Group {
   const skinW: number[] = [];
   const frontIdx = new Int32Array((nx + 1) * (ny + 1)).fill(-1);
   const backIdx = new Int32Array((nx + 1) * (ny + 1)).fill(-1);
-  const addVertex = (n: number, gx: number, gy: number, z: number, shade: number): number => {
+  const addVertex = (n: number, gx: number, gy: number, z: number, shade: number, back = false): number => {
     const px = gx * step;
     const py = gy * step;
     const x = (px - w / 2) * s;
     const y = (h - py) * s;
     positions.push(x, y, z);
-    uvs.push(Math.min(1, px / w), 1 - Math.min(1, py / h));
+    uvs.push((back ? 0.5 : 0) + 0.5 * Math.min(1, px / w), 1 - Math.min(1, py / h)); // atlas: frente à esquerda, costas à direita
     colors.push(shade, shade, shade);
     const wts = weightsAt(y / HEIGHT_M, x / HEIGHT_M);
     for (let k = 0; k < 4; k++) {
@@ -400,7 +466,7 @@ export function buildCharacter(cut: Cutout): Group {
       return frontIdx[n]!;
     }
     if (back) {
-      if (backIdx[n]! < 0) backIdx[n] = addVertex(n, gx, gy, -z, 0.7);
+      if (backIdx[n]! < 0) backIdx[n] = addVertex(n, gx, gy, -z, 0.9, true);
       return backIdx[n]!;
     }
     if (frontIdx[n]! < 0) frontIdx[n] = addVertex(n, gx, gy, z, 1);
@@ -437,7 +503,14 @@ export function buildCharacter(cut: Cutout): Group {
   geo.setIndex(index);
   geo.computeVertexNormals();
 
-  const map = new CanvasTexture(cut.canvas);
+  // Textura em atlas: a foto à esquerda e as costas pintadas à direita.
+  const atlas = document.createElement("canvas");
+  atlas.width = w * 2;
+  atlas.height = h;
+  const actx = atlas.getContext("2d")!;
+  actx.drawImage(cut.canvas, 0, 0);
+  actx.drawImage(makeBackCanvas(cut), w, 0);
+  const map = new CanvasTexture(atlas);
   map.colorSpace = SRGBColorSpace;
   const material = new MeshStandardMaterial({ map, vertexColors: true, roughness: 0.9, metalness: 0 });
   const mesh = new SkinnedMesh(geo, material);
