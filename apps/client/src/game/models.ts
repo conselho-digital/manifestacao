@@ -9,9 +9,17 @@ import { modelOverride } from "../config/gameConfig.js";
  * Fontes CC0 recomendadas (ver CLAUDE.md §6 e CREDITS.md): KayKit, Quaternius.
  */
 /** Modelos que já vêm no jogo: um por personagem e por equipe (roupa da equipe), com esqueleto humanoide reconhecido sozinho. */
-const SHIPPED_PREFIX: Record<CharacterId, string> = { homem_comum: "homem", mulher_comum: "mulher" };
+const SHIPPED_PREFIX: Partial<Record<CharacterId, string>> = { homem_comum: "homem", mulher_comum: "mulher" };
+/** Personagens com um só modelo para todas as equipes (a roupa não muda com a camisa da equipe). */
+const SHIPPED_SINGLE: Partial<Record<CharacterId, string>> = {
+  renam_santos: "/models/characters/renam_santos.glb",
+  jair_bolsonaro: "/models/characters/jair_bolsonaro.glb",
+  eneias: "/models/characters/eneias.glb",
+};
 export function shippedModel(character: CharacterId, team: TeamId): string | null {
-  return Object.hasOwn(SHIPPED_PREFIX, character) ? `/models/characters/${SHIPPED_PREFIX[character]}_${team}.glb` : null;
+  if (Object.hasOwn(SHIPPED_SINGLE, character)) return SHIPPED_SINGLE[character] ?? null;
+  const prefix = SHIPPED_PREFIX[character];
+  return prefix ? `/models/characters/${prefix}_${team}.glb` : null;
 }
 
 /**
@@ -19,7 +27,7 @@ export function shippedModel(character: CharacterId, team: TeamId): string | nul
  * (camisa da equipe) → o boneco geométrico.
  */
 export function modelUrlFor(character: CharacterId, team: TeamId = TEAM_IDS[0]!): string | null {
-  if (!Object.hasOwn(SHIPPED_PREFIX, character)) return null;
+  if (!Object.hasOwn(SHIPPED_PREFIX, character) && !Object.hasOwn(SHIPPED_SINGLE, character)) return null;
   return modelOverride(`character:${character}:${team}`) ?? modelOverride(`character:${character}`) ?? shippedModel(character, team);
 }
 

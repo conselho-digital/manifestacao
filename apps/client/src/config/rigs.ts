@@ -92,9 +92,43 @@ export function setRigs(next: Record<string, RigMarks>): void {
   rigs = next;
 }
 
-/** Marcações do modelo com essa URL, se o admin fez o editor para ele. */
+/**
+ * Esqueleto dos modelos que já vêm no jogo sem esqueleto próprio (marcado uma vez e guardado aqui). O que o admin
+ * marcar no editor para a mesma URL vale mais.
+ */
+const SHIPPED_RIGS: Record<string, RigMarks> = {
+  "/models/characters/renam_santos.glb": fillRig({
+    yaw: 0,
+    head: [0, 1.755],
+    neck: [0, 1.56],
+    shoulder: [0.207, 1.416],
+    elbow: [0.535, 1.416],
+    hand: [0.863, 1.416],
+    pelvis: [0, 0.936],
+    hip: [0.103, 0.9],
+    knee: [0.103, 0.495],
+    ankle: [0.103, 0.09],
+    toe: [0.103, 0.036],
+  }),
+  "/models/characters/eneias.glb": fillRig({
+    yaw: 0,
+    head: [0, 1.755],
+    neck: [0, 1.56],
+    shoulder: [0.23, 1.371],
+    elbow: [0.557, 1.371],
+    hand: [0.885, 1.371],
+    pelvis: [0, 0.92],
+    hip: [0.1, 0.88],
+    knee: [0.1, 0.48],
+    ankle: [0.1, 0.09],
+    toe: [0.1, 0.036],
+  }),
+};
+
+/** Marcações do modelo com essa URL: as do admin (editor) ou, na falta, as que já vêm no jogo. */
 export function rigForUrl(url: string): RigMarks | null {
-  return Object.hasOwn(rigs, url) ? rigs[url]! : null;
+  if (Object.hasOwn(rigs, url)) return rigs[url]!;
+  return Object.hasOwn(SHIPPED_RIGS, url) ? SHIPPED_RIGS[url]! : null;
 }
 
 export function currentRigs(): Record<string, RigMarks> {

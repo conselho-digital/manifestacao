@@ -15,6 +15,9 @@ export interface CharacterLook {
 export const CHARACTER_LOOKS: Record<CharacterId, CharacterLook> = {
   homem_comum: { scale: 1, hair: "short", hairColor: 0x3b2a1e },
   mulher_comum: { scale: 0.96, hair: "long", hairColor: 0x5a3825 },
+  renam_santos: { scale: 1, hair: "short", hairColor: 0x1e1612 },
+  jair_bolsonaro: { scale: 1, hair: "short", hairColor: 0x1c1c1c },
+  eneias: { scale: 1, hair: "short", hairColor: 0x2a2a2a },
 };
 
 export function lookOf(character: CharacterId | undefined): CharacterLook {

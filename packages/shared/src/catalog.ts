@@ -10,7 +10,7 @@
 import type { TeamId } from "./teams.js";
 
 // ── Personagens ────────────────────────────────────────────────────────────
-export type CharacterId = "homem_comum" | "mulher_comum";
+export type CharacterId = "homem_comum" | "mulher_comum" | "renam_santos" | "jair_bolsonaro" | "eneias";
 
 export interface Character {
   id: CharacterId;
@@ -23,9 +23,12 @@ export interface Character {
 export const CHARACTERS: Record<CharacterId, Character> = {
   homem_comum: { id: "homem_comum", label: "Homem", priceCents: 0 },
   mulher_comum: { id: "mulher_comum", label: "Mulher", priceCents: 0 },
+  renam_santos: { id: "renam_santos", label: "Renam Santos", priceCents: 0 },
+  jair_bolsonaro: { id: "jair_bolsonaro", label: "Jair Bolsonaro", priceCents: 0 },
+  eneias: { id: "eneias", label: "Enéias", priceCents: 0 },
 };
 
-export const CHARACTER_IDS: CharacterId[] = ["homem_comum", "mulher_comum"];
+export const CHARACTER_IDS: CharacterId[] = ["homem_comum", "mulher_comum", "renam_santos", "jair_bolsonaro", "eneias"];
 
 /** Personagem inicial (e o que vale quando um valor salvo/recebido é inválido ou de uma versão antiga). */
 export const DEFAULT_CHARACTER: CharacterId = "homem_comum";

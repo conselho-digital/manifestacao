@@ -117,7 +117,7 @@
   - **Mixamo** (Adobe): ok para rig/animação, mas **não redistribuir** arquivos crus (só embutidos, convertidos para GLB) e exporta só FBX/DAE.
   - **Não usar**: Ready Player Me (serviço público encerrado em jan/2026); CC-BY-NC e CC-BY-ND num jogo pago.
 - **Otimização**: Draco/meshopt na geometria, KTX2/Basis nas texturas, compartilhar um esqueleto entre avatares, `InstancedMesh` para prédios/postes, LOD e lazy-load por área.
-- **Regra**: nenhum asset entra sem licença compatível com **uso comercial** (o jogo cobra via Pix). Avatares não representam **pessoas reais** (ver §9).
+- **Regra**: nenhum asset entra sem licença compatível com **uso comercial** (o jogo cobra via Pix).
 
 > Estado atual: os avatares da Fase 1 são **geométricos (gerados por código)**,
 > placeholder até entrarem os modelos glTF CC0 na Fase 2.
@@ -155,7 +155,7 @@ Em cada fase: entregar → rodar agentes de bugs/segurança/visual (§7) → cor
 
 ## 9. Riscos e pontos legais
 
-- **Conteúdo é do operador**: nomes de equipes, bandeiras (cor e imagem), produtos e textos são definidos pelo dono do jogo no painel de admin; a plataforma não impõe nomes nem temas. A responsabilidade legal sobre esse conteúdo (direito de imagem, legislação eleitoral/TSE, marcas) é do operador. O código não deve trazer nomes/bandeiras de partidos ou pessoas reais como padrão — o padrão é neutro e o admin sobrescreve.
+- **Conteúdo é do operador**: nomes de equipes, bandeiras (cor e imagem), produtos e textos são definidos pelo dono do jogo no painel de admin; a plataforma não impõe nomes nem temas. A responsabilidade legal sobre esse conteúdo (direito de imagem, legislação eleitoral/TSE, marcas) é do operador. O código não deve trazer nomes/bandeiras de partidos como padrão — o padrão é neutro e o admin sobrescreve. Personagens (inclusive inspirados em figuras públicas) são conteúdo do operador, que responde por eles.
 - **Marca/arte/código do original**: não reutilizar.
 - **Licença de assets 3D**: só compatível com uso comercial; atribuição em `CREDITS.md`.
 - **LGPD**: controlador/DPO definidos, exclusão de conta, retenção mínima, só dados necessários do Google.
