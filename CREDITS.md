@@ -42,3 +42,7 @@ arquivos crus — só embutidos no bundle já convertidos para GLB.
 ## Fontes e áudio
 
 _(a preencher conforme entrarem.)_
+
+## Ferramentas de desenvolvimento
+
+- **TripoSR** (`tools/triposr/`): código MIT (VAST AI / Stability AI) e pesos `stabilityai/TripoSR` (MIT). Instalado só localmente; nada dele é distribuído com o jogo.
