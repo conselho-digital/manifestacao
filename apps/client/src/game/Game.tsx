@@ -5,6 +5,7 @@ import { StageButton } from "../ui/StageButton.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { TEAMS, VEHICLES, hexColor, type AvatarConfig, type FlagId, type VehicleId, type VehicleMusic } from "@manifestacao/shared";
+import { EngineSounds } from "./EngineSounds.js";
 import { VehicleMusicPlayers } from "./VehicleMusic.js";
 import { MusicModal } from "../ui/MusicModal.js";
 import { serverNow } from "../config/parkScreen.js";
@@ -541,6 +542,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
       {superchatOpen && signedIn && <SuperchatModal defaultName={avatar.nickname} isAdmin={isAdmin} onClose={() => setSuperchatOpen(false)} />}
       <ParkScreenModal />
       {billboardOpen && signedIn && <BillboardModal ads={billboardAds} isAdmin={isAdmin} onClose={() => setBillboardOpen(false)} />}
+      <EngineSounds playersRef={net.playersRef} posRef={transformRef} selfVehicle={vehicle} />
       <VehicleMusicPlayers playersRef={net.playersRef} posRef={transformRef} selfMusic={music} selfVehicle={vehicle} />
       {musicOpen && soundVehicle && (
         <MusicModal current={music} onPlay={(id) => setMusic({ id, t: serverNow() })} onStop={() => setMusic(null)} onClose={() => setMusicOpen(false)} />
