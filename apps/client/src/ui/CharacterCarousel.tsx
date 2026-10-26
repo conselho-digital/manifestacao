@@ -94,3 +94,128 @@ export function CharacterCarousel({
     </div>
   );
 }
+
+/** Tela larga (computador): o seletor ocupa a largura toda e mostra várias opções de uma vez. */
+export function useWide(): boolean {
+  const query = "(min-width: 1100px)";
+  const [wide, setWide] = useState(() => window.matchMedia(query).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(query);
+    const on = () => setWide(mq.matches);
+    mq.addEventListener("change", on);
+    return () => mq.removeEventListener("change", on);
+  }, []);
+  return wide;
+}
+
+/** Altura (px) do boneco nos cartões da tela larga: acompanha a altura da janela, para tudo caber sem rolar. */
+export function useCardBodyHeight(): number {
+  const calc = () => {
+    const h = window.innerHeight;
+    return Math.max(130, Math.min(260, Math.round(0.2 * h + 0.25 * (h - 768))));
+  };
+  const [h, setH] = useState(calc);
+  useEffect(() => {
+    const on = () => setH(calc());
+    window.addEventListener("resize", on);
+    return () => window.removeEventListener("resize", on);
+  }, []);
+  return h;
+}
+
+/**
+ * Carrossel de uma linha para o computador: mostra `visible` cartões de uma vez e tem setas para ver o resto (também
+ * dá para arrastar com o dedo ou rolar). O cartão escolhido sempre é trazido para a vista.
+ */
+export function WideCarousel({
+  ids,
+  onSelect,
+  selected,
+  renderCard,
+  visible = 4,
+  gap = 12,
+}: {
+  ids: readonly CharacterId[];
+  selected: CharacterId | null;
+  onSelect?: (id: CharacterId) => void;
+  renderCard: (id: CharacterId) => React.ReactNode;
+  visible?: number;
+  gap?: number;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [edge, setEdge] = useState({ start: true, end: ids.length <= visible });
+  void onSelect;
+
+  const update = () => {
+    const el = ref.current;
+    if (!el) return;
+    setEdge({ start: el.scrollLeft < 4, end: el.scrollLeft + el.clientWidth >= el.scrollWidth - 4 });
+  };
+  useEffect(update, [ids.length]);
+
+  // Traz o escolhido para a vista.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || selected === null) return;
+    const i = ids.indexOf(selected);
+    const item = el.children[i] as HTMLElement | undefined;
+    if (!item) return;
+    if (item.offsetLeft < el.scrollLeft || item.offsetLeft + item.offsetWidth > el.scrollLeft + el.clientWidth) {
+      el.scrollTo({ left: item.offsetLeft - el.offsetLeft, behavior: "smooth" });
+    }
+  }, [selected, ids]);
+
+  const go = (dir: 1 | -1) => {
+    const el = ref.current;
+    if (!el) return;
+    const item = el.children[0] as HTMLElement | undefined;
+    const step = (item?.offsetWidth ?? 160) + gap;
+    el.scrollBy({ left: dir * step * Math.max(1, visible - 1), behavior: "smooth" });
+  };
+
+  const arrow = (dir: 1 | -1, disabled: boolean): React.CSSProperties => ({
+    position: "absolute",
+    top: "50%",
+    [dir === 1 ? "right" : "left"]: -14,
+    transform: "translateY(-50%)",
+    width: 36,
+    height: 36,
+    borderRadius: "50%",
+    border: "1px solid var(--line)",
+    background: "var(--surface-2)",
+    color: "var(--ink)",
+    fontSize: 20,
+    lineHeight: 1,
+    cursor: disabled ? "default" : "pointer",
+    opacity: disabled ? 0.25 : 1,
+    zIndex: 2,
+  });
+
+  return (
+    <div style={{ position: "relative", minWidth: 0 }}>
+      <div
+        ref={ref}
+        onScroll={update}
+        role="group"
+        aria-label="Políticos (use as setas para ver mais)"
+        style={{ display: "flex", gap, overflowX: "auto", scrollSnapType: "x mandatory", scrollbarWidth: "none", padding: 2 }}
+      >
+        {ids.map((id) => (
+          <div key={id} style={{ display: "flex", flex: `0 0 calc((100% - ${(visible - 1) * gap}px) / ${visible})`, scrollSnapAlign: "start", minWidth: 0 }}>
+            <div style={{ display: "flex", flex: 1, minWidth: 0 }}>{renderCard(id)}</div>
+          </div>
+        ))}
+      </div>
+      {ids.length > visible && (
+        <>
+          <button type="button" aria-label="Anteriores" disabled={edge.start} onClick={() => go(-1)} style={arrow(-1, edge.start)}>
+            ‹
+          </button>
+          <button type="button" aria-label="Próximos" disabled={edge.end} onClick={() => go(1)} style={arrow(1, edge.end)}>
+            ›
+          </button>
+        </>
+      )}
+    </div>
+  );
+}

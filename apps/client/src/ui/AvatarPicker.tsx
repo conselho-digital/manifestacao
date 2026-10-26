@@ -27,7 +27,7 @@ import { GoogleSignInButton } from "../auth/GoogleSignInButton.js";
 import { isOnlineEnabled } from "../config/env.js";
 import { TeamFlagIcon } from "./TeamFlagIcon.js";
 import { CharacterBody } from "./CharacterFace.js";
-import { CAROUSEL_CARD_W, CharacterCarousel, useNarrow } from "./CharacterCarousel.js";
+import { CAROUSEL_CARD_W, CharacterCarousel, WideCarousel, useCardBodyHeight, useNarrow, useWide } from "./CharacterCarousel.js";
 
 export const AVATAR_STORAGE_KEY = "manifestacao.avatar";
 const STORAGE_KEY = AVATAR_STORAGE_KEY;
@@ -123,8 +123,10 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
 
   const teamColorHex = hexColor(TEAMS[team].color);
   const narrow = useNarrow();
+  const wide = useWide();
+  const bodyH = useCardBodyHeight();
 
-  const renderCard = (id: CharacterId, fixedWidth?: number) => {
+  const renderCard = (id: CharacterId, fixedWidth?: number, height = 200) => {
         const selected = id === character;
         return (
           <button
@@ -173,7 +175,7 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
                 </svg>
               </span>
             )}
-            <CharacterBody color={teamColorHex} character={id} team={team} width={132} height={200} />
+            <CharacterBody color={teamColorHex} character={id} team={team} width={Math.round(height * 0.66)} height={height} />
             <span style={{ fontSize: "var(--t-ui)", fontWeight: 700, color: "var(--ink)", textAlign: "center" }}>
               {CHARACTERS[id].label}
             </span>
@@ -182,13 +184,235 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
 
   };
 
+  const teamSection = (
+        <section>
+          <SectionTitle>De que lado você está?</SectionTitle>
+          {/* Sempre 3 colunas na mesma linha, mesmo em telas estreitas —
+              os cards encolhem (gap/padding/fonte menores) em vez de quebrar. */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginTop: 10 }}>
+            {TEAM_IDS.map((id) => {
+              const t = TEAMS[id];
+              const selected = id === team;
+              const c = hexColor(t.color);
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  aria-pressed={selected}
+                  onClick={() => setTeam(id)}
+                  style={{
+                    minHeight: 64,
+                    minWidth: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: 6,
+                    padding: "8px 4px",
+                    borderRadius: "var(--r-md)",
+                    border: `2px solid ${selected ? c : "var(--line)"}`,
+                    background: selected ? "var(--surface-2)" : "var(--surface)",
+                    color: "var(--ink)",
+                    fontWeight: 700,
+                    fontSize: 13,
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    cursor: "pointer",
+                    transition: "transform .08s, border-color .12s",
+                  }}
+                >
+                  <TeamFlagIcon color={c} imageUrl={teamIconImageUrl(id)} />
+                  {t.label}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+
+  );
+  const nicknameField = (
+          <div style={{ marginTop: 14 }}>
+            <Label htmlFor="nickname">Apelido</Label>
+            <input
+              id="nickname"
+              value={nickname}
+              onChange={(e) => setNickname(e.target.value)}
+              maxLength={MAX_NICKNAME_LENGTH}
+              placeholder="Como te chamamos?"
+              style={{
+                marginTop: 6,
+                width: "100%",
+                minHeight: 44,
+                padding: "12px 14px",
+                fontSize: 16,
+                borderRadius: "var(--r-md)",
+                border: "1px solid var(--line)",
+                background: "var(--surface)",
+                color: "var(--ink)",
+              }}
+            />
+          </div>
+
+  );
+  const flagSection = (
+          <div style={{ marginTop: 14 }}>
+            <Label>Bandeira</Label>
+            <Row>
+              {FLAG_IDS.map((id) => {
+                const accent = id === "nenhuma" ? "var(--accent)" : hexColor(flagColor(id, TEAMS[team].color));
+                const flagImg = id === "time" ? teamIconImageUrl(team) : null;
+                const selected = id === flag;
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    aria-pressed={selected}
+                    onClick={() => setFlag(id)}
+                    style={{ ...chip(selected, accent), display: "inline-flex", alignItems: "center", gap: 6 }}
+                  >
+                    {flagImg && <TeamFlagIcon color={accent} size={14} imageUrl={flagImg} />}
+                    {FLAGS[id].label}
+                  </button>
+                );
+              })}
+            </Row>
+          </div>
+  );
+  const storeTile = isOnlineEnabled && (
+    <button
+      type="button"
+      onClick={onOpenStore}
+      style={{
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        gap: 8,
+        minHeight: 44,
+        padding: "8px 6px",
+        borderRadius: "var(--r-md)",
+        border: "2px dashed var(--line)",
+        background: "transparent",
+        color: "var(--ink-dim)",
+        cursor: "pointer",
+      }}
+    >
+      <span style={{ fontSize: 22, lineHeight: 1 }}>+</span>
+      <span style={{ fontSize: "var(--t-ui)", fontWeight: 700 }}>Loja: mais personagens e veículos</span>
+    </button>
+  );
+  const nicknameInline = nicknameField;
+
+  const formWide = (
+    <form
+      id="avatar-picker-form"
+      onSubmit={submit}
+      style={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        gap: 18,
+        padding: "16px 32px 132px",
+        width: "min(1480px, 100%)",
+        margin: "0 auto",
+        boxSizing: "border-box",
+      }}
+    >
+      {bodyH >= 170 && (
+        <p style={{ margin: 0, fontSize: 17, color: "var(--ink)", textAlign: "center" }}>
+          Uma manifestação online e satírica numa avenida 3D: escolha seu lado, monte seu personagem e entre.
+        </p>
+      )}
+      <div style={{ display: "grid", gridTemplateColumns: "minmax(320px, 380px) minmax(0, 1fr)", gap: 20, alignItems: "stretch" }}>
+        <aside style={{ ...cardStyle, display: "flex", flexDirection: "column", gap: 14 }}>
+          {teamSection}
+          <div style={{ marginTop: 2 }}>{nicknameField}</div>
+          {flagSection}
+          <InstallShortcut />
+          {storeTile}
+        </aside>
+        <section style={{ ...cardStyle, display: "flex", flexDirection: "column", gap: 12, minWidth: 0 }}>
+          <SectionTitle>Escolha seu personagem</SectionTitle>
+          <div style={{ display: "grid", gridTemplateColumns: "minmax(0, 2fr) minmax(0, 4fr)", gap: 28, alignItems: "start" }}>
+            {CHARACTER_GROUPS.map((group, gi) => (
+              <div key={group.id} style={{ minWidth: 0, display: "flex", flexDirection: "column", gap: 8 }}>
+                <div style={{ fontSize: "var(--t-ui)", fontWeight: 700, color: "var(--ink-dim)", textTransform: "uppercase", letterSpacing: "0.04em" }}>{group.label}</div>
+                {gi === 0 ? (
+                  <div style={{ display: "grid", gridTemplateColumns: `repeat(${group.ids.length}, minmax(0, 1fr))`, gap: 12 }}>
+                    {group.ids.map((id) => renderCard(id, undefined, bodyH))}
+                  </div>
+                ) : (
+                  <WideCarousel ids={group.ids} selected={character} renderCard={(id) => renderCard(id, undefined, bodyH)} visible={4} gap={12} />
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, minmax(0, 1fr))", gap: 14 }}>
+        {INFO_CARDS.map((c) => (
+          <div key={c.title} style={{ ...cardStyle, padding: 14, display: "flex", flexDirection: "column", gap: 6 }}>
+            <div style={{ fontFamily: "var(--font-display)", fontSize: 15, textTransform: "uppercase", color: "var(--accent)" }}>{c.title}</div>
+            <div style={{ fontSize: "var(--t-ui)", color: "var(--ink)", lineHeight: 1.4 }}>{c.text}</div>
+          </div>
+        ))}
+      </div>
+    </form>
+  );
+
+  const formNarrow = (
+    <form
+      id="avatar-picker-form"
+      onSubmit={submit}
+      style={{
+        flex: 1,
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "center",
+        gap: 28,
+        padding: "20px max(16px, env(safe-area-inset-right)) 176px max(16px, env(safe-area-inset-left))",
+        width: "min(640px, 100%)",
+        margin: "0 auto",
+      }}
+    >
+      <InstallShortcut />
+      <section>{teamSection}</section>
+      <section style={cardStyle}>
+        <SectionTitle>Escolha seu personagem</SectionTitle>
+        <p style={{ margin: "6px 0 0", color: "var(--ink)", fontSize: "var(--t-body)", maxWidth: "48ch" }}>
+          Visual e bandeira você personaliza aqui — seu nome aparece pros outros na avenida.
+        </p>
+        {nicknameInline}
+        <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
+          {CHARACTER_GROUPS.map((group, gi) => (
+            <div key={group.id} style={{ display: "flex", flexDirection: "column", gap: 8, gridColumn: "1 / -1", marginTop: gi === 0 ? 0 : 10 }}>
+              {gi > 0 && (
+                <div style={{ fontSize: "var(--t-ui)", fontWeight: 700, color: "var(--ink-dim)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+                  {group.label}
+                </div>
+              )}
+              {narrow ? (
+                <CharacterCarousel ids={group.ids} selected={group.ids.includes(character) ? character : null} onSelect={setCharacter} renderCard={(id) => renderCard(id, CAROUSEL_CARD_W)} />
+              ) : (
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>{group.ids.map((id) => renderCard(id))}</div>
+              )}
+            </div>
+          ))}
+          {storeTile}
+        </div>
+        {flagSection}
+      </section>
+    </form>
+  );
+
   return (
     <div
       style={{
         position: "fixed",
         inset: 0,
         overflowY: "auto",
-        paddingBottom: "calc(130px + env(safe-area-inset-bottom))",
+        paddingBottom: wide ? 0 : "calc(130px + env(safe-area-inset-bottom))",
         display: "flex",
         flexDirection: "column",
       }}
@@ -249,167 +473,7 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
         )}
       </header>
 
-      <form
-        id="avatar-picker-form"
-        onSubmit={submit}
-        style={{
-          flex: 1,
-          display: "flex",
-          flexDirection: "column",
-          // Centraliza verticalmente quando sobra altura (desktop/tablet) —
-          // evita o conteúdo ficar preso no topo com um vazio grande embaixo.
-          justifyContent: "center",
-          gap: 28,
-          padding: "20px max(16px, env(safe-area-inset-right)) 176px max(16px, env(safe-area-inset-left))",
-          width: "min(640px, 100%)",
-          margin: "0 auto",
-        }}
-      >
-        <InstallShortcut />
-
-        {/* Lado */}
-        <section>
-          <SectionTitle>De que lado você está?</SectionTitle>
-          {/* Sempre 3 colunas na mesma linha, mesmo em telas estreitas —
-              os cards encolhem (gap/padding/fonte menores) em vez de quebrar. */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 8, marginTop: 10 }}>
-            {TEAM_IDS.map((id) => {
-              const t = TEAMS[id];
-              const selected = id === team;
-              const c = hexColor(t.color);
-              return (
-                <button
-                  key={id}
-                  type="button"
-                  aria-pressed={selected}
-                  onClick={() => setTeam(id)}
-                  style={{
-                    minHeight: 64,
-                    minWidth: 0,
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: 6,
-                    padding: "8px 4px",
-                    borderRadius: "var(--r-md)",
-                    border: `2px solid ${selected ? c : "var(--line)"}`,
-                    background: selected ? "var(--surface-2)" : "var(--surface)",
-                    color: "var(--ink)",
-                    fontWeight: 700,
-                    fontSize: 13,
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                    cursor: "pointer",
-                    transition: "transform .08s, border-color .12s",
-                  }}
-                >
-                  <TeamFlagIcon color={c} imageUrl={teamIconImageUrl(id)} />
-                  {t.label}
-                </button>
-              );
-            })}
-          </div>
-        </section>
-
-        {/* Personagem */}
-        <section style={cardStyle}>
-          <SectionTitle>Escolha seu personagem</SectionTitle>
-          <p style={{ margin: "6px 0 0", color: "var(--ink)", fontSize: "var(--t-body)", maxWidth: "48ch" }}>
-            Visual e bandeira você personaliza aqui — seu nome aparece pros outros na avenida.
-          </p>
-
-          <div style={{ marginTop: 14 }}>
-            <Label htmlFor="nickname">Apelido</Label>
-            <input
-              id="nickname"
-              value={nickname}
-              onChange={(e) => setNickname(e.target.value)}
-              maxLength={MAX_NICKNAME_LENGTH}
-              placeholder="Como te chamamos?"
-              style={{
-                marginTop: 6,
-                width: "100%",
-                minHeight: 44,
-                padding: "12px 14px",
-                fontSize: 16,
-                borderRadius: "var(--r-md)",
-                border: "1px solid var(--line)",
-                background: "var(--surface)",
-                color: "var(--ink)",
-              }}
-            />
-          </div>
-
-          <div
-            style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}
-          >
-            {CHARACTER_GROUPS.map((group, gi) => (
-              <div key={group.id} style={{ display: "flex", flexDirection: "column", gap: 8, gridColumn: "1 / -1", marginTop: gi === 0 ? 0 : 10 }}>
-                {gi > 0 && (
-                  <div style={{ fontSize: "var(--t-ui)", fontWeight: 700, color: "var(--ink-dim)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
-                    {group.label}
-                  </div>
-                )}
-                {narrow ? (
-                  <CharacterCarousel ids={group.ids} selected={group.ids.includes(character) ? character : null} onSelect={setCharacter} renderCard={(id) => renderCard(id, CAROUSEL_CARD_W)} />
-                ) : (
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>{group.ids.map((id) => renderCard(id))}</div>
-                )}
-              </div>
-            ))}
-
-            {isOnlineEnabled && (
-              <button
-                type="button"
-                onClick={onOpenStore}
-                style={{
-                  gridColumn: "1 / -1",
-                  display: "flex",
-                  flexDirection: "row",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  gap: 8,
-                  minHeight: 44,
-                  padding: "8px 6px",
-                  borderRadius: "var(--r-md)",
-                  border: "2px dashed var(--line)",
-                  background: "transparent",
-                  color: "var(--ink-dim)",
-                  cursor: "pointer",
-                }}
-              >
-                <span style={{ fontSize: 22, lineHeight: 1 }}>+</span>
-                <span style={{ fontSize: "var(--t-ui)", fontWeight: 700 }}>Loja</span>
-              </button>
-            )}
-          </div>
-
-          <div style={{ marginTop: 14 }}>
-            <Label>Bandeira</Label>
-            <Row>
-              {FLAG_IDS.map((id) => {
-                const accent = id === "nenhuma" ? "var(--accent)" : hexColor(flagColor(id, TEAMS[team].color));
-                const flagImg = id === "time" ? teamIconImageUrl(team) : null;
-                const selected = id === flag;
-                return (
-                  <button
-                    key={id}
-                    type="button"
-                    aria-pressed={selected}
-                    onClick={() => setFlag(id)}
-                    style={{ ...chip(selected, accent), display: "inline-flex", alignItems: "center", gap: 6 }}
-                  >
-                    {flagImg && <TeamFlagIcon color={accent} size={14} imageUrl={flagImg} />}
-                    {FLAGS[id].label}
-                  </button>
-                );
-              })}
-            </Row>
-          </div>
-        </section>
-      </form>
+      {wide ? formWide : formNarrow}
 
       {/* Barra fixa de entrada */}
       <div
@@ -480,6 +544,15 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
     </div>
   );
 }
+
+/** Faixa de informações da tela de entrada (computador). */
+const INFO_CARDS: { title: string; text: string }[] = [
+  { title: "Avenida ao vivo", text: "Ande, corra e converse com quem está online, em tempo real, no celular ou no computador." },
+  { title: "Palanques com voz", text: "Sete palanques, na praça e sob o museu: dois falam juntos, a fila espera e o resto escuta." },
+  { title: "Veículos", text: "Moto, moto esportiva, carro, carro de som e caminhão de som. O Premium libera todos." },
+  { title: "Bandeira e spray", text: "Leve a bandeira do seu lado, bata com ela e pixe a avenida (15 sprays por dia)." },
+  { title: "Telões e superchat", text: "Anuncie nos telões e destaque a sua mensagem para toda a avenida." },
+];
 
 const cardStyle: React.CSSProperties = {
   background: "var(--surface)",
