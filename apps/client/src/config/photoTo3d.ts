@@ -398,9 +398,42 @@ function makeBackCanvas(cut: Cutout): HTMLCanvasElement {
       }
     return v;
   };
-  const skinColor = median(collect(0.04 * h, yHead, (i) => skin(i)), [200, 150, 120]);
+  // Chapéu: a aba é a linha mais larga da cabeça e logo abaixo dela o contorno encolhe de repente (rosto). As costas do
+  // chapéu são a própria frente dele (mesma cor e forma), em vez de pintar tudo como cabelo.
+  const rowWidth = (y: number) => {
+    let n = 0;
+    for (let x = 0; x < w; x++) if (mask[y * w + x]) n++;
+    return n;
+  };
+  let yBrim = -1;
+  {
+    // só até o pescoço (a linha mais estreita abaixo da cabeça): depois dele os ombros são mais largos que a aba
+    let limit = Math.round(0.1 * h);
+    for (let y = limit, minW = Infinity; y <= Math.min(h - 1, Math.round(0.22 * h)); y++) {
+      const rw = rowWidth(y);
+      if (rw > 0 && rw < minW) { minW = rw; limit = y; }
+    }
+    let yw = 0, maxW = 0;
+    for (let y = 0; y <= limit; y++) {
+      const rw = rowWidth(y);
+      if (rw > maxW) { maxW = rw; yw = y; }
+    }
+    if (maxW > 0 && yw < 0.12 * h) {
+      for (let y = yw; y <= limit; y++) {
+        if (rowWidth(y) < 0.62 * maxW) {
+          if (y - yw < 0.05 * h) yBrim = y;
+          break;
+        }
+      }
+    }
+  }
+  const faceTop = yBrim >= 0 ? yBrim : 0.04 * h;
+  const skinColor = median(collect(faceTop, yNeck, (i) => skin(i)), [200, 150, 120]);
   const topColor = median(collect(0, 0.04 * h, () => true), [60, 45, 35]);
-  const hairColor = median(collect(0.5 * yHead, yHead, (i) => !skin(i)), topColor);
+  // Cabelo/barba: o que não é pele na faixa do rosto (cabelo grisalho aparece assim); sem isso, a pele escurecida.
+  const hairColor = yBrim >= 0
+    ? median(collect(yBrim, yNeck, (i) => !skin(i)), [skinColor[0] * 0.6, skinColor[1] * 0.6, skinColor[2] * 0.6])
+    : median(collect(0.5 * yHead, yHead, (i) => !skin(i)), topColor);
   const jacket = median(collect(0.3 * h, 0.5 * h, (i, x) => !skin(i) && Math.abs(x - cx) > 0.12 * w), [30, 40, 70]);
   const trousers = median(collect(0.62 * h, 0.88 * h, () => true), jacket);
   const noise = (i: number) => (((i * 2654435761) >>> 0) % 13) - 6;
@@ -409,16 +442,19 @@ function makeBackCanvas(cut: Cutout): HTMLCanvasElement {
       const i = y * w + x;
       if (!mask[i]) continue;
       let c: [number, number, number] | null = null;
-      if (y < yHead) c = y < yHead * 0.3 ? topColor : hairColor;
+      if (yBrim >= 0 && y < yBrim) c = null; // chapéu: a frente serve (escurecida abaixo)
+      else if (yBrim >= 0 && y < yNeck) c = y < yNeck - 0.02 * h ? hairColor : skinColor;
+      else if (y < yHead) c = y < yHead * 0.3 ? topColor : hairColor;
       else if (y < yNeck) c = skinColor;
       else if (y < yHip) c = skin(i) ? null : jacket;
       else if (y < yFoot) c = skin(i) ? null : trousers;
       if (c && y >= yNeck && y < yHip && Math.abs(x - cx) < 0.05 * w && y < yNeck + 0.014 * h) c = [235, 235, 235]; // colarinho
       if (c && y > yNeck + 0.02 * h && y < yHip && Math.abs(x - cx) < 1.2) c = [c[0] * 0.8, c[1] * 0.8, c[2] * 0.8]; // costura central
       const n = c ? noise(i) : 0;
-      img.data[i * 4] = c ? Math.max(0, Math.min(255, c[0] + n)) : src[i * 4]!;
-      img.data[i * 4 + 1] = c ? Math.max(0, Math.min(255, c[1] + n)) : src[i * 4 + 1]!;
-      img.data[i * 4 + 2] = c ? Math.max(0, Math.min(255, c[2] + n)) : src[i * 4 + 2]!;
+      const hat = yBrim >= 0 && y < yBrim ? 0.82 : 1; // costas do chapéu: igual à frente, um pouco mais escuro
+      img.data[i * 4] = c ? Math.max(0, Math.min(255, c[0] + n)) : src[i * 4]! * hat;
+      img.data[i * 4 + 1] = c ? Math.max(0, Math.min(255, c[1] + n)) : src[i * 4 + 1]! * hat;
+      img.data[i * 4 + 2] = c ? Math.max(0, Math.min(255, c[2] + n)) : src[i * 4 + 2]! * hat;
       img.data[i * 4 + 3] = 255;
     }
   }
