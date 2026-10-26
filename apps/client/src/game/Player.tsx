@@ -74,6 +74,8 @@ interface PlayerProps {
   transformRef?: { current: PlayerTransform };
   /** Marcado true após o primeiro frame — transformRef só é confiável depois disso. */
   transformReadyRef?: { current: boolean };
+  /** PC: true enquanto a tecla de mirar/bater (E) está segurada — o personagem encara a cruz da tela em vez de onde anda. */
+  aimHoldRef?: { current: boolean };
   /** Outros jogadores (posição e veículo): o jogador local não os atravessa. */
   othersRef?: { current: ReadonlyMap<string, { x: number; z: number; vehicle: VehicleId }> };
 }
@@ -153,6 +155,7 @@ export function Player({
   onMove,
   driveRef,
   wheelieRef,
+  aimHoldRef,
   hitRef,
   knock,
   cameraTouchedAtRef,
@@ -279,6 +282,14 @@ export function Player({
       // forward(yaw) = (sin yaw, cos yaw), o mesmo da rotação em Y. Em veículo a direção vem do volante.
       const diff = wrapAngle(Math.atan2(worldX, worldZ) - g.rotation.y);
       g.rotation.y = wrapAngle(g.rotation.y + diff * Math.min(1, 14 * delta));
+    }
+
+    // Mirando (E segurado): o personagem encara onde a câmera olha (a cruz) mesmo andando de lado; a câmera não se realinha sozinha.
+    if (!driving && aimHoldRef?.current) {
+      cameraTouchedAtRef.current = performance.now();
+      const diff = wrapAngle(yaw - g.rotation.y);
+      g.rotation.y = wrapAngle(g.rotation.y + diff * Math.min(1, 18 * delta));
+      facing.current = facingOf(Math.sin(yaw), Math.cos(yaw), facing.current);
     }
 
     if (!Number.isFinite(g.position.x + g.position.z)) g.position.set(0, 0, 0); // proteção: posição inválida nunca fica

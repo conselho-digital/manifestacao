@@ -101,8 +101,12 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
     return avatar;
   };
 
+  // O apelido é obrigatório: sem ele não há login nem entrada.
+  const nameOk = nickname.trim().length > 0;
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!nameOk) return;
     const avatar = buildAvatar();
     if (needsLogin) {
       // Só alcançado se o form for submetido sem o botão do Google (ex.:
@@ -279,6 +283,27 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
             </Row>
           </div>
   );
+  // Login com Google logo abaixo do apelido; o botão do Google só aparece depois que há um apelido (o do Google não dá
+  // para desativar, então antes disso entra um botão igual, apagado).
+  const loginBlock =
+    needsLogin || (isOnlineEnabled && authLoading) ? (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8, marginTop: 10 }}>
+        {isOnlineEnabled && authLoading ? (
+          <button type="button" disabled style={{ ...lockedBtn, opacity: 0.6 }}>
+            Carregando…
+          </button>
+        ) : nameOk ? (
+          <GoogleSignInButton onSignedIn={handleSignedIn} />
+        ) : (
+          <button type="button" disabled aria-disabled style={lockedBtn}>
+            Continuar com Google
+          </button>
+        )}
+        <p style={{ margin: 0, textAlign: "center", fontSize: "var(--t-ui)", color: "var(--ink-dim)" }}>
+          {nameOk ? "Conta é obrigatória pra entrar na avenida." : "Escreva um apelido para liberar o login."}
+        </p>
+      </div>
+    ) : null;
   const storeTile = isOnlineEnabled && (
     <button
       type="button"
@@ -328,6 +353,7 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
         <aside style={{ ...cardStyle, display: "flex", flexDirection: "column", gap: 14 }}>
           {teamSection}
           <div style={{ marginTop: 2 }}>{nicknameField}</div>
+          {loginBlock}
           {flagSection}
           <InstallShortcut />
           {storeTile}
@@ -384,6 +410,7 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
           Visual e bandeira você personaliza aqui — seu nome aparece pros outros na avenida.
         </p>
         {nicknameInline}
+        {loginBlock}
         <div style={{ marginTop: 14, display: "flex", flexDirection: "column", gap: 10 }}>
           {CHARACTER_GROUPS.map((group, gi) => (
             <div key={group.id} style={{ display: "flex", flexDirection: "column", gap: 8, gridColumn: "1 / -1", marginTop: gi === 0 ? 0 : 10 }}>
@@ -509,17 +536,11 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
           >
             Carregando…
           </button>
-        ) : needsLogin ? (
-          <div style={{ width: "min(720px, 100%)", margin: "0 auto", display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-            <GoogleSignInButton onSignedIn={handleSignedIn} />
-            <p style={{ margin: 0, textAlign: "center", fontSize: "var(--t-ui)", color: "var(--ink-dim)" }}>
-              Conta é obrigatória pra entrar na avenida.
-            </p>
-          </div>
-        ) : (
+        ) : needsLogin ? null : (
           <button
             type="submit"
             form="avatar-picker-form"
+            disabled={!nameOk}
             style={{
               width: "min(720px, 100%)",
               margin: "0 auto",
@@ -530,13 +551,14 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
               fontWeight: 800,
               borderRadius: "var(--r-lg)",
               border: "none",
-              cursor: "pointer",
+              cursor: nameOk ? "pointer" : "not-allowed",
+              opacity: nameOk ? 1 : 0.5,
               background: "var(--accent)",
               color: "var(--on-accent)",
               transition: "transform .08s",
             }}
           >
-            Entrar na avenida
+            {nameOk ? "Entrar na avenida" : "Escreva um apelido para entrar"}
           </button>
         )}
         <LegalLinks />
@@ -553,6 +575,20 @@ const INFO_CARDS: { title: string; text: string }[] = [
   { title: "Bandeira e spray", text: "Leve a bandeira do seu lado, bata com ela e pixe a avenida (15 sprays por dia)." },
   { title: "Telões e superchat", text: "Anuncie nos telões e destaque a sua mensagem para toda a avenida." },
 ];
+
+/** Botão de login apagado (antes de escrever o apelido), no tamanho do botão do Google. */
+const lockedBtn: React.CSSProperties = {
+  width: "100%",
+  minHeight: 44,
+  borderRadius: 999,
+  border: "1px solid var(--line)",
+  background: "var(--surface-2)",
+  color: "var(--ink-dim)",
+  fontWeight: 700,
+  fontSize: "var(--t-body)",
+  cursor: "not-allowed",
+  opacity: 0.7,
+};
 
 const cardStyle: React.CSSProperties = {
   background: "var(--surface)",

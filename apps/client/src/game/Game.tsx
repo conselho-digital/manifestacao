@@ -179,14 +179,16 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
   const cameraTouchedAtRef = useRef(0);
   const vehicleKind = VEHICLES[vehicle]?.kind ?? "foot";
   const driving = vehicleKind !== "foot";
-  // PC: Q empina e E abaixa a roda da frente da moto (W S A D / setas já vêm do useInput).
+  // PC: Shift empina e Espaço abaixa a roda da frente da moto (W S A D / setas já vêm do useInput).
   useEffect(() => {
     if (vehicleKind !== "moto") return;
     const key = (down: boolean) => (e: KeyboardEvent) => {
       if (isTypingTarget(e.target)) return;
-      const k = e.key.toLowerCase();
-      if (k === "q") driveRef.current = { ...driveRef.current, up: down };
-      else if (k === "e") driveRef.current = { ...driveRef.current, down: down };
+      if (e.key === "Shift") driveRef.current = { ...driveRef.current, up: down };
+      else if (e.key === " " || e.code === "Space") {
+        e.preventDefault(); // Espaço não rola a página nem aperta o botão focado
+        driveRef.current = { ...driveRef.current, down: down };
+      }
     };
     const onDown = key(true);
     const onUp = key(false);
@@ -296,14 +298,38 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     setHitBusy(true);
     window.setTimeout(() => setHitBusy(false), strikeSeconds(kind) * 1000);
   }, [canHit, flagShown, net.sendHit, net.sendImpact, net.playersRef]);
+  // PC: segurar E mira (o personagem vira para onde a câmera olha, a cruz da tela) e bate sem parar; F dá um golpe só.
+  const aimHoldRef = useRef(false);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.repeat || e.key.toLowerCase() !== "f" || isTypingTarget(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
-      doHit();
+    let repeat: number | undefined;
+    const stop = () => {
+      aimHoldRef.current = false;
+      if (repeat !== undefined) window.clearInterval(repeat);
+      repeat = undefined;
     };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [doHit]);
+    const onDown = (e: KeyboardEvent) => {
+      if (isTypingTarget(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
+      const k = e.key.toLowerCase();
+      if (k === "f" && !e.repeat) doHit();
+      else if (k === "e" && !e.repeat && canHit) {
+        aimHoldRef.current = true;
+        doHit();
+        repeat = window.setInterval(doHit, 120);
+      }
+    };
+    const onUp = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() === "e") stop();
+    };
+    window.addEventListener("keydown", onDown);
+    window.addEventListener("keyup", onUp);
+    window.addEventListener("blur", stop);
+    return () => {
+      stop();
+      window.removeEventListener("keydown", onDown);
+      window.removeEventListener("keyup", onUp);
+      window.removeEventListener("blur", stop);
+    };
+  }, [doHit, canHit]);
 
   const handleSpray = useCallback(() => {
     if (!transformReadyRef.current) return;
@@ -394,6 +420,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           cameraDistance={cameraDistance}
           aimRef={aimRef}
           runRef={runRef}
+          aimHoldRef={aimHoldRef}
           onMove={net.sendMove}
           driveRef={driveRef}
           wheelieRef={wheelieRef}
@@ -434,7 +461,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           {vehicleKind === "moto" && (
             <>
               {" "}
-              · <strong>Q</strong>/<strong>E</strong> empina
+              · <strong>Shift</strong> empina · <strong>Espaço</strong> abaixa
             </>
           )}
         </div>
@@ -456,7 +483,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
             userSelect: "none",
           }}
         >
-          Segure <strong>Shift</strong> para correr
+          Segure <strong>Shift</strong> para correr · <strong>E</strong> mira e bate
         </div>
         )
       )}
