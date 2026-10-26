@@ -15,6 +15,7 @@ import {
 import { Flag3D, GlbModel, ProceduralVehicle } from "../game/props3d.js";
 import { modelUrlFor, sprayModelUrl, teamImageUrl, vehicleModelUrl } from "../game/models.js";
 import { sprayOptionById } from "../config/sprays.js";
+import { CharacterFace } from "../ui/CharacterFace.js";
 
 const SIZE = 64;
 
@@ -96,6 +97,16 @@ export class Boundary extends Component<{ onError: () => void; children: ReactNo
  * no mapa não há foto de produto. Itens sem objeto (passe) não mostram nada.
  */
 export function ProductThumb({ itemId }: { itemId: string }) {
+  const [kind, slug] = itemId.split(":");
+  // Personagem: o retrato tirado do próprio modelo (o mesmo da seleção), não um enquadramento 3D genérico.
+  if (kind === "character" && isCharacterId(slug)) {
+    const teamColor = `#${TEAMS[TEAM_IDS[0]!].color.toString(16).padStart(6, "0")}`;
+    return <CharacterFace color={teamColor} character={slug} team={TEAM_IDS[0]} size={SIZE} />;
+  }
+  return <ProductThumbModel itemId={itemId} />;
+}
+
+function ProductThumbModel({ itemId }: { itemId: string }) {
   const [kind] = itemId.split(":");
   const hasObject = kind === "vehicle" || kind === "character" || kind === "flag" || kind === "spray";
   const [src, setSrc] = useState<string | null>(cache.get(itemId) ?? null);

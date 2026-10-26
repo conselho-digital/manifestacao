@@ -4,6 +4,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import { Box3, CanvasTexture, SRGBColorSpace, Vector3 } from "three";
 import { clearCameraColliders, setCameraColliders } from "./colliders.js";
 import { clearSolids, setSolids } from "./solids.js";
+import { AVENUE_WIDTH, PARK_GAP, PARK_SIZE } from "./world.js";
 import {
   currentLocalVolume,
   currentPlayback,
@@ -105,6 +106,19 @@ const VIDEO_RANGE = 90;
 /** Histerese: liga a menos de VIDEO_ON e só desliga além de VIDEO_RANGE (o iframe não pisca no limite). */
 const VIDEO_ON = 70;
 const FULL_VOLUME_RANGE = 25;
+/** O som só chega a quem está em frente à tela (dentro deste leque, aberto a partir dela) ou dentro do parque. */
+const FRONT_HALF_ANGLE = Math.tan((55 * Math.PI) / 180);
+
+/** O ouvinte (x, z) pode ouvir o outdoor em (sx, sz), que olha para +Z? */
+function canHearScreen(lx: number, lz: number, sx: number, sz: number): boolean {
+  // Dentro do parque (atrás/ao redor da tela): o quadrado do parque, do lado -Z da avenida.
+  const parkZ0 = -(AVENUE_WIDTH / 2 + PARK_GAP / 2);
+  const parkZ1 = -(AVENUE_WIDTH / 2 + PARK_GAP + PARK_SIZE);
+  if (Math.abs(lx) <= PARK_SIZE / 2 + 2 && lz <= parkZ0 && lz >= parkZ1 - 2) return true;
+  // Em frente: do lado para onde a tela olha, dentro de um leque a partir dela.
+  const ahead = lz - sz;
+  return ahead > 0 && Math.abs(lx - sx) <= ahead * FRONT_HALF_ANGLE + SCREEN_W / 2;
+}
 /** O Html do drei em modo "transform" usa 40 px por unidade do mundo (400 / distanceFactor 10). */
 const HTML_PX_PER_UNIT = 40;
 
@@ -202,7 +216,7 @@ function OutdoorVideo({ cfg, videoId, cy, x, z }: { cfg: ScreenConfig; videoId: 
     if (!readyRef.current) return;
     const d = Math.hypot(camera.position.x - x, camera.position.z - z);
     const master = ((currentPlayback()?.volume ?? 100) / 100) * (currentLocalVolume() / 100);
-    const v = cfg.mute ? 0 : Math.round(100 * master * Math.max(0, Math.min(1, (VIDEO_RANGE - d) / (VIDEO_RANGE - FULL_VOLUME_RANGE))));
+    const v = cfg.mute || !canHearScreen(camera.position.x, camera.position.z, x, z) ? 0 : Math.round(100 * master * Math.max(0, Math.min(1, (VIDEO_RANGE - d) / (VIDEO_RANGE - FULL_VOLUME_RANGE))));
     if (Math.abs(v - volumeRef.current) >= 4 || (v === 0) !== (volumeRef.current === 0)) {
       volumeRef.current = v;
       send("setVolume", [v]);

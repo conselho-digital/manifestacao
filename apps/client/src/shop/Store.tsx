@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { Session } from "@supabase/supabase-js";
-import { CHARACTERS, FLAGS, PASSES, VEHICLES, isCharacterId, isFlagId, isPassId, isVehicleId } from "@manifestacao/shared";
+import { CHARACTERS, FLAGS, PASSES, VEHICLES, VEHICLE_IDS, isCharacterId, isFlagId, isPassId, isVehicleId } from "@manifestacao/shared";
 import { signInWithGoogle, signOut } from "../auth/useAuth.js";
 import { useCatalog, type CatalogItem } from "./useCatalog.js";
 import { createPixCharge, type PixCharge } from "../net/payments.js";
@@ -225,6 +225,17 @@ export function Store({ onClose, session, authLoading, owned, refresh }: StorePr
                   >
                     <div style={{ fontWeight: 700, fontSize: "var(--t-body)" }}>{itemLabel(item)}</div>
                     <div style={{ fontSize: "var(--t-ui)", color: "var(--ink-dim)" }}>{description}</div>
+                    {item.kind === "pass" && (
+                      // Fotos do que o passe libera (as mesmas miniaturas da loja, com o nome de cada veículo).
+                      <ul style={{ listStyle: "none", margin: "2px 0 0", padding: 0, display: "flex", flexWrap: "wrap", gap: 8 }}>
+                        {VEHICLE_IDS.filter((v) => v !== "nenhum").map((v) => (
+                          <li key={v} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4, width: 64 }}>
+                            <ProductThumb itemId={`vehicle:${v}`} />
+                            <span style={{ fontSize: 11, lineHeight: 1.2, textAlign: "center", color: "var(--ink-dim)" }}>{VEHICLES[v].label}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
                     <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: 2 }}>
                       {priceLine}
                       {action}

@@ -29,6 +29,7 @@ const SHIPPED_VEHICLES: Partial<Record<VehicleId, { url?: string; byTeam?: boole
   moto2: { url: "/models/vehicles/moto2.glb" },
   carro: { byTeam: true },
   carro_som: { byTeam: true },
+  caminhao: { byTeam: true },
 };
 
 function shippedVehicle(vehicle: VehicleId, team: TeamId): string | null {

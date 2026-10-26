@@ -73,12 +73,12 @@ export interface Vehicle {
   kind: VehicleKind;
   /** Multiplicador de velocidade de caminhada (define a velocidade máxima). */
   speedMul: number;
-  /** Toca som ambiente por proximidade (carro de som). */
+  /** Toca som ambiente por proximidade (carro e caminhão de som). */
   playsMusic: boolean;
   priceCents: number;
 }
 
-// PREÇOS PROVISÓRIOS (moto, carro, carro de som) — a definir. Ao mudar, atualize
+// PREÇOS PROVISÓRIOS (moto, carro, carro e caminhão de som) — a definir. Ao mudar, atualize
 // também supabase/migrations (nova migration de update em catalog_items): a
 // cobrança lê o preço do banco, e a lista da lateral lê daqui.
 export const VEHICLES: Record<VehicleId, Vehicle> = {
@@ -88,13 +88,13 @@ export const VEHICLES: Record<VehicleId, Vehicle> = {
   carro: { id: "carro", label: "Carro", kind: "car", speedMul: 2.6, playsMusic: false, priceCents: 4990 },
   carro_som: {
     id: "carro_som",
-    label: "Caminhão de som",
+    label: "Carro de som",
     kind: "car",
     speedMul: 2.0,
     playsMusic: true,
     priceCents: 20000,
   },
-  caminhao: { id: "caminhao", label: "Caminhão", kind: "car", speedMul: 1.8, playsMusic: false, priceCents: 9990 },
+  caminhao: { id: "caminhao", label: "Caminhão de som", kind: "car", speedMul: 1.8, playsMusic: true, priceCents: 9990 },
 };
 
 export const VEHICLE_IDS: VehicleId[] = ["nenhum", "moto", "moto2", "carro", "carro_som", "caminhao"];
@@ -122,8 +122,7 @@ export const PASSES: Record<PassId, Pass> = {
   premium: {
     id: "premium",
     label: "Premium",
-    description:
-      "Moto, carro, caixa de som básica inclusa (libera o caminhão de som), spray ilimitado e 5 cartazes.",
+    description: "Libera todos os veículos: as duas motos, o carro, o carro de som e o caminhão de som.",
     priceCents: 1000,
   },
 };
@@ -134,7 +133,7 @@ export function isPassId(v: unknown): v is PassId {
   return typeof v === "string" && Object.hasOwn(PASSES, v);
 }
 
-/** O passe Premium inclui moto, carro e o caminhão de som (caixa de som básica). */
+/** O passe Premium inclui as motos, o carro e os veículos de som (caixa de som básica). */
 export function hasVehicleViaPremium(vehicle: VehicleId, owned: ReadonlySet<string>): boolean {
   return vehicle !== "nenhum" && owned.has("pass:premium");
 }

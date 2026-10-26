@@ -132,7 +132,9 @@ export const MOTO_SEATS: Partial<Record<VehicleId, MotoSeat>> = {
   // Esportiva: banco atrás, tronco deitado sobre o tanque, mãos nos semiguidões baixos.
   moto2: { hipY: 0.85, z: -0.5, lean: 0.95, thigh: 0.95, knee: -1.6, arm: 1.4, forearm: 0.0 },
   // Caminhão de som: motorista no banco da esquerda, costas retas, mãos no volante.
-  carro_som: { x: 0.35, hipY: 0.68, z: 0.7, lean: 0.18, thigh: 1.45, knee: -1.4, arm: 0.85, forearm: 0.75 },
+  caminhao: { x: 0.35, hipY: 0.68, z: 0.7, lean: 0.18, thigh: 1.45, knee: -0.7, arm: 0.85, forearm: 0.75 },
+  // Carro de som (picape): banco baixo, volante perto.
+  carro_som: { x: 0.35, hipY: 0.46, z: 0.0, lean: 0.12, thigh: 1.45, knee: -0.35, arm: 0.85, forearm: 0.7 },
 };
 
 export type AutoPose = "moto" | "car" | null;
