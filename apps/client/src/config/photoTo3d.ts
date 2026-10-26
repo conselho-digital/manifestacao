@@ -21,7 +21,7 @@ import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
  * de corpo inteiro, braços ao lado do corpo e pernas levemente abertas.
  */
 
-export const CUTOUT_MAX_SIDE = 768;
+export const CUTOUT_MAX_SIDE = 1024;
 const HEIGHT_M = 1.8;
 
 export interface Cutout {
@@ -30,6 +30,8 @@ export interface Cutout {
   mask: Uint8Array;
   w: number;
   h: number;
+  /** Costas de verdade (opcional): mesma pose e enquadramento da frente, já espelhadas e cortadas igual. */
+  back?: HTMLCanvasElement;
 }
 
 /** Foto lida e reduzida; fica em memória para refazer o recorte ao mudar a tolerância sem reabrir o arquivo. */
@@ -96,7 +98,7 @@ function borderIndices(w: number, h: number): number[] {
 }
 
 /** Recorta a pessoa: usa o alfa se a imagem tem transparência; senão tira o fundo liso a partir das bordas. */
-export function makeCutout(photo: LoadedPhoto, tolerance: number): Cutout {
+export function makeCutout(photo: LoadedPhoto, tolerance: number, backPhoto?: LoadedPhoto): Cutout {
   const { width: w, height: h, data } = photo.data;
   const px = data;
   let transparent = 0;
@@ -191,7 +193,28 @@ export function makeCutout(photo: LoadedPhoto, tolerance: number): Cutout {
     }
   }
   ctx.putImageData(img, 0, 0);
-  return { canvas, mask: outMask, w: cw, h: ch };
+  let back: HTMLCanvasElement | undefined;
+  if (backPhoto && backPhoto.data.width === w && backPhoto.data.height === h) {
+    // Costas com o mesmo enquadramento da frente: corta pela mesma caixa.
+    back = document.createElement("canvas");
+    back.width = cw;
+    back.height = ch;
+    const bctx = back.getContext("2d")!;
+    const bimg = bctx.createImageData(cw, ch);
+    const bp = backPhoto.data.data;
+    for (let y = 0; y < ch; y++) {
+      for (let x = 0; x < cw; x++) {
+        const si = ((y0 + y) * w + (x0 + x)) * 4;
+        const di = (y * cw + x) * 4;
+        bimg.data[di] = bp[si]!;
+        bimg.data[di + 1] = bp[si + 1]!;
+        bimg.data[di + 2] = bp[si + 2]!;
+        bimg.data[di + 3] = bp[si + 3]!;
+      }
+    }
+    bctx.putImageData(bimg, 0, 0);
+  }
+  return { canvas, mask: outMask, w: cw, h: ch, back };
 }
 
 /** Distância (px) de cada pixel da pessoa até a borda, em duas passadas (chanfro 3-4). */
@@ -403,6 +426,46 @@ function makeBackCanvas(cut: Cutout): HTMLCanvasElement {
   return out;
 }
 
+/**
+ * Estende as cores da borda da pessoa para fora (e deixa tudo opaco): sem isso o filtro da textura mistura a borda com o
+ * preto transparente e o lado do boneco fica riscado de escuro.
+ */
+function bleedEdges(canvas: HTMLCanvasElement, alphaMask: Uint8Array, passes = 12): void {
+  const ctx = canvas.getContext("2d")!;
+  const { width: w, height: h } = canvas;
+  const img = ctx.getImageData(0, 0, w, h);
+  const d = img.data;
+  let has = new Uint8Array(w * h);
+  for (let i = 0; i < w * h; i++) has[i] = d[i * 4 + 3]! >= 128 ? 1 : 0;
+  for (let pass = 0; pass < passes; pass++) {
+    const next = has.slice();
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const i = y * w + x;
+        if (has[i]) continue;
+        let r = 0, g = 0, b = 0, n = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const xx = x + dx, yy = y + dy;
+            if (xx < 0 || yy < 0 || xx >= w || yy >= h) continue;
+            const j = yy * w + xx;
+            if (!has[j]) continue;
+            r += d[j * 4]!; g += d[j * 4 + 1]!; b += d[j * 4 + 2]!; n++;
+          }
+        }
+        if (n) {
+          d[i * 4] = r / n; d[i * 4 + 1] = g / n; d[i * 4 + 2] = b / n;
+          next[i] = 1;
+        }
+      }
+    }
+    has = next;
+  }
+  // Cor estendida para fora; o contorno exato vem do alfa (o material recorta com alphaTest).
+  for (let i = 0; i < w * h; i++) d[i * 4 + 3] = alphaMask[i] ? 255 : 0;
+  ctx.putImageData(img, 0, 0);
+}
+
 export function buildCharacter(cut: Cutout): Group {
   const { w, h, mask } = cut;
   const dist = distanceInside(mask, w, h);
@@ -421,16 +484,35 @@ export function buildCharacter(cut: Cutout): Group {
   /** Nó ativo = pixel da pessoa. Os da borda (com vizinho fora) ficam em z=0: frente e costas se fecham ali. */
   const active = new Uint8Array((nx + 1) * (ny + 1));
   const zOf = new Float32Array((nx + 1) * (ny + 1));
+  const isIn = new Uint8Array((nx + 1) * (ny + 1));
   const inside = (gx: number, gy: number) => gx >= 0 && gy >= 0 && gx <= nx && gy <= ny && mask[at(gx * step, gy * step)] === 1 && gx * step < w && gy * step < h;
   for (let gy = 0; gy <= ny; gy++) {
     for (let gx = 0; gx <= nx; gx++) {
       const n = gy * (nx + 1) + gx;
       if (!inside(gx, gy)) continue;
+      isIn[n] = 1;
       active[n] = 1;
       if (!(inside(gx - 1, gy) && inside(gx + 1, gy) && inside(gx, gy - 1) && inside(gx, gy + 1))) continue; // borda: z = 0
       const d = dist[at(gx * step, gy * step)]!;
       const k = Math.min(1, d / dcap);
       zOf[n] = tmax * Math.sqrt(Math.max(0, 1 - (1 - k) * (1 - k))) * s;
+    }
+  }
+
+  // Anel extra de nós (z = 0) em volta da pessoa: a malha passa um pouco do contorno e o alfa da textura recorta a borda
+  // exata (sem degraus nos braços e pernas).
+  for (let gy = 0; gy <= ny; gy++) {
+    for (let gx = 0; gx <= nx; gx++) {
+      const n = gy * (nx + 1) + gx;
+      if (isIn[n]) continue;
+      for (let dy = -1; dy <= 1 && !active[n]; dy++)
+        for (let dx = -1; dx <= 1; dx++) {
+          const xx = gx + dx, yy = gy + dy;
+          if (xx >= 0 && yy >= 0 && xx <= nx && yy <= ny && isIn[yy * (nx + 1) + xx]) {
+            active[n] = 1;
+            break;
+          }
+        }
     }
   }
 
@@ -508,11 +590,21 @@ export function buildCharacter(cut: Cutout): Group {
   atlas.width = w * 2;
   atlas.height = h;
   const actx = atlas.getContext("2d")!;
-  actx.drawImage(cut.canvas, 0, 0);
-  actx.drawImage(makeBackCanvas(cut), w, 0);
+  const frontTex = document.createElement("canvas");
+  frontTex.width = w;
+  frontTex.height = h;
+  frontTex.getContext("2d")!.drawImage(cut.canvas, 0, 0);
+  bleedEdges(frontTex, mask);
+  const backTex = document.createElement("canvas");
+  backTex.width = w;
+  backTex.height = h;
+  backTex.getContext("2d")!.drawImage(cut.back ?? makeBackCanvas(cut), 0, 0, w, h);
+  bleedEdges(backTex, mask);
+  actx.drawImage(frontTex, 0, 0);
+  actx.drawImage(backTex, w, 0);
   const map = new CanvasTexture(atlas);
   map.colorSpace = SRGBColorSpace;
-  const material = new MeshStandardMaterial({ map, vertexColors: true, roughness: 0.9, metalness: 0 });
+  const material = new MeshStandardMaterial({ map, vertexColors: true, roughness: 0.9, metalness: 0, alphaTest: 0.5 });
   const mesh = new SkinnedMesh(geo, material);
   mesh.name = "Personagem";
   mesh.frustumCulled = false;
