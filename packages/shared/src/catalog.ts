@@ -94,8 +94,8 @@ export interface Vehicle {
 // cobrança lê o preço do banco, e a lista da lateral lê daqui.
 export const VEHICLES: Record<VehicleId, Vehicle> = {
   nenhum: { id: "nenhum", label: "A pé", kind: "foot", speedMul: 1, playsMusic: false, priceCents: 0 },
-  moto: { id: "moto", label: "Moto", kind: "moto", speedMul: 2.2, playsMusic: false, priceCents: 2990 },
-  moto2: { id: "moto2", label: "Moto esportiva", kind: "moto", speedMul: 2.8, playsMusic: false, priceCents: 2990 },
+  moto: { id: "moto", label: "Moto", kind: "moto", speedMul: 4.4, playsMusic: false, priceCents: 2990 },
+  moto2: { id: "moto2", label: "Moto esportiva", kind: "moto", speedMul: 5.6, playsMusic: false, priceCents: 2990 },
   carro: { id: "carro", label: "Carro", kind: "car", speedMul: 2.6, playsMusic: false, priceCents: 4990 },
   carro_som: {
     id: "carro_som",

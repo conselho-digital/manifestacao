@@ -36,8 +36,8 @@ interface EngineProfile {
 }
 
 const PROFILES: Partial<Record<VehicleId, EngineProfile>> = {
-  moto: { idle: 38, red: 210, gears: [0.16, 0.34, 0.54, 0.76], afterShift: 0.5, shiftTime: 0.14, cutLow: 700, cutHigh: 4200, mix: { saw: 0.5, square: 0.25, high: 0.2, noise: 0.07 }, rattle: 0.14, volume: 0.9, radius: 36 },
-  moto2: { idle: 44, red: 270, gears: [0.14, 0.3, 0.48, 0.68, 0.86], afterShift: 0.55, shiftTime: 0.11, cutLow: 900, cutHigh: 5600, mix: { saw: 0.55, square: 0.15, high: 0.3, noise: 0.07 }, rattle: 0.1, volume: 1, radius: 42 },
+  moto: { idle: 38, red: 210, gears: [0.16, 0.34, 0.54, 0.76], afterShift: 0.5, shiftTime: 0.14, cutLow: 700, cutHigh: 4200, mix: { saw: 0.5, square: 0.25, high: 0.2, noise: 0.07 }, rattle: 0.14, volume: 0.45, radius: 36 },
+  moto2: { idle: 44, red: 270, gears: [0.14, 0.3, 0.48, 0.68, 0.86], afterShift: 0.55, shiftTime: 0.11, cutLow: 900, cutHigh: 5600, mix: { saw: 0.55, square: 0.15, high: 0.3, noise: 0.07 }, rattle: 0.1, volume: 0.5, radius: 42 },
   carro: { idle: 25, red: 150, gears: [0.14, 0.3, 0.5, 0.74], afterShift: 0.45, shiftTime: 0.2, cutLow: 380, cutHigh: 2300, mix: { saw: 0.5, square: 0.4, high: 0.1, noise: 0.05 }, rattle: 0.1, volume: 0.85, radius: 34 },
   carro_som: { idle: 23, red: 140, gears: [0.14, 0.3, 0.5, 0.74], afterShift: 0.45, shiftTime: 0.22, cutLow: 340, cutHigh: 2000, mix: { saw: 0.45, square: 0.45, high: 0.08, noise: 0.05 }, rattle: 0.12, volume: 0.85, radius: 34 },
   caminhao: { idle: 14, red: 78, gears: [0.12, 0.26, 0.44, 0.66], afterShift: 0.5, shiftTime: 0.32, cutLow: 240, cutHigh: 1300, mix: { saw: 0.35, square: 0.6, high: 0.05, noise: 0.09 }, rattle: 0.38, volume: 1, radius: 48 },
