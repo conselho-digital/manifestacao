@@ -13,7 +13,34 @@ import { useUserGestureUnlocked } from "./useUserGesture.js";
  * veículo está. Nada disso trafega pela rede: a velocidade de cada veículo é estimada pelo deslocamento dele.
  */
 
+/**
+ * Timbre: o que faz um motor soar diferente do outro além da altura (grave/agudo) — formas de onda, harmônicos,
+ * ritmo das batidas (lfo) e o sopro do escapamento.
+ */
+interface EngineTone {
+  main: OscillatorType;
+  sub: OscillatorType;
+  high: OscillatorType;
+  /** Frequências do 2º e do 3º oscilador e da "batida" do motor, como múltiplos da frequência de ignição. */
+  subRatio: number;
+  highRatio: number;
+  lfoRatio: number;
+  /** Ressonância do filtro (maior = mais "nasal") e centro do sopro do escapamento (Hz). */
+  q: number;
+  noiseHz: number;
+}
+
+/** Moto: serra aguda e zumbida, batida rápida e escapamento chiado. */
+const MOTO_TONE: EngineTone = { main: "sawtooth", sub: "square", high: "sawtooth", subRatio: 0.5, highRatio: 2.004, lfoRatio: 0.5, q: 2.2, noiseHz: 700 };
+/** Carro: zumbido redondo e liso (onda triangular), pouca ressonância, escapamento abafado. */
+const CARRO_TONE: EngineTone = { main: "triangle", sub: "square", high: "sine", subRatio: 0.5, highRatio: 3.01, lfoRatio: 1, q: 0.9, noiseHz: 420 };
+/** Carro de som: motor encorpado de picape — serra grave com "borbulhar" lento e escapamento rouco. */
+const CARRO_SOM_TONE: EngineTone = { main: "sawtooth", sub: "triangle", high: "triangle", subRatio: 0.5, highRatio: 1.5, lfoRatio: 0.35, q: 1.4, noiseHz: 330 };
+/** Caminhão: diesel — onda quadrada com batida lenta e áspera, subgrave e sopro bem baixo. */
+const CAMINHAO_TONE: EngineTone = { main: "square", sub: "sawtooth", high: "triangle", subRatio: 0.25, highRatio: 1.5, lfoRatio: 0.25, q: 3, noiseHz: 200 };
+
 interface EngineProfile {
+  tone: EngineTone;
   /** Frequência de ignição (Hz) em marcha lenta e no limite de giros. */
   idle: number;
   red: number;
@@ -36,11 +63,11 @@ interface EngineProfile {
 }
 
 const PROFILES: Partial<Record<VehicleId, EngineProfile>> = {
-  moto: { idle: 38, red: 210, gears: [0.16, 0.34, 0.54, 0.76], afterShift: 0.5, shiftTime: 0.14, cutLow: 700, cutHigh: 4200, mix: { saw: 0.5, square: 0.25, high: 0.2, noise: 0.07 }, rattle: 0.14, volume: 0.45, radius: 36 },
-  moto2: { idle: 44, red: 270, gears: [0.14, 0.3, 0.48, 0.68, 0.86], afterShift: 0.55, shiftTime: 0.11, cutLow: 900, cutHigh: 5600, mix: { saw: 0.55, square: 0.15, high: 0.3, noise: 0.07 }, rattle: 0.1, volume: 0.5, radius: 42 },
-  carro: { idle: 25, red: 150, gears: [0.14, 0.3, 0.5, 0.74], afterShift: 0.45, shiftTime: 0.2, cutLow: 380, cutHigh: 2300, mix: { saw: 0.5, square: 0.4, high: 0.1, noise: 0.05 }, rattle: 0.1, volume: 0.85, radius: 34 },
-  carro_som: { idle: 23, red: 140, gears: [0.14, 0.3, 0.5, 0.74], afterShift: 0.45, shiftTime: 0.22, cutLow: 340, cutHigh: 2000, mix: { saw: 0.45, square: 0.45, high: 0.08, noise: 0.05 }, rattle: 0.12, volume: 0.85, radius: 34 },
-  caminhao: { idle: 14, red: 78, gears: [0.12, 0.26, 0.44, 0.66], afterShift: 0.5, shiftTime: 0.32, cutLow: 240, cutHigh: 1300, mix: { saw: 0.35, square: 0.6, high: 0.05, noise: 0.09 }, rattle: 0.38, volume: 1, radius: 48 },
+  moto: { tone: MOTO_TONE, idle: 38, red: 210, gears: [0.16, 0.34, 0.54, 0.76], afterShift: 0.5, shiftTime: 0.14, cutLow: 700, cutHigh: 4200, mix: { saw: 0.5, square: 0.25, high: 0.2, noise: 0.07 }, rattle: 0.14, volume: 0.45, radius: 36 },
+  moto2: { tone: MOTO_TONE, idle: 44, red: 270, gears: [0.14, 0.3, 0.48, 0.68, 0.86], afterShift: 0.55, shiftTime: 0.11, cutLow: 900, cutHigh: 5600, mix: { saw: 0.55, square: 0.15, high: 0.3, noise: 0.07 }, rattle: 0.1, volume: 0.5, radius: 42 },
+  carro: { tone: CARRO_TONE, idle: 25, red: 140, gears: [0.16, 0.34, 0.54, 0.78], afterShift: 0.5, shiftTime: 0.18, cutLow: 420, cutHigh: 1900, mix: { saw: 0.75, square: 0.3, high: 0.22, noise: 0.04 }, rattle: 0.05, volume: 1, radius: 34 },
+  carro_som: { tone: CARRO_SOM_TONE, idle: 21, red: 120, gears: [0.14, 0.3, 0.5, 0.74], afterShift: 0.45, shiftTime: 0.24, cutLow: 300, cutHigh: 1500, mix: { saw: 0.55, square: 0.6, high: 0.18, noise: 0.07 }, rattle: 0.22, volume: 1, radius: 36 },
+  caminhao: { tone: CAMINHAO_TONE, idle: 13, red: 70, gears: [0.12, 0.26, 0.44, 0.66], afterShift: 0.5, shiftTime: 0.34, cutLow: 200, cutHigh: 1000, mix: { saw: 0.5, square: 0.75, high: 0.12, noise: 0.1 }, rattle: 0.5, volume: 1.1, radius: 48 },
 };
 
 const TICK_MS = 60;
@@ -94,11 +121,11 @@ class EngineVoice {
   constructor(private readonly ctx: AudioContext, private readonly p: EngineProfile) {
     const mk = <T extends AudioNode>(n: T): T => (this.nodes.push(n), n);
     this.saw = mk(ctx.createOscillator());
-    this.saw.type = "sawtooth";
+    this.saw.type = p.tone.main;
     this.square = mk(ctx.createOscillator());
-    this.square.type = "square";
+    this.square.type = p.tone.sub;
     this.high = mk(ctx.createOscillator());
-    this.high.type = "sawtooth";
+    this.high.type = p.tone.high;
     this.lfo = mk(ctx.createOscillator());
     this.lfo.type = "sine";
     const gSaw = mk(ctx.createGain());
@@ -109,7 +136,7 @@ class EngineVoice {
     gHi.gain.value = p.mix.high;
     this.filter = mk(ctx.createBiquadFilter());
     this.filter.type = "lowpass";
-    this.filter.Q.value = 2.2;
+    this.filter.Q.value = p.tone.q;
     const shaper = mk(ctx.createWaveShaper());
     shaper.curve = softClip();
     this.trem = mk(ctx.createGain());
@@ -129,7 +156,7 @@ class EngineVoice {
     this.noise.loop = true;
     const band = mk(ctx.createBiquadFilter());
     band.type = "bandpass";
-    band.frequency.value = 700;
+    band.frequency.value = p.tone.noiseHz;
     band.Q.value = 0.7;
     this.noiseGain = mk(ctx.createGain());
     this.noiseGain.gain.value = 0;
@@ -149,9 +176,9 @@ class EngineVoice {
     const f = p.idle + (p.red - p.idle) * rpm;
     const k = 0.05;
     this.saw.frequency.setTargetAtTime(f, t, k);
-    this.square.frequency.setTargetAtTime(f * 0.5, t, k);
-    this.high.frequency.setTargetAtTime(f * 2.004, t, k);
-    this.lfo.frequency.setTargetAtTime(f * 0.5, t, k);
+    this.square.frequency.setTargetAtTime(f * p.tone.subRatio, t, k);
+    this.high.frequency.setTargetAtTime(f * p.tone.highRatio, t, k);
+    this.lfo.frequency.setTargetAtTime(f * p.tone.lfoRatio, t, k);
     this.filter.frequency.setTargetAtTime(p.cutLow + (p.cutHigh - p.cutLow) * rpm * (0.55 + 0.45 * load), t, k);
     this.noiseGain.gain.setTargetAtTime(p.mix.noise * (0.25 + 0.75 * load) * (0.4 + 0.6 * rpm), t, k);
     const level = p.volume * vol * (0.4 + 0.6 * load) * (0.55 + 0.45 * rpm);
