@@ -44,14 +44,14 @@ function mirror4<T extends { x: number; z: number }>(t: T): T[] {
 }
 
 export const ARENA_CRATES: ArenaCrate[] = [
-  // Cruz central: quatro blocos baixos em volta do pilar do meio.
-  ...[7, -7].map((x) => ({ x, z: 0, w: 4, d: 1.4, h: 1.4 })),
-  ...[7, -7].map((z) => ({ x: 0, z, w: 1.4, d: 4, h: 1.4 })),
+  // Cruz central: quatro blocos baixos (1 m: dá para pular em cima) em volta do pilar do meio.
+  ...[7, -7].map((x) => ({ x, z: 0, w: 4, d: 1.4, h: 1 })),
+  ...[7, -7].map((z) => ({ x: 0, z, w: 1.4, d: 4, h: 1 })),
   // Muros em L nos quatro cantos internos.
   ...mirror4({ x: 18, z: 18, w: 8, d: 1.2, h: 2.2 }),
   ...mirror4({ x: 22, z: 14, w: 1.2, d: 6, h: 2.2 }),
   // Barricadas baixas junto às muralhas, dos dois lados.
-  ...mirror4({ x: 12, z: 29, w: 6, d: 1.4, h: 1.6 }),
+  ...mirror4({ x: 12, z: 29, w: 6, d: 1.4, h: 1 }),
 ];
 
 export const ARENA_PILLARS: ArenaPillar[] = [

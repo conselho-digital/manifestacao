@@ -2,7 +2,7 @@ import { AVATAR_STORAGE_KEY } from "../ui/AvatarPicker.js";
 import { deleteMyAccount } from "../net/account.js";
 import { useStageVoice } from "../net/useStageVoice.js";
 import { StageButton } from "../ui/StageButton.js";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
 import { TEAMS, VEHICLES, hexColor, type AvatarConfig, type FlagId, type VehicleId, type VehicleMusic } from "@manifestacao/shared";
 import { EngineSounds } from "./EngineSounds.js";
@@ -10,7 +10,11 @@ import { VehicleMusicPlayers } from "./VehicleMusic.js";
 import { MusicModal } from "../ui/MusicModal.js";
 import { serverNow } from "../config/parkScreen.js";
 import { Scenery } from "./Scenery.js";
-import { Arena } from "./Arena.js";
+import type { PhysicsHandle } from "./physicsHandle.js";
+import { JumpButton } from "../ui/JumpButton.js";
+
+// Arena com física (Rapier, WASM ~2 MB): só baixa quando alguém entra na arena.
+const ArenaWorld = lazy(() => import("./ArenaWorld.js"));
 import { ArenaHud, arenaHudTopOffset } from "../ui/ArenaHud.js";
 import { randomArenaSpawn } from "./arena.js";
 import { ARENA_CHANNEL, AVENUE_CHANNEL } from "@manifestacao/shared";
@@ -232,6 +236,17 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
       driveRef.current = { ...driveRef.current, up: false, down: false };
     };
   }, [vehicleKind]);
+  // Arena: Espaço pula (a pé). Na moto, Espaço continua empinando (efeito acima).
+  useEffect(() => {
+    if (!isArena || vehicleKind !== "foot") return;
+    const onDown = (e: KeyboardEvent) => {
+      if (e.code !== "Space" || e.repeat || isTypingTarget(e.target)) return;
+      e.preventDefault();
+      jumpRef.current = true;
+    };
+    window.addEventListener("keydown", onDown);
+    return () => window.removeEventListener("keydown", onDown);
+  }, [isArena, vehicleKind]);
   // Ponto do chão sob a mira (centro da tela), atualizado a cada frame pelo Player.
   const aimRef = useRef<SprayAim>({ x: 0, y: 0, z: 0, nx: 0, ny: 1, nz: 0 });
   const cameraDistance = isTouch ? CAMERA_DISTANCE_MOBILE : CAMERA_DISTANCE_DESKTOP;
@@ -281,6 +296,9 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     if (!allowed) setVehicle("nenhum");
   }, [vehicle, owned, entitlementsLoading]);
 
+  // Corpo físico da arena (preenchido pelo ArenaWorld) e pedido de pulo (tecla Espaço / botão), lidos a cada quadro pelo Player.
+  const physicsRef = useRef<PhysicsHandle | null>(null);
+  const jumpRef = useRef(false);
   const transformRef = useRef<PlayerTransform>({ x: 0, z: 0, rotationY: 0 });
   const voice = useStageVoice({
     selfId: net.selfId,
@@ -374,6 +392,38 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     if (!net.sendSpray(target, avatar.shirt, DEFAULT_SPRAY_ID, rot)) sprays.refund();
   }, [net, avatar.shirt, sprays]);
 
+  const playerEl = (
+<Player
+          color={avatar.shirt}
+          name={avatar.nickname}
+          flag={playAvatar.flag}
+          team={avatar.team}
+          character={avatar.character}
+          sign={signId ? signs.get(signId) ?? null : null}
+          vehicle={vehicle}
+          modelUrl={modelUrlFor(avatar.character, avatar.team)}
+          inputRef={inputRef}
+          cameraYawRef={cameraYawRef}
+          cameraPitchRef={cameraPitchRef}
+          othersRef={net.playersRef}
+          cameraDistance={cameraDistance}
+          aimRef={aimRef}
+          runRef={runRef}
+          aimHoldRef={aimHoldRef}
+          onMove={net.sendMove}
+          driveRef={driveRef}
+          wheelieRef={wheelieRef}
+          hitRef={hitRef.current}
+          knock={net.selfKnock}
+          cameraTouchedAtRef={cameraTouchedAtRef}
+          transformRef={transformRef}
+          transformReadyRef={transformReadyRef}
+          spawn={spawn}
+          physics={isArena ? physicsRef : undefined}
+          jumpRef={jumpRef}
+        />
+  );
+
   return (
     <>
       {/* Posição calculada com os mesmos yaw=0/pitch padrão que o Player.tsx
@@ -431,35 +481,19 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           <sphereGeometry args={[9, 24, 16]} />
           <meshBasicMaterial color="#fff3b0" fog={false} />
         </mesh>
-        {isArena ? <Arena /> : <Scenery />}
+        {isArena && spawn ? (
+          <Suspense fallback={null}>
+            <ArenaWorld handleRef={physicsRef} spawn={spawn}>
+              {playerEl}
+            </ArenaWorld>
+          </Suspense>
+        ) : (
+          <>
+            <Scenery />
+            {playerEl}
+          </>
+        )}
         <SprayMarks marksRef={net.sprayMarksRef} version={net.sprayVersion} />
-        <Player
-          color={avatar.shirt}
-          name={avatar.nickname}
-          flag={playAvatar.flag}
-          team={avatar.team}
-          character={avatar.character}
-          sign={signId ? signs.get(signId) ?? null : null}
-          vehicle={vehicle}
-          modelUrl={modelUrlFor(avatar.character, avatar.team)}
-          inputRef={inputRef}
-          cameraYawRef={cameraYawRef}
-          cameraPitchRef={cameraPitchRef}
-          othersRef={net.playersRef}
-          cameraDistance={cameraDistance}
-          aimRef={aimRef}
-          runRef={runRef}
-          aimHoldRef={aimHoldRef}
-          onMove={net.sendMove}
-          driveRef={driveRef}
-          wheelieRef={wheelieRef}
-          hitRef={hitRef.current}
-          knock={net.selfKnock}
-          cameraTouchedAtRef={cameraTouchedAtRef}
-          transformRef={transformRef}
-          transformReadyRef={transformReadyRef}
-          spawn={spawn}
-        />
         <RemotePlayers ids={net.remoteIds} playersRef={net.playersRef} signs={signs} />
         {!isArena && <Billboards ads={billboardAds} />}
       </Canvas>
@@ -469,7 +503,12 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
       {/* Tela toda gira a câmera; o Joystick (z-index maior) só captura o toque dentro da própria área. */}
       <CameraLook yawRef={cameraYawRef} pitchRef={cameraPitchRef} touchedAtRef={cameraTouchedAtRef} fullScreen />
       {isTouch ? (
-        !driving && <RunButton runRef={runRef} />
+        !driving && (
+          <>
+            <RunButton runRef={runRef} />
+            {isArena && <JumpButton jumpRef={jumpRef} />}
+          </>
+        )
       ) : driving ? (
         <div
           style={{
@@ -513,7 +552,12 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
             userSelect: "none",
           }}
         >
-          Segure <strong>Shift</strong> para correr · <strong>E</strong> mira e bate
+          Segure <strong>Shift</strong> para correr · <strong>E</strong> mira e bate{isArena && (
+            <>
+              {" "}
+              · <strong>Espaço</strong> pula
+            </>
+          )}
         </div>
         )
       )}

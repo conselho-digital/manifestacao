@@ -28,6 +28,7 @@ import { SPRAY_MAX_RANGE, type SprayAim } from "./spray.js";
 import { raycastSolids } from "./solids.js";
 import { CAMERA_MIN_HEIGHT, allowedCameraDistance, raycastSurface } from "./colliders.js";
 import { resolveSolids } from "./solids.js";
+import { JUMP_SPEED, PLAYER_FOOT_OFFSET, type PhysicsHandle } from "./physicsHandle.js";
 
 /** Posição + rotação atuais do jogador local, lidas fora do Canvas (ex.: botão de spray). */
 export interface PlayerTransform {
@@ -76,6 +77,10 @@ interface PlayerProps {
   transformReadyRef?: { current: boolean };
   /** PC: true enquanto a tecla de mirar/bater (E) está segurada — o personagem encara a cruz da tela em vez de onde anda. */
   aimHoldRef?: { current: boolean };
+  /** Corpo físico (arena PvP): quando existe, andar a pé, pular e colidir com o cenário vêm do Rapier. */
+  physics?: { current: PhysicsHandle | null };
+  /** true quando o botão/tecla de pular foi acionado (consumido a cada quadro). */
+  jumpRef?: { current: boolean };
   /** Ponto de entrada (arena PvP): posiciona o jogador uma vez, ao montar. */
   spawn?: { x: number; z: number; rotationY: number };
   /** Outros jogadores (posição e veículo): o jogador local não os atravessa. */
@@ -165,6 +170,8 @@ export function Player({
   transformReadyRef,
   othersRef,
   spawn,
+  physics,
+  jumpRef,
 }: PlayerProps) {
   const ref = useRef<Group>(null);
   useLayoutEffect(() => {
@@ -239,6 +246,8 @@ export function Player({
       g.position.x = next.x;
       g.position.z = next.z;
       g.rotation.y = st.heading;
+      physics?.current?.setPos(next.x, PLAYER_FOOT_OFFSET + 0.05, next.z); // o corpo físico acompanha o veículo
+      physics?.current?.setVel(0, 0, 0);
       facing.current = facingOf(Math.sin(st.heading), Math.cos(st.heading), facing.current);
       wheelieRef.current = st.wheelie;
       moving = Math.abs(st.speed) > 0.05 || st.wheelie > 0.01;
@@ -256,6 +265,9 @@ export function Player({
     // Correr só a pé (a velocidade do veículo vem da direção).
     const runMul = runRef.current ? RUN_MULTIPLIER : 1;
     const speed = FOOT_WALK_SPEED * runMul;
+    // Velocidade horizontal desejada a pé (m/s), aplicada ao corpo físico quando há um.
+    let footVX = 0;
+    let footVZ = 0;
     if (!driving && len > 0) {
       // Entrada do joystick é relativa à tela (z negativo = pra frente, ver
       // useInput.ts); giramos pelo ângulo da câmera para mover "pra onde a
@@ -267,9 +279,11 @@ export function Player({
       const worldX = input.x * cos - input.z * sin;
       const worldZ = -input.x * sin - input.z * cos;
       const step = (speed * delta) / len;
+      footVX = (worldX * speed) / len;
+      footVZ = (worldZ * speed) / len;
       // Em fatias de até 0,2 m: a parede de vidro tem 0,2 m e, com FPS baixo, um passo inteiro a atravessaria.
       const total = Math.hypot(worldX, worldZ) * step;
-      const slices = Math.max(1, Math.ceil(total / 0.2));
+      const slices = physics?.current ? 0 : Math.max(1, Math.ceil(total / 0.2)); // com física, o Rapier move e colide
       for (let i = 0; i < slices; i++) {
         const clamped = clampToAvenue(g.position.x + (worldX * step) / slices, g.position.z + (worldZ * step) / slices, g.position);
         const solid = resolveSolids(clamped.x, clamped.z, AVATAR_RADIUS);
@@ -301,6 +315,23 @@ export function Player({
       const diff = wrapAngle(yaw - g.rotation.y);
       g.rotation.y = wrapAngle(g.rotation.y + diff * Math.min(1, 18 * delta));
       facing.current = facingOf(Math.sin(yaw), Math.cos(yaw), facing.current);
+    }
+
+    // Física a pé (arena): velocidade horizontal + gravidade e pulo do Rapier; a posição volta do corpo para o avatar.
+    const ph = physics?.current;
+    if (ph && !driving) {
+      let vy = ph.vel().y;
+      if (jumpRef?.current) {
+        jumpRef.current = false;
+        if (!downed && vy <= 0.1 && ph.grounded()) vy = JUMP_SPEED;
+      }
+      ph.setVel(footVX, vy, footVZ);
+      const p = ph.pos();
+      const pos = { x: p.x, z: p.z };
+      const touched = pushOutOfPlayers(pos, AVATAR_RADIUS, othersRef?.current);
+      const lim = clampToAvenue(pos.x, pos.z);
+      if (touched || lim.x !== pos.x || lim.z !== pos.z) ph.setPos(lim.x, p.y, lim.z);
+      g.position.set(lim.x, Math.max(0, p.y - PLAYER_FOOT_OFFSET), lim.z);
     }
 
     if (!Number.isFinite(g.position.x + g.position.z)) g.position.set(0, 0, 0); // proteção: posição inválida nunca fica

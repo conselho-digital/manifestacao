@@ -1,6 +1,7 @@
 import { Suspense, useEffect, useMemo } from "react";
 import { Box3, Mesh, Vector3 } from "three";
 import { useGLTF } from "@react-three/drei";
+import { CuboidCollider, CylinderCollider, RigidBody } from "@react-three/rapier";
 import { ModelBoundary } from "./ModelBoundary.js";
 import { clearCameraColliders, setCameraColliders } from "./colliders.js";
 import { clearSolids, setSolids } from "./solids.js";
@@ -25,6 +26,15 @@ function useCarBody(id: string, car: ArenaCar, w: number, d: number, h: number) 
       clearCameraColliders(id);
     };
   }, [id, car.x, car.z, w, d, h]);
+}
+
+/** Corpo fixo (Rapier) de um veículo: caixa do tamanho real no mundo. */
+function CarCollider({ car, w, d, h }: { car: ArenaCar; w: number; d: number; h: number }) {
+  return (
+    <RigidBody type="fixed" colliders={false} position={[car.x, h / 2, car.z]}>
+      <CuboidCollider args={[w / 2, h / 2, d / 2]} />
+    </RigidBody>
+  );
 }
 
 function CoverCar({ car, id }: { car: ArenaCar; id: string }) {
@@ -56,9 +66,12 @@ function CoverCar({ car, id }: { car: ArenaCar; id: string }) {
   useCarBody(id, car, car.turn ? bodyWid : bodyLen, car.turn ? bodyLen : bodyWid, size.y);
   const yaw = yaw0;
   return (
-    <group position={[car.x, 0, car.z]} rotation={[0, yaw, 0]} scale={k}>
-      <primitive object={root} position={[-center.x, -minY, -center.z]} />
-    </group>
+    <>
+      <CarCollider car={car} w={car.turn ? bodyWid : bodyLen} d={car.turn ? bodyLen : bodyWid} h={size.y} />
+      <group position={[car.x, 0, car.z]} rotation={[0, yaw, 0]} scale={k}>
+        <primitive object={root} position={[-center.x, -minY, -center.z]} />
+      </group>
+    </>
   );
 }
 
@@ -67,10 +80,13 @@ function CarFallback({ car, id }: { car: ArenaCar; id: string }) {
   const d = car.turn ? car.len : car.wid;
   useCarBody(id, car, w, d, 1.8);
   return (
-    <mesh position={[car.x, 0.9, car.z]} castShadow receiveShadow>
-      <boxGeometry args={[w, 1.8, d]} />
-      <meshStandardMaterial color={0x6a7a8c} />
-    </mesh>
+    <>
+      <CarCollider car={car} w={w} d={d} h={1.8} />
+      <mesh position={[car.x, 0.9, car.z]} castShadow receiveShadow>
+        <boxGeometry args={[w, 1.8, d]} />
+        <meshStandardMaterial color={0x6a7a8c} />
+      </mesh>
+    </>
   );
 }
 
@@ -111,6 +127,20 @@ export function Arena() {
 
   return (
     <group>
+      {/* Física (Rapier): piso, muralhas, caixas e pilares como corpos fixos; o jogador pisa, bate e pula neles. */}
+      <RigidBody type="fixed" colliders={false}>
+        <CuboidCollider args={[size, 0.5, size]} position={[0, -0.5, 0]} />
+        <CuboidCollider args={[wallLen / 2, WALL_HEIGHT, WALL_THICKNESS / 2]} position={[0, WALL_HEIGHT, wallOff]} />
+        <CuboidCollider args={[wallLen / 2, WALL_HEIGHT, WALL_THICKNESS / 2]} position={[0, WALL_HEIGHT, -wallOff]} />
+        <CuboidCollider args={[WALL_THICKNESS / 2, WALL_HEIGHT, wallLen / 2]} position={[wallOff, WALL_HEIGHT, 0]} />
+        <CuboidCollider args={[WALL_THICKNESS / 2, WALL_HEIGHT, wallLen / 2]} position={[-wallOff, WALL_HEIGHT, 0]} />
+        {ARENA_CRATES.map((c, i) => (
+          <CuboidCollider key={`cc${i}`} args={[c.w / 2, c.h / 2, c.d / 2]} position={[c.x, c.h / 2, c.z]} />
+        ))}
+        {ARENA_PILLARS.map((p, i) => (
+          <CylinderCollider key={`pc${i}`} args={[p.h / 2, p.r]} position={[p.x, p.h / 2, p.z]} />
+        ))}
+      </RigidBody>
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
         <planeGeometry args={[size + 400, size + 400]} />
         <meshStandardMaterial color={0x3a3f46} />
