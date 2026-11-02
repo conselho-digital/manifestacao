@@ -12,6 +12,9 @@ import type { Facing } from "./world.js";
 /** Nome do canal Realtime da avenida. */
 export const AVENUE_CHANNEL = "avenue";
 
+/** Nome do canal Realtime da arena PvP (mapa de combate). */
+export const ARENA_CHANNEL = "arena";
+
 /** Id de vídeo do YouTube (11 caracteres) — a música do carro/caminhão de som. */
 export const MUSIC_ID_RE = /^[A-Za-z0-9_-]{11}$/;
 /** Até que distância (u) se ouve a música de um veículo de som. */

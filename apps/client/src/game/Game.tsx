@@ -10,6 +10,9 @@ import { VehicleMusicPlayers } from "./VehicleMusic.js";
 import { MusicModal } from "../ui/MusicModal.js";
 import { serverNow } from "../config/parkScreen.js";
 import { Scenery } from "./Scenery.js";
+import { Arena } from "./Arena.js";
+import { randomArenaSpawn } from "./arena.js";
+import { ARENA_CHANNEL, AVENUE_CHANNEL } from "@manifestacao/shared";
 import { Player, type PlayerTransform } from "./Player.js";
 import { RemotePlayers } from "./RemotePlayers.js";
 import { SprayMarks } from "./SprayMarks.js";
@@ -84,14 +87,21 @@ interface GameProps {
   onConfigChanged: () => Promise<void>;
   /** Aviso de conta silenciada (chat desativado); null = pode conversar. */
   mutedNotice?: string | null;
+  /** Mapa: avenida (padrão) ou arena PvP (canal Realtime e cenário próprios). */
+  map?: GameMap;
 }
+
+export type GameMap = "avenida" | "arena";
 
 /**
  * Cena de jogo: avenida 3D, jogador local, jogadores remotos (Realtime),
  * HUD (placar + chat), seletor de veículo, spray e joystick de toque.
  * Sessão/loja não vivem aqui — ver App.tsx.
  */
-export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, onAvatarChange, onExit, isAdmin, signedIn, onConfigChanged, mutedNotice = null }: GameProps) {
+export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, onAvatarChange, onExit, isAdmin, signedIn, onConfigChanged, mutedNotice = null, map = "avenida" }: GameProps) {
+  const isArena = map === "arena";
+  // Ponto de entrada sorteado uma vez por partida na arena.
+  const spawn = useMemo(() => (isArena ? randomArenaSpawn() : undefined), [isArena]);
   const [optionsOpen, setOptionsOpen] = useState(false);
   const [chatOpen, setChatOpen] = useState(false);
   const [graphics, setGraphics] = useState<GraphicsLevel>(loadGraphics);
@@ -165,7 +175,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     }, 2500);
     return () => window.clearTimeout(t);
   }, [glLost]);
-  const net = useAvenueRealtime(playAvatar, signedIn, signId, music);
+  const net = useAvenueRealtime(playAvatar, signedIn, signId, music, isArena ? ARENA_CHANNEL : AVENUE_CHANNEL);
   const isTouch = useIsTouch();
   const signs = useSigns(net.remoteIds, net.playersRef, signId);
   const billboardAds = useBillboards(signedIn);
@@ -277,7 +287,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     posRef: transformRef,
     sendVoice: net.sendVoice,
     voiceHandlerRef: net.voiceHandlerRef,
-    blocked: !!mutedNotice,
+    blocked: !!mutedNotice || isArena, // sem palanques na arena
     isOnline: (id) => net.playersRef.current.has(id),
   });
   // Só true depois do primeiro useFrame do Player — evita que um clique no
@@ -418,7 +428,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           <sphereGeometry args={[9, 24, 16]} />
           <meshBasicMaterial color="#fff3b0" fog={false} />
         </mesh>
-        <Scenery />
+        {isArena ? <Arena /> : <Scenery />}
         <SprayMarks marksRef={net.sprayMarksRef} version={net.sprayVersion} />
         <Player
           color={avatar.shirt}
@@ -445,9 +455,10 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           cameraTouchedAtRef={cameraTouchedAtRef}
           transformRef={transformRef}
           transformReadyRef={transformReadyRef}
+          spawn={spawn}
         />
         <RemotePlayers ids={net.remoteIds} playersRef={net.playersRef} signs={signs} />
-        <Billboards ads={billboardAds} />
+        {!isArena && <Billboards ads={billboardAds} />}
       </Canvas>
 
       {isTouch && !driving && <Joystick onMove={setJoystick} />}
@@ -509,7 +520,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
         </div>
       )}
       <Crosshair />
-      <StageButton voice={voice} blockedNotice={mutedNotice} />
+      {!isArena && <StageButton voice={voice} blockedNotice={mutedNotice} />}
       <TopRightPanel>
         <div style={{ display: "flex", gap: 8 }}>
           <ChatButton open={chatOpen} onClick={() => setChatOpen((o) => !o)} />

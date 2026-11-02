@@ -149,7 +149,13 @@ function sanitizePresence(id: string, p: unknown): PresenceState {
  * time) + broadcast (movimento e chat). Não autoritativo (CLAUDE.md §4).
  * Em modo offline (sem credenciais) vira no-op e o jogo roda só local.
  */
-export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId: string | null = null, music: VehicleMusic | null = null) {
+export function useAvenueRealtime(
+  self: AvatarConfig,
+  signedIn: boolean,
+  signId: string | null = null,
+  music: VehicleMusic | null = null,
+  channelName: string = AVENUE_CHANNEL,
+) {
   const selfId = useMemo(
     () => (crypto.randomUUID ? crypto.randomUUID() : String(Math.random())),
     [],
@@ -233,7 +239,7 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
 
     // Canal PRIVADO: só quem está logado entra (policies em realtime.messages,
     // migration 0009). A chave de presence é o nosso id de sessão.
-    const channel = supabase.channel(AVENUE_CHANNEL, {
+    const channel = supabase.channel(channelName, {
       config: { private: true, presence: { key: selfId } },
     });
     channelRef.current = channel;
@@ -443,7 +449,7 @@ export function useAvenueRealtime(self: AvatarConfig, signedIn: boolean, signId:
       void supabase.removeChannel(channel);
       channelRef.current = null;
     };
-  }, [selfId, signedIn, self.nickname, self.team, self.character]);
+  }, [selfId, signedIn, self.nickname, self.team, self.character, channelName]);
 
   // Camisa e bandeira mudam só o presence (não derrubam o canal nem somem com os outros jogadores).
   useEffect(() => {

@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { TEAMS, VEHICLE_IDS, type AvatarConfig } from "@manifestacao/shared";
 import { AVATAR_STORAGE_KEY, AvatarPicker } from "./ui/AvatarPicker.js";
 import { CookieConsent } from "./ui/CookieConsent.js";
-import { Game } from "./game/Game.js";
+import { Game, type GameMap } from "./game/Game.js";
+import { MapSwitch, loadMap, saveMap } from "./ui/MapSwitch.js";
 import { Store } from "./shop/Store.js";
 import { signOut, useAuth } from "./auth/useAuth.js";
 import { useEntitlements } from "./shop/useEntitlements.js";
@@ -24,6 +25,11 @@ import { clearFacePortraits } from "./ui/CharacterFace.js";
 export function App() {
   const [avatar, setAvatar] = useState<AvatarConfig | null>(null);
   const [storeOpen, setStoreOpen] = useState(false);
+  const [map, setMap] = useState<GameMap>(loadMap);
+  const chooseMap = (m: GameMap) => {
+    setMap(m);
+    saveMap(m);
+  };
   const { session, loading: authLoading } = useAuth();
   const { owned: ownedByPurchase, refresh, loading: entitlementsLoading } = useEntitlements(session);
   const isAdmin = useIsAdmin(session);
@@ -173,14 +179,18 @@ export function App() {
           signedIn={session !== null}
           onConfigChanged={reloadConfig}
           mutedNotice={mutedNotice}
+          map={map}
         />
       ) : (
+        <>
+        <MapSwitch value={map} onChange={chooseMap} />
         <AvatarPicker
           onReady={setAvatar}
           session={session}
           authLoading={authLoading}
           onOpenStore={() => setStoreOpen(true)}
         />
+        </>
       )}
       {storeOpen && (
         <Store

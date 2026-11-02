@@ -63,14 +63,26 @@ export const PLAZA_MAX_Z = 44;
 export const CITY_HALF_X = AVENUE_LENGTH / 2 + 27;
 export const CITY_HALF_Z = 122;
 
+/** Limites ativos do mundo: a cidade por padrão; mapas menores (arena PvP) trocam com `setWorldBounds`. */
+let boundsHalfX = CITY_HALF_X;
+let boundsHalfZ = CITY_HALF_Z;
+export function setWorldBounds(halfX: number, halfZ: number): void {
+  boundsHalfX = halfX;
+  boundsHalfZ = halfZ;
+}
+export function resetWorldBounds(): void {
+  boundsHalfX = CITY_HALF_X;
+  boundsHalfZ = CITY_HALF_Z;
+}
+
 export function clampToAvenue(
   x: number,
   z: number,
   _prev?: { x: number; z: number },
 ): { x: number; z: number } {
   return {
-    x: Math.max(-CITY_HALF_X + AVATAR_RADIUS, Math.min(CITY_HALF_X - AVATAR_RADIUS, x)),
-    z: Math.max(-CITY_HALF_Z + AVATAR_RADIUS, Math.min(CITY_HALF_Z - AVATAR_RADIUS, z)),
+    x: Math.max(-boundsHalfX + AVATAR_RADIUS, Math.min(boundsHalfX - AVATAR_RADIUS, x)),
+    z: Math.max(-boundsHalfZ + AVATAR_RADIUS, Math.min(boundsHalfZ - AVATAR_RADIUS, z)),
   };
 }
 

@@ -1,5 +1,5 @@
 import type { StrikeRefs } from "./strike.js";
-import { useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import { Group, Vector3 } from "three";
 import { useFrame, useThree } from "@react-three/fiber";
 import {
@@ -76,6 +76,8 @@ interface PlayerProps {
   transformReadyRef?: { current: boolean };
   /** PC: true enquanto a tecla de mirar/bater (E) está segurada — o personagem encara a cruz da tela em vez de onde anda. */
   aimHoldRef?: { current: boolean };
+  /** Ponto de entrada (arena PvP): posiciona o jogador uma vez, ao montar. */
+  spawn?: { x: number; z: number; rotationY: number };
   /** Outros jogadores (posição e veículo): o jogador local não os atravessa. */
   othersRef?: { current: ReadonlyMap<string, { x: number; z: number; vehicle: VehicleId }> };
 }
@@ -162,8 +164,17 @@ export function Player({
   transformRef,
   transformReadyRef,
   othersRef,
+  spawn,
 }: PlayerProps) {
   const ref = useRef<Group>(null);
+  useLayoutEffect(() => {
+    const g = ref.current;
+    if (!g || !spawn) return;
+    g.position.set(spawn.x, 0, spawn.z);
+    g.rotation.y = spawn.rotationY;
+    cameraYawRef.current = spawn.rotationY;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const camera = useThree((s) => s.camera);
   const facing = useRef<Facing>("down");
   const accum = useRef(0);
