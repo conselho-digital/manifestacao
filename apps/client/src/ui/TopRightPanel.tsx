@@ -4,7 +4,7 @@
  * metade inferior da tela). Evita que botões soltos com position:fixed
  * disputem o mesmo canto e se sobreponham.
  */
-export function TopRightPanel({ children }: { children: React.ReactNode }) {
+export function TopRightPanel({ children, compact = false }: { children: React.ReactNode; compact?: boolean }) {
   return (
     <div
       style={{
@@ -13,12 +13,15 @@ export function TopRightPanel({ children }: { children: React.ReactNode }) {
         right: "calc(env(safe-area-inset-right, 0px) + 10px)",
         zIndex: 6,
         display: "flex",
-        flexDirection: "column",
-        alignItems: "flex-end",
-        gap: 10,
-        // Em celular deitado a coluna não desce até o botão Correr.
-        maxHeight: "calc(100dvh - 140px)",
-        overflowY: "auto",
+        // Celular deitado: duas fileiras curtas no topo (nada desce até os botões do polegar); senão, uma coluna.
+        flexDirection: compact ? "row" : "column",
+        flexWrap: compact ? "wrap" : "nowrap",
+        justifyContent: compact ? "flex-end" : undefined,
+        alignItems: compact ? "center" : "flex-end",
+        gap: compact ? 8 : 10,
+        maxWidth: compact ? "min(420px, 58vw)" : undefined,
+        maxHeight: compact ? "108px" : "calc(100dvh - 140px)",
+        overflowY: compact ? "visible" : "auto",
       }}
     >
       {children}

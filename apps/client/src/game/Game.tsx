@@ -19,7 +19,7 @@ import { EXIT_MAX_SPEED, canEnter, spawnBeside, startDoor, type BoardOrder, type
 
 // Arena com física (Rapier, WASM ~2 MB): só baixa quando alguém entra na arena.
 const ArenaWorld = lazy(() => import("./ArenaWorld.js"));
-import { ArenaHud, arenaHudTopOffset } from "../ui/ArenaHud.js";
+import { ArenaHud, COMPACT_MAP_SIZE, arenaHudTopOffset } from "../ui/ArenaHud.js";
 import { randomArenaSpawn } from "./arena.js";
 import { ARENA_CHANNEL, AVENUE_CHANNEL } from "@manifestacao/shared";
 import { Player, type PlayerTransform } from "./Player.js";
@@ -65,7 +65,7 @@ import { DEFAULT_SPRAY_ID } from "../config/sprays.js";
 import { SprayButton } from "../ui/SprayButton.js";
 import { TopRightPanel } from "../ui/TopRightPanel.js";
 import { Crosshair } from "../ui/Crosshair.js";
-import { useIsTouch } from "../ui/useIsTouch.js";
+import { useIsCompactTouch, useIsTouch } from "../ui/useIsTouch.js";
 import { hasVehicleViaPremium, vehicleRequiresEntitlement } from "@manifestacao/shared";
 import { DriveControls } from "../ui/DriveControls.js";
 import { NO_DRIVE_INPUT, type DriveInput } from "./driving.js";
@@ -193,6 +193,8 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
   }, [glLost]);
   const net = useAvenueRealtime(playAvatar, signedIn, signId, music, isArena ? ARENA_CHANNEL : AVENUE_CHANNEL);
   const isTouch = useIsTouch();
+  const compact = useIsCompactTouch();
+  const mapSize = compact ? COMPACT_MAP_SIZE : isTouch ? 92 : 120;
   const signs = useSigns(net.remoteIds, net.playersRef, signId);
   const billboardAds = useBillboards(signedIn);
 
@@ -672,7 +674,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
       )}
       <Crosshair />
       {!isArena && <StageButton voice={voice} blockedNotice={mutedNotice} />}
-      <TopRightPanel>
+      <TopRightPanel compact={compact}>
         <div style={{ display: "flex", gap: 8 }}>
           <ChatButton open={chatOpen} onClick={() => setChatOpen((o) => !o)} />
           <OptionsButton onClick={() => setOptionsOpen(true)} />
@@ -716,7 +718,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           remaining={flagTime.remaining}
           shown={flagShown}
         />
-        {canHit && <HitButton onHit={doHit} busy={hitBusy} />}
+        {canHit && <HitButton onHit={doHit} busy={hitBusy} fab={isTouch} />}
         {(mounted || nearParked) && <VehicleButton label={mounted ? "Sair" : "Entrar"} onPress={mounted ? exitVehicle : enterVehicle} />}
       </TopRightPanel>
       {optionsOpen && !adminOpen && (
@@ -759,7 +761,8 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
       {adminOpen && isAdmin && <AdminPanel onClose={() => setAdminOpen(false)} onChanged={onConfigChanged} />}
       {isArena && (
         <ArenaHud
-          size={isTouch ? 92 : 120}
+          size={mapSize}
+          compact={compact}
           playersRef={net.playersRef}
           posRef={transformRef}
           yawRef={cameraYawRef}
@@ -773,7 +776,9 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
         />
       )}
       <Hud
-        topOffset={isArena ? arenaHudTopOffset(isTouch ? 92 : 120) : 0}
+        topOffset={isArena && !compact ? arenaHudTopOffset(mapSize) : 0}
+        leftOffset={isArena && compact ? mapSize + 12 : 0}
+        compact={compact}
         enterFocusesChat={!paused && !optionsOpen && !adminOpen && !superchatOpen && !signOpen && !billboardOpen && !musicOpen}
         online={net.online}
         scores={net.scores}

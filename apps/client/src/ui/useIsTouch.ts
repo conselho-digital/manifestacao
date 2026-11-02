@@ -16,3 +16,17 @@ export function useIsTouch(): boolean {
   }, []);
   return touch;
 }
+
+const SHORT_QUERY = "(hover: none) and (pointer: coarse) and (max-height: 520px)";
+
+/** true em celular DEITADO (toque e altura curta): a interface vira mais compacta para não cobrir a cena nem o joystick. */
+export function useIsCompactTouch(): boolean {
+  const [compact, setCompact] = useState(() => window.matchMedia(SHORT_QUERY).matches);
+  useEffect(() => {
+    const mq = window.matchMedia(SHORT_QUERY);
+    const onChange = () => setCompact(mq.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return compact;
+}

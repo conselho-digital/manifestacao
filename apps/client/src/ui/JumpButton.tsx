@@ -11,11 +11,11 @@ export function JumpButton({ jumpRef }: { jumpRef: { current: boolean } }) {
       onContextMenu={(e) => e.preventDefault()}
       style={{
         position: "fixed",
-        right: "calc(env(safe-area-inset-right, 0px) + 28px)",
-        bottom: "calc(env(safe-area-inset-bottom, 0px) + 116px)",
+        right: "calc(env(safe-area-inset-right, 0px) + 20px)",
+        bottom: "calc(env(safe-area-inset-bottom, 0px) + 92px)",
         zIndex: 5,
-        minWidth: 72,
-        minHeight: 72,
+        width: 64,
+        height: 64,
         borderRadius: "50%",
         border: "1px solid var(--line)",
         background: "var(--scrim)",

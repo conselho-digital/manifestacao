@@ -10,6 +10,8 @@ const RADIUS_M = 34;
 export function arenaHudTopOffset(size: number): number {
   return size + 84;
 }
+/** Celular deitado: o minimapa fica ao lado do placar, não em cima. */
+export const COMPACT_MAP_SIZE = 76;
 
 interface Props {
   size: number;
@@ -24,12 +26,14 @@ interface Props {
   feed: FeedEntry[];
   stats: Record<string, CombatStat>;
   playerCount: number;
+  /** Celular deitado: só minimapa, vida e uma linha; o feed sobe para ficar acima dos botões do polegar. */
+  compact?: boolean;
 }
 
 const teamHex = (t: unknown) => (isTeamId(t) ? hexColor(TEAMS[t].color) : "#999");
 
 /** Interface da arena PvP: minimapa girando com a câmera, vida, jogadores online, feed de quedas e placar de derrubadas. */
-export function ArenaHud({ size, playersRef, posRef, yawRef, selfId, selfTeam, selfNickname, hp, feed, stats, playerCount }: Props) {
+export function ArenaHud({ size, playersRef, posRef, yawRef, selfId, selfTeam, selfNickname, hp, feed, stats, playerCount, compact = false }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   // Obstáculos fixos do layout, em metros (caixas e carros como retângulos; pilares como círculos).
@@ -171,15 +175,21 @@ export function ArenaHud({ size, playersRef, posRef, yawRef, selfId, selfTeam, s
           aria-valuemin={0}
           aria-valuemax={100}
           aria-valuenow={Math.round(hp * 100)}
-          style={{ marginTop: 6, height: 10, borderRadius: 3, background: "var(--scrim)", overflow: "hidden", border: "1px solid var(--line)" }}
+          style={{ marginTop: compact ? 4 : 6, height: compact ? 7 : 10, borderRadius: 3, background: "var(--scrim)", overflow: "hidden", border: "1px solid var(--line)" }}
         >
           <div style={{ width: `${Math.round(hp * 100)}%`, height: "100%", background: hpColor, transition: "width .2s" }} />
         </div>
-        <div style={{ marginTop: 4, fontSize: "var(--t-ui)", fontWeight: 800, textTransform: "uppercase", lineHeight: 1.25, whiteSpace: "nowrap" }}>
-          <div style={{ color: teamHex(selfTeam) }}>{selfNickname}</div>
-          <div>Arena PvP</div>
-          <div style={{ color: "var(--ink-dim)" }}>Jogadores: {playerCount}</div>
-        </div>
+        {compact ? (
+          <div style={{ marginTop: 3, fontSize: 11, fontWeight: 800, textTransform: "uppercase", lineHeight: 1.2, whiteSpace: "nowrap" }}>
+            Arena PvP · {playerCount}
+          </div>
+        ) : (
+          <div style={{ marginTop: 4, fontSize: "var(--t-ui)", fontWeight: 800, textTransform: "uppercase", lineHeight: 1.25, whiteSpace: "nowrap" }}>
+            <div style={{ color: teamHex(selfTeam) }}>{selfNickname}</div>
+            <div>Arena PvP</div>
+            <div style={{ color: "var(--ink-dim)" }}>Jogadores: {playerCount}</div>
+          </div>
+        )}
       </div>
 
       {/* Canto inferior direito: quedas recentes e placar de derrubadas / quedas. */}
@@ -187,8 +197,8 @@ export function ArenaHud({ size, playersRef, posRef, yawRef, selfId, selfTeam, s
         style={{
           position: "fixed",
           right: "calc(env(safe-area-inset-right, 0px) + 10px)",
-          bottom: "calc(env(safe-area-inset-bottom, 0px) + 64px)",
-          maxWidth: "min(320px, 55vw)",
+          bottom: compact ? "calc(env(safe-area-inset-bottom, 0px) + 172px)" : "calc(env(safe-area-inset-bottom, 0px) + 64px)",
+          maxWidth: compact ? "min(300px, 40vw)" : "min(320px, 55vw)",
           zIndex: 6,
           pointerEvents: "none",
           userSelect: "none",
@@ -205,7 +215,7 @@ export function ArenaHud({ size, playersRef, posRef, yawRef, selfId, selfTeam, s
             <span style={{ color: teamHex(f.killerTeam) }}>{f.killer}</span> derrubou <span style={{ color: teamHex(f.victimTeam) }}>{f.victim}</span>
           </div>
         ))}
-        {board.length > 0 && (
+        {!compact && board.length > 0 && (
           <div style={{ marginTop: 8 }}>
             {board.map((b) => (
               <div key={b.id} style={{ outline: b.id === selfId ? "none" : undefined }}>

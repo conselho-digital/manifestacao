@@ -23,6 +23,10 @@ interface HudProps {
   mutedNotice?: string | null;
   /** Desce o placar e o chat (px) para abrir espaço a um bloco no canto superior esquerdo (minimapa da arena). */
   topOffset?: number;
+  /** Afasta o placar e o chat da esquerda (px): em celular deitado o minimapa fica ao lado deles. */
+  leftOffset?: number;
+  /** Celular deitado: placar em fichas pequenas e chat com poucas linhas. */
+  compact?: boolean;
 }
 
 /** Cor de time segura: ignora `team` inválido vindo da rede (defensivo). */
@@ -31,7 +35,7 @@ function teamColor(team: unknown): string {
 }
 
 /** Sobreposição 2D: placar por time, estado da conexão e chat efêmero. */
-export function Hud({ online, scores, chatLog, onChat, chatOpen, onChatOpenChange, enterFocusesChat = true, mutedNotice = null, topOffset = 0 }: HudProps) {
+export function Hud({ online, scores, chatLog, onChat, chatOpen, onChatOpenChange, enterFocusesChat = true, mutedNotice = null, topOffset = 0, leftOffset = 0, compact = false }: HudProps) {
   const [text, setText] = useState("");
   const isTouch = useIsTouch();
   const logRef = useRef<HTMLDivElement>(null);
@@ -159,13 +163,13 @@ export function Hud({ online, scores, chatLog, onChat, chatOpen, onChatOpenChang
         style={{
           position: "fixed",
           top: `calc(env(safe-area-inset-top, 0px) + ${10 + topOffset}px)`,
-          left: "calc(env(safe-area-inset-left, 0px) + 10px)",
+          left: `calc(env(safe-area-inset-left, 0px) + ${10 + leftOffset}px)`,
           display: "flex",
           flexWrap: "wrap",
           alignItems: "center",
           gap: 6,
           // Não invade a coluna de botões da direita em telas estreitas.
-          maxWidth: "calc(100vw - 280px)",
+          maxWidth: compact ? "calc(100vw - 96px - 440px)" : "calc(100vw - 280px)",
           zIndex: 6,
         }}
       >
@@ -173,15 +177,18 @@ export function Hud({ online, scores, chatLog, onChat, chatOpen, onChatOpenChang
           <div
             key={id}
             style={{
-              padding: "4px 10px",
+              padding: compact ? "2px 8px" : "4px 10px",
               whiteSpace: "nowrap",
               borderRadius: "var(--r-sm)",
               background: "var(--scrim)",
-              borderLeft: `3px solid ${hexColor(TEAMS[id].color)}`,
+              display: "inline-flex",
+              alignItems: "center",
+              gap: 6,
               fontSize: "var(--t-ui)",
               fontWeight: 700,
             }}
           >
+            <span aria-hidden style={{ width: 8, height: 8, borderRadius: "50%", background: hexColor(TEAMS[id].color), flex: "none" }} />
             {TEAMS[id].label}: {scores[id]}
           </div>
         ))}
@@ -214,8 +221,8 @@ export function Hud({ online, scores, chatLog, onChat, chatOpen, onChatOpenChang
       <div
         style={{
           position: "fixed",
-          left: "calc(env(safe-area-inset-left, 0px) + 10px)",
-          top: `calc(env(safe-area-inset-top, 0px) + ${54 + topOffset}px)`,
+          left: `calc(env(safe-area-inset-left, 0px) + ${10 + leftOffset}px)`,
+          top: `calc(env(safe-area-inset-top, 0px) + ${(compact ? 38 : 54) + topOffset}px)`,
           // Termina antes da coluna de botões da direita (Spray/Veículo), pra não roubar o toque deles.
           width: "min(360px, calc(100vw - 150px))",
           zIndex: 6,
@@ -225,7 +232,7 @@ export function Hud({ online, scores, chatLog, onChat, chatOpen, onChatOpenChang
         <div
           ref={logRef}
           style={{
-            maxHeight: chatOpen && !isTouch ? 220 : 140,
+            maxHeight: chatOpen && !isTouch ? 220 : compact ? 64 : 140,
             overflowY: chatOpen && !isTouch ? "auto" : "hidden",
             marginBottom: 6,
             pointerEvents: chatOpen && !isTouch ? "auto" : "none",

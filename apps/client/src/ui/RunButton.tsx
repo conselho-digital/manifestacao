@@ -34,11 +34,11 @@ export function RunButton({ runRef }: RunButtonProps) {
       onContextMenu={(e) => e.preventDefault()}
       style={{
         position: "fixed",
-        right: "calc(env(safe-area-inset-right, 0px) + 28px)",
-        bottom: "calc(env(safe-area-inset-bottom, 0px) + 28px)",
+        right: "calc(env(safe-area-inset-right, 0px) + 20px)",
+        bottom: "calc(env(safe-area-inset-bottom, 0px) + 20px)",
         zIndex: 5,
-        minWidth: 72,
-        minHeight: 72,
+        width: 64,
+        height: 64,
         borderRadius: "50%",
         border: `1px solid ${pressed ? "var(--accent)" : "var(--line)"}`,
         background: pressed ? "var(--accent)" : "var(--scrim)",
