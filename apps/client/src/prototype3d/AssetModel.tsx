@@ -3,7 +3,7 @@ import { useGLTF } from "@react-three/drei";
 import { useLoader } from "@react-three/fiber";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
-import { Mesh, type AnimationClip, type Object3D } from "three";
+import { Box3, Mesh, Vector3, type AnimationClip, type Object3D } from "three";
 import { ASSET_BASE } from "./config.js";
 
 /** Caminho completo de um arquivo da pasta de assets. */
@@ -54,12 +54,30 @@ interface AssetModelProps {
   scale?: number | [number, number, number];
   /** Esconde o desenho (útil para um modelo usado só como colisão). */
   visible?: boolean;
+  /** Ajusta o modelo para esta altura (m), com os pés em y=0 e centrado em x/z. Útil para modelos em outra escala. */
+  fitHeight?: number;
   /** Recebe a cena carregada (ex.: para ligar animações). */
   onLoaded?: (asset: LoadedAsset) => void;
 }
 
-function AssetModelInner({ file, castShadow = true, receiveShadow = true, scale = 1, visible = true, onLoaded }: AssetModelProps) {
+/** Escala e posiciona a cena para ter `height` metros, pés em y=0, centrada em x/z (mede a caixa já com a escala 1). */
+function fitToHeight(scene: Object3D, height: number): void {
+  scene.scale.setScalar(1);
+  scene.position.set(0, 0, 0);
+  scene.updateMatrixWorld(true);
+  const box = new Box3().setFromObject(scene);
+  const size = box.getSize(new Vector3());
+  if (size.y <= 0) return;
+  const k = height / size.y;
+  scene.scale.setScalar(k);
+  scene.position.set(-((box.min.x + box.max.x) / 2) * k, -box.min.y * k, -((box.min.z + box.max.z) / 2) * k);
+}
+
+function AssetModelInner({ file, castShadow = true, receiveShadow = true, scale = 1, visible = true, fitHeight, onLoaded }: AssetModelProps) {
   const asset = useAsset(file);
+  useMemo(() => {
+    if (fitHeight) fitToHeight(asset.scene, fitHeight);
+  }, [asset, fitHeight]);
   useEffect(() => {
     asset.scene.traverse((o) => {
       if (o instanceof Mesh) {
@@ -69,7 +87,7 @@ function AssetModelInner({ file, castShadow = true, receiveShadow = true, scale 
     });
     onLoaded?.(asset);
   }, [asset, castShadow, receiveShadow, onLoaded]);
-  return <primitive object={asset.scene} scale={scale} visible={visible} />;
+  return fitHeight ? <primitive object={asset.scene} visible={visible} /> : <primitive object={asset.scene} scale={scale} visible={visible} />;
 }
 
 /** Falha de carregamento (404, arquivo corrompido) não derruba a cena: mostra o `fallback`. */

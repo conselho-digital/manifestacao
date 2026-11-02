@@ -4,7 +4,7 @@ import { useAnimations } from "@react-three/drei";
 import { CapsuleCollider, RigidBody, useRapier, type RapierRigidBody } from "@react-three/rapier";
 import { AnimationAction, LoopOnce, LoopRepeat, Object3D, Quaternion, Vector3, type Group } from "three";
 import { AssetModel, type LoadedAsset } from "./AssetModel.js";
-import { CAMERA, CLIPS, FILES, PHYSICS, type Locomotion } from "./config.js";
+import { CAMERA, CHARACTER_HEIGHT, CLIPS, FILES, PHYSICS, type Locomotion } from "./config.js";
 import { useControls } from "./useControls.js";
 
 const PITCH_RANGE: [number, number] = [CAMERA.minPitch, CAMERA.maxPitch];
@@ -29,12 +29,20 @@ function Placeholder() {
 /** Personagem com animações esqueléticas: o modelo vem de FILES.character e os clipes de CLIPS. */
 function CharacterModel({ state }: { state: Locomotion }) {
   const group = useRef<Group>(null);
+  const motion = useRef<Group>(null);
   const [asset, setAsset] = useState<LoadedAsset | null>(null);
   const { actions, mixer } = useAnimations(asset?.animations ?? [], group);
   const current = useRef<AnimationAction | null>(null);
   const warned = useRef(new Set<string>());
+  // Modelo sem animações (malha estática, sem esqueleto): o movimento é feito no conjunto, por código.
+  const staticModel = asset !== null && asset.animations.length === 0;
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const attackStart = useRef(0);
 
   useEffect(() => {
+    if (state === "attack") attackStart.current = performance.now();
+    if (staticModel) return;
     const clipName = CLIPS[state];
     const next = actions[clipName] ?? actions[CLIPS.idle] ?? null;
     if (asset && !actions[clipName] && !warned.current.has(clipName)) {
@@ -49,14 +57,35 @@ function CharacterModel({ state }: { state: Locomotion }) {
     next.fadeIn(0.15).play();
     current.current?.fadeOut(0.15);
     current.current = next;
-  }, [state, actions]);
+  }, [state, actions, asset, staticModel]);
 
   useEffect(() => () => void mixer.stopAllAction(), [mixer]);
+
+  // Movimento procedural para malha estática: balanço ao andar/correr, respiração parado, inclinação ao golpear.
+  useFrame(({ clock }) => {
+    const m = motion.current;
+    if (!m || !staticModel) return;
+    const t = clock.elapsedTime;
+    const s = stateRef.current;
+    let bob = 0, roll = 0, pitch = 0, lunge = 0;
+    if (s === "walk") { bob = Math.abs(Math.sin(t * 8)) * 0.05; roll = Math.sin(t * 8) * 0.05; pitch = 0.05; }
+    else if (s === "run") { bob = Math.abs(Math.sin(t * 12)) * 0.09; roll = Math.sin(t * 12) * 0.07; pitch = 0.2; }
+    else if (s === "aim") { pitch = -0.05; }
+    else if (s === "attack") {
+      const u = Math.min(1, (performance.now() - attackStart.current) / 600);
+      pitch = Math.sin(u * Math.PI) * 0.45;
+      lunge = Math.sin(u * Math.PI) * 0.25;
+    } else { bob = Math.sin(t * 2) * 0.008; }
+    m.position.set(0, bob, lunge);
+    m.rotation.set(pitch, 0, roll);
+  });
 
   return (
     <group ref={group} position={[0, -FOOT_OFFSET, 0]}>
       {/* Enquanto não carrega (ou se o arquivo falhar), uma cápsula visível marca onde o personagem está. */}
-      <AssetModel file={FILES.character} onLoaded={setAsset} fallback={<Placeholder />} />
+      <group ref={motion}>
+        <AssetModel file={FILES.character} fitHeight={CHARACTER_HEIGHT} onLoaded={setAsset} fallback={<Placeholder />} />
+      </group>
     </group>
   );
 }
@@ -75,7 +104,7 @@ export function ThirdPersonController({ spawn = [0, 2, 0], onAttack }: Props) {
   const [anim, setAnim] = useState<Locomotion>("idle");
   const attackUntil = useRef(0);
   const facing = useRef(new Quaternion());
-  const tmp = useRef({ dir: new Vector3(), want: new Vector3(), cam: new Vector3(), look: new Vector3(), qy: new Quaternion(), up: new Vector3(0, 1, 0) });
+  const tmp = useRef({ dir: new Vector3(), want: new Vector3(), arm: new Vector3(), cam: new Vector3(), look: new Vector3(), qy: new Quaternion(), up: new Vector3(0, 1, 0) });
   const visual = useRef<Object3D>(null);
 
   useFrame((_, rawDelta) => {
@@ -133,7 +162,7 @@ export function ThirdPersonController({ spawn = [0, 2, 0], onAttack }: Props) {
     t.want.copy(t.look).addScaledVector(t.dir, dist);
     t.want.x += Math.cos(c.yaw) * CAMERA.shoulder;
     t.want.z -= Math.sin(c.yaw) * CAMERA.shoulder;
-    const toCam = t.cam.copy(t.want).sub(t.look);
+    const toCam = t.arm.copy(t.want).sub(t.look); // vetor próprio: `t.cam` é reutilizado logo abaixo
     const len = toCam.length();
     toCam.divideScalar(len);
     const sray = new rapier.Ray({ x: t.look.x, y: t.look.y, z: t.look.z }, { x: toCam.x, y: toCam.y, z: toCam.z });

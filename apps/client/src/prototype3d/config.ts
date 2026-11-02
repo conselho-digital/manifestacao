@@ -32,6 +32,9 @@ export const CLIPS = {
 
 export type Locomotion = keyof typeof CLIPS;
 
+/** Altura (m) em que o personagem é ajustado ao carregar — corrige modelos exportados em outra escala. */
+export const CHARACTER_HEIGHT = 1.75;
+
 export const PHYSICS = {
   gravity: [0, -22, 0] as [number, number, number],
   /** Cápsula do personagem (metros): meia altura do trecho reto e raio. */
