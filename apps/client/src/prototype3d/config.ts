@@ -1,0 +1,57 @@
+/**
+ * Configuração do protótipo 3D (cenário urbano + personagem em 3ª pessoa com física).
+ * Tudo que costuma mudar de projeto para projeto fica aqui: pastas, nomes de arquivo e de animação.
+ */
+
+/**
+ * Pasta (dentro de `public/`) onde ficam os `.glb`/`.fbx`. Em um projeto Next.js use "/assets".
+ * Neste projeto (Vite) NÃO use "/assets": é a pasta dos arquivos gerados no build e o service worker
+ * os guarda para sempre; "/models" é servida com atualização em segundo plano.
+ */
+export const ASSET_BASE = "/models";
+
+/** Arquivos (relativos a ASSET_BASE). O de colisão é opcional: uma versão simplificada do cenário. */
+export const FILES = {
+  city: "city.glb",
+  /** Malha simples só para colisão (casas = caixas). Se não existir, usa a própria `city`. */
+  cityCollision: null as string | null,
+  character: "character.glb",
+} as const;
+
+/**
+ * Nome do clipe de animação dentro do arquivo do personagem, para cada estado. Ajuste aos nomes do seu arquivo
+ * (ex.: os do Mixamo: "Idle", "Walking", "Running"). Estado sem clipe cai em `idle`.
+ */
+export const CLIPS = {
+  idle: "Idle",
+  walk: "Walk",
+  run: "Run",
+  aim: "Aim",
+  attack: "Attack",
+} as const;
+
+export type Locomotion = keyof typeof CLIPS;
+
+export const PHYSICS = {
+  gravity: [0, -22, 0] as [number, number, number],
+  /** Cápsula do personagem (metros): meia altura do trecho reto e raio. */
+  capsuleHalfHeight: 0.5,
+  capsuleRadius: 0.35,
+  walkSpeed: 3.2,
+  runSpeed: 6.4,
+  /** Velocidade quando mirando (andando devagar). */
+  aimSpeed: 1.8,
+  jumpSpeed: 7,
+} as const;
+
+export const CAMERA = {
+  distance: 4.2,
+  aimDistance: 2.2,
+  height: 1.55,
+  /** Deslocamento lateral ("sobre o ombro"). */
+  shoulder: 0.45,
+  minPitch: -0.5,
+  maxPitch: 1.2,
+  /** Radianos por pixel do mouse. */
+  sensitivity: 0.0024,
+} as const;
