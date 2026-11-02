@@ -140,9 +140,12 @@ function Portrait({ character, url, size, border, variant = "face", height }: { 
   // Falhou ao montar o retrato do modelo: cai na foto padrão do personagem.
   if (failed) return body ? <AvatarGlyph color="#888" character={character} size={Math.min(size, hpx)} /> : <StaticFace character={character} size={size} border={border} />;
   if (src) return <img src={src} alt="" width={size} height={hpx} style={{ ...box, objectFit: body ? "contain" : "cover" }} />;
+  // Enquanto o retrato não fica pronto, mostra só um espaço neutro: o modelo em montagem (primeiros quadros, antes do
+  // enquadramento) ficava visível e era trocado pela foto. O Canvas renderiza escondido e só a foto final aparece.
   return (
-    <div style={box} aria-hidden>
+    <div style={{ ...box, position: "relative" }} aria-hidden aria-busy>
       {active && (
+        <div style={{ position: "absolute", inset: 0, visibility: "hidden" }}>
         <Canvas dpr={body ? Math.min(2, window.devicePixelRatio || 1) : 1} gl={{ preserveDrawingBuffer: true, alpha: true, antialias: true }} camera={{ position: [0, 1.6, 0.8], fov: 28 }}>
           <ambientLight intensity={1.1} />
           <directionalLight position={[2, 3, 4]} intensity={1.8} />
@@ -164,6 +167,7 @@ function Portrait({ character, url, size, border, variant = "face", height }: { 
             </Suspense>
           </Boundary>
         </Canvas>
+        </div>
       )}
     </div>
   );
