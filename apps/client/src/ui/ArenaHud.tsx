@@ -185,7 +185,7 @@ export function ArenaHud({ size, playersRef, posRef, yawRef, selfId, selfTeam, s
         >
           <div style={{ width: `${Math.round(hp * 100)}%`, height: "100%", background: hpColor, transition: "width .2s" }} />
         </div>
-        <div style={{ marginTop: 4, fontSize: "var(--t-ui)", fontWeight: 800, textTransform: "uppercase", lineHeight: 1.25 }}>
+        <div style={{ marginTop: 4, fontSize: "var(--t-ui)", fontWeight: 800, textTransform: "uppercase", lineHeight: 1.25, whiteSpace: "nowrap" }}>
           <div style={{ color: teamHex(selfTeam) }}>{selfNickname}</div>
           <div>Arena PvP</div>
           <div style={{ color: "var(--ink-dim)" }}>Jogadores: {playerCount}</div>
