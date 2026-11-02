@@ -10,12 +10,12 @@
  */
 export const ASSET_BASE = "/models";
 
-/** Arquivos (relativos a ASSET_BASE). O de colisão é opcional: uma versão simplificada do cenário. */
+/** Arquivos (relativos a ASSET_BASE): `mapa.glb` (cenário) e `player.glb` (personagem). O de colisão é opcional: uma versão simplificada do cenário. */
 export const FILES = {
-  city: "city.glb",
-  /** Malha simples só para colisão (casas = caixas). Se não existir, usa a própria `city`. */
+  city: "mapa.glb",
+  /** Malha simples só para colisão (casas = caixas), ex.: "mapa_colisao.glb". Se for null, usa a própria malha de `mapa.glb`. */
   cityCollision: null as string | null,
-  character: "character.glb",
+  character: "player.glb",
 } as const;
 
 /**

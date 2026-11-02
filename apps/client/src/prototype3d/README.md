@@ -13,9 +13,9 @@ Coloque em `public/models/` (veja `ASSET_BASE` em `config.ts`; em um projeto Nex
 
 | Arquivo | Uso |
 |---|---|
-| `city.glb` | cenário (visual e, por padrão, colisão `trimesh`) |
-| `city_collision.glb` (opcional) | malha simplificada só para colisão — defina em `FILES.cityCollision` |
-| `character.glb` | personagem com esqueleto e animações |
+| `mapa.glb` | cenário (visual e, por padrão, colisão `trimesh`) |
+| `mapa_colisao.glb` (opcional) | malha simplificada só para colisão — defina em `FILES.cityCollision` |
+| `player.glb` | personagem com esqueleto e animações |
 
 `.fbx` também carrega (pela extensão). FBX costuma vir em centímetros: ajuste a `scale` do `AssetModel`.
 Nomes dos clipes de animação: `CLIPS` em `config.ts` (idle, walk, run, aim, attack). Clipe ausente cai em `idle` e avisa no console.
@@ -32,3 +32,19 @@ WASD/setas · Shift corre · Espaço pula · mouse olha (clique para travar o po
 - `trimesh` do cenário inteiro pesa em celular: prefira `cityCollision` simplificado.
 - `onAttack` só avisa que o golpe começou. Dano e acerto devem ser decididos no **servidor** (CLAUDE.md §2/§4).
 - O Rapier carrega um WASM (~1–2 MB): importe este módulo só na tela que o usa (`React.lazy`).
+
+## Em um projeto Next.js (App Router)
+1. Copie a pasta `prototype3d/` para `src/` e instale: `three @react-three/fiber @react-three/drei @react-three/rapier` (R3F 8 + rapier 1.x; com R3F 9 use rapier 2.x).
+2. Em `config.ts`: `ASSET_BASE = "/assets"` e coloque `mapa.glb` e `player.glb` em `public/assets/`.
+3. Componente de cliente, sem SSR:
+```tsx
+"use client";
+import dynamic from "next/dynamic";
+const Prototype3D = dynamic(() => import("@/prototype3d").then((m) => m.Prototype3D), { ssr: false });
+export default function Page() { return <div style={{ width: "100vw", height: "100vh" }}><Prototype3D /></div>; }
+```
+
+## Referências de arquitetura
+- `pmndrs/react-three-rapier` (`@react-three/rapier`): é o pacote usado aqui (não existe `pmndrs/use-rapier`).
+- `pmndrs/ecctrl` (MIT): controlador de personagem com cápsula dinâmica + raios; mesma ideia deste controlador, mas v2 exige R3F 9.
+- Rede (futuro): Colyseus para o servidor autoritativo do deathmatch (CLAUDE.md §4).
