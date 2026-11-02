@@ -10,6 +10,15 @@
  */
 export const ASSET_BASE = "/models";
 
+let assetBase: string = ASSET_BASE;
+/** Troca a pasta de assets em tempo de execução (ex.: a versão offline usa "/offline"). */
+export function setAssetBase(base: string): void {
+  assetBase = base;
+}
+export function getAssetBase(): string {
+  return assetBase;
+}
+
 /** Arquivos (relativos a ASSET_BASE): `mapa.glb` (cenário) e `player.glb` (personagem). O de colisão é opcional: uma versão simplificada do cenário. */
 export const FILES = {
   city: "mapa.glb",

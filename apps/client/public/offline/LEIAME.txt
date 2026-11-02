@@ -1,0 +1,3 @@
+Pasta dos arquivos 3D da versão offline (single-player).
+Coloque aqui: mapa.glb (cenário) e player.glb (personagem). Veja src/prototype3d/README.md.
+O git IGNORA tudo que estiver nesta pasta (exceto este aviso): nada daqui vai para o repositório nem para o site.

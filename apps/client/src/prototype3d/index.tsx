@@ -1,6 +1,4 @@
-import { Suspense } from "react";
 import { Canvas } from "@react-three/fiber";
-import { Environment } from "@react-three/drei";
 import { Physics } from "@react-three/rapier";
 import { PHYSICS } from "./config.js";
 import { ThirdPersonController } from "./ThirdPersonController.js";
@@ -24,9 +22,6 @@ export function Prototype3D({ onAttack }: { onAttack?: () => void }) {
         <color attach="background" args={["#9fb4c8"]} />
         <hemisphereLight args={["#ffffff", "#556677", 0.9]} />
         <directionalLight position={[30, 50, 20]} intensity={1.8} castShadow shadow-mapSize={[2048, 2048]} />
-        <Suspense fallback={null}>
-          <Environment preset="city" />
-        </Suspense>
         <Physics gravity={PHYSICS.gravity}>
           <UrbanScene />
           <ThirdPersonController onAttack={onAttack} />

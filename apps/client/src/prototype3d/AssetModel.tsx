@@ -4,11 +4,11 @@ import { useLoader } from "@react-three/fiber";
 import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 import { clone as cloneSkinned } from "three/examples/jsm/utils/SkeletonUtils.js";
 import { Box3, Mesh, Vector3, type AnimationClip, type Object3D } from "three";
-import { ASSET_BASE } from "./config.js";
+import { getAssetBase } from "./config.js";
 
 /** Caminho completo de um arquivo da pasta de assets. */
 export function assetUrl(file: string): string {
-  return `${ASSET_BASE.replace(/\/$/, "")}/${file.replace(/^\//, "")}`;
+  return `${getAssetBase().replace(/\/$/, "")}/${file.replace(/^\//, "")}`;
 }
 
 export interface LoadedAsset {

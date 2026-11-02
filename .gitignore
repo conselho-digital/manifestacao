@@ -10,3 +10,8 @@ build/
 coverage/
 *.log
 .taste-skill/
+
+# Arquivos 3D locais da versão offline (nunca vão para o repositório nem para o site)
+apps/client/public/offline/*
+!apps/client/public/offline/.gitkeep
+!apps/client/public/offline/LEIAME.txt

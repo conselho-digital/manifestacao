@@ -48,3 +48,11 @@ export default function Page() { return <div style={{ width: "100vw", height: "1
 - `pmndrs/react-three-rapier` (`@react-three/rapier`): é o pacote usado aqui (não existe `pmndrs/use-rapier`).
 - `pmndrs/ecctrl` (MIT): controlador de personagem com cápsula dinâmica + raios; mesma ideia deste controlador, mas v2 exige R3F 9.
 - Rede (futuro): Colyseus para o servidor autoritativo do deathmatch (CLAUDE.md §4).
+
+## Versão single-player offline (sem servidor, login nem rede)
+- Página separada, só no desenvolvimento: `/offline.html` (não entra no build do site).
+- Rodar: `pnpm --filter @manifestacao/client dev:offline` (abre `http://localhost:5173/offline.html`).
+- Seus arquivos 3D: `apps/client/public/offline/mapa.glb` e `player.glb` (nomes em `config.ts`).
+  **O git ignora tudo dessa pasta** (exceto `.gitkeep` e `LEIAME.txt`): nada vai para o repositório nem para o site.
+- Não faz nenhuma requisição externa (sem CDN, sem Supabase). Sem os arquivos, aparece a cápsula vermelha e a grade.
+- Modelo sem esqueleto (malha estática) também funciona: altura ajustada para 1,75 m e movimento feito por código.
