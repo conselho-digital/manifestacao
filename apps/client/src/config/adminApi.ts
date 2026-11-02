@@ -109,11 +109,10 @@ function sniffImage(b: Uint8Array): { ext: "png" | "jpg" | "webp"; type: string 
   return null;
 }
 
-/** Tipos que um produto novo pode ter (o enum do banco). */
+/** Tipos que um produto novo pode ter: só veículos ou personagens (o enum do banco; a policy 0038 aceita só estes). */
 export const NEW_PRODUCT_KINDS = [
-  { id: "object", label: "Objeto" },
-  { id: "sound", label: "Som" },
-  { id: "pass", label: "Passe" },
+  { id: "vehicle", label: "Veículo" },
+  { id: "character", label: "Personagem" },
 ] as const;
 
 /** Id único e legível para produto novo: `produto:<nome>-<sufixo>` (só [a-z0-9-]). */

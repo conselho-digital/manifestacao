@@ -123,7 +123,7 @@ export function Vehicle3D({ vehicle, team }: { vehicle: VehicleId; team?: TeamId
   const url = vehicleModelUrl(vehicle, team);
   if (!url) return <ProceduralVehicle vehicle={vehicle} />;
   return (
-    <Suspense fallback={<ProceduralVehicle vehicle={vehicle} />}>
+    <Suspense fallback={null}>
       <GlbModel url={url} spinWheels fallback={<ProceduralVehicle vehicle={vehicle} />} />
     </Suspense>
   );

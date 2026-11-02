@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useRef } from "react";
 import { TEAMS, hexColor, isTeamId, type TeamId } from "@manifestacao/shared";
 import type { CombatStat, FeedEntry, RemotePlayer } from "../net/useAvenueRealtime.js";
-import { ARENA_CARS, ARENA_CRATES, ARENA_HALF, ARENA_PILLARS } from "../game/arena.js";
+import { ARENA_BLOCKS, ARENA_PILLARS, ARENA_RADIUS, blockCorners } from "../game/arena.js";
 
 /** Metros mostrados do centro do minimapa até a borda. */
-const RADIUS_M = 28;
+const RADIUS_M = 34;
 
 /** Altura total ocupada pelo bloco do canto superior esquerdo (minimapa + legenda): o placar/chat descem esse tanto. */
 export function arenaHudTopOffset(size: number): number {
@@ -35,10 +35,8 @@ export function ArenaHud({ size, playersRef, posRef, yawRef, selfId, selfTeam, s
   // Obstáculos fixos do layout, em metros (caixas e carros como retângulos; pilares como círculos).
   const shapes = useMemo(
     () => ({
-      rects: [
-        ...ARENA_CRATES.map((c) => ({ x: c.x, z: c.z, w: c.w, d: c.d })),
-        ...ARENA_CARS.map((c) => ({ x: c.x, z: c.z, w: c.turn ? c.wid : c.len, d: c.turn ? c.len : c.wid })),
-      ],
+      // Cantos de cada bloco já no mundo (os carros são caixas alinhadas aos eixos).
+      polys: ARENA_BLOCKS.map(blockCorners),
       circles: ARENA_PILLARS,
     }),
     [],
@@ -74,32 +72,24 @@ export function ArenaHud({ size, playersRef, posRef, yawRef, selfId, selfTeam, s
       ctx.fillStyle = "#1b1f25";
       ctx.fillRect(0, 0, size, size);
 
-      // Piso da arena (quadrado girado).
-      const corners = [
-        [-ARENA_HALF, -ARENA_HALF],
-        [ARENA_HALF, -ARENA_HALF],
-        [ARENA_HALF, ARENA_HALF],
-        [-ARENA_HALF, ARENA_HALF],
-      ].map(([x, z]) => px(x!, z!));
+      // Areia da arena: círculo de raio ARENA_RADIUS, com a borda amarela.
+      const [ox, oy] = px(0, 0);
       ctx.beginPath();
-      corners.forEach(([x, y], i) => (i ? ctx.lineTo(x!, y!) : ctx.moveTo(x!, y!)));
-      ctx.closePath();
-      ctx.fillStyle = "#4b525c";
+      ctx.arc(ox, oy, ARENA_RADIUS * scale, 0, Math.PI * 2);
+      ctx.fillStyle = "#6a5c44";
       ctx.fill();
       ctx.lineWidth = 2;
       ctx.strokeStyle = "#ffd12e";
       ctx.stroke();
 
-      ctx.fillStyle = "#8d95a1";
-      for (const r of shapes.rects) {
-        const pts = [
-          [r.x - r.w / 2, r.z - r.d / 2],
-          [r.x + r.w / 2, r.z - r.d / 2],
-          [r.x + r.w / 2, r.z + r.d / 2],
-          [r.x - r.w / 2, r.z + r.d / 2],
-        ].map(([x, z]) => px(x!, z!));
+      ctx.fillStyle = "#c9bba0";
+      for (const poly of shapes.polys) {
         ctx.beginPath();
-        pts.forEach(([x, y], i) => (i ? ctx.lineTo(x!, y!) : ctx.moveTo(x!, y!)));
+        poly.forEach(([wx, wz], i) => {
+          const [x, y] = px(wx, wz);
+          if (i) ctx.lineTo(x, y);
+          else ctx.moveTo(x, y);
+        });
         ctx.closePath();
         ctx.fill();
       }

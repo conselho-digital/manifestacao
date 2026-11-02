@@ -297,7 +297,7 @@ function ProductsTab({ busy, run }: TabProps) {
 
   const add = () =>
     setRows([
-      { id: newProductId("novo produto"), label: "Novo produto", price: "0.00", active: true, isNew: true, kind: "object" },
+      { id: newProductId("novo produto"), label: "Novo produto", price: "0.00", active: true, isNew: true, kind: "vehicle" },
       ...rows,
     ]);
 
@@ -386,8 +386,8 @@ function ProductsTab({ busy, run }: TabProps) {
   return (
     <>
       <p style={hint}>
-        Nome, preço (R$) e disponibilidade na loja. O preço cobrado no Pix é o daqui. Produto novo entra na loja como
-        item avulso (a posse fica registrada; efeito no jogo depende de o jogo usar esse item).
+        Nome, preço (R$) e disponibilidade na loja. O preço cobrado no Pix é o daqui. Produto novo é um veículo ou um
+        personagem e entra na loja como item avulso (a posse fica registrada; o efeito no jogo depende de o jogo usar esse item).
       </p>
       <button type="button" disabled={busy} onClick={add} style={primaryBtn}>
         Adicionar produto

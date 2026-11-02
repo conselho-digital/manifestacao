@@ -20,6 +20,8 @@ interface ActionsMenuProps {
   owned: ReadonlySet<string>;
   /** Chamado ao escolher um veículo bloqueado (abre a loja). */
   onLocked: (vehicle: VehicleId) => void;
+  /** Esconde a lista de veículos (arena PvP não tem veículos). */
+  noVehicles?: boolean;
   /** Posse ainda carregando: não mostra cadeado nem preço (pode ser falso-positivo). */
   loading: boolean;
 }
@@ -32,7 +34,7 @@ function formatBRL(cents: number): string {
  * Menu do jogo: um único botão com quatro pontos que abre "Divulgar" (Telões, Cartaz, Superchat) e "Veículo".
  * A lista é `fixed` porque o painel do canto tem rolagem e cortaria uma lista absoluta.
  */
-export function ActionsMenu({ signedIn, onBillboards, onSign, onSuperchat, vehicle, onVehicle, owned, onLocked, loading }: ActionsMenuProps) {
+export function ActionsMenu({ signedIn, onBillboards, onSign, onSuperchat, vehicle, onVehicle, owned, onLocked, loading, noVehicles = false }: ActionsMenuProps) {
   const [open, setOpen] = useState(false);
   const screen = useParkScreen();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -200,8 +202,8 @@ export function ActionsMenu({ signedIn, onBillboards, onSign, onSuperchat, vehic
               </button>
             </>
           )}
-          <p style={heading}>Veículo</p>
-          {VEHICLE_IDS.map((id) => {
+          {!noVehicles && <p style={heading}>Veículo</p>}
+          {(noVehicles ? [] : VEHICLE_IDS).map((id) => {
             const selected = id === vehicle;
             const needsEntitlement = vehicleRequiresEntitlement(id);
             const unlocked = loading || !needsEntitlement || owned.has(`vehicle:${id}`) || hasVehicleViaPremium(id, owned);

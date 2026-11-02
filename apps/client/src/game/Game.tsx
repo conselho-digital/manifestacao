@@ -4,6 +4,7 @@ import { useStageVoice } from "../net/useStageVoice.js";
 import { StageButton } from "../ui/StageButton.js";
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Canvas } from "@react-three/fiber";
+import { useProgress } from "@react-three/drei";
 import { TEAMS, VEHICLES, hexColor, type AvatarConfig, type FlagId, type VehicleId, type VehicleMusic } from "@manifestacao/shared";
 import { EngineSounds } from "./EngineSounds.js";
 import { VehicleMusicPlayers } from "./VehicleMusic.js";
@@ -469,6 +470,20 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     [parked, vehicle, avatar.team, net.remoteParked],
   );
 
+  // Tela de carregamento: o jogo só aparece depois que os modelos 3D da primeira cena chegaram (nada de peça "antiga" trocada depois).
+  const loading = useProgress();
+  const [sceneReady, setSceneReady] = useState(false);
+  useEffect(() => {
+    if (sceneReady || loading.active) return;
+    // Pequena folga: o carregamento de um modelo pode começar logo depois de outro terminar.
+    const t = window.setTimeout(() => setSceneReady(true), 600);
+    return () => window.clearTimeout(t);
+  }, [loading.active, sceneReady]);
+  useEffect(() => {
+    const t = window.setTimeout(() => setSceneReady(true), 20_000); // rede ruim: não prende a tela para sempre
+    return () => window.clearTimeout(t);
+  }, []);
+
   const playerEl = (
 <Player
           color={avatar.shirt}
@@ -546,14 +561,14 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           color="#fff1d6"
           intensity={1.6}
           castShadow
-          shadow-mapSize-width={1024}
-          shadow-mapSize-height={1024}
+          shadow-mapSize-width={isArena ? 2048 : 1024}
+          shadow-mapSize-height={isArena ? 2048 : 1024}
           shadow-bias={-0.0004}
           shadow-normalBias={0.04}
-          shadow-camera-left={isArena ? -45 : -60}
-          shadow-camera-right={isArena ? 45 : 60}
-          shadow-camera-top={isArena ? 45 : 60}
-          shadow-camera-bottom={isArena ? -45 : -60}
+          shadow-camera-left={isArena ? -80 : -60}
+          shadow-camera-right={isArena ? 80 : 60}
+          shadow-camera-top={isArena ? 80 : 60}
+          shadow-camera-bottom={isArena ? -80 : -60}
           shadow-camera-near={1}
           shadow-camera-far={200}
         />
@@ -647,6 +662,14 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           Recuperando a imagem…
         </div>
       )}
+      {!sceneReady && (
+        <div
+          role="status"
+          style={{ position: "fixed", inset: 0, zIndex: 30, display: "grid", placeItems: "center", background: "var(--bg)", color: "var(--ink)", fontWeight: 700 }}
+        >
+          Carregando… {Math.round(loading.progress)}%
+        </div>
+      )}
       <Crosshair />
       {!isArena && <StageButton voice={voice} blockedNotice={mutedNotice} />}
       <TopRightPanel>
@@ -675,6 +698,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           owned={owned}
           onLocked={onOpenStore}
           loading={entitlementsLoading}
+          noVehicles={isArena}
         />
         <SprayButton
           charges={sprays.charges}

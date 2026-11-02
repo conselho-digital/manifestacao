@@ -70,9 +70,15 @@ export function setWorldBounds(halfX: number, halfZ: number): void {
   boundsHalfX = halfX;
   boundsHalfZ = halfZ;
 }
+/** Raio máximo (mapa circular, ex.: arena); 0 = só o retângulo acima. */
+let boundsRadius = 0;
+export function setWorldRadius(r: number): void {
+  boundsRadius = r;
+}
 export function resetWorldBounds(): void {
   boundsHalfX = CITY_HALF_X;
   boundsHalfZ = CITY_HALF_Z;
+  boundsRadius = 0;
 }
 
 export function clampToAvenue(
@@ -80,10 +86,14 @@ export function clampToAvenue(
   z: number,
   _prev?: { x: number; z: number },
 ): { x: number; z: number } {
-  return {
-    x: Math.max(-boundsHalfX + AVATAR_RADIUS, Math.min(boundsHalfX - AVATAR_RADIUS, x)),
-    z: Math.max(-boundsHalfZ + AVATAR_RADIUS, Math.min(boundsHalfZ - AVATAR_RADIUS, z)),
-  };
+  const cx = Math.max(-boundsHalfX + AVATAR_RADIUS, Math.min(boundsHalfX - AVATAR_RADIUS, x));
+  const cz = Math.max(-boundsHalfZ + AVATAR_RADIUS, Math.min(boundsHalfZ - AVATAR_RADIUS, z));
+  if (boundsRadius > 0) {
+    const d = Math.hypot(cx, cz);
+    const max = boundsRadius - AVATAR_RADIUS;
+    if (d > max) return { x: (cx / d) * max, z: (cz / d) * max };
+  }
+  return { x: cx, z: cz };
 }
 
 /**

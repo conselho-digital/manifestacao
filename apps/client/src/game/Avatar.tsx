@@ -286,9 +286,10 @@ export const Avatar = forwardRef<Group, AvatarProps>(function Avatar(
       <group ref={tiltRef} position={[0, 0, MOTO_REAR_AXLE_Z]}>
       <group position={[0, 0, -MOTO_REAR_AXLE_Z]}>
       {/* Moto: o personagem vai sentado de piloto. Carro, caminhão e carro de som: só o veículo aparece. */}
+      {/* Enquanto o modelo carrega não aparece nada (o boneco geométrico antigo piscava antes de ser trocado). */}
       {!hideBody &&
         (modelUrl ? (
-          <Suspense fallback={<ProceduralBody color={color} arms riding={isMoto} character={character} hitRef={hitRef} carry={flag !== "nenhuma" && vehicle === "nenhum"} />}>
+          <Suspense fallback={null}>
             <GlbModel
               url={modelUrl}
               animated
