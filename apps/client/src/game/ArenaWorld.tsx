@@ -14,6 +14,23 @@ function PlayerBody({ handleRef, spawn }: { handleRef: { current: PhysicsHandle 
       vel: () => rb.current?.linvel() ?? { x: 0, y: 0, z: 0 },
       setVel: (x, y, z) => rb.current?.setLinvel({ x, y, z }, true),
       setPos: (x, y, z) => rb.current?.setTranslation({ x, y, z }, true),
+      probe: (dx, dz, dist) => {
+        const body = rb.current;
+        if (!body) return null;
+        const p = body.translation();
+        // Raio horizontal na altura do joelho (0,5 m acima dos pés): há parede à frente?
+        const oy = p.y - PLAYER_FOOT_OFFSET + 0.5;
+        const wall = world.castRay(new rapier.Ray({ x: p.x, y: oy, z: p.z }, { x: dx, y: 0, z: dz }), dist, true, undefined, undefined, undefined, body);
+        if (!wall) return null;
+        const t = wall.timeOfImpact;
+        // Depois, um raio de cima para baixo logo além da parede acha o topo (dentro de parede alta, o raio já começa dentro: topo > 3 m).
+        const top = p.y - PLAYER_FOOT_OFFSET + 3.2;
+        const hx = p.x + dx * (t + 0.15);
+        const hz = p.z + dz * (t + 0.15);
+        const down = world.castRay(new rapier.Ray({ x: hx, y: top, z: hz }, { x: 0, y: -1, z: 0 }), 3.2, true, undefined, undefined, undefined, body);
+        if (!down) return null;
+        return { hitDist: t, topY: top - down.timeOfImpact };
+      },
       grounded: () => {
         const body = rb.current;
         if (!body) return false;

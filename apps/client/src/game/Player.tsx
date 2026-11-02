@@ -28,7 +28,8 @@ import { SPRAY_MAX_RANGE, type SprayAim } from "./spray.js";
 import { raycastSolids } from "./solids.js";
 import { CAMERA_MIN_HEIGHT, allowedCameraDistance, raycastSurface } from "./colliders.js";
 import { resolveSolids } from "./solids.js";
-import { JUMP_SPEED, PLAYER_FOOT_OFFSET, type PhysicsHandle } from "./physicsHandle.js";
+import { CLIMB_MAX, CLIMB_MIN, CLIMB_SECONDS, JUMP_SPEED, PLAYER_FOOT_OFFSET, VAULT_MAX, type PhysicsHandle } from "./physicsHandle.js";
+import { boardTimes, doorPoint, type BoardOrder } from "./parking.js";
 
 /** Posição + rotação atuais do jogador local, lidas fora do Canvas (ex.: botão de spray). */
 export interface PlayerTransform {
@@ -81,6 +82,12 @@ interface PlayerProps {
   physics?: { current: PhysicsHandle | null };
   /** true quando o botão/tecla de pular foi acionado (consumido a cada quadro). */
   jumpRef?: { current: boolean };
+  /** Velocidade do veículo dirigido (m/s), atualizada a cada quadro: só dá para descer parado. */
+  speedRef?: { current: number };
+  /** Pedido de entrar/descer do veículo estacionado (o Game preenche; o Player executa e limpa). */
+  boardRef?: { current: BoardOrder | null };
+  /** Chamado quando a entrada no veículo termina (o Game passa a tratar o jogador como motorista). */
+  onBoarded?: () => void;
   /** Ponto de entrada (arena PvP): posiciona o jogador uma vez, ao montar. */
   spawn?: { x: number; z: number; rotationY: number };
   /** Outros jogadores (posição e veículo): o jogador local não os atravessa. */
@@ -172,7 +179,12 @@ export function Player({
   spawn,
   physics,
   jumpRef,
+  boardRef,
+  onBoarded,
+  speedRef,
 }: PlayerProps) {
+  // Escalada em andamento (arena): sobe junto à parede e passa para cima da borda.
+  const climb = useRef<{ t0: number; sx: number; sy: number; sz: number; ex: number; ey: number; ez: number } | null>(null);
   const ref = useRef<Group>(null);
   useLayoutEffect(() => {
     const g = ref.current;
@@ -211,7 +223,53 @@ export function Player({
     const input = inputRef.current;
     // Caído (ou levantando): não anda até terminar a animação.
     const downed = knock ? fallSeconds(knock.fallAt.current) >= 0 : false;
-    const len = downed ? 0 : Math.hypot(input.x, input.z);
+    // Entrar/descer do veículo estacionado: o Player conduz o personagem pela linha do tempo.
+    let boarding = false;
+    const order = boardRef?.current;
+    if (order) {
+      const ph0 = physics?.current;
+      if (order.kind === "exit") {
+        const d = doorPoint(order.pose, order.vehicle);
+        g.position.set(d.x, 0, d.z);
+        g.rotation.y = order.pose.heading;
+        ph0?.setPos(d.x, PLAYER_FOOT_OFFSET + 0.05, d.z);
+        ph0?.setVel(0, 0, 0);
+        boardRef.current = null;
+      } else {
+        boarding = true;
+        climb.current = null;
+        const tm = boardTimes(order.vehicle);
+        const t = (performance.now() - order.t0) / 1000;
+        const door = doorPoint(order.pose, order.vehicle);
+        const ease = (k: number) => k * k * (3 - 2 * k);
+        let x = door.x;
+        let z = door.z;
+        if (t < tm.walkEnd) {
+          const k = ease(Math.min(1, t / tm.walkEnd));
+          x = order.from.x + (door.x - order.from.x) * k;
+          z = order.from.z + (door.z - order.from.z) * k;
+        } else if (t >= tm.openEnd) {
+          const k = ease(Math.min(1, (t - tm.openEnd) / Math.max(0.01, tm.seatEnd - tm.openEnd)));
+          x = door.x + (order.pose.x - door.x) * k;
+          z = door.z + (order.pose.z - door.z) * k;
+        }
+        g.position.set(x, 0, z);
+        // Olha para o veículo; ao sentar, alinha com a direção dele.
+        const face = t < tm.seatEnd ? Math.atan2(order.pose.x - door.x, order.pose.z - door.z) : order.pose.heading;
+        g.rotation.y = wrapAngle(g.rotation.y + wrapAngle(face - g.rotation.y) * Math.min(1, 14 * delta));
+        ph0?.setPos(x, PLAYER_FOOT_OFFSET + 0.05, z);
+        ph0?.setVel(0, 0, 0);
+        if (t >= tm.closeEnd) {
+          g.position.set(order.pose.x, 0, order.pose.z);
+          g.rotation.y = order.pose.heading;
+          ph0?.setPos(order.pose.x, PLAYER_FOOT_OFFSET + 0.05, order.pose.z);
+          boardRef.current = null;
+          boarding = false;
+          onBoarded?.();
+        }
+      }
+    }
+    const len = downed || boarding ? 0 : Math.hypot(input.x, input.z);
     const driving = (VEHICLES[vehicleRef.current]?.kind ?? "foot") !== "foot";
     // Trocou de veículo (ou desceu): zera a velocidade e herda a direção atual.
     if (prevVehicle.current !== vehicleRef.current) {
@@ -250,6 +308,7 @@ export function Player({
       physics?.current?.setVel(0, 0, 0);
       facing.current = facingOf(Math.sin(st.heading), Math.cos(st.heading), facing.current);
       wheelieRef.current = st.wheelie;
+      if (speedRef) speedRef.current = st.speed;
       moving = Math.abs(st.speed) > 0.05 || st.wheelie > 0.01;
       // A câmera se alinha atrás do veículo, a menos que o jogador esteja olhando em volta.
       if (Math.abs(st.speed) > 1 && performance.now() - cameraTouchedAtRef.current > 900) {
@@ -258,6 +317,7 @@ export function Player({
       }
     } else {
       wheelieRef.current = 0;
+      if (speedRef) speedRef.current = 0;
       driveRef.current = NO_DRIVE_INPUT;
     }
 
@@ -317,21 +377,66 @@ export function Player({
       facing.current = facingOf(Math.sin(yaw), Math.cos(yaw), facing.current);
     }
 
-    // Física a pé (arena): velocidade horizontal + gravidade e pulo do Rapier; a posição volta do corpo para o avatar.
+    // Física a pé (arena): velocidade horizontal + gravidade, pulo, escalada e vault; a posição volta do corpo para o avatar.
     const ph = physics?.current;
-    if (ph && !driving) {
-      let vy = ph.vel().y;
-      if (jumpRef?.current) {
-        jumpRef.current = false;
-        if (!downed && vy <= 0.1 && ph.grounded()) vy = JUMP_SPEED;
+    if (ph && !driving && !boarding) {
+      const now = performance.now();
+      const cl = climb.current;
+      if (cl) {
+        // Escalando: sobe junto à parede (0–65 %) e passa para cima da borda (55–100 %); sem gravidade nem controle.
+        const k = Math.min(1, (now - cl.t0) / (CLIMB_SECONDS * 1000));
+        const sm = (a: number, b: number) => {
+          const u = Math.max(0, Math.min(1, (k - a) / (b - a)));
+          return u * u * (3 - 2 * u);
+        };
+        const ky = sm(0, 0.65);
+        const kx = sm(0.55, 1);
+        const x = cl.sx + (cl.ex - cl.sx) * kx;
+        const z = cl.sz + (cl.ez - cl.sz) * kx;
+        const y = cl.sy + (cl.ey - cl.sy) * ky;
+        ph.setPos(x, y, z);
+        ph.setVel(0, 0, 0);
+        g.position.set(x, Math.max(0, y - PLAYER_FOOT_OFFSET), z);
+        if (k >= 1) climb.current = null;
+      } else {
+        let vy = ph.vel().y;
+        const p = ph.pos();
+        if (jumpRef?.current) {
+          jumpRef.current = false;
+          if (!downed && vy <= 0.1 && ph.grounded()) {
+            // Segurando para a frente: pula por cima de obstáculo baixo (vault). Parado: agarra a borda e sobe (escalar).
+            const forward = len > 0;
+            const dx = forward ? footVX / Math.hypot(footVX, footVZ) : Math.sin(g.rotation.y);
+            const dz = forward ? footVZ / Math.hypot(footVX, footVZ) : Math.cos(g.rotation.y);
+            const hit = ph.probe(dx, dz, 1.15);
+            const h = hit ? hit.topY - (p.y - PLAYER_FOOT_OFFSET) : 0;
+            if (hit && forward && h > CLIMB_MIN && h <= VAULT_MAX) {
+              vy = Math.sqrt(2 * 22 * (h + 0.5)); // sobe o bastante para passar por cima
+            } else if (hit && !forward && h > CLIMB_MIN && h <= CLIMB_MAX) {
+              climb.current = {
+                t0: now,
+                sx: p.x,
+                sy: p.y,
+                sz: p.z,
+                ex: p.x + dx * (hit.hitDist + 0.6),
+                ey: hit.topY + PLAYER_FOOT_OFFSET + 0.05,
+                ez: p.z + dz * (hit.hitDist + 0.6),
+              };
+              g.rotation.y = Math.atan2(dx, dz);
+            } else {
+              vy = JUMP_SPEED;
+            }
+          }
+        }
+        if (!climb.current) {
+          ph.setVel(footVX, vy, footVZ);
+          const pos = resolveSolids(p.x, p.z, AVATAR_RADIUS, "parked"); // veículos estacionados (o resto do cenário é do Rapier)
+          const touched = pushOutOfPlayers(pos, AVATAR_RADIUS, othersRef?.current);
+          const lim = clampToAvenue(pos.x, pos.z);
+          if (touched || lim.x !== p.x || lim.z !== p.z) ph.setPos(lim.x, p.y, lim.z);
+          g.position.set(lim.x, Math.max(0, p.y - PLAYER_FOOT_OFFSET), lim.z);
+        }
       }
-      ph.setVel(footVX, vy, footVZ);
-      const p = ph.pos();
-      const pos = { x: p.x, z: p.z };
-      const touched = pushOutOfPlayers(pos, AVATAR_RADIUS, othersRef?.current);
-      const lim = clampToAvenue(pos.x, pos.z);
-      if (touched || lim.x !== pos.x || lim.z !== pos.z) ph.setPos(lim.x, p.y, lim.z);
-      g.position.set(lim.x, Math.max(0, p.y - PLAYER_FOOT_OFFSET), lim.z);
     }
 
     if (!Number.isFinite(g.position.x + g.position.z)) g.position.set(0, 0, 0); // proteção: posição inválida nunca fica

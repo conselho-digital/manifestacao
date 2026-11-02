@@ -23,6 +23,7 @@ import {
   type SprayBroadcast,
   type HitBroadcast,
   type ImpactBroadcast,
+  type ParkedBroadcast,
   type TeamId,
   type VehicleId,
 } from "@manifestacao/shared";
@@ -39,6 +40,7 @@ import {
   type SprayMark,
 } from "../game/spray.js";
 import { clampToAvenue } from "../game/world.js";
+import type { ParkedItem } from "../game/ParkedVehicles.js";
 import { strikeSeconds, type StrikeKind } from "../game/strike.js";
 import { FALL_SECONDS, HITS_TO_FALL, HIT_COUNT_RESET_MS, newKnockRefs, registerHit, STRIKE_RANGE } from "../game/knock.js";
 import { DEFAULT_SPRAY_ID, SPRAY_SLUG_RE, sprayOptions } from "../config/sprays.js";
@@ -209,6 +211,11 @@ export function useAvenueRealtime(
   const lastOwnSprayAtRef = useRef(0);
   // Golpes de bandeira: contagem por alvo, limite de recepção e o estado de reação/queda do jogador local.
   const hitCountsRef = useRef<Map<string, { n: number; at: number }>>(new Map());
+  // Veículos estacionados dos outros jogadores (dono -> estado) e o meu (reenviado como batimento a cada poucos segundos).
+  const parkedMapRef = useRef<Map<string, { vehicle: VehicleId; x: number; z: number; heading: number; at: number }>>(new Map());
+  const lastParkedBySenderRef = useRef<Map<string, number>>(new Map());
+  const myParkedRef = useRef<ParkedBroadcast | null>(null);
+  const [remoteParked, setRemoteParked] = useState<ParkedItem[]>([]);
   const [feed, setFeed] = useState<FeedEntry[]>([]);
   const feedKeyRef = useRef(0);
   const [stats, setStats] = useState<Record<string, CombatStat>>({});
@@ -298,6 +305,7 @@ export function useAvenueRealtime(
           if (!seen.has(id)) {
             playersRef.current.delete(id);
             lastPosBySenderRef.current.delete(id); // volta em outro ponto sem ser tratado como teleporte
+            if (parkedMapRef.current.delete(id)) syncRemoteParked(); // o veículo some junto com o dono
           }
         }
         setScores(next);
@@ -385,6 +393,28 @@ export function useAvenueRealtime(
         if (!victim || Math.hypot(victim.x - attacker.x, victim.z - attacker.z) > STRIKE_RANGE + 2) return;
         applyImpact(h.targetId, h.senderId);
       })
+      .on("broadcast", { event: BROADCAST.parked }, ({ payload }) => {
+        const k = payload as ParkedBroadcast;
+        if (typeof k?.id !== "string" || k.id === selfId || k.id.length === 0 || k.id.length > 64) return;
+        const nowP = Date.now();
+        if (nowP - (lastParkedBySenderRef.current.get(k.id) ?? 0) < 400) return;
+        lastParkedBySenderRef.current.set(k.id, nowP);
+        capMap(lastParkedBySenderRef.current, 500);
+        const owner = playersRef.current.get(k.id);
+        if (!owner) return; // só de quem está online
+        if (k.vehicle === "nenhum" || !isVehicleId(k.vehicle)) {
+          if (parkedMapRef.current.delete(k.id)) syncRemoteParked();
+          return;
+        }
+        if (!isFiniteNumber(k.x) || !isFiniteNumber(k.z) || !isFiniteNumber(k.heading)) return;
+        if (!parkedMapRef.current.has(k.id) && parkedMapRef.current.size >= MAX_REMOTE_PLAYERS) return;
+        const c = clampToAvenue(k.x, k.z);
+        const prev = parkedMapRef.current.get(k.id);
+        const heading = Math.round(k.heading * 100) / 100;
+        parkedMapRef.current.set(k.id, { vehicle: k.vehicle, x: c.x, z: c.z, heading, at: nowP });
+        // Só re-renderiza quando algo mudou (o batimento repete o mesmo estado).
+        if (!prev || prev.vehicle !== k.vehicle || prev.x !== c.x || prev.z !== c.z || prev.heading !== heading) syncRemoteParked();
+      })
       .on("broadcast", { event: BROADCAST.chat }, ({ payload }) => {
         const c = payload as ChatBroadcast;
         if (typeof c?.id !== "string" || c.id === selfId || c.id.length > 64) return;
@@ -467,6 +497,8 @@ export function useAvenueRealtime(
     return () => {
       setOnline(false);
       playersRef.current.clear();
+      parkedMapRef.current.clear();
+      setRemoteParked([]);
       void supabase.removeChannel(channel);
       channelRef.current = null;
     };
@@ -580,6 +612,45 @@ export function useAvenueRealtime(
     [selfId, self.nickname, self.team],
   );
 
+  /** Atualiza a lista de veículos estacionados dos outros (re-renderiza o desenho). */
+  const syncRemoteParked = useCallback(() => {
+    const out: ParkedItem[] = [];
+    for (const [owner, p] of parkedMapRef.current) {
+      out.push({ owner, vehicle: p.vehicle, pose: { x: p.x, z: p.z, heading: p.heading }, team: playersRef.current.get(owner)?.team ?? TEAM_IDS[0]! });
+    }
+    setRemoteParked(out);
+  }, []);
+
+  /** Meu veículo estacionado (null = recolhido): envia já e passa a reenviar a cada 3 s para quem entrar depois. */
+  const sendParked = useCallback(
+    (p: { vehicle: VehicleId; x: number; z: number; heading: number } | null) => {
+      const payload: ParkedBroadcast = p ? { id: selfId, ...p } : { id: selfId, vehicle: "nenhum", x: 0, z: 0, heading: 0 };
+      myParkedRef.current = p ? payload : null;
+      const channel = channelRef.current;
+      if (channel && channel.state === "joined") void channel.send({ type: "broadcast", event: BROADCAST.parked, payload });
+    },
+    [selfId],
+  );
+
+  // Batimento do meu veículo estacionado + limpeza dos que sumiram sem avisar (dono caiu da conexão).
+  useEffect(() => {
+    const t = window.setInterval(() => {
+      const channel = channelRef.current;
+      const mine = myParkedRef.current;
+      if (mine && channel && channel.state === "joined") void channel.send({ type: "broadcast", event: BROADCAST.parked, payload: mine });
+      const now = Date.now();
+      let changed = false;
+      for (const [id, p] of parkedMapRef.current) {
+        if (now - p.at > 9000) {
+          parkedMapRef.current.delete(id);
+          changed = true;
+        }
+      }
+      if (changed) syncRemoteParked();
+    }, 3000);
+    return () => window.clearInterval(t);
+  }, [syncRemoteParked]);
+
   /** Meu golpe acertou `targetId`: aplica aqui e avisa os outros. */
   const sendImpact = useCallback(
     (targetId: string, kind: StrikeKind) => {
@@ -672,6 +743,8 @@ export function useAvenueRealtime(
   }, [selfId]);
 
   return {
+    remoteParked,
+    sendParked,
     feed,
     stats,
     selfHp,

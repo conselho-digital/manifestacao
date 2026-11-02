@@ -12,6 +12,9 @@ import { serverNow } from "../config/parkScreen.js";
 import { Scenery } from "./Scenery.js";
 import type { PhysicsHandle } from "./physicsHandle.js";
 import { JumpButton } from "../ui/JumpButton.js";
+import { VehicleButton } from "../ui/VehicleButton.js";
+import { ParkedVehicles, type ParkedItem } from "./ParkedVehicles.js";
+import { EXIT_MAX_SPEED, canEnter, spawnBeside, startDoor, type BoardOrder, type ParkedPose } from "./parking.js";
 
 // Arena com física (Rapier, WASM ~2 MB): só baixa quando alguém entra na arena.
 const ArenaWorld = lazy(() => import("./ArenaWorld.js"));
@@ -135,11 +138,18 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
       /* sem armazenamento: vale só nesta sessão */
     }
   };
+  // O veículo escolhido no menu aparece estacionado ao lado do personagem (`parked`); `mounted` = está dentro, dirigindo.
+  // `riding` é o que o resto do jogo chama de "veículo": "nenhum" enquanto o personagem anda a pé.
   const [vehicle, setVehicle] = useState<VehicleId>("nenhum");
+  const [mounted, setMounted] = useState(false);
+  const [parked, setParked] = useState<ParkedPose | null>(null);
+  const riding: VehicleId = mounted ? vehicle : "nenhum";
+  const boardRef = useRef<BoardOrder | null>(null);
+  const speedRef = useRef(0);
   // Música do veículo de som (link do YouTube escolhido pelo motorista); para ao descer do veículo.
   const [music, setMusic] = useState<VehicleMusic | null>(null);
   const [musicOpen, setMusicOpen] = useState(false);
-  const soundVehicle = !!VEHICLES[vehicle]?.playsMusic;
+  const soundVehicle = !!VEHICLES[riding]?.playsMusic;
   useEffect(() => {
     if (!soundVehicle) {
       setMusic(null);
@@ -157,7 +167,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
   const { inputRef, setJoystick } = useInput(
     !paused && !optionsOpen && !adminOpen && !superchatOpen && !signOpen && !billboardOpen && !musicOpen,
     // Na moto as setas empinam, não dirigem.
-    VEHICLES[vehicle]?.kind !== "moto",
+    VEHICLES[riding]?.kind !== "moto",
   );
   // Bandeira: grátis por 3 horas por dia (contadas só enquanto aparece no jogo); quem comprou bandeira não tem limite.
   const ownsPaidFlag = useMemo(() => [...owned].some((id) => id.startsWith("flag:")), [owned]);
@@ -196,7 +206,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
   const wheelieRef = useRef(0);
   const hitRef = useRef(newStrikeRefs());
   const cameraTouchedAtRef = useRef(0);
-  const vehicleKind = VEHICLES[vehicle]?.kind ?? "foot";
+  const vehicleKind = VEHICLES[riding]?.kind ?? "foot";
   const driving = vehicleKind !== "foot";
   // PC, moto: ↑ ou Espaço empinam (levantam a roda da frente); ↓ ou Ctrl abaixam.
   // W A S D dirigem (as setas deixam de dirigir na moto — ver useInput).
@@ -293,7 +303,11 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     if (entitlementsLoading || vehicle === "nenhum") return;
     const allowed =
       !vehicleRequiresEntitlement(vehicle) || owned.has(`vehicle:${vehicle}`) || hasVehicleViaPremium(vehicle, owned);
-    if (!allowed) setVehicle("nenhum");
+    if (!allowed) {
+      setVehicle("nenhum");
+      setMounted(false);
+      setParked(null);
+    }
   }, [vehicle, owned, entitlementsLoading]);
 
   // Corpo físico da arena (preenchido pelo ArenaWorld) e pedido de pulo (tecla Espaço / botão), lidos a cada quadro pelo Player.
@@ -392,6 +406,69 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
     if (!net.sendSpray(target, avatar.shirt, DEFAULT_SPRAY_ID, rot)) sprays.refund();
   }, [net, avatar.shirt, sprays]);
 
+  // ── Veículo estacionado: escolher no menu, entrar (porta abre) e descer ──
+  const [nearParked, setNearParked] = useState(false);
+  useEffect(() => {
+    const t = window.setInterval(() => {
+      setNearParked(!!parked && !mounted && !boardRef.current && canEnter(transformRef.current, parked, vehicle));
+    }, 250);
+    return () => window.clearInterval(t);
+  }, [parked, mounted, vehicle]);
+
+  const chooseVehicle = useCallback(
+    (v: VehicleId) => {
+      if (boardRef.current) return; // no meio de entrar
+      setVehicle(v);
+      setMounted(false);
+      if (v === "nenhum") {
+        setParked(null);
+        net.sendParked(null);
+        return;
+      }
+      // Aparece ao lado do personagem (de onde ele está agora), com a porta do motorista virada para ele.
+      const pose = spawnBeside(transformRef.current, v);
+      setParked(pose);
+      net.sendParked({ vehicle: v, ...pose });
+    },
+    [net],
+  );
+  const enterVehicle = useCallback(() => {
+    if (!parked || mounted || boardRef.current || vehicle === "nenhum" || fallenNow) return;
+    if (!canEnter(transformRef.current, parked, vehicle)) return;
+    startDoor("board", vehicle);
+    const me = transformRef.current;
+    boardRef.current = { kind: "enter", vehicle, pose: parked, from: { x: me.x, z: me.z }, t0: performance.now() };
+  }, [parked, mounted, vehicle, fallenNow]);
+  const onBoarded = useCallback(() => {
+    setMounted(true);
+    setParked(null);
+    net.sendParked(null);
+  }, [net]);
+  const exitVehicle = useCallback(() => {
+    if (!mounted || vehicle === "nenhum" || Math.abs(speedRef.current) > EXIT_MAX_SPEED) return;
+    const me = transformRef.current;
+    const pose: ParkedPose = { x: me.x, z: me.z, heading: me.rotationY };
+    startDoor("exit", vehicle);
+    boardRef.current = { kind: "exit", vehicle, pose, from: { x: me.x, z: me.z }, t0: performance.now() };
+    setMounted(false);
+    setParked(pose);
+    net.sendParked({ vehicle, ...pose });
+  }, [mounted, vehicle, net]);
+  // PC: V entra (perto do veículo) ou desce (parado).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key.toLowerCase() !== "v" || e.repeat || isTypingTarget(e.target) || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (mounted) exitVehicle();
+      else enterVehicle();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [mounted, enterVehicle, exitVehicle]);
+  const parkedItems = useMemo<ParkedItem[]>(
+    () => [...(parked && vehicle !== "nenhum" ? [{ owner: "self", vehicle, pose: parked, team: avatar.team }] : []), ...net.remoteParked],
+    [parked, vehicle, avatar.team, net.remoteParked],
+  );
+
   const playerEl = (
 <Player
           color={avatar.shirt}
@@ -400,7 +477,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           team={avatar.team}
           character={avatar.character}
           sign={signId ? signs.get(signId) ?? null : null}
-          vehicle={vehicle}
+          vehicle={riding}
           modelUrl={modelUrlFor(avatar.character, avatar.team)}
           inputRef={inputRef}
           cameraYawRef={cameraYawRef}
@@ -420,6 +497,9 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           transformReadyRef={transformReadyRef}
           spawn={spawn}
           physics={isArena ? physicsRef : undefined}
+          boardRef={boardRef}
+          onBoarded={onBoarded}
+          speedRef={speedRef}
           jumpRef={jumpRef}
         />
   );
@@ -494,6 +574,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           </>
         )}
         <SprayMarks marksRef={net.sprayMarksRef} version={net.sprayVersion} />
+        <ParkedVehicles items={parkedItems} />
         <RemotePlayers ids={net.remoteIds} playersRef={net.playersRef} signs={signs} />
         {!isArena && <Billboards ads={billboardAds} />}
       </Canvas>
@@ -590,7 +671,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           onSign={() => setSignOpen(true)}
           onSuperchat={() => setSuperchatOpen(true)}
           vehicle={vehicle}
-          onVehicle={setVehicle}
+          onVehicle={chooseVehicle}
           owned={owned}
           onLocked={onOpenStore}
           loading={entitlementsLoading}
@@ -612,6 +693,7 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           shown={flagShown}
         />
         {canHit && <HitButton onHit={doHit} busy={hitBusy} />}
+        {(mounted || nearParked) && <VehicleButton label={mounted ? "Sair" : "Entrar"} onPress={mounted ? exitVehicle : enterVehicle} />}
       </TopRightPanel>
       {optionsOpen && !adminOpen && (
         <OptionsModal
@@ -643,8 +725,8 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
       {superchatOpen && signedIn && <SuperchatModal defaultName={avatar.nickname} isAdmin={isAdmin} onClose={() => setSuperchatOpen(false)} />}
       <ParkScreenModal />
       {billboardOpen && signedIn && <BillboardModal ads={billboardAds} isAdmin={isAdmin} onClose={() => setBillboardOpen(false)} />}
-      <EngineSounds playersRef={net.playersRef} posRef={transformRef} selfVehicle={vehicle} />
-      <VehicleMusicPlayers playersRef={net.playersRef} posRef={transformRef} selfMusic={music} selfVehicle={vehicle} />
+      <EngineSounds playersRef={net.playersRef} posRef={transformRef} selfVehicle={riding} />
+      <VehicleMusicPlayers playersRef={net.playersRef} posRef={transformRef} selfMusic={music} selfVehicle={riding} />
       {musicOpen && soundVehicle && (
         <MusicModal current={music} onPlay={(id) => setMusic({ id, t: serverNow() })} onStop={() => setMusic(null)} onClose={() => setMusicOpen(false)} />
       )}

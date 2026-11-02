@@ -48,12 +48,14 @@ export function clearSolids(name: string): void {
 }
 
 /** Empurra um círculo (centro x,z; raio r) para fora de todos os obstáculos; devolve a posição corrigida. */
-export function resolveSolids(x: number, z: number, r: number): { x: number; z: number } {
+/** `only`: se dado, considera só os grupos cujo nome começa com este prefixo (ex.: "parked"). */
+export function resolveSolids(x: number, z: number, r: number, only?: string): { x: number; z: number } {
   let px = x;
   let pz = z;
   // Duas passadas: sair de um obstáculo pode encostar noutro vizinho.
   for (let pass = 0; pass < 2; pass++) {
-    for (const group of rectGroups.values()) {
+    for (const [gname, group] of rectGroups) {
+      if (only && !gname.startsWith(only)) continue;
       for (const b of group) {
         if (px < b.minX - r || px > b.maxX + r || pz < b.minZ - r || pz > b.maxZ + r) continue;
         const cx = Math.max(b.minX, Math.min(b.maxX, px));
@@ -79,7 +81,8 @@ export function resolveSolids(x: number, z: number, r: number): { x: number; z: 
         }
       }
     }
-    for (const group of polyGroups.values()) {
+    for (const [gname, group] of polyGroups) {
+      if (only && !gname.startsWith(only)) continue;
       for (const b of group) {
         if (px < b.minX - r || px > b.maxX + r || pz < b.minZ - r || pz > b.maxZ + r) continue;
         const pts = b.pts;
@@ -118,7 +121,8 @@ export function resolveSolids(x: number, z: number, r: number): { x: number; z: 
         pz = qz + (dirz / len) * r;
       }
     }
-    for (const group of circleGroups.values()) {
+    for (const [gname, group] of circleGroups) {
+      if (only && !gname.startsWith(only)) continue;
       for (const c of group) {
         const dx = px - c.x;
         const dz = pz - c.z;

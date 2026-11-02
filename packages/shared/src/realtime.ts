@@ -98,7 +98,19 @@ export const BROADCAST = {
   hit: "hit",
   /** Golpe que acertou alguém (alvo reage; no 5º seguido, cai). */
   impact: "impact",
+  /** Veículo estacionado ao lado do dono (vazio = recolhido). Reenviado a cada poucos segundos. */
+  parked: "parked",
 } as const;
+
+/** Veículo estacionado de um jogador: onde está e para onde aponta (heading em radianos; frente = (sin h, cos h)). */
+export interface ParkedBroadcast {
+  id: string;
+  /** "nenhum" = o dono recolheu/entrou no veículo. */
+  vehicle: VehicleId;
+  x: number;
+  z: number;
+  heading: number;
+}
 
 export interface ImpactBroadcast {
   senderId: string;
