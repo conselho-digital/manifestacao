@@ -7,14 +7,27 @@ import { clearSolids, setSolids } from "./solids.js";
 import { resetWorldBounds, setWorldBounds } from "./world.js";
 import { ARENA_CARS, ARENA_CRATES, ARENA_HALF, ARENA_PILLARS, WALL_HEIGHT, WALL_THICKNESS, arenaSolids, type ArenaCar } from "./arena.js";
 
-const FLOOR = 0x7b828c;
+const FLOOR = 0x5f6670;
 const LINE = 0xe8e4d6;
-const WALL = 0x8d95a1;
-const CRATE = 0xb98c58;
-const PILLAR = 0xb3b8bf;
+const WALL = 0x9aa3ae;
+const CRATE = 0xc2884a;
+const PILLAR = 0xcfd4da;
+const ACCENT = 0xffd12e;
 
 /** Veículo parado como abrigo: ajusta o modelo ao tamanho previsto, deitado no eixo X e apoiado no chão. */
-function CoverCar({ car }: { car: ArenaCar }) {
+/** Registra colisão (jogador) e obstáculo de câmera de um veículo, a partir do retângulo no mundo. */
+function useCarBody(id: string, car: ArenaCar, w: number, d: number, h: number) {
+  useEffect(() => {
+    setSolids(id, [{ minX: car.x - w / 2, maxX: car.x + w / 2, minZ: car.z - d / 2, maxZ: car.z + d / 2 }], [], [], 0);
+    setCameraColliders(id, [], [new Box3(new Vector3(car.x - w / 2, 0, car.z - d / 2), new Vector3(car.x + w / 2, h, car.z + d / 2))]);
+    return () => {
+      clearSolids(id);
+      clearCameraColliders(id);
+    };
+  }, [id, car.x, car.z, w, d, h]);
+}
+
+function CoverCar({ car, id }: { car: ArenaCar; id: string }) {
   const { scene } = useGLTF(car.url);
   const prepared = useMemo(() => {
     const root = scene.clone(true);
@@ -32,11 +45,16 @@ function CoverCar({ car }: { car: ArenaCar }) {
         o.receiveShadow = true;
       }
     });
-    return { root, k, longZ, center, minY: box.min.y };
+    return { root, k, longZ, center, minY: box.min.y, size: { x: size.x * k, y: size.y * k, z: size.z * k } };
   }, [scene, car.len]);
   // Em unidades do modelo: recentra no XZ e encosta a base no chão (y = 0) antes de escalar e girar.
-  const { root, k, longZ, center, minY } = prepared;
-  const yaw = (longZ ? Math.PI / 2 : 0) + (car.turn ? Math.PI / 2 : 0);
+  const { root, k, longZ, center, minY, size } = prepared;
+  const yaw0 = (longZ ? Math.PI / 2 : 0) + (car.turn ? Math.PI / 2 : 0);
+  // Largura real no mundo: se o eixo comprido era Z, o modelo girou 90° (comprimento = size.z).
+  const bodyLen = longZ ? size.z : size.x;
+  const bodyWid = longZ ? size.x : size.z;
+  useCarBody(id, car, car.turn ? bodyWid : bodyLen, car.turn ? bodyLen : bodyWid, size.y);
+  const yaw = yaw0;
   return (
     <group position={[car.x, 0, car.z]} rotation={[0, yaw, 0]} scale={k}>
       <primitive object={root} position={[-center.x, -minY, -center.z]} />
@@ -44,13 +62,14 @@ function CoverCar({ car }: { car: ArenaCar }) {
   );
 }
 
-function CarFallback({ car }: { car: ArenaCar }) {
+function CarFallback({ car, id }: { car: ArenaCar; id: string }) {
   const w = car.turn ? car.wid : car.len;
   const d = car.turn ? car.len : car.wid;
+  useCarBody(id, car, w, d, 1.8);
   return (
     <mesh position={[car.x, 0.9, car.z]} castShadow receiveShadow>
       <boxGeometry args={[w, 1.8, d]} />
-      <meshStandardMaterial color={WALL} />
+      <meshStandardMaterial color={0x6a7a8c} />
     </mesh>
   );
 }
@@ -74,6 +93,7 @@ export function Arena() {
   useEffect(() => {
     const boxes: Box3[] = [];
     for (const c of ARENA_CRATES) boxes.push(new Box3(new Vector3(c.x - c.w / 2, 0, c.z - c.d / 2), new Vector3(c.x + c.w / 2, c.h, c.z + c.d / 2)));
+    for (const p of ARENA_PILLARS) boxes.push(new Box3(new Vector3(p.x - p.r, 0, p.z - p.r), new Vector3(p.x + p.r, p.h, p.z + p.r)));
     const e = ARENA_HALF + WALL_THICKNESS;
     boxes.push(
       new Box3(new Vector3(-e, 0, ARENA_HALF), new Vector3(e, WALL_HEIGHT, e)),
@@ -91,11 +111,11 @@ export function Arena() {
 
   return (
     <group>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} receiveShadow>
-        <planeGeometry args={[size + 20, size + 20]} />
-        <meshStandardMaterial color={0x4a5058} />
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} receiveShadow>
+        <planeGeometry args={[size + 400, size + 400]} />
+        <meshStandardMaterial color={0x3a3f46} />
       </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.01, 0]} receiveShadow>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0, 0]} receiveShadow>
         <planeGeometry args={[size, size]} />
         <meshStandardMaterial color={FLOOR} />
       </mesh>
@@ -104,11 +124,11 @@ export function Arena() {
         <ringGeometry args={[5.5, 5.8, 48]} />
         <meshStandardMaterial color={LINE} />
       </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.025, 0]}>
         <planeGeometry args={[size, 0.25]} />
         <meshStandardMaterial color={LINE} />
       </mesh>
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]}>
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.03, 0]}>
         <planeGeometry args={[0.25, size]} />
         <meshStandardMaterial color={LINE} />
       </mesh>
@@ -129,10 +149,16 @@ export function Arena() {
       ))}
 
       {ARENA_CRATES.map((c, i) => (
-        <mesh key={`c${i}`} position={[c.x, c.h / 2, c.z]} castShadow receiveShadow>
-          <boxGeometry args={[c.w, c.h, c.d]} />
-          <meshStandardMaterial color={CRATE} />
-        </mesh>
+        <group key={`c${i}`} position={[c.x, 0, c.z]}>
+          <mesh position={[0, c.h / 2, 0]} castShadow receiveShadow>
+            <boxGeometry args={[c.w, c.h, c.d]} />
+            <meshStandardMaterial color={CRATE} />
+          </mesh>
+          <mesh position={[0, c.h + 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+            <planeGeometry args={[c.w * 0.92, c.d * 0.92]} />
+            <meshStandardMaterial color={ACCENT} />
+          </mesh>
+        </group>
       ))}
       {ARENA_PILLARS.map((p, i) => (
         <mesh key={`p${i}`} position={[p.x, p.h / 2, p.z]} castShadow receiveShadow>
@@ -141,9 +167,9 @@ export function Arena() {
         </mesh>
       ))}
       {ARENA_CARS.map((car, i) => (
-        <ModelBoundary key={`${car.url}:${i}`} fallback={<CarFallback car={car} />}>
-          <Suspense fallback={<CarFallback car={car} />}>
-            <CoverCar car={car} />
+        <ModelBoundary key={`${car.url}:${i}`} fallback={<CarFallback car={car} id={`arena-car:${i}`} />}>
+          <Suspense fallback={<CarFallback car={car} id={`arena-car:${i}`} />}>
+            <CoverCar car={car} id={`arena-car:${i}`} />
           </Suspense>
         </ModelBoundary>
       ))}

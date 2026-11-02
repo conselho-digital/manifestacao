@@ -417,10 +417,12 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
           castShadow
           shadow-mapSize-width={1024}
           shadow-mapSize-height={1024}
-          shadow-camera-left={-60}
-          shadow-camera-right={60}
-          shadow-camera-top={60}
-          shadow-camera-bottom={-60}
+          shadow-bias={-0.0004}
+          shadow-normalBias={0.04}
+          shadow-camera-left={isArena ? -45 : -60}
+          shadow-camera-right={isArena ? 45 : 60}
+          shadow-camera-top={isArena ? 45 : 60}
+          shadow-camera-bottom={isArena ? -45 : -60}
           shadow-camera-near={1}
           shadow-camera-far={200}
         />

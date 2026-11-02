@@ -183,12 +183,13 @@ export function App() {
         />
       ) : (
         <>
-        <MapSwitch value={map} onChange={chooseMap} />
         <AvatarPicker
           onReady={setAvatar}
           session={session}
           authLoading={authLoading}
           onOpenStore={() => setStoreOpen(true)}
+          map={map}
+          mapSwitch={<MapSwitch value={map} onChange={chooseMap} />}
         />
         </>
       )}

@@ -69,15 +69,10 @@ export const ARENA_CARS: ArenaCar[] = [
   { url: "/models/vehicles/carro_som_neutro.glb", x: -26, z: 22, len: 5.5, wid: 2.2, turn: true },
 ];
 
-/** Colisão (retângulos e círculos) de todo o layout. */
+/** Colisão (retângulos e círculos) de caixas e pilares; os veículos registram a própria colisão pelo tamanho real do modelo (Arena.tsx). */
 export function arenaSolids(): { rects: SolidRect[]; circles: SolidCircle[] } {
   const rects: SolidRect[] = [];
   for (const c of ARENA_CRATES) rects.push({ minX: c.x - c.w / 2, maxX: c.x + c.w / 2, minZ: c.z - c.d / 2, maxZ: c.z + c.d / 2 });
-  for (const v of ARENA_CARS) {
-    const w = v.turn ? v.wid : v.len;
-    const d = v.turn ? v.len : v.wid;
-    rects.push({ minX: v.x - w / 2, maxX: v.x + w / 2, minZ: v.z - d / 2, maxZ: v.z + d / 2 });
-  }
   const circles: SolidCircle[] = ARENA_PILLARS.map((p) => ({ x: p.x, z: p.z, r: p.r }));
   return { rects, circles };
 }
@@ -88,11 +83,11 @@ export interface ArenaSpawn {
   rotationY: number;
 }
 
-/** Oito pontos de entrada em anel, de frente para o centro (livres de obstáculos). */
+/** Oito pontos de entrada em anel (raio 33,5, além das barricadas), de frente para o centro. */
 export const ARENA_SPAWNS: ArenaSpawn[] = Array.from({ length: 8 }, (_, i) => {
   const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
-  const x = Math.round(Math.sin(a) * 31 * 10) / 10;
-  const z = Math.round(Math.cos(a) * 31 * 10) / 10;
+  const x = Math.round(Math.sin(a) * 33.5 * 10) / 10;
+  const z = Math.round(Math.cos(a) * 33.5 * 10) / 10;
   return { x, z, rotationY: Math.atan2(-x, -z) };
 });
 

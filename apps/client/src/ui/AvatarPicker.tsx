@@ -52,6 +52,9 @@ interface AvatarPickerProps {
   session: Session | null;
   authLoading: boolean;
   onOpenStore: () => void;
+  /** Seletor de mapa (renderizado antes da escolha de lado) e o mapa atual, para os textos. */
+  mapSwitch?: React.ReactNode;
+  map?: "avenida" | "arena";
 }
 
 /**
@@ -61,7 +64,7 @@ interface AvatarPickerProps {
  * sessão, o botão principal faz login em vez de abrir o jogo direto.
  * Identidade e nomes são próprios — ver CLAUDE.md §9.
  */
-export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: AvatarPickerProps) {
+export function AvatarPicker({ onReady, session, authLoading, onOpenStore, mapSwitch, map = "avenida" }: AvatarPickerProps) {
   // Inicializador lazy: lê o localStorage só na primeira renderização, não a
   // cada tecla digitada (useState(saved...) re-rodaria loadSaved() sempre).
   const [saved] = useState(loadSaved);
@@ -300,7 +303,7 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
           </button>
         )}
         <p style={{ margin: 0, textAlign: "center", fontSize: "var(--t-ui)", color: "var(--ink-dim)" }}>
-          {nameOk ? "Conta é obrigatória pra entrar na avenida." : "Escreva um apelido para liberar o login."}
+          {nameOk ? `Conta é obrigatória pra entrar ${map === "arena" ? "na arena" : "na avenida"}.` : "Escreva um apelido para liberar o login."}
         </p>
       </div>
     ) : null;
@@ -351,6 +354,7 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
       )}
       <div style={{ display: "grid", gridTemplateColumns: "minmax(320px, 380px) minmax(0, 1fr)", gap: 20, alignItems: "stretch" }}>
         <aside style={{ ...cardStyle, display: "flex", flexDirection: "column", gap: 14 }}>
+          {mapSwitch}
           {teamSection}
           <div style={{ marginTop: 2 }}>{nicknameField}</div>
           {loginBlock}
@@ -403,6 +407,7 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
       }}
     >
       <InstallShortcut />
+      {mapSwitch && <section>{mapSwitch}</section>}
       <section>{teamSection}</section>
       <section style={cardStyle}>
         <SectionTitle>Escolha seu personagem</SectionTitle>
@@ -558,7 +563,7 @@ export function AvatarPicker({ onReady, session, authLoading, onOpenStore }: Ava
               transition: "transform .08s",
             }}
           >
-            {nameOk ? "Entrar na avenida" : "Escreva um apelido para entrar"}
+            {nameOk ? (map === "arena" ? "Entrar na arena" : "Entrar na avenida") : "Escreva um apelido para entrar"}
           </button>
         )}
         <LegalLinks />
