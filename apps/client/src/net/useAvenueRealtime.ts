@@ -40,7 +40,7 @@ import {
 } from "../game/spray.js";
 import { clampToAvenue } from "../game/world.js";
 import { strikeSeconds, type StrikeKind } from "../game/strike.js";
-import { FALL_SECONDS, newKnockRefs, registerHit, STRIKE_RANGE } from "../game/knock.js";
+import { FALL_SECONDS, HITS_TO_FALL, HIT_COUNT_RESET_MS, newKnockRefs, registerHit, STRIKE_RANGE } from "../game/knock.js";
 import { DEFAULT_SPRAY_ID, SPRAY_SLUG_RE, sprayOptions } from "../config/sprays.js";
 
 /** `typeof === "number"` deixa passar NaN/Infinity; isto não. */
@@ -84,6 +84,22 @@ export interface RemotePlayer extends PresenceState {
 export interface ChatEntry extends ChatBroadcast {
   key: number;
 }
+
+/** Quedas por golpe: o 5º golpe seguido derruba (ver knock.ts). Placar e feed de combate são locais (best effort). */
+export interface FeedEntry {
+  key: number;
+  killer: string;
+  killerTeam: TeamId;
+  victim: string;
+  victimTeam: TeamId;
+}
+export interface CombatStat {
+  nickname: string;
+  team: TeamId;
+  kills: number;
+  deaths: number;
+}
+const MAX_FEED = 5;
 
 const MAX_CHAT = 30;
 /** Limites de recepção (anti-flood): jogadores na cena, intervalo mínimo por remetente. */
@@ -193,6 +209,11 @@ export function useAvenueRealtime(
   const lastOwnSprayAtRef = useRef(0);
   // Golpes de bandeira: contagem por alvo, limite de recepção e o estado de reação/queda do jogador local.
   const hitCountsRef = useRef<Map<string, { n: number; at: number }>>(new Map());
+  const [feed, setFeed] = useState<FeedEntry[]>([]);
+  const feedKeyRef = useRef(0);
+  const [stats, setStats] = useState<Record<string, CombatStat>>({});
+  // Vida (0..1) do jogador local: cada golpe recebido tira 1/HITS_TO_FALL; volta ao fim da queda ou sem apanhar por um tempo.
+  const [selfHp, setSelfHp] = useState(1);
   const lastImpactBySenderRef = useRef<Map<string, number>>(new Map());
   const selfKnockRef = useRef(newKnockRefs());
   // Teto GLOBAL de recepção de spray (o senderId vem do payload e pode ser forjado).
@@ -362,7 +383,7 @@ export function useAvenueRealtime(
         // adulterado derrubaria qualquer um do mapa).
         const victim = h.targetId === selfId ? lastMoveRef.current : playersRef.current.get(h.targetId);
         if (!victim || Math.hypot(victim.x - attacker.x, victim.z - attacker.z) > STRIKE_RANGE + 2) return;
-        applyImpact(h.targetId);
+        applyImpact(h.targetId, h.senderId);
       })
       .on("broadcast", { event: BROADCAST.chat }, ({ payload }) => {
         const c = payload as ChatBroadcast;
@@ -520,7 +541,7 @@ export function useAvenueRealtime(
   /** Sinalização do palanque (sem eco local: o remetente já conhece o próprio estado). */
   /** Aplica um golpe que acertou `targetId` (eu ou outro jogador): reação, ou queda no 5º seguido. */
   const applyImpact = useCallback(
-    (targetId: string) => {
+    (targetId: string, attackerId: string) => {
       const now = performance.now();
       const who = targetId === selfId ? null : playersRef.current.get(targetId);
       if (targetId !== selfId && (!who || who.vehicle !== "nenhum")) return; // só quem está a pé
@@ -534,14 +555,35 @@ export function useAvenueRealtime(
         if (kind === "fall") who.fallAt = now;
         else who.reactAt = now;
       }
+      if (targetId === selfId) setSelfHp(kind === "fall" ? 0 : 1 - (hitCountsRef.current.get(selfId)?.n ?? 0) / HITS_TO_FALL);
+      if (kind === "fall") {
+        const info = (id: string) => (id === selfId ? { nickname: self.nickname, team: self.team } : playersRef.current.get(id));
+        const k = info(attackerId);
+        const v = info(targetId);
+        if (k && v) {
+          setFeed((f) => [...f, { key: ++feedKeyRef.current, killer: k.nickname, killerTeam: k.team, victim: v.nickname, victimTeam: v.team }].slice(-MAX_FEED));
+          setStats((st) => {
+            const next = { ...st };
+            const bump = (id: string, who2: { nickname: string; team: TeamId }, field: "kills" | "deaths") => {
+              const cur = next[id] ?? { nickname: who2.nickname, team: who2.team, kills: 0, deaths: 0 };
+              next[id] = { ...cur, nickname: who2.nickname, team: who2.team, [field]: cur[field] + 1 };
+            };
+            bump(attackerId, k, "kills");
+            bump(targetId, v, "deaths");
+            const ids = Object.keys(next);
+            if (ids.length > 200) for (const id of ids.slice(0, ids.length - 200)) if (id !== selfId) delete next[id];
+            return next;
+          });
+        }
+      }
     },
-    [selfId],
+    [selfId, self.nickname, self.team],
   );
 
   /** Meu golpe acertou `targetId`: aplica aqui e avisa os outros. */
   const sendImpact = useCallback(
     (targetId: string, kind: StrikeKind) => {
-      applyImpact(targetId);
+      applyImpact(targetId, selfId);
       const channel = channelRef.current;
       if (channel && channel.state === "joined") {
         const payload: ImpactBroadcast = { senderId: selfId, targetId, kind };
@@ -617,7 +659,22 @@ export function useAvenueRealtime(
     return () => clearInterval(t);
   }, []);
 
+  // A vida volta sozinha depois de um tempo sem apanhar (e ao levantar da queda).
+  useEffect(() => {
+    const t = window.setInterval(() => {
+      const c = hitCountsRef.current.get(selfId);
+      const fallAt = selfKnockRef.current.fallAt.current;
+      const downed = fallAt > 0 && performance.now() - fallAt < FALL_SECONDS * 1000;
+      if (downed) return;
+      setSelfHp(!c || Date.now() - c.at > HIT_COUNT_RESET_MS ? 1 : 1 - c.n / HITS_TO_FALL);
+    }, 500);
+    return () => window.clearInterval(t);
+  }, [selfId]);
+
   return {
+    feed,
+    stats,
+    selfHp,
     selfId,
     playersRef,
     online,

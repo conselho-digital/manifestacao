@@ -21,6 +21,8 @@ interface HudProps {
   enterFocusesChat?: boolean;
   /** Texto do aviso quando a conta está silenciada (desativa o campo de chat). */
   mutedNotice?: string | null;
+  /** Desce o placar e o chat (px) para abrir espaço a um bloco no canto superior esquerdo (minimapa da arena). */
+  topOffset?: number;
 }
 
 /** Cor de time segura: ignora `team` inválido vindo da rede (defensivo). */
@@ -29,7 +31,7 @@ function teamColor(team: unknown): string {
 }
 
 /** Sobreposição 2D: placar por time, estado da conexão e chat efêmero. */
-export function Hud({ online, scores, chatLog, onChat, chatOpen, onChatOpenChange, enterFocusesChat = true, mutedNotice = null }: HudProps) {
+export function Hud({ online, scores, chatLog, onChat, chatOpen, onChatOpenChange, enterFocusesChat = true, mutedNotice = null, topOffset = 0 }: HudProps) {
   const [text, setText] = useState("");
   const isTouch = useIsTouch();
   const logRef = useRef<HTMLDivElement>(null);
@@ -156,7 +158,7 @@ export function Hud({ online, scores, chatLog, onChat, chatOpen, onChatOpenChang
       <div
         style={{
           position: "fixed",
-          top: "calc(env(safe-area-inset-top, 0px) + 10px)",
+          top: `calc(env(safe-area-inset-top, 0px) + ${10 + topOffset}px)`,
           left: "calc(env(safe-area-inset-left, 0px) + 10px)",
           display: "flex",
           flexWrap: "wrap",
@@ -213,7 +215,7 @@ export function Hud({ online, scores, chatLog, onChat, chatOpen, onChatOpenChang
         style={{
           position: "fixed",
           left: "calc(env(safe-area-inset-left, 0px) + 10px)",
-          top: "calc(env(safe-area-inset-top, 0px) + 54px)",
+          top: `calc(env(safe-area-inset-top, 0px) + ${54 + topOffset}px)`,
           // Termina antes da coluna de botões da direita (Spray/Veículo), pra não roubar o toque deles.
           width: "min(360px, calc(100vw - 150px))",
           zIndex: 6,

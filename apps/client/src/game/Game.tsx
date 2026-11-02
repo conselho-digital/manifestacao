@@ -11,6 +11,7 @@ import { MusicModal } from "../ui/MusicModal.js";
 import { serverNow } from "../config/parkScreen.js";
 import { Scenery } from "./Scenery.js";
 import { Arena } from "./Arena.js";
+import { ArenaHud, arenaHudTopOffset } from "../ui/ArenaHud.js";
 import { randomArenaSpawn } from "./arena.js";
 import { ARENA_CHANNEL, AVENUE_CHANNEL } from "@manifestacao/shared";
 import { Player, type PlayerTransform } from "./Player.js";
@@ -606,7 +607,23 @@ export function Game({ avatar, owned, onOpenStore, paused, entitlementsLoading, 
       {signOpen && signedIn && <SignModal equippedId={signId} onEquip={equipSign} isAdmin={isAdmin} onClose={() => setSignOpen(false)} />}
       <SuperchatBanner enabled={signedIn} />
       {adminOpen && isAdmin && <AdminPanel onClose={() => setAdminOpen(false)} onChanged={onConfigChanged} />}
+      {isArena && (
+        <ArenaHud
+          size={isTouch ? 92 : 120}
+          playersRef={net.playersRef}
+          posRef={transformRef}
+          yawRef={cameraYawRef}
+          selfId={net.selfId}
+          selfTeam={avatar.team}
+          selfNickname={avatar.nickname}
+          hp={net.selfHp}
+          feed={net.feed}
+          stats={net.stats}
+          playerCount={net.remoteIds.length + 1}
+        />
+      )}
       <Hud
+        topOffset={isArena ? arenaHudTopOffset(isTouch ? 92 : 120) : 0}
         enterFocusesChat={!paused && !optionsOpen && !adminOpen && !superchatOpen && !signOpen && !billboardOpen && !musicOpen}
         online={net.online}
         scores={net.scores}
