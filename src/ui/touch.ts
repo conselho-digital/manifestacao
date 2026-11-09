@@ -1,23 +1,18 @@
 import { EMOTES, SPECIALS, WALK_STYLES } from '../game/anim';
-import { addLook, getWalkClip, queueClimb, queueInteract, queueEmote, queueJump, setSprint, setTouchVector, setWalkClip } from '../game/input';
+import { getWalkClip, queueEmote, setWalkClip } from '../game/input';
+import { createMobileHud, type MobileHud } from './mobile';
+import { isTouchDevice, setViewportUnit } from './orientation';
 
 const CSS = `
-.hud{position:fixed;inset:0;pointer-events:none;z-index:5;font-family:system-ui,sans-serif;user-select:none;-webkit-user-select:none;touch-action:none}
+.hud{position:fixed;inset:0;pointer-events:none;z-index:6;font-family:system-ui,sans-serif;user-select:none;-webkit-user-select:none;touch-action:none}
 .hud *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-.hud-look{position:fixed;inset:0;pointer-events:auto;touch-action:none}
-.hud-stick{position:fixed;left:max(20px,env(safe-area-inset-left));bottom:max(24px,env(safe-area-inset-bottom));width:140px;height:140px;border-radius:50%;
-  background:rgba(255,255,255,.12);border:2px solid rgba(255,255,255,.35);pointer-events:auto;touch-action:none}
-.hud-knob{position:absolute;left:42px;top:42px;width:56px;height:56px;border-radius:50%;background:rgba(255,255,255,.55)}
-.hud-btn{position:fixed;pointer-events:auto;touch-action:none;border-radius:50%;border:2px solid rgba(255,255,255,.5);background:rgba(20,30,45,.55);
+.hud-btn{position:fixed;pointer-events:auto;touch-action:none;border:2px solid rgba(255,255,255,.5);background:rgba(20,30,45,.55);
   color:#fff;font-weight:700;display:flex;align-items:center;justify-content:center;text-align:center;font-size:14px}
 .hud-btn:active,.hud-btn.on{background:rgba(76,194,255,.7)}
-.hud-jump{right:max(24px,env(safe-area-inset-right));bottom:max(30px,env(safe-area-inset-bottom));width:88px;height:88px;font-size:16px}
-.hud-climb{right:calc(max(24px,env(safe-area-inset-right)) + 100px);bottom:max(30px,env(safe-area-inset-bottom));width:70px;height:70px}
-.hud-car{right:calc(max(24px,env(safe-area-inset-right)) + 100px);bottom:calc(max(30px,env(safe-area-inset-bottom)) + 100px);width:70px;height:70px}
-.hud-sprint{right:max(34px,env(safe-area-inset-right));bottom:calc(max(30px,env(safe-area-inset-bottom)) + 100px);width:70px;height:70px}
-.hud-anim{right:10px;top:10px;width:auto;height:40px;border-radius:20px;padding:0 14px;position:fixed}
+.hud-anim{right:10px;top:10px;height:40px;border-radius:20px;padding:0 14px}
 .hud-panel{position:fixed;right:10px;top:58px;width:min(440px,calc(100vw - 20px));max-height:calc(100vh - 80px);overflow:auto;pointer-events:auto;
-  background:rgba(20,26,38,.92);border-radius:14px;padding:12px;color:#fff;display:none}
+  background:rgba(20,26,38,.94);border-radius:14px;padding:12px;color:#fff;display:none;z-index:20}
+.hud-panel.touch{right:auto;left:50%;transform:translateX(-50%);top:calc(var(--u,4px)*11);max-height:calc(var(--u,4px)*86)}
 .hud-panel.open{display:block}
 .hud-panel h3{margin:10px 0 6px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;opacity:.7}
 .hud-panel h3:first-child{margin-top:0}
@@ -27,18 +22,9 @@ const CSS = `
 .hud-help{font-size:11px;opacity:.6;margin-top:10px;line-height:1.4}
 `;
 
-const isTouch = (): boolean =>
-  'ontouchstart' in window || navigator.maxTouchPoints > 0 || new URLSearchParams(location.search).has('touch');
-
-function holdButton(el: HTMLElement, onDown: () => void, onUp?: () => void): void {
-  el.addEventListener('pointerdown', (e) => { e.preventDefault(); el.setPointerCapture(e.pointerId); el.classList.add('on'); onDown(); });
-  const up = (): void => { el.classList.remove('on'); onUp?.(); };
-  el.addEventListener('pointerup', up);
-  el.addEventListener('pointercancel', up);
-}
-
-/** Cria o HUD: controles de toque (celular) e o painel de animações (celular e PC). */
-export function createHud(): void {
+/** Cria o HUD. No celular devolve o HUD móvel (minimapa, botões...); no PC, só o menu de animações. */
+export function createHud(): MobileHud | null {
+  setViewportUnit();
   const style = document.createElement('style');
   style.textContent = CSS;
   document.head.appendChild(style);
@@ -46,74 +32,12 @@ export function createHud(): void {
   hud.className = 'hud';
   document.body.appendChild(hud);
 
-  const touch = isTouch();
-  if (touch) {
-    // Arrastar o dedo na tela gira a câmera
-    const look = document.createElement('div');
-    look.className = 'hud-look';
-    hud.appendChild(look);
-    const last = new Map<number, number>();
-    look.addEventListener('pointerdown', (e) => { look.setPointerCapture(e.pointerId); last.set(e.pointerId, e.clientX); });
-    look.addEventListener('pointermove', (e) => {
-      const x0 = last.get(e.pointerId);
-      if (x0 === undefined) return;
-      addLook(e.clientX - x0);
-      last.set(e.pointerId, e.clientX);
-    });
-    const end = (e: PointerEvent): void => { last.delete(e.pointerId); };
-    look.addEventListener('pointerup', end);
-    look.addEventListener('pointercancel', end);
+  const touch = isTouchDevice();
 
-    // Joystick
-    const stick = document.createElement('div');
-    stick.className = 'hud-stick';
-    stick.innerHTML = '<div class="hud-knob"></div>';
-    hud.appendChild(stick);
-    const knob = stick.firstElementChild as HTMLElement;
-    const R = 50;
-    let active: number | null = null;
-    const setKnob = (e: PointerEvent): void => {
-      const r = stick.getBoundingClientRect();
-      let dx = e.clientX - (r.left + r.width / 2);
-      let dy = e.clientY - (r.top + r.height / 2);
-      const len = Math.hypot(dx, dy);
-      if (len > R) { dx = (dx / len) * R; dy = (dy / len) * R; }
-      knob.style.transform = `translate(${dx}px,${dy}px)`;
-      setTouchVector(dx / R, -dy / R, true);
-    };
-    stick.addEventListener('pointerdown', (e) => { e.preventDefault(); active = e.pointerId; stick.setPointerCapture(e.pointerId); setKnob(e); });
-    stick.addEventListener('pointermove', (e) => { if (e.pointerId === active) setKnob(e); });
-    const release = (e: PointerEvent): void => {
-      if (e.pointerId !== active) return;
-      active = null;
-      knob.style.transform = '';
-      setTouchVector(0, 0, false);
-    };
-    stick.addEventListener('pointerup', release);
-    stick.addEventListener('pointercancel', release);
-
-    const mk = (cls: string, label: string): HTMLElement => {
-      const b = document.createElement('div');
-      b.className = `hud-btn ${cls}`;
-      b.textContent = label;
-      hud.appendChild(b);
-      return b;
-    };
-    holdButton(mk('hud-jump', 'Pular'), queueJump);
-    holdButton(mk('hud-climb', 'Escalar'), queueClimb);
-    holdButton(mk('hud-car', 'Carro'), queueInteract);
-    holdButton(mk('hud-sprint', 'Correr+'), () => setSprint(true), () => setSprint(false));
-  }
-
-  // Painel de animações
-  const btn = document.createElement('div');
-  btn.className = 'hud-btn hud-anim';
-  btn.textContent = touch ? 'Animações' : 'Animações (G)';
-  hud.appendChild(btn);
+  // Painel de animações (celular e PC)
   const panel = document.createElement('div');
-  panel.className = 'hud-panel';
+  panel.className = touch ? 'hud-panel touch' : 'hud-panel';
   hud.appendChild(panel);
-
   const section = (title: string): HTMLElement => {
     const h = document.createElement('h3');
     h.textContent = title;
@@ -123,6 +47,7 @@ export function createHud(): void {
     return g;
   };
   const close = (): void => panel.classList.remove('open');
+  const toggle = (): void => { panel.classList.toggle('open'); };
   const emotes = section('Poses (mexa para sair)');
   for (const e of EMOTES) {
     const b = document.createElement('button');
@@ -151,10 +76,20 @@ export function createHud(): void {
   const help = document.createElement('div');
   help.className = 'hud-help';
   help.textContent = touch
-    ? 'Joystick: pouco = anda, muito = corre. Arraste a tela para girar a câmera.'
+    ? 'Joystick: pouco = anda, muito = corre. Arraste a tela para girar a câmera. Porta = entrar/sair do carro.'
     : 'WASD move · Shift anda · Q sprint · Espaço pula · E escala · F entra/sai do carro · arraste o mouse para girar · G abre este menu.';
   panel.appendChild(help);
+  window.addEventListener('keydown', (e) => { if (e.code === 'KeyG') toggle(); });
 
-  holdButton(btn, () => panel.classList.toggle('open'));
-  window.addEventListener('keydown', (e) => { if (e.code === 'KeyG') panel.classList.toggle('open'); });
+  if (touch) {
+    window.addEventListener('resize', setViewportUnit);
+    return createMobileHud(toggle);
+  }
+
+  const btn = document.createElement('div');
+  btn.className = 'hud-btn hud-anim';
+  btn.textContent = 'Animações (G)';
+  btn.addEventListener('pointerdown', (e) => { e.preventDefault(); toggle(); });
+  hud.appendChild(btn);
+  return null;
 }

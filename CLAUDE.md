@@ -59,5 +59,5 @@ Arena multiplayer no navegador. Mapa pequeno, personagens low-poly. Plano **grá
 ## Controles
 - PC: WASD move · Shift anda · Q sprint · Espaço pula · E (ou C) escala · arrastar o mouse gira a câmera · G abre o menu de animações.
 - Carros: F entra/sai (botão "Carro" no celular); W/S acelera e freia, A/D esterça.
-- Celular: joystick (pouco = anda, muito = corre), Pular, Escalar, Correr+, arrastar a tela gira a câmera, botão "Animações".
+- Celular: ao entrar o jogo vai para tela cheia e paisagem (onde o navegador não trava, aparece "Gire o celular"). HUD estilo GTA: minimapa, vida/colete, arma e munição, joystick, Sprint, tiro, mira, pular, porta (carro), escalar, chat e placar. Combate (dano, vida, kills) ainda não existe: munição e contadores são locais.
 - Dados de animação: `public/anims/ped*.json` (esqueleto GTA SA, Law1-9) e `carlos*.json` (baked). Os `-extra` carregam em segundo plano.

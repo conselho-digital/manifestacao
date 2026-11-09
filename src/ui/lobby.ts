@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { enterLandscape } from './orientation';
 import { CHARACTERS, createCharacter, type CharacterName } from '../game/characters';
 
 export interface Profile {
@@ -133,6 +134,7 @@ export function showLobby(): Promise<Profile> {
     const submit = (): void => {
       const name = input.value.trim();
       if (!name) return;
+      void enterLandscape(); // tela cheia + paisagem (precisa ser dentro do toque)
       const profile: Profile = { name, character: selected };
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(profile));

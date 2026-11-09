@@ -1,0 +1,18 @@
+// Ícones em SVG (texto fixo, sem dados de fora). Brancos, para fundo escuro.
+const svg = (inner: string): string =>
+  `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="#fff" stroke="none">${inner}</svg>`;
+
+export const ICON = {
+  reload: svg('<path d="M12 5V2L8 6l4 4V7c3.3 0 6 2.7 6 6 0 1-.3 2-.7 2.8l1.5 1.5C19.5 16.2 20 14.7 20 13c0-4.4-3.6-8-8-8zm-6.8 2.2C4.5 8.8 4 10.3 4 12c0 4.4 3.6 8 8 8v3l4-4-4-4v3c-3.3 0-6-2.7-6-6 0-1 .3-2 .7-2.8L5.2 7.2z"/>'),
+  swap: svg('<path d="M3 9h5l2-3h7l1 1h3v2h-3l-1 1h-5l-1 4H8l1-4H3z"/><path d="M6 18l3-3v2h8v2H9v2z"/>'),
+  rifle: svg('<path d="M1 10.5h6.5l1.2-2H15l1 1h2l.8-1H23v2.2h-3.2l-1 1.3h-5.3l-1.2 5.5H9.6l1.1-5.5H1z"/>'),
+  fist: svg('<path d="M8 4a2 2 0 0 1 2 2v1h1V5a2 2 0 0 1 4 0v2h1V6a2 2 0 0 1 4 0v8c0 4-3 7-7 7h-2c-3 0-6-2-6-5v-3a2 2 0 0 1 2-2h1V6a2 2 0 0 1 2-2z"/>'),
+  bullet: svg('<path d="M12 2c2.2 0 4 3 4 7v9H8V9c0-4 1.8-7 4-7zM7 19.5h10V22H7z"/>'),
+  crosshair: svg('<circle cx="12" cy="12" r="6.5" fill="none" stroke="#fff" stroke-width="2"/><path d="M12 1v6M12 17v6M1 12h6M17 12h6" stroke="#fff" stroke-width="2"/>'),
+  run: svg('<path d="M13.5 5.5c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zM9.8 8.9L7 23h2.1l1.8-8 2.1 2v6h2v-7.5l-2.1-2 .6-3C14.8 12 16.8 13 19 13v-2c-1.9 0-3.5-1-4.3-2.4l-1-1.6c-.4-.6-1-1-1.7-1-.3 0-.5.1-.8.1L6 8.3V13h2V9.6l1.8-.7z"/>'),
+  door: svg('<path d="M4 21V8.5L9 3h9a2 2 0 0 1 2 2v16H4zm2-2h12V5H9.9L6 9.3V19z"/><path d="M8 9.5h6V13H8zM14 15h3v2h-3z"/>'),
+  plus: svg('<path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z" fill="#9ad88a"/>'),
+  shield: svg('<path d="M12 1L3 5v6c0 5.6 3.8 10.7 9 12 5.2-1.3 9-6.4 9-12V5l-9-4z" fill="#7db6ff"/>'),
+  climb: svg('<path d="M3 21h18v-2H3zM5 17h4v-4h4V9h4V5h2V3h-8v4H8v4H4v4z"/>'),
+  anim: svg('<path d="M12 2a2.2 2.2 0 1 1 0 4.4A2.2 2.2 0 0 1 12 2zM9 8h6l1 5-2 .5V22h-2v-6h-2v6H8v-8.5L6 13z"/>'),
+};

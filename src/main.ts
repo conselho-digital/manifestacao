@@ -6,6 +6,7 @@ import { readInput, takeLook } from './game/input';
 import { Player } from './game/player';
 import { showLobby } from './ui/lobby';
 import { createHud } from './ui/touch';
+import type { MobileHud } from './ui/mobile';
 import { Animator } from './game/anim';
 import { Net } from './net/sync';
 import { RemotePlayer } from './game/remote';
@@ -27,11 +28,16 @@ window.addEventListener('mousemove', (e) => {
 
 const clock = new THREE.Clock();
 let player: Player | null = null;
+let hud: MobileHud | null = null;
+const BASE_FOV = camera.fov;
 const net = new Net();
 const remotes = new Map<string, RemotePlayer>();
+let profileName = 'Jogador';
 
 void showLobby().then(async (profile) => {
-  createHud();
+  profileName = profile.name;
+  hud = createHud();
+  hud?.addChat(`Sistema: bem-vindo, ${profile.name}!`);
   const obj = await createCharacter(profile.character);
   obj.position.set(0, 0, 8);
   scene.add(obj);
@@ -40,11 +46,14 @@ void showLobby().then(async (profile) => {
   try {
     await net.join({ name: profile.name, character: profile.character }, {
       onJoin: (p) => {
+        hud?.addChat(`${p.name}: entrou na arena`);
         const r = new RemotePlayer(p);
         remotes.set(p.id, r);
         scene.add(r.root);
       },
       onLeave: (id) => {
+        const who = remotes.get(id)?.info.name;
+        if (who) hud?.addChat(`${who}: saiu da arena`);
         remotes.get(id)?.dispose();
         remotes.delete(id);
       },
@@ -68,6 +77,21 @@ function loop(): void {
     player.update(dt, readInput(), yaw);
     player.followCamera(camera, dt, yaw + camOffset);
     const p = player.object;
+    if (hud) {
+      hud.update({
+        name: profileName,
+        x: p.position.x, z: p.position.z, yaw,
+        driving: player.carId >= 0,
+        remotes: [...remotes.values()].map((r) => ({ name: r.info.name, x: r.root.position.x, z: r.root.position.z })),
+        players: remotes.size + 1, maxPlayers: 30,
+      }, dt);
+      // Mira: aproxima a câmera suavemente
+      const fov = hud.aiming ? BASE_FOV * 0.7 : BASE_FOV;
+      if (Math.abs(camera.fov - fov) > 0.05) {
+        camera.fov += (fov - camera.fov) * Math.min(1, dt * 10);
+        camera.updateProjectionMatrix();
+      }
+    }
     net.sendMove(p.position.x, p.position.y, p.position.z, p.rotation.y, player.animName, player.carId, performance.now());
   }
   remotes.forEach((r) => r.update(dt));
