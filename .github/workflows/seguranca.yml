@@ -1,0 +1,77 @@
+name: Segurança
+
+# Bot de segurança: segredos vazados, dependências vulneráveis e análise estática (CodeQL).
+# Não usa segredos nem serviços pagos.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 6 * * 1' # toda segunda, 06:17 UTC
+
+permissions:
+  contents: read
+
+concurrency:
+  group: seguranca-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  segredos:
+    name: Segredos no código
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: node scripts/scan-secrets.mjs
+
+  dependencias:
+    name: Dependências (npm audit)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      # Falha com vulnerabilidade alta/crítica no que vai para produção
+      - name: Produção (alta ou pior = falha)
+        run: npm audit --omit=dev --audit-level=high
+      # Só informa: ferramentas de desenvolvimento
+      - name: Desenvolvimento (informativo)
+        continue-on-error: true
+        run: npm audit --audit-level=high
+
+  codeql:
+    name: CodeQL (análise estática)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # Em repositório privado sem GitHub Advanced Security o CodeQL não roda; isso não deve bloquear.
+    continue-on-error: true
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+      - uses: github/codeql-action/analyze@v3
+
+  revisao-de-dependencias:
+    name: Revisão de dependências do PR
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
