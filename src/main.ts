@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createCamera, createRenderer, createScene, handleResize } from './game/scene';
-import { createCity } from './game/city';
+import { createCity, updateCity } from './game/city';
 import { createCharacter } from './game/characters';
 import { initMouse, readInput, takeLook, type InputState } from './game/input';
 import { Player } from './game/player';
@@ -27,6 +27,7 @@ initMouse(renderer.domElement);
 const camOffset = Number(new URLSearchParams(location.search).get('camoffset') ?? 0) || 0;
 // Vista aérea (inspeção do mapa, como a foto da maquete): ?vista=aerea
 const aerial = new URLSearchParams(location.search).get('vista') === 'aerea';
+if (aerial) scene.fog = null;
 let yaw = 0; // câmera olha para +Z
 const PITCH_DEFAULT = 0.3; // um pouco de cima
 const PITCH_MIN = -0.6; // olhando para cima
@@ -108,7 +109,7 @@ function loop(): void {
     player.followCamera(camera, dt, yaw + camOffset, pitch, aimK);
     player.setAimPitch(pitch);
     if (aerial) {
-      camera.position.set(0, 120, -150);
+      camera.position.set(0, 150, -200);
       camera.lookAt(0, 0, 8);
     }
     const p = player.object;
@@ -144,6 +145,7 @@ function loop(): void {
       combat.dead ? 0 : player.weaponCode, pitch, performance.now(),
     );
   }
+  updateCity(dt);
   remotes.forEach((r) => r.update(dt));
   renderer.render(scene, camera);
   requestAnimationFrame(loop);

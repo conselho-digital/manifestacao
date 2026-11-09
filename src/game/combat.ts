@@ -20,7 +20,7 @@ const HIT_RADIUS = 0.55; // um pouco generoso para facilitar no celular
 const RESPAWN_TIME = 3.5;
 const INVULNERABLE = 2;
 const KILL_MONEY = 100;
-const SPAWNS: [number, number][] = [[25, 16], [-10, -16], [64, 16], [-45, 16], [30, -16], [-60, -16], [-14, 0], [64, -30]];
+const SPAWNS: [number, number][] = [[25, 16], [-10, -16], [64, 16], [-45, 16], [30, -16], [-60, -16], [-14, 16], [80, -16]];
 
 export interface StatRow { id: string; name: string; k: number; d: number }
 

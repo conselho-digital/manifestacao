@@ -127,10 +127,10 @@ export function createCars(): THREE.Group {
   const group = new THREE.Group();
   // Avenida: pista sul vai para leste (heading π/2), pista norte para oeste (-π/2)
   const spawn: [number, number, number, number][] = [
-    [34, -8, Math.PI / 2, 0xc0392b],
-    [-26, -8, Math.PI / 2, 0x2e86c1],
-    [10, 8, -Math.PI / 2, 0xf1c40f],
-    [-40, 8, -Math.PI / 2, 0xecf0f1],
+    [34, -9, Math.PI / 2, 0xc0392b],
+    [-26, -9, Math.PI / 2, 0x2e86c1],
+    [10, 9, -Math.PI / 2, 0xf1c40f],
+    [-40, 9, -Math.PI / 2, 0xecf0f1],
   ];
   spawn.forEach(([x, z, h, c], i) => {
     const car = new Car(i, x, z, h, c);

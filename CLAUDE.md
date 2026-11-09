@@ -66,5 +66,6 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 
 ## Mapa (cidade)
 - Gerado por código em `src/game/city.ts` (prédios com janelas em geometria fundida, árvores instanciadas). MASP é o modelo `public/models/map/masp.glb` (CC-BY, ver CREDITS.md).
-- Limites em `MAP` (`src/game/map.ts`): 200 x 144 m. Avenida no eixo X (z de -12 a 12), 3 ruas transversais, Parque Trianon ao sul, MASP na calçada norte.
+- Limites em `MAP` (`src/game/map.ts`): 220 x 168 m. Avenida no eixo X (z de -12 a 12), 3 ruas transversais ao norte e 2 ao sul, Parque Trianon e estacionamento ao sul, MASP na calçada norte, 38 prédios (cremes, brancos, ocre, vidro, torre escura, casas de telhado vermelho/cinza).
+- O layout é escrito no espaço da foto (`R()` em `city.ts`, X espelhado). Em desenvolvimento, `validate()` avisa no console se algum prédio cair em rua, avenida, calçada, estacionamento ou sobre outro prédio. Carros e ônibus do fundo (`updateCity`) são só decoração, sem colisão. Árvores têm tronco sólido e a câmera não entra nas copas.
 - Inspeção: `?vista=aerea` (câmera de cima, como a foto da maquete) e `?pos=x,z` (ponto de partida).

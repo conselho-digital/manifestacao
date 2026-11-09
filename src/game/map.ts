@@ -10,7 +10,7 @@ export interface Box {
 export interface Rect { x0: number; x1: number; z0: number; z1: number }
 
 /** Limites da cidade (metros a partir do centro). */
-export const MAP = { halfX: 100, halfZ: 72 };
+export const MAP = { halfX: 110, halfZ: 84 };
 
 /** Lugares com nome, em ordem de prioridade (o primeiro que contém o ponto vence). */
 export const PLACES: { name: string; rect: Rect }[] = [];
@@ -25,6 +25,8 @@ export function placeName(x: number, z: number): string {
 }
 
 export const COLLIDERS: Box[] = [];
+/** Copas das árvores (esferas), só para a câmera não entrar nelas. */
+export const TREES: { x: number; y: number; z: number; r: number }[] = [];
 /** Ruas e parques (só para desenhar nos mapas). */
 export const ROADS: Rect[] = [];
 export const PARKS: Rect[] = [];

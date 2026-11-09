@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COLLIDERS, MAP, rayBox, type Box } from './map';
+import { COLLIDERS, MAP, rayBox, TREES, type Box } from './map';
 import type { InputState } from './input';
 import { CARS, type Car } from './vehicle';
 import type { Animator, Armed } from './anim';
@@ -377,6 +377,20 @@ export class Player {
     for (const b of COLLIDERS) {
       const t = rayBox(from.x, from.y, from.z, back.x, back.y, back.z, b.minX - 0.25, b.bottom ?? 0, b.minZ - 0.25, b.maxX + 0.25, b.top + 0.25, b.maxZ + 0.25);
       if (t !== null && t < d) d = Math.max(0.9, t - 0.1);
+    }
+    // copas de árvores: a câmera para antes de entrar (se o jogador já está debaixo da copa, ela não atrapalha)
+    for (const tr of TREES) {
+      const ox = from.x - tr.x;
+      const oy = from.y - tr.y;
+      const oz = from.z - tr.z;
+      if (Math.abs(ox) > 16 || Math.abs(oz) > 16) continue;
+      const c = ox * ox + oy * oy + oz * oz - tr.r * tr.r;
+      if (c < 0) continue; // ponto de partida dentro da copa
+      const bq = ox * back.x + oy * back.y + oz * back.z;
+      const disc = bq * bq - c;
+      if (disc < 0) continue;
+      const t = -bq - Math.sqrt(disc);
+      if (t > 0 && t < d) d = Math.max(0.9, t - 0.1);
     }
     const desired = from.clone().addScaledVector(back, d);
     desired.y = Math.max(desired.y, 0.35);

@@ -208,6 +208,7 @@ function drawMap(canvas: HTMLCanvasElement, cssSize: number, s: HudState, v: Vie
   for (const r of PARKS) rect(r, '#5d9a52');
   for (const r of ROADS) rect(r, '#44484e');
   for (const b of COLLIDERS) {
+    if (b.maxX - b.minX < 1) continue; // troncos de árvore
     if ((b.bottom ?? 0) > 0 && b.top - (b.bottom ?? 0) < 20) rect({ x0: b.minX, x1: b.maxX, z0: b.minZ, z1: b.maxZ }, 'rgba(200,60,50,.85)');
     else rect({ x0: b.minX, x1: b.maxX, z0: b.minZ, z1: b.maxZ }, b.color ?? '#8a6f4d');
   }
