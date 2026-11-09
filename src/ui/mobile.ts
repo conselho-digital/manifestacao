@@ -134,6 +134,8 @@ const CSS = `
 .m-fullmap.open{display:flex}
 .m-fullmap canvas{width:calc(var(--u)*88);height:calc(var(--u)*88);border-radius:calc(var(--u)*2);border:calc(var(--u)*.6) solid #fff;background:#233}
 .m-fullmap .x{position:fixed;right:calc(var(--u)*2);top:calc(var(--u)*2);width:calc(var(--u)*9);height:calc(var(--u)*9);font-size:calc(var(--u)*5)}
+.m-fullmap .list{position:fixed;left:calc(var(--u)*2);top:calc(var(--u)*2);font-size:calc(var(--u)*3.2);line-height:1.35;text-align:left}
+.m-fullmap .list em{font-style:normal;color:#f1c40f}
 .m-fullmap .tip{position:fixed;left:0;right:0;bottom:calc(var(--u)*1.5);text-align:center;font-size:calc(var(--u)*3)}
 `;
 
@@ -309,6 +311,7 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   const fullCanvas = make('', full, 'canvas') as HTMLCanvasElement;
   const fullClose = circle(full, 'x', null, '✕');
   make('tip m-out', full).textContent = 'Toque para fechar';
+  const list = make('list m-out', full);
   let mapOpen = false;
   const setMap = (open: boolean): void => { mapOpen = open; full.classList.toggle('open', open); };
   mapBox.addEventListener('pointerdown', (e) => { e.preventDefault(); setMap(true); });
@@ -444,7 +447,7 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   let speed = 0;
   let lastHit = 0;
   let lastHurt = 0;
-  const cache = { l1: '', l3: '', score: '', money: '', ammo: '', weapon: '' };
+  const cache = { l1: '', l3: '', score: '', list: '', money: '', ammo: '', weapon: '' };
   const retrigger = (el: El): void => { el.classList.remove('go'); void el.offsetWidth; el.classList.add('go'); };
 
   return {
@@ -484,18 +487,29 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
       if (t1 !== cache.l1) { cache.l1 = t1; l1.textContent = t1; }
       const t3 = `JOGADORES: ${s.players}/${s.maxPlayers}`;
       if (t3 !== cache.l3) { cache.l3 = t3; l3.textContent = t3; }
-      const rows = s.scores.slice(0, 2);
-      const sc = rows.map((r) => `${r.name}|${r.k}|${r.d}`).join(';');
+      // Canto inferior direito: só uma linha, com o nome e a equipe
+      const sc = s.name;
       if (sc !== cache.score) {
         cache.score = sc;
         score.textContent = '';
-        rows.forEach((r, i) => {
-          const div = document.createElement('div');
-          const em = document.createElement('em');
-          em.textContent = `P${i + 1}:`;
-          div.append(em, document.createTextNode(` ${r.name}  ${r.k} Kills/${r.d} Deaths`));
-          score.appendChild(div);
-        });
+        const em = document.createElement('em');
+        em.textContent = `${s.name}:`;
+        score.append(em, document.createTextNode(' EQUIPE LIVRE'));
+      }
+      // O placar de kills e mortes fica no mapa grande
+      if (mapOpen) {
+        const key = s.scores.map((r) => `${r.name}|${r.k}|${r.d}`).join(';');
+        if (key !== cache.list) {
+          cache.list = key;
+          list.textContent = '';
+          s.scores.forEach((r, i) => {
+            const div = document.createElement('div');
+            const em = document.createElement('em');
+            em.textContent = `P${i + 1}:`;
+            div.append(em, document.createTextNode(` ${r.name}  ${r.k} Kills/${r.d} Deaths`));
+            list.appendChild(div);
+          });
+        }
       }
       drawMap(canvas, mapBox.clientWidth, s, { yaw: s.yaw, cx: s.x, cz: s.z, range: 32, labels: false, circle: true }, dpr);
       if (mapOpen) drawMap(fullCanvas, fullCanvas.clientWidth, s, { yaw: 0, cx: 0, cz: 0, range: MAP.halfX * 1.06, labels: true, circle: false }, dpr);
