@@ -6,6 +6,7 @@ const MAX_REVERSE = 5;
 const ACCEL = 11;
 const BRAKE = 20;
 const DRAG = 3;
+const HAND_BRAKE = 16;
 const TURN_RATE = 1.9;
 const RADIUS = 1.3;
 const LIMIT = ARENA_SIZE / 2 - 1.8;
@@ -63,16 +64,18 @@ export class Car {
     this.apply(0);
   }
 
-  /** Dirige: throttle -1..1 (frente +), steer -1..1 (direita +). */
-  drive(dt: number, throttle: number, steer: number): void {
+  /** Dirige: acelerador, freio e freio de mão; steer -1..1 (direita +). */
+  drive(dt: number, gas: boolean, brake: boolean, hand: boolean, steer: number): void {
     const f = this.speed;
-    if (throttle > 0.05) this.speed += (f < 0 ? BRAKE : ACCEL) * throttle * dt;
-    else if (throttle < -0.05) this.speed += (f > 0 ? -BRAKE : -ACCEL * 0.6) * -throttle * dt;
+    if (gas) this.speed += (f < -0.5 ? BRAKE : ACCEL) * dt;
+    else if (brake) this.speed -= (f > 0.5 ? BRAKE : ACCEL * 0.6) * dt; // freia e depois dá ré
     else this.speed -= Math.sign(f) * Math.min(Math.abs(f), DRAG * dt);
+    if (hand) this.speed -= Math.sign(this.speed) * Math.min(Math.abs(this.speed), HAND_BRAKE * dt);
     this.speed = THREE.MathUtils.clamp(this.speed, -MAX_REVERSE, MAX_SPEED);
 
-    // Só esterça andando; de ré o sentido inverte naturalmente
-    this.heading -= steer * TURN_RATE * THREE.MathUtils.clamp(this.speed / 4, -1, 1) * dt;
+    // Só esterça andando; com o freio de mão o carro "derrapa" (gira mais)
+    const grip = THREE.MathUtils.clamp(this.speed / 4, -1, 1) * (hand ? 1.7 : 1);
+    this.heading -= steer * TURN_RATE * grip * dt;
     this.x += Math.sin(this.heading) * this.speed * dt;
     this.z += Math.cos(this.heading) * this.speed * dt;
 

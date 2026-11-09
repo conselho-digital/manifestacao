@@ -16,6 +16,15 @@ export interface InputState {
   emote: string | null;
   /** clipe usado ao andar (estilo de andar) */
   walkClip: string;
+  /** combate */
+  fire: boolean;
+  aim: boolean;
+  reload: boolean;
+  switchWeapon: boolean;
+  /** carro: acelerador, freio e freio de mão */
+  gas: boolean;
+  brake: boolean;
+  handbrake: boolean;
 }
 
 const keys = new Set<string>();
@@ -26,9 +35,18 @@ let sprintHeld = false;
 let jumpQ = false;
 let climbQ = false;
 let interactQ = false;
+let reloadQ = false;
+let switchQ = false;
 let emoteQ: string | null = null;
 let lookDx = 0;
 let walkClip = 'walk';
+let fireHeld = false;
+let aimOn = false;
+let mouseFire = false;
+let mouseAim = false;
+let padGas = false;
+let padBrake = false;
+let padHand = false;
 
 window.addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLInputElement) return;
@@ -36,15 +54,22 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') { jumpQ = true; e.preventDefault(); }
   if (e.code === 'KeyE' || e.code === 'KeyC') climbQ = true;
   if (e.code === 'KeyF') interactQ = true;
+  if (e.code === 'KeyR') reloadQ = true;
+  if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'KeyX') switchQ = true;
 });
 window.addEventListener('keyup', (e) => keys.delete(e.code));
-window.addEventListener('blur', () => keys.clear());
+window.addEventListener('blur', () => { keys.clear(); mouseFire = false; mouseAim = false; });
 
 export const queueJump = (): void => { jumpQ = true; };
 export const queueClimb = (): void => { climbQ = true; };
 export const queueInteract = (): void => { interactQ = true; };
+export const queueReload = (): void => { reloadQ = true; };
+export const queueSwitch = (): void => { switchQ = true; };
 export const queueEmote = (id: string): void => { emoteQ = id; };
 export const setSprint = (v: boolean): void => { sprintHeld = v; };
+export const setFire = (v: boolean): void => { fireHeld = v; };
+export const setAim = (v: boolean): void => { aimOn = v; };
+export const setPedals = (gas: boolean, brake: boolean, hand: boolean): void => { padGas = gas; padBrake = brake; padHand = hand; };
 export const setWalkClip = (id: string): void => { walkClip = id; };
 export const getWalkClip = (): string => walkClip;
 export function setTouchVector(x: number, y: number, active: boolean): void {
@@ -55,6 +80,26 @@ export function takeLook(): number {
   const d = lookDx;
   lookDx = 0;
   return d;
+}
+
+/** PC: clique no jogo trava o mouse (gira a câmera), botão esquerdo atira, direito mira. */
+export function initMouse(canvas: HTMLElement): void {
+  if ('ontouchstart' in window || navigator.maxTouchPoints > 0) return;
+  const locked = (): boolean => document.pointerLockElement === canvas;
+  canvas.addEventListener('click', () => { if (!locked()) void canvas.requestPointerLock?.(); });
+  window.addEventListener('mousemove', (e) => {
+    if (locked() || (e.buttons & 1 && !(e.target instanceof HTMLElement && e.target.closest('.m-hud button, .m-btn')))) lookDx += e.movementX;
+  });
+  window.addEventListener('mousedown', (e) => {
+    if (!locked()) return;
+    if (e.button === 0) mouseFire = true;
+    if (e.button === 2) mouseAim = true;
+  });
+  window.addEventListener('mouseup', (e) => {
+    if (e.button === 0) mouseFire = false;
+    if (e.button === 2) mouseAim = false;
+  });
+  window.addEventListener('contextmenu', (e) => e.preventDefault());
 }
 
 export function readInput(): InputState {
@@ -75,10 +120,18 @@ export function readInput(): InputState {
     x, y, mag: len, walk,
     sprint: keys.has('KeyQ') || sprintHeld,
     jump: jumpQ, climb: climbQ, interact: interactQ, emote: emoteQ, walkClip,
+    fire: fireHeld || mouseFire,
+    aim: aimOn || mouseAim,
+    reload: reloadQ, switchWeapon: switchQ,
+    gas: keys.has('KeyW') || keys.has('ArrowUp') || padGas,
+    brake: keys.has('KeyS') || keys.has('ArrowDown') || padBrake,
+    handbrake: keys.has('Space') || padHand,
   };
   jumpQ = false;
   climbQ = false;
   interactQ = false;
+  reloadQ = false;
+  switchQ = false;
   emoteQ = null;
   return state;
 }

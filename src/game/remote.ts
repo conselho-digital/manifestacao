@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { createCharacter } from './characters';
 import { Animator } from './anim';
 import { CARS, type Car } from './vehicle';
+import { WeaponVisual } from './weapons';
 import type { MoveMsg, PlayerInfo } from '../net/sync';
 
 function makeLabel(text: string): THREE.Sprite {
@@ -38,12 +39,17 @@ export class RemotePlayer {
   private carId = -1;
   private lastCar: Car | null = null;
   private model: THREE.Object3D | null = null;
+  private weaponVis: WeaponVisual | null = null;
+  private weapon = 0;
+  private lie = 0;
+  private modelBaseY: number | null = null;
 
   constructor(readonly info: PlayerInfo) {
     this.root.add(makeLabel(info.name));
     void createCharacter(info.character).then((m) => {
       this.root.add(m);
       this.model = m;
+      this.weaponVis = new WeaponVisual(this.root);
       void Animator.create(m).then((a) => (this.animator = a));
       this.ready = true;
       if (this.pending) this.setTarget(this.pending, true);
@@ -56,6 +62,7 @@ export class RemotePlayer {
     this.targetRy = m.ry;
     this.anim = m.a || 'idle';
     this.carId = m.v;
+    this.weapon = m.w;
     if (snap || !this.ready) {
       this.root.position.copy(this.target);
       this.root.rotation.y = m.ry;
@@ -76,13 +83,39 @@ export class RemotePlayer {
       if (this.lastCar) { this.lastCar.driver = null; this.lastCar = null; }
       if (this.model) this.model.visible = true;
     }
+    const dead = this.anim === 'dead';
     if (this.animator && !car) {
-      this.animator.play(this.anim);
+      this.animator.setArmed(this.weapon === 2 ? 'aim' : this.weapon === 1 ? 'rifle' : 'none');
+      this.animator.play(dead ? 'idle' : this.anim);
       this.animator.update(dt);
+    }
+    if (this.weaponVis) {
+      this.weaponVis.setMode(this.weapon === 2 ? 'aim' : this.weapon === 1 ? 'rifle' : 'none');
+      this.weaponVis.setHidden(!!car || dead);
+      this.weaponVis.update(dt);
+    }
+    // Morto: deita de costas
+    const target = dead ? 1 : 0;
+    if (this.model && this.lie !== target) {
+      this.lie += Math.sign(target - this.lie) * Math.min(Math.abs(target - this.lie), dt * 4);
+      this.modelBaseY ??= this.model.position.y;
+      this.model.rotation.x = -this.lie * (Math.PI / 2);
+      this.model.position.y = this.modelBaseY + this.lie * 0.12;
     }
     let d = this.targetRy - this.root.rotation.y;
     d = Math.atan2(Math.sin(d), Math.cos(d));
     this.root.rotation.y += d * k;
+  }
+
+  get isDead(): boolean { return this.anim === 'dead'; }
+  get inCar(): boolean { return this.carId >= 0; }
+
+  /** Clarão do cano quando este jogador atira. */
+  flash(): void { this.weaponVis?.flash(); }
+
+  /** Posição do cano no mundo. */
+  muzzle(out: THREE.Vector3): THREE.Vector3 {
+    return this.weaponVis ? this.weaponVis.muzzle(out) : out.copy(this.root.position).setY(1.3);
   }
 
   dispose(): void {

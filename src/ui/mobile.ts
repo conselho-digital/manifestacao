@@ -1,7 +1,7 @@
 import { ICON } from './icons';
 import { CARS } from '../game/vehicle';
 import { ARENA_SIZE, COLLIDERS } from '../game/map';
-import { addLook, queueClimb, queueInteract, queueJump, setSprint, setTouchVector } from '../game/input';
+import { addLook, queueClimb, queueInteract, queueJump, queueReload, queueSwitch, setAim, setFire, setPedals, setSprint, setTouchVector } from '../game/input';
 
 /** Dados do jogo que o HUD mostra (preenchidos pelo main a cada quadro). */
 export interface HudState {
@@ -10,16 +10,36 @@ export interface HudState {
   z: number;
   yaw: number;
   driving: boolean;
+  kmh: number;
   remotes: { name: string; x: number; z: number }[];
   players: number;
   maxPlayers: number;
+  health: number;
+  armor: number;
+  money: number;
+  weapon: 'ak' | 'fist';
+  weaponName: string;
+  mag: number;
+  reserve: number;
+  reloading: boolean;
+  aiming: boolean;
+  dead: boolean;
+  respawnIn: number;
+  /** sobem a cada acerto dado / dano recebido (disparam a animação) */
+  hitTick: number;
+  hurtTick: number;
+  scores: { name: string; k: number; d: number; me: boolean }[];
+}
+
+export interface MobileHudOptions {
+  onAnimations: () => void;
+  /** texto digitado no chat (o main envia pela rede e mostra) */
+  onChatSend: (text: string) => void;
 }
 
 export interface MobileHud {
   update(s: HudState, dt: number): void;
   addChat(text: string): void;
-  /** mira ligada (câmera aproxima) */
-  readonly aiming: boolean;
 }
 
 const CSS = `
@@ -27,25 +47,28 @@ const CSS = `
   user-select:none;-webkit-user-select:none;touch-action:none;text-transform:uppercase}
 .m-hud *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 .m-look{position:fixed;inset:0;pointer-events:auto;touch-action:none}
+.m-hud.desktop .m-look,.m-hud.desktop .m-stick{display:none}
+.m-hud.driving .foot{display:none!important}
+.m-hud:not(.driving) .car{display:none!important}
 .m-out{text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000,0 2px 3px rgba(0,0,0,.6)}
-.m-map{position:fixed;left:calc(var(--u)*1.6);top:calc(var(--u)*2.2);width:calc(var(--u)*21);height:calc(var(--u)*21);border-radius:50%;
+.m-map{position:fixed;left:calc(var(--u)*1.6);top:calc(var(--u)*2.2);width:calc(var(--u)*21);height:calc(var(--u)*21);border-radius:50%;pointer-events:auto;touch-action:none;
   border:calc(var(--u)*.7) solid #fff;box-shadow:0 0 0 calc(var(--u)*.3) #000,0 0 calc(var(--u)*1.5) rgba(0,0,0,.6);overflow:hidden;background:#233}
 .m-map canvas{width:100%;height:100%;display:block}
 .m-bars{position:fixed;left:calc(var(--u)*24.5);top:calc(var(--u)*12.5);display:flex;flex-direction:column;gap:calc(var(--u)*1.2)}
 .m-bar{display:flex;align-items:center;gap:calc(var(--u)*.8);height:calc(var(--u)*3.2)}
 .m-bar i{display:block;width:calc(var(--u)*3.4);height:calc(var(--u)*3.4)}
 .m-bar b{display:block;width:calc(var(--u)*25);height:calc(var(--u)*3);border:calc(var(--u)*.3) solid #000;background:rgba(0,0,0,.55);position:relative}
-.m-bar b span{position:absolute;inset:0;width:100%}
+.m-bar b span{position:absolute;left:0;top:0;bottom:0;width:100%;transition:width .15s}
 .m-hp span{background:#69b25a}.m-ar span{background:#3d7be0}
 .m-info{position:fixed;left:calc(var(--u)*1.6);top:calc(var(--u)*25);font-size:calc(var(--u)*3.4);line-height:1.18;letter-spacing:.02em}
 .m-money{position:fixed;right:calc(var(--u)*15.8);top:calc(var(--u)*2.2);font-size:calc(var(--u)*5);color:#d9d9d9}
 .m-speed{position:fixed;right:calc(var(--u)*15.8);top:calc(var(--u)*9.5);width:calc(var(--u)*11);height:calc(var(--u)*2);border:calc(var(--u)*.3) solid #000;background:rgba(0,0,0,.5)}
 .m-speed span{display:block;height:100%;background:#c0392b;width:0}
 .m-weapon{position:fixed;right:calc(var(--u)*1.6);top:calc(var(--u)*2.2);width:calc(var(--u)*13);height:calc(var(--u)*13);background:rgba(47,107,47,.9);
-  border:calc(var(--u)*.5) solid #000;border-radius:calc(var(--u)*1.2);display:flex;align-items:center;justify-content:center;padding:calc(var(--u)*1.4);pointer-events:auto}
-.m-ammo{position:fixed;right:calc(var(--u)*1.6);top:calc(var(--u)*16);width:calc(var(--u)*13);text-align:center;font-size:calc(var(--u)*4)}
+  border:calc(var(--u)*.5) solid #000;border-radius:calc(var(--u)*1.2);display:flex;align-items:center;justify-content:center;padding:calc(var(--u)*1.4)}
+.m-ammo{position:fixed;right:calc(var(--u)*1.6);top:calc(var(--u)*16);width:calc(var(--u)*13);text-align:center;font-size:calc(var(--u)*3.6)}
 .m-btn{position:fixed;pointer-events:auto;touch-action:none;border-radius:50%;background:rgba(31,84,34,.82);border:calc(var(--u)*.6) solid #0a140a;
-  box-shadow:0 0 0 calc(var(--u)*.25) rgba(255,255,255,.55) inset;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;color:#fff}
+  box-shadow:0 0 0 calc(var(--u)*.25) rgba(255,255,255,.55) inset;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;color:#fff;cursor:pointer}
 .m-btn .ico{width:56%;height:56%;display:block}
 .m-btn .lbl{font-size:calc(var(--u)*1.9);max-width:94%;line-height:1;margin-top:calc(var(--u)*-.2);text-align:center}
 .m-btn.small .ico{width:44%;height:44%}
@@ -58,11 +81,19 @@ const CSS = `
 .m-aim{right:calc(var(--u)*2.5);bottom:calc(var(--u)*29);width:calc(var(--u)*13.5);height:calc(var(--u)*13.5)}
 .m-jump{right:calc(var(--u)*20.5);bottom:calc(var(--u)*8);width:calc(var(--u)*14);height:calc(var(--u)*14)}
 .m-door{right:calc(var(--u)*2.5);bottom:calc(var(--u)*9.5);width:calc(var(--u)*17);height:calc(var(--u)*17)}
-.m-climb{right:calc(var(--u)*36.5);bottom:calc(var(--u)*7);width:calc(var(--u)*11);height:calc(var(--u)*11)}
-.m-sprint{left:calc(var(--u)*40);bottom:calc(var(--u)*8);width:calc(var(--u)*12);height:calc(var(--u)*12);font-size:calc(var(--u)*2.9)}
+.m-hud.driving .m-door{bottom:auto;top:calc(var(--u)*33);right:calc(var(--u)*2.5);width:calc(var(--u)*13);height:calc(var(--u)*13)}
+/* Sprint à direita (onde era o Escalar) e Escalar à esquerda (onde era o Sprint) */
+.m-sprint{right:calc(var(--u)*36.5);bottom:calc(var(--u)*7);width:calc(var(--u)*12);height:calc(var(--u)*12);font-size:calc(var(--u)*2.9)}
+.m-climb{left:calc(var(--u)*40);bottom:calc(var(--u)*8);width:calc(var(--u)*11);height:calc(var(--u)*11)}
 .m-anim{left:50%;top:calc(var(--u)*1.5);transform:translateX(-50%);width:auto;height:calc(var(--u)*8);border-radius:calc(var(--u)*4);padding:0 calc(var(--u)*3);
   flex-direction:row;gap:calc(var(--u)*1.2);font-size:calc(var(--u)*3);position:fixed}
 .m-anim .ico{width:calc(var(--u)*4.4);height:calc(var(--u)*4.4)}
+/* carro */
+.m-gas{right:calc(var(--u)*3);bottom:calc(var(--u)*6);width:calc(var(--u)*13);height:calc(var(--u)*24);border-radius:calc(var(--u)*3);font-size:calc(var(--u)*3)}
+.m-brake{right:calc(var(--u)*19);bottom:calc(var(--u)*6);width:calc(var(--u)*13);height:calc(var(--u)*17);border-radius:calc(var(--u)*3);font-size:calc(var(--u)*3);background:rgba(120,30,30,.85)}
+.m-hand{right:calc(var(--u)*35);bottom:calc(var(--u)*6);width:calc(var(--u)*13);height:calc(var(--u)*13);font-size:calc(var(--u)*2.3);background:rgba(110,80,20,.85)}
+.m-kmh{position:fixed;right:calc(var(--u)*17);top:calc(var(--u)*2.2);font-size:calc(var(--u)*6.5);color:#fff;text-align:right}
+.m-kmh small{display:block;font-size:calc(var(--u)*2.6);color:#ccc}
 .m-stick{position:fixed;left:calc(var(--u)*8);bottom:calc(var(--u)*9);width:calc(var(--u)*28);height:calc(var(--u)*28);border-radius:50%;pointer-events:auto;touch-action:none;
   background:rgba(31,84,34,.78);border:calc(var(--u)*.6) solid #0a140a;box-shadow:0 0 0 calc(var(--u)*.25) rgba(255,255,255,.55) inset}
 .m-stick .a{position:absolute;width:0;height:0;border:calc(var(--u)*1.6) solid transparent;opacity:.55}
@@ -72,11 +103,34 @@ const CSS = `
 .m-stick .a.r{top:50%;right:calc(var(--u)*.6);transform:translateY(-50%);border-left-color:#fff;border-right-width:0}
 .m-knob{position:absolute;left:50%;top:50%;width:calc(var(--u)*11);height:calc(var(--u)*11);margin:calc(var(--u)*-5.5) 0 0 calc(var(--u)*-5.5);border-radius:50%;
   background:radial-gradient(circle at 35% 30%,#f2f2f2,#bdbdbd);border:calc(var(--u)*.4) solid #222}
-.m-chat{position:fixed;left:calc(var(--u)*1.4);bottom:calc(var(--u)*.8);font-size:calc(var(--u)*3.3);line-height:1.2;max-width:calc(var(--u)*60)}
+.m-chat{position:fixed;left:calc(var(--u)*1.4);bottom:calc(var(--u)*.8);font-size:calc(var(--u)*3.3);line-height:1.2;max-width:calc(var(--u)*60);text-transform:none}
 .m-chat p{margin:0}
-.m-chat em{font-style:normal;color:#f1c40f}
+.m-chat em,.m-score em{font-style:normal;color:#f1c40f}
+.m-chatbtn{left:calc(var(--u)*1.4);bottom:calc(var(--u)*9);width:calc(var(--u)*6);height:calc(var(--u)*6);font-size:calc(var(--u)*2.4)}
+.m-chatbox{position:fixed;left:calc(var(--u)*1.4);bottom:calc(var(--u)*1);width:calc(var(--u)*70);display:none;pointer-events:auto;gap:calc(var(--u)*1);z-index:8}
+.m-chatbox.open{display:flex}
+.m-chatbox input{flex:1;min-width:0;font-size:calc(var(--u)*4);padding:calc(var(--u)*1.4);border-radius:calc(var(--u)*1);border:2px solid #fff;background:rgba(0,0,0,.75);color:#fff;text-transform:none}
+.m-chatbox button{font-size:calc(var(--u)*3.4);padding:0 calc(var(--u)*2.5);border-radius:calc(var(--u)*1);border:0;background:#2f6b2f;color:#fff;font-weight:800}
 .m-score{position:fixed;right:calc(var(--u)*1);bottom:calc(var(--u)*.8);text-align:right;font-size:calc(var(--u)*3.3);line-height:1.2}
-.m-score em{font-style:normal;color:#f1c40f}
+.m-cross{position:fixed;left:50%;top:44%;width:calc(var(--u)*3);height:calc(var(--u)*3);margin:calc(var(--u)*-1.5) 0 0 calc(var(--u)*-1.5);border:2px solid rgba(255,255,255,.9);border-radius:50%;
+  box-shadow:0 0 0 1px rgba(0,0,0,.6);transition:transform .12s;display:none}
+.m-cross.show{display:block}.m-cross.aim{transform:scale(.6);border-color:#ff5a4a}
+.m-hit{position:fixed;left:50%;top:44%;width:calc(var(--u)*6);height:calc(var(--u)*6);margin:calc(var(--u)*-3) 0 0 calc(var(--u)*-3);opacity:0;pointer-events:none}
+.m-hit::before,.m-hit::after{content:"";position:absolute;left:50%;top:0;bottom:0;width:3px;background:#fff;box-shadow:0 0 3px #000}
+.m-hit::before{transform:rotate(45deg)}.m-hit::after{transform:rotate(-45deg)}
+.m-hit.go{animation:mhit .25s ease-out}
+@keyframes mhit{from{opacity:1;transform:scale(1.4)}to{opacity:0;transform:scale(.8)}}
+.m-hurt{position:fixed;inset:0;pointer-events:none;opacity:0;background:radial-gradient(ellipse at center,rgba(255,0,0,0) 35%,rgba(220,0,0,.55) 100%)}
+.m-hurt.go{animation:mhurt .5s ease-out}
+@keyframes mhurt{from{opacity:1}to{opacity:0}}
+.m-dead{position:fixed;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;background:rgba(80,0,0,.45);pointer-events:none;text-align:center}
+.m-dead.show{display:flex}
+.m-dead b{font-size:calc(var(--u)*11);color:#ff5a4a}.m-dead span{font-size:calc(var(--u)*4.5)}
+.m-fullmap{position:fixed;inset:0;z-index:9;background:rgba(0,0,0,.72);display:none;align-items:center;justify-content:center;pointer-events:auto}
+.m-fullmap.open{display:flex}
+.m-fullmap canvas{width:calc(var(--u)*88);height:calc(var(--u)*88);border-radius:calc(var(--u)*2);border:calc(var(--u)*.6) solid #fff;background:#233}
+.m-fullmap .x{position:fixed;right:calc(var(--u)*2);top:calc(var(--u)*2);width:calc(var(--u)*9);height:calc(var(--u)*9);font-size:calc(var(--u)*5)}
+.m-fullmap .tip{position:fixed;left:0;right:0;bottom:calc(var(--u)*1.5);text-align:center;font-size:calc(var(--u)*3)}
 `;
 
 type El = HTMLElement;
@@ -96,36 +150,13 @@ function holdButton(el: El, onDown: () => void, onUp?: () => void): void {
 
 function circle(parent: El, cls: string, icon: string | null, label: string | null): El {
   const b = make(`m-btn ${cls}`, parent);
-  if (icon) {
-    const i = make('ico', b);
-    i.insertAdjacentHTML('beforeend', icon);
-  }
-  if (label) {
-    const l = make('lbl m-out', b);
-    l.textContent = label;
-  }
+  if (icon) make('ico', b).insertAdjacentHTML('beforeend', icon);
+  if (label) make('lbl m-out', b).textContent = label;
   return b;
 }
 
-let audio: AudioContext | null = null;
-function shotSound(empty: boolean): void {
-  try {
-    audio ??= new AudioContext();
-    const len = Math.floor(audio.sampleRate * (empty ? 0.02 : 0.09));
-    const buf = audio.createBuffer(1, len, audio.sampleRate);
-    const d = buf.getChannelData(0);
-    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / len) ** 2;
-    const src = audio.createBufferSource();
-    src.buffer = buf;
-    const g = audio.createGain();
-    g.gain.value = empty ? 0.08 : 0.22;
-    src.connect(g).connect(audio.destination);
-    src.start();
-  } catch { /* sem áudio */ }
-}
-
-const RANGE = 20; // metros mostrados do centro à borda do minimapa
 const HALF = ARENA_SIZE / 2;
+const COLORS = ['#4da3ff', '#f1c40f', '#c77dff', '#ff7a59'];
 
 function zoneName(x: number, z: number): string {
   if (Math.abs(x) < 6 && Math.abs(z) < 6) return 'CENTRO';
@@ -133,14 +164,121 @@ function zoneName(x: number, z: number): string {
   return x > 0 ? 'OESTE' : 'LESTE';
 }
 
-/** HUD de celular (paisagem): minimapa, barras, arma, botões e placar. */
-export function createMobileHud(onAnimations: () => void): MobileHud {
+interface View {
+  /** rotação da câmera (minimapa gira; mapa grande usa 0 = norte para cima) */
+  yaw: number;
+  cx: number;
+  cz: number;
+  /** metros do centro à borda */
+  range: number;
+  labels: boolean;
+  circle: boolean;
+}
+
+/** Desenha o mapa (minimapa e mapa grande usam a mesma função). */
+function drawMap(canvas: HTMLCanvasElement, cssSize: number, s: HudState, v: View, dpr: number): void {
+  const g = canvas.getContext('2d')!;
+  const size = Math.round(cssSize * dpr);
+  if (canvas.width !== size) { canvas.width = size; canvas.height = size; }
+  const R = size / 2;
+  const k = R / v.range;
+  const fx = Math.sin(v.yaw);
+  const fz = Math.cos(v.yaw);
+  const rx = -Math.cos(v.yaw);
+  const rz = Math.sin(v.yaw);
+  const proj = (x: number, z: number): [number, number] => {
+    const dx = x - v.cx;
+    const dz = z - v.cz;
+    return [R + (dx * rx + dz * rz) * k, R - (dx * fx + dz * fz) * k];
+  };
+  const poly = (pts: [number, number][], fill: string | null, stroke?: string, w = 1): void => {
+    g.beginPath();
+    pts.forEach(([x, y], i) => (i ? g.lineTo(x, y) : g.moveTo(x, y)));
+    g.closePath();
+    if (fill) { g.fillStyle = fill; g.fill(); }
+    if (stroke) { g.strokeStyle = stroke; g.lineWidth = w; g.stroke(); }
+  };
+  g.clearRect(0, 0, size, size);
+  g.save();
+  if (v.circle) { g.beginPath(); g.arc(R, R, R, 0, Math.PI * 2); g.clip(); }
+  g.fillStyle = '#1d2a1d';
+  g.fillRect(0, 0, size, size);
+  poly([proj(-HALF, -HALF), proj(HALF, -HALF), proj(HALF, HALF), proj(-HALF, HALF)], '#5d9a52', '#d8d8d8', 3 * dpr);
+  for (const b of COLLIDERS) poly([proj(b.minX, b.minZ), proj(b.maxX, b.minZ), proj(b.maxX, b.maxZ), proj(b.minX, b.maxZ)], '#8a6f4d');
+  for (const c of CARS) {
+    const sx = Math.sin(c.heading);
+    const cz = Math.cos(c.heading);
+    const corner = (a: number, f: number): [number, number] => proj(c.x + -cz * a + sx * f, c.z + sx * a + cz * f);
+    poly([corner(-0.9, -2), corner(0.9, -2), corner(0.9, 2), corner(-0.9, 2)], c.driver ? '#ffffff' : '#e8c34a', '#000', dpr);
+  }
+  g.font = `bold ${Math.round(R * (v.labels ? 0.06 : 0.2))}px system-ui,sans-serif`;
+  g.textAlign = 'center';
+  g.lineWidth = 3 * dpr;
+  s.remotes.forEach((p, i) => {
+    const [x, y] = proj(p.x, p.z);
+    g.fillStyle = COLORS[i % 4]!;
+    g.beginPath();
+    g.moveTo(x, y + 6 * dpr);
+    g.lineTo(x - 5 * dpr, y - 5 * dpr);
+    g.lineTo(x + 5 * dpr, y - 5 * dpr);
+    g.closePath();
+    g.fill();
+    const label = v.labels ? p.name : `P${i + 2}`;
+    g.strokeStyle = '#000';
+    g.strokeText(label, x, y - 8 * dpr);
+    g.fillStyle = '#fff';
+    g.fillText(label, x, y - 8 * dpr);
+  });
+  // Eu: seta branca apontando para onde olho
+  const [mx, my] = proj(s.x, s.z);
+  const ang = v.circle ? 0 : -s.yaw;
+  g.save();
+  g.translate(mx, my);
+  g.rotate(ang);
+  g.fillStyle = '#fff';
+  g.strokeStyle = '#000';
+  g.lineWidth = 2 * dpr;
+  g.beginPath();
+  g.moveTo(0, -9 * dpr);
+  g.lineTo(6 * dpr, 7 * dpr);
+  g.lineTo(0, 3 * dpr);
+  g.lineTo(-6 * dpr, 7 * dpr);
+  g.closePath();
+  g.fill();
+  g.stroke();
+  g.restore();
+  if (v.circle) {
+    // Norte (+Z do mundo)
+    const nx = R + rz * (R - 11 * dpr);
+    const ny = R - fz * (R - 11 * dpr);
+    g.font = `bold ${Math.round(R * 0.2)}px system-ui,sans-serif`;
+    g.fillStyle = '#fff';
+    g.strokeStyle = '#000';
+    g.lineWidth = 4 * dpr;
+    g.strokeText('N', nx, ny + 5 * dpr);
+    g.fillText('N', nx, ny + 5 * dpr);
+  }
+  g.restore();
+}
+
+/** HUD (paisagem): minimapa, barras, arma, botões, chat e placar. No carro vira acelerador/freio/freio de mão. */
+export function createMobileHud(opts: MobileHudOptions): MobileHud {
+  const touch = 'ontouchstart' in window || navigator.maxTouchPoints > 0 || new URLSearchParams(location.search).has('touch');
   const style = document.createElement('style');
   style.textContent = CSS;
   document.head.appendChild(style);
-  const hud = make('m-hud', document.body);
+  const hud = make('m-hud' + (touch ? '' : ' desktop'), document.body);
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
 
-  // Arrastar a tela gira a câmera
+  // Efeitos de tela
+  const hurt = make('m-hurt', hud);
+  const cross = make('m-cross', hud);
+  const hitMark = make('m-hit', hud);
+  const dead = make('m-dead m-out', hud);
+  make('', dead, 'b').textContent = 'Você morreu';
+  const deadSub = make('', dead, 'span');
+
+  // Arrastar a tela gira a câmera (celular)
   const look = make('m-look', hud);
   const last = new Map<number, number>();
   look.addEventListener('pointerdown', (e) => { look.setPointerCapture(e.pointerId); last.set(e.pointerId, e.clientX); });
@@ -154,10 +292,23 @@ export function createMobileHud(onAnimations: () => void): MobileHud {
   look.addEventListener('pointerup', endLook);
   look.addEventListener('pointercancel', endLook);
 
-  // Minimapa
+  // Minimapa (toque = abre o mapa grande)
   const mapBox = make('m-map', hud);
   const canvas = make('', mapBox, 'canvas') as HTMLCanvasElement;
-  const g2d = canvas.getContext('2d')!;
+  const full = make('m-fullmap', hud);
+  const fullCanvas = make('', full, 'canvas') as HTMLCanvasElement;
+  const fullClose = circle(full, 'x', null, '✕');
+  make('tip m-out', full).textContent = 'Toque para fechar';
+  let mapOpen = false;
+  const setMap = (open: boolean): void => { mapOpen = open; full.classList.toggle('open', open); };
+  mapBox.addEventListener('pointerdown', (e) => { e.preventDefault(); setMap(true); });
+  full.addEventListener('pointerdown', () => setMap(false));
+  fullClose.addEventListener('pointerdown', () => setMap(false));
+  window.addEventListener('keydown', (e) => {
+    if (e.target instanceof HTMLInputElement) return;
+    if (e.code === 'KeyM') setMap(!mapOpen);
+    if (e.code === 'Escape') setMap(false);
+  });
 
   // Vida e colete
   const bars = make('m-bars', hud);
@@ -167,82 +318,47 @@ export function createMobileHud(onAnimations: () => void): MobileHud {
   const ar = make('m-bar m-ar', bars);
   make('', ar, 'i').insertAdjacentHTML('beforeend', ICON.shield);
   const arFill = make('', make('', ar, 'b'), 'span');
-  hpFill.style.width = '100%';
-  arFill.style.width = '70%';
 
   // Textos de local
   const info = make('m-info m-out', hud);
-  const l1 = make('', info, 'div');
-  const l2 = make('', info, 'div');
-  const l3 = make('', info, 'div');
-  l2.textContent = 'MODO LIVRE - ARENA 1';
+  const l1 = make('', info);
+  make('', info).textContent = 'MODO LIVRE - ARENA 1';
+  const l3 = make('', info);
 
-  // Dinheiro, velocidade, arma e munição
-  const money = make('m-money m-out', hud);
-  money.textContent = '$0';
-  const speedBar = make('m-speed', hud);
+  // Dinheiro, velocidade, arma e munição (a pé) / velocímetro (no carro)
+  const money = make('m-money m-out foot', hud);
+  const speedBar = make('m-speed foot', hud);
   const speedFill = make('', speedBar, 'span');
-  const weaponBox = make('m-weapon', hud);
-  const ammo = make('m-ammo m-out', hud);
+  const weaponBox = make('m-weapon foot', hud);
+  const ammo = make('m-ammo m-out foot', hud);
+  const kmh = make('m-kmh m-out car', hud);
 
-  const weapons = [
-    { name: 'AK-47', icon: ICON.rifle, mag: 30, reserve: 120, size: 30 },
-    { name: 'PUNHO', icon: ICON.fist, mag: 0, reserve: 0, size: 0 },
-  ];
-  let cur = 0;
-  const refreshWeapon = (): void => {
-    const w = weapons[cur]!;
-    weaponBox.textContent = '';
-    weaponBox.insertAdjacentHTML('beforeend', w.icon);
-    ammo.textContent = w.size > 0 ? `${w.mag}/${w.reserve}` : '--';
-  };
-  refreshWeapon();
+  holdButton(circle(hud, 'm-reload foot', ICON.reload, 'Recarga'), queueReload);
+  holdButton(circle(hud, 'm-change foot', ICON.swap, 'Arma'), queueSwitch);
 
-  const reload = circle(hud, 'm-reload', ICON.reload, 'Recarga');
-  const change = circle(hud, 'm-change', ICON.swap, 'Arma');
-  holdButton(reload, () => {
-    const w = weapons[cur]!;
-    if (w.size === 0) return;
-    const take = Math.min(w.size - w.mag, w.reserve);
-    w.mag += take;
-    w.reserve -= take;
-    reload.classList.remove('spin');
-    void reload.offsetWidth;
-    reload.classList.add('spin');
-    refreshWeapon();
-  });
-  holdButton(change, () => { cur = (cur + 1) % weapons.length; refreshWeapon(); });
+  // Ações da direita (a pé)
+  holdButton(circle(hud, 'm-fire foot', ICON.bullet, null), () => setFire(true), () => setFire(false));
+  let aimOn = false;
+  const aim = circle(hud, 'm-aim foot', ICON.crosshair, null);
+  aim.addEventListener('pointerdown', (e) => { e.preventDefault(); aimOn = !aimOn; setAim(aimOn); aim.classList.toggle('on', aimOn); });
+  holdButton(circle(hud, 'm-jump foot', ICON.run, null), queueJump);
+  holdButton(circle(hud, 'm-door', ICON.door, null), queueInteract);
+  holdButton(circle(hud, 'm-sprint small foot', null, 'Sprint'), () => setSprint(true), () => setSprint(false));
+  holdButton(circle(hud, 'm-climb small foot', ICON.climb, 'Escalar'), queueClimb);
 
-  // Ações da direita
-  const fire = circle(hud, 'm-fire', ICON.bullet, null);
-  let fireTimer: number | null = null;
-  const shoot = (): void => {
-    const w = weapons[cur]!;
-    if (w.size === 0) return; // punho: sem tiro
-    if (w.mag > 0) { w.mag--; shotSound(false); } else shotSound(true);
-    refreshWeapon();
-  };
-  holdButton(fire, () => { shoot(); fireTimer = window.setInterval(shoot, 110); }, () => {
-    if (fireTimer !== null) window.clearInterval(fireTimer);
-    fireTimer = null;
-  });
-
-  let aiming = false;
-  const aim = circle(hud, 'm-aim', ICON.crosshair, null);
-  holdButton(aim, () => { aiming = !aiming; aim.classList.toggle('on', aiming); });
-  // o botão fica "ligado" enquanto a mira está ativa
-  aim.addEventListener('pointerup', () => aim.classList.toggle('on', aiming));
-
-  holdButton(circle(hud, 'm-jump', ICON.run, null), queueJump);
-  const door = circle(hud, 'm-door', ICON.door, null);
-  holdButton(door, queueInteract);
-  holdButton(circle(hud, 'm-climb small', ICON.climb, 'Escalar'), queueClimb);
+  // No carro: acelerador, freio e freio de mão
+  let gas = false;
+  let brake = false;
+  let hand = false;
+  const pedals = (): void => setPedals(gas, brake, hand);
+  holdButton(circle(hud, 'm-gas car', null, 'Acelerar'), () => { gas = true; pedals(); }, () => { gas = false; pedals(); });
+  holdButton(circle(hud, 'm-brake car', null, 'Freio'), () => { brake = true; pedals(); }, () => { brake = false; pedals(); });
+  holdButton(circle(hud, 'm-hand car', null, 'Freio de mão'), () => { hand = true; pedals(); }, () => { hand = false; pedals(); });
 
   // Animações (menu)
-  const animBtn = circle(hud, 'm-anim', ICON.anim, 'Animações');
-  holdButton(animBtn, onAnimations);
+  holdButton(circle(hud, 'm-anim', ICON.anim, 'Animações'), opts.onAnimations);
 
-  // Joystick e sprint
+  // Joystick (a pé: anda; no carro: só esterça)
   const stick = make('m-stick', hud);
   for (const c of ['u', 'd', 'l', 'r']) make(`a ${c}`, stick);
   const knob = make('m-knob', stick);
@@ -267,136 +383,112 @@ export function createMobileHud(onAnimations: () => void): MobileHud {
   };
   stick.addEventListener('pointerup', release);
   stick.addEventListener('pointercancel', release);
-  holdButton(circle(hud, 'm-sprint', null, 'Sprint'), () => setSprint(true), () => setSprint(false));
 
   // Chat e placar
   const chat = make('m-chat m-out', hud);
   const score = make('m-score m-out', hud);
+  const chatBtn = circle(hud, 'm-chatbtn small', null, 'Chat');
+  const box = make('m-chatbox', hud);
+  const input = make('', box, 'input') as HTMLInputElement;
+  input.maxLength = 80;
+  input.placeholder = 'Mensagem...';
+  input.autocomplete = 'off';
+  const sendBtn = make('', box, 'button');
+  sendBtn.textContent = 'Enviar';
+  const closeChat = (): void => { box.classList.remove('open'); input.blur(); };
+  const openChat = (): void => {
+    if (document.pointerLockElement) document.exitPointerLock();
+    box.classList.add('open');
+    input.focus();
+  };
+  const submit = (): void => {
+    const t = input.value.trim();
+    input.value = '';
+    closeChat();
+    if (t) opts.onChatSend(t);
+  };
+  chatBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); if (box.classList.contains('open')) closeChat(); else openChat(); });
+  sendBtn.addEventListener('click', submit);
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') { e.preventDefault(); submit(); }
+    if (e.key === 'Escape') closeChat();
+  });
+  window.addEventListener('keydown', (e) => {
+    if (e.target instanceof HTMLInputElement) return;
+    if (e.code === 'Enter' || e.code === 'KeyT') { e.preventDefault(); openChat(); }
+  });
 
   const addChat = (text: string): void => {
     const p = document.createElement('p');
-    const em = document.createElement('em');
     const idx = text.indexOf(':');
-    if (idx > 0) { em.textContent = text.slice(0, idx + 1); p.append(em, document.createTextNode(text.slice(idx + 1))); }
-    else p.textContent = text;
+    if (idx > 0) {
+      const em = document.createElement('em');
+      em.textContent = text.slice(0, idx + 1);
+      p.append(em, document.createTextNode(text.slice(idx + 1)));
+    } else p.textContent = text;
     chat.appendChild(p);
-    while (chat.childElementCount > 4) chat.firstElementChild?.remove();
-    window.setTimeout(() => p.remove(), 12000);
+    while (chat.childElementCount > 5) chat.firstElementChild?.remove();
+    window.setTimeout(() => p.remove(), 14000);
   };
 
-  // Minimapa: gira com a câmera, norte indicado por "N"
-  const dpr = Math.min(window.devicePixelRatio || 1, 2);
   let prev: { x: number; z: number } | null = null;
   let speed = 0;
-  const cache = { l1: '', l3: '', score: '' };
-
-  function drawMap(s: HudState): void {
-    const size = Math.round(mapBox.clientWidth * dpr);
-    if (canvas.width !== size) { canvas.width = size; canvas.height = size; }
-    const R = size / 2;
-    const k = R / RANGE;
-    const fx = Math.sin(s.yaw);
-    const fz = Math.cos(s.yaw);
-    const rx = -Math.cos(s.yaw);
-    const rz = Math.sin(s.yaw);
-    const proj = (x: number, z: number): [number, number] => {
-      const dx = x - s.x;
-      const dz = z - s.z;
-      return [R + (dx * rx + dz * rz) * k, R - (dx * fx + dz * fz) * k];
-    };
-    const poly = (pts: [number, number][], fill: string | null, stroke?: string, w = 1): void => {
-      g2d.beginPath();
-      pts.forEach(([x, y], i) => (i ? g2d.lineTo(x, y) : g2d.moveTo(x, y)));
-      g2d.closePath();
-      if (fill) { g2d.fillStyle = fill; g2d.fill(); }
-      if (stroke) { g2d.strokeStyle = stroke; g2d.lineWidth = w; g2d.stroke(); }
-    };
-    g2d.clearRect(0, 0, size, size);
-    g2d.save();
-    g2d.beginPath();
-    g2d.arc(R, R, R, 0, Math.PI * 2);
-    g2d.clip();
-    g2d.fillStyle = '#1d2a1d';
-    g2d.fillRect(0, 0, size, size);
-    poly([proj(-HALF, -HALF), proj(HALF, -HALF), proj(HALF, HALF), proj(-HALF, HALF)], '#5d9a52', '#d8d8d8', 3 * dpr);
-    for (const b of COLLIDERS) {
-      poly([proj(b.minX, b.minZ), proj(b.maxX, b.minZ), proj(b.maxX, b.maxZ), proj(b.minX, b.maxZ)], '#8a6f4d');
-    }
-    for (const c of CARS) {
-      const sx = Math.sin(c.heading);
-      const cz = Math.cos(c.heading);
-      const corner = (a: number, f: number): [number, number] => proj(c.x + (-cz * a) + sx * f, c.z + sx * a + cz * f);
-      poly([corner(-0.9, -2), corner(0.9, -2), corner(0.9, 2), corner(-0.9, 2)], c.driver ? '#ffffff' : '#e8c34a', '#000', dpr);
-    }
-    g2d.font = `bold ${Math.round(R * 0.2)}px system-ui,sans-serif`;
-    g2d.textAlign = 'center';
-    g2d.lineWidth = 3 * dpr;
-    s.remotes.forEach((p, i) => {
-      const [x, y] = proj(p.x, p.z);
-      g2d.fillStyle = ['#4da3ff', '#f1c40f', '#c77dff', '#ff7a59'][i % 4]!;
-      g2d.beginPath();
-      g2d.moveTo(x, y + 6 * dpr);
-      g2d.lineTo(x - 5 * dpr, y - 5 * dpr);
-      g2d.lineTo(x + 5 * dpr, y - 5 * dpr);
-      g2d.closePath();
-      g2d.fill();
-      g2d.strokeStyle = '#000';
-      g2d.strokeText(`P${i + 2}`, x, y - 8 * dpr);
-      g2d.fillText(`P${i + 2}`, x, y - 8 * dpr);
-    });
-    // Eu: seta branca no centro apontando para cima
-    g2d.fillStyle = '#fff';
-    g2d.strokeStyle = '#000';
-    g2d.lineWidth = 2 * dpr;
-    g2d.beginPath();
-    g2d.moveTo(R, R - 9 * dpr);
-    g2d.lineTo(R + 6 * dpr, R + 7 * dpr);
-    g2d.lineTo(R, R + 3 * dpr);
-    g2d.lineTo(R - 6 * dpr, R + 7 * dpr);
-    g2d.closePath();
-    g2d.fill();
-    g2d.stroke();
-    // Norte (+Z do mundo)
-    const nx = R + rz * (R - 11 * dpr);
-    const ny = R - fz * (R - 11 * dpr);
-    g2d.fillStyle = '#fff';
-    g2d.strokeStyle = '#000';
-    g2d.lineWidth = 4 * dpr;
-    g2d.strokeText('N', nx, ny + 5 * dpr);
-    g2d.fillText('N', nx, ny + 5 * dpr);
-    g2d.restore();
-  }
+  let lastHit = 0;
+  let lastHurt = 0;
+  const cache = { l1: '', l3: '', score: '', money: '', ammo: '', weapon: '' };
+  const retrigger = (el: El): void => { el.classList.remove('go'); void el.offsetWidth; el.classList.add('go'); };
 
   return {
-    get aiming(): boolean { return aiming; },
     addChat,
     update(s, dt): void {
+      hud.classList.toggle('driving', s.driving);
       if (prev && dt > 0) {
         const inst = Math.hypot(s.x - prev.x, s.z - prev.z) / dt;
         speed += (inst - speed) * Math.min(1, dt * 6);
       }
       prev = { x: s.x, z: s.z };
-      speedFill.style.width = `${Math.min(100, (speed / (s.driving ? 14 : 7.5)) * 100).toFixed(0)}%`;
-      door.classList.toggle('on', s.driving);
+      speedFill.style.width = `${Math.min(100, (speed / 7.5) * 100).toFixed(0)}%`;
+      kmh.textContent = '';
+      kmh.append(document.createTextNode(String(Math.round(s.kmh))), Object.assign(document.createElement('small'), { textContent: 'km/h' }));
+
+      hpFill.style.width = `${Math.max(0, s.health)}%`;
+      arFill.style.width = `${Math.max(0, s.armor)}%`;
+      const mny = `$${s.money.toLocaleString('en-US')}`;
+      if (mny !== cache.money) { cache.money = mny; money.textContent = mny; }
+      if (s.weapon !== cache.weapon) {
+        cache.weapon = s.weapon;
+        weaponBox.textContent = '';
+        weaponBox.insertAdjacentHTML('beforeend', s.weapon === 'ak' ? ICON.rifle : ICON.fist);
+      }
+      const am = s.weapon === 'fist' ? '--' : s.reloading ? '...' : `${s.mag}/${s.reserve}`;
+      if (am !== cache.ammo) { cache.ammo = am; ammo.textContent = am; }
+
+      cross.classList.toggle('show', s.weapon === 'ak' && !s.driving && !s.dead);
+      cross.classList.toggle('aim', s.aiming);
+      if (s.hitTick !== lastHit) { lastHit = s.hitTick; retrigger(hitMark); }
+      if (s.hurtTick !== lastHurt) { lastHurt = s.hurtTick; retrigger(hurt); }
+      dead.classList.toggle('show', s.dead);
+      if (s.dead) deadSub.textContent = `Renasce em ${Math.max(0, Math.ceil(s.respawnIn))}s`;
 
       const t1 = `${s.name} - ${zoneName(s.x, s.z)}`;
       if (t1 !== cache.l1) { cache.l1 = t1; l1.textContent = t1; }
       const t3 = `JOGADORES: ${s.players}/${s.maxPlayers}`;
       if (t3 !== cache.l3) { cache.l3 = t3; l3.textContent = t3; }
-      const rows = [s.name, ...s.remotes.slice(0, 1).map((r) => r.name)];
-      const sc = rows.join('|');
+      const rows = s.scores.slice(0, 2);
+      const sc = rows.map((r) => `${r.name}|${r.k}|${r.d}`).join(';');
       if (sc !== cache.score) {
         cache.score = sc;
         score.textContent = '';
-        rows.forEach((n, i) => {
+        rows.forEach((r, i) => {
           const div = document.createElement('div');
           const em = document.createElement('em');
           em.textContent = `P${i + 1}:`;
-          div.append(em, document.createTextNode(` ${n}  0 Kills/0 Deaths`));
+          div.append(em, document.createTextNode(` ${r.name}  ${r.k} Kills/${r.d} Deaths`));
           score.appendChild(div);
         });
       }
-      drawMap(s);
+      drawMap(canvas, mapBox.clientWidth, s, { yaw: s.yaw, cx: s.x, cz: s.z, range: 20, labels: false, circle: true }, dpr);
+      if (mapOpen) drawMap(fullCanvas, fullCanvas.clientWidth, s, { yaw: 0, cx: 0, cz: 0, range: HALF * 1.12, labels: true, circle: false }, dpr);
     },
   };
 }

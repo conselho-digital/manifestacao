@@ -6,7 +6,8 @@ interface ClipData<T> { duration: number; tracks: T[] }
 type Clips<T> = Record<string, ClipData<T>>;
 type Kind = 'gta' | 'carlos';
 
-export type ArmMode = 'swing' | 'up' | 'reach' | 'forward';
+export type ArmMode = 'swing' | 'up' | 'reach' | 'forward' | 'rifle' | 'aim';
+export type Armed = 'none' | 'rifle' | 'aim';
 
 /** Clipes que tocam uma vez e param no último quadro. */
 const ONCE = new Set(['jump_launch', 'jump_land', 'climb_jump', 'climb_pull', 'climb_stand', 'roll', 'dive']);
@@ -95,6 +96,7 @@ export class Animator {
   private time = 0;
   private bend = BEND.idle!;
   private armMode: ArmMode = 'swing';
+  private armed: Armed = 'none';
   private readonly actions = new Map<string, THREE.AnimationAction>();
   private readonly tmpM = new THREE.Matrix4();
   private readonly rootInv = new THREE.Matrix4();
@@ -202,6 +204,11 @@ export class Animator {
     this.armMode = ARM_MODE[name] ?? 'swing';
   }
 
+  /** Segurando a arma: braços em posição de fuzil (só quando o clipe não define os braços). */
+  setArmed(a: Armed): void {
+    this.armed = a;
+  }
+
   /** Reinicia o mesmo clipe de ação (ex.: pular de novo). */
   restart(name: string): void {
     this.clipName = '';
@@ -235,7 +242,17 @@ export class Animator {
     const s = def.side;
     const tU = new THREE.Vector3();
     const tF = new THREE.Vector3();
-    switch (this.armMode) {
+    const mode: ArmMode = this.armMode === 'swing' && this.armed !== 'none' ? this.armed : this.armMode;
+    switch (mode) {
+      case 'rifle':
+        // braço direito (s=-1) segura a empunhadura; esquerdo (s=+1) apoia o cano
+        if (s < 0) { tU.set(-0.1, -0.85, 0.5); tF.set(0.32, -0.15, 0.94); }
+        else { tU.set(0.2, -0.55, 0.8); tF.set(-0.5, -0.1, 0.86); }
+        break;
+      case 'aim':
+        if (s < 0) { tU.set(-0.2, 0.0, 0.98); tF.set(0.25, 0.08, 0.96); }
+        else { tU.set(0.25, 0.05, 0.96); tF.set(-0.45, 0.1, 0.89); }
+        break;
       case 'up':
         tU.set(s * 0.45, 0.45, 0.8); tF.set(s * 0.3, 0.7, 0.65); break;
       case 'forward':

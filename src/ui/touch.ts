@@ -22,14 +22,15 @@ const CSS = `
 .hud-help{font-size:11px;opacity:.6;margin-top:10px;line-height:1.4}
 `;
 
-/** Cria o HUD. No celular devolve o HUD móvel (minimapa, botões...); no PC, só o menu de animações. */
-export function createHud(): MobileHud | null {
+/** Cria o HUD (celular e PC) e o menu de animações. */
+export function createHud(onChatSend: (text: string) => void): MobileHud {
   setViewportUnit();
   const style = document.createElement('style');
   style.textContent = CSS;
   document.head.appendChild(style);
   const hud = document.createElement('div');
   hud.className = 'hud';
+  hud.style.zIndex = '9';
   document.body.appendChild(hud);
 
   const touch = isTouchDevice();
@@ -81,15 +82,6 @@ export function createHud(): MobileHud | null {
   panel.appendChild(help);
   window.addEventListener('keydown', (e) => { if (e.code === 'KeyG') toggle(); });
 
-  if (touch) {
-    window.addEventListener('resize', setViewportUnit);
-    return createMobileHud(toggle);
-  }
-
-  const btn = document.createElement('div');
-  btn.className = 'hud-btn hud-anim';
-  btn.textContent = 'Animações (G)';
-  btn.addEventListener('pointerdown', (e) => { e.preventDefault(); toggle(); });
-  hud.appendChild(btn);
-  return null;
+  window.addEventListener('resize', setViewportUnit);
+  return createMobileHud({ onAnimations: toggle, onChatSend });
 }

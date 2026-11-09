@@ -2,7 +2,8 @@ import * as THREE from 'three';
 import { ARENA_SIZE, COLLIDERS, type Box } from './map';
 import type { InputState } from './input';
 import { CARS, type Car } from './vehicle';
-import type { Animator } from './anim';
+import type { Animator, Armed } from './anim';
+import type { WeaponVisual } from './weapons';
 
 const RUN_SPEED = 5;
 const WALK_SPEED = 1.8;
@@ -22,7 +23,7 @@ const SPECIAL: Record<string, { dur: number; speed: number }> = {
   dive: { dur: 1.5, speed: 3 },
 };
 
-type Mode = 'ground' | 'air' | 'climb' | 'special' | 'drive';
+type Mode = 'ground' | 'air' | 'climb' | 'special' | 'drive' | 'dead';
 
 interface Climb {
   t: number;
@@ -44,9 +45,45 @@ export class Player {
   private special: { id: string; t: number } | null = null;
   private climb: Climb | null = null;
   private car: Car | null = null;
+  private armed: Armed = 'none';
+  private lie = 0; // 0 em pé, 1 deitado (morto)
+  private modelBaseY: number | null = null;
+  /** arma visual (fuzil na mão), definida pelo main */
+  weaponVis: WeaponVisual | null = null;
 
   constructor(object: THREE.Object3D, private animator: Animator | null = null) {
     this.object = object;
+  }
+
+  get isDead(): boolean { return this.mode === 'dead'; }
+  get isDriving(): boolean { return this.mode === 'drive'; }
+  get carSpeed(): number { return this.car ? this.car.speed : 0; }
+  /** 0 punho, 1 fuzil, 2 fuzil mirando (enviado aos outros) */
+  get weaponCode(): number { return this.armed === 'aim' ? 2 : this.armed === 'rifle' ? 1 : 0; }
+
+  /** Muda o que o personagem segura (braços e arma na mão). */
+  setArmed(a: Armed): void {
+    this.armed = a;
+    this.animator?.setArmed(a);
+    this.weaponVis?.setMode(a);
+  }
+
+  /** Morre: cai deitado até renascer. */
+  die(): void {
+    if (this.car) this.exitCar();
+    this.mode = 'dead';
+    this.emote = null;
+    this.climb = null;
+    this.special = null;
+    this.animator?.play('idle');
+    this.weaponVis?.setHidden(true);
+  }
+
+  respawn(x: number, z: number): void {
+    this.object.position.set(x, 0, z);
+    this.vy = 0;
+    this.mode = 'ground';
+    this.weaponVis?.setHidden(false);
   }
 
   /** Nome do clipe de animação atual (enviado aos outros jogadores). */
@@ -66,7 +103,9 @@ export class Player {
 
   update(dt: number, input: InputState, yaw: number): void {
     const pos = this.object.position;
+    this.weaponVis?.update(dt);
 
+    if (this.mode === 'dead') { this.finish(dt); return; }
     if (this.mode === 'drive' && this.car) { this.updateDrive(dt, input); return; }
     if (this.mode === 'climb' && this.climb) { this.updateClimb(dt); this.finish(dt); return; }
     if (this.mode === 'special' && this.special) { this.updateSpecial(dt); this.finish(dt); return; }
@@ -98,6 +137,8 @@ export class Player {
       this.moveHoriz(dir.x * speed * dt, dir.z * speed * dt);
       this.heading = Math.atan2(dir.x, dir.z);
     }
+    // Armado e atirando/mirando: o corpo olha para onde a câmera aponta
+    if (this.armed !== 'none' && (input.aim || input.fire)) this.heading = yaw;
 
     // Vertical
     const support = supportHeight(pos.x, pos.z, pos.y);
@@ -185,8 +226,8 @@ export class Player {
   private updateDrive(dt: number, input: InputState): void {
     const car = this.car!;
     if (input.interact) { this.exitCar(); return; }
-    // No carro o controle é do carro: W/S acelera e freia, A/D esterça
-    car.drive(dt, input.y, input.x);
+    // No carro: acelerador, freio e freio de mão; o joystick (A/D) só esterça
+    car.drive(dt, input.gas, input.brake, input.handbrake, input.x);
     this.object.position.set(car.x, 0, car.z);
     this.heading = car.heading;
     this.object.rotation.y = car.heading;
@@ -294,6 +335,17 @@ export class Player {
     diff = Math.atan2(Math.sin(diff), Math.cos(diff));
     this.object.rotation.y += diff * Math.min(1, dt * 12);
     this.animator?.update(dt);
+    // Morto: deita de costas
+    const target = this.mode === 'dead' ? 1 : 0;
+    if (this.lie !== target) {
+      this.lie += Math.sign(target - this.lie) * Math.min(Math.abs(target - this.lie), dt * 4);
+      const model = this.object.children[0];
+      if (model) {
+        this.modelBaseY ??= model.position.y;
+        model.rotation.x = -this.lie * (Math.PI / 2);
+        model.position.y = this.modelBaseY + this.lie * 0.12;
+      }
+    }
   }
 
   /** Câmera em terceira pessoa, atrás do jogador. */

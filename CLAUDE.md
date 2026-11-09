@@ -58,6 +58,8 @@ Arena multiplayer no navegador. Mapa pequeno, personagens low-poly. Plano **grá
 
 ## Controles
 - PC: WASD move · Shift anda · Q sprint · Espaço pula · E (ou C) escala · arrastar o mouse gira a câmera · G abre o menu de animações.
-- Carros: F entra/sai (botão "Carro" no celular); W/S acelera e freia, A/D esterça.
+- Carros: F entra/sai (botão da porta no celular). PC: W acelera, S freia/dá ré, Espaço = freio de mão, A/D esterça. Celular: joystick só esterça; pedais Acelerar, Freio e Freio de mão na direita.
+- Combate (PC): clique no jogo trava o mouse (gira a câmera); botão esquerdo atira, direito mira, R recarrega, 1/2/X troca arma, T/Enter abre o chat, M abre o mapa grande. Celular: botões de tiro, mira, recarga e arma; toque no minimapa abre o mapa; botão Chat.
+- Combate: tiro na horizontal (sem inclinação de câmera). O atirador calcula o acerto, quem leva o tiro aplica o dano em si (casual, sem servidor). AK-47: 20 de dano, 40 na cabeça; colete absorve 60%. Morreu: renasce em 3,5 s.
 - Celular: ao entrar o jogo vai para tela cheia e paisagem (onde o navegador não trava, aparece "Gire o celular"). HUD estilo GTA: minimapa, vida/colete, arma e munição, joystick, Sprint, tiro, mira, pular, porta (carro), escalar, chat e placar. Combate (dano, vida, kills) ainda não existe: munição e contadores são locais.
 - Dados de animação: `public/anims/ped*.json` (esqueleto GTA SA, Law1-9) e `carlos*.json` (baked). Os `-extra` carregam em segundo plano.
