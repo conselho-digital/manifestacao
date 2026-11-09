@@ -20,3 +20,25 @@ export const PARKS: Rect[] = [];
 export function addBox(minX: number, maxX: number, minZ: number, maxZ: number, top: number, color = '#9a9a9a', bottom = 0): void {
   COLLIDERS.push({ minX, maxX, minZ, maxZ, top, color, bottom });
 }
+
+/** Raio contra caixa alinhada aos eixos; devolve a distância ou null. */
+export function rayBox(
+  ox: number, oy: number, oz: number, dx: number, dy: number, dz: number,
+  x0: number, y0: number, z0: number, x1: number, y1: number, z1: number,
+): number | null {
+  let t0 = 0;
+  let t1 = Infinity;
+  for (const [o, d, lo, hi] of [[ox, dx, x0, x1], [oy, dy, y0, y1], [oz, dz, z0, z1]] as const) {
+    if (Math.abs(d) < 1e-9) {
+      if (o < lo || o > hi) return null;
+    } else {
+      let a = (lo - o) / d;
+      let b = (hi - o) / d;
+      if (a > b) [a, b] = [b, a];
+      t0 = Math.max(t0, a);
+      t1 = Math.min(t1, b);
+      if (t0 > t1) return null;
+    }
+  }
+  return t0;
+}

@@ -39,6 +39,7 @@ let reloadQ = false;
 let switchQ = false;
 let emoteQ: string | null = null;
 let lookDx = 0;
+let lookDy = 0;
 let walkClip = 'walk';
 let fireHeld = false;
 let aimOn = false;
@@ -75,10 +76,12 @@ export const getWalkClip = (): string => walkClip;
 export function setTouchVector(x: number, y: number, active: boolean): void {
   touchX = x; touchY = y; touchActive = active;
 }
-export const addLook = (dx: number): void => { lookDx += dx; };
-export function takeLook(): number {
-  const d = lookDx;
+export const addLook = (dx: number, dy = 0): void => { lookDx += dx; lookDy += dy; };
+/** Quanto o dedo/mouse andou desde a última leitura (px): dx gira, dy inclina. */
+export function takeLook(): { dx: number; dy: number } {
+  const d = { dx: lookDx, dy: lookDy };
   lookDx = 0;
+  lookDy = 0;
   return d;
 }
 
@@ -88,7 +91,7 @@ export function initMouse(canvas: HTMLElement): void {
   const locked = (): boolean => document.pointerLockElement === canvas;
   canvas.addEventListener('click', () => { if (!locked()) void canvas.requestPointerLock?.(); });
   window.addEventListener('mousemove', (e) => {
-    if (locked() || (e.buttons & 1 && !(e.target instanceof HTMLElement && e.target.closest('.m-hud button, .m-btn')))) lookDx += e.movementX;
+    if (locked() || (e.buttons & 1 && !(e.target instanceof HTMLElement && e.target.closest('.m-hud button, .m-btn')))) { lookDx += e.movementX; lookDy += e.movementY; }
   });
   window.addEventListener('mousedown', (e) => {
     if (!locked()) return;

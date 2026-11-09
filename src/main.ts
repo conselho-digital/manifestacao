@@ -28,6 +28,11 @@ const camOffset = Number(new URLSearchParams(location.search).get('camoffset') ?
 // Vista aérea (inspeção do mapa, como a foto da maquete): ?vista=aerea
 const aerial = new URLSearchParams(location.search).get('vista') === 'aerea';
 let yaw = 0; // câmera olha para +Z
+const PITCH_DEFAULT = 0.3; // um pouco de cima
+const PITCH_MIN = -0.6; // olhando para cima
+const PITCH_MAX = 1.2; // quase vista de cima
+let pitch = PITCH_DEFAULT;
+let aimK = 0;
 
 const clock = new THREE.Clock();
 let player: Player | null = null;
@@ -86,7 +91,9 @@ void showLobby().then(async (profile) => {
 function loop(): void {
   const dt = Math.min(clock.getDelta(), 0.05);
   if (player && combat) {
-    yaw -= takeLook() * 0.006;
+    const look = takeLook();
+    yaw -= look.dx * 0.006;
+    pitch = THREE.MathUtils.clamp(pitch + look.dy * 0.005, PITCH_MIN, PITCH_MAX);
     const dh = player.driveHeading;
     if (dh !== null) {
       // No carro a câmera fica atrás dele
@@ -97,7 +104,9 @@ function loop(): void {
     lastInput = input;
     combat.update(dt, input, player);
     player.update(dt, input, yaw);
-    player.followCamera(camera, dt, yaw + camOffset);
+    aimK += ((input.aim && combat.weapon === 0 && !player.isDriving ? 1 : 0) - aimK) * Math.min(1, dt * 9);
+    player.followCamera(camera, dt, yaw + camOffset, pitch, aimK);
+    player.setAimPitch(pitch);
     if (aerial) {
       camera.position.set(0, 120, -150);
       camera.lookAt(0, 0, 8);
@@ -132,7 +141,7 @@ function loop(): void {
     net.sendMove(
       p.position.x, p.position.y, p.position.z, p.rotation.y,
       combat.dead ? 'dead' : player.animName, player.isDriving ? player.carId : -1,
-      combat.dead ? 0 : player.weaponCode, performance.now(),
+      combat.dead ? 0 : player.weaponCode, pitch, performance.now(),
     );
   }
   remotes.forEach((r) => r.update(dt));

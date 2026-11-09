@@ -78,6 +78,7 @@ function gtaKey(name: string): string {
 }
 
 const FADE = 0.2;
+const AXIS_X = new THREE.Vector3(1, 0, 0);
 const ARM_GAIN = 0.9;
 
 interface Arm {
@@ -97,6 +98,7 @@ export class Animator {
   private bend = BEND.idle!;
   private armMode: ArmMode = 'swing';
   private armed: Armed = 'none';
+  private aimPitch = 0;
   private readonly actions = new Map<string, THREE.AnimationAction>();
   private readonly tmpM = new THREE.Matrix4();
   private readonly rootInv = new THREE.Matrix4();
@@ -204,6 +206,11 @@ export class Animator {
     this.armMode = ARM_MODE[name] ?? 'swing';
   }
 
+  /** Inclinação da mira (rad): os braços de fuzil sobem/descem junto. */
+  setAimPitch(p: number): void {
+    this.aimPitch = p;
+  }
+
   /** Segurando a arma: braços em posição de fuzil (só quando o clipe não define os braços). */
   setArmed(a: Armed): void {
     this.armed = a;
@@ -271,6 +278,11 @@ export class Animator {
         tU.set(s * 0.12, -Math.cos(theta), Math.sin(theta));
         tF.set(s * 0.06, -Math.cos(theta + beta), Math.sin(theta + beta));
       }
+    }
+    if (mode === 'rifle' || mode === 'aim') {
+      // gira os braços em torno do eixo lateral: pitch positivo = apontar para baixo
+      tU.applyAxisAngle(AXIS_X, this.aimPitch);
+      tF.applyAxisAngle(AXIS_X, this.aimPitch);
     }
     const k = Math.min(1, dt * 12);
     arm.curU.lerp(tU.normalize(), k).normalize();

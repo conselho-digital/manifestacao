@@ -41,6 +41,7 @@ export class RemotePlayer {
   private model: THREE.Object3D | null = null;
   private weaponVis: WeaponVisual | null = null;
   private weapon = 0;
+  private pitch = 0;
   private lie = 0;
   private modelBaseY: number | null = null;
 
@@ -63,6 +64,7 @@ export class RemotePlayer {
     this.anim = m.a || 'idle';
     this.carId = m.v;
     this.weapon = m.w;
+    this.pitch = m.pt;
     if (snap || !this.ready) {
       this.root.position.copy(this.target);
       this.root.rotation.y = m.ry;
@@ -86,11 +88,13 @@ export class RemotePlayer {
     const dead = this.anim === 'dead';
     if (this.animator && !car) {
       this.animator.setArmed(this.weapon === 2 ? 'aim' : this.weapon === 1 ? 'rifle' : 'none');
+      this.animator.setAimPitch(this.pitch);
       this.animator.play(dead ? 'idle' : this.anim);
       this.animator.update(dt);
     }
     if (this.weaponVis) {
       this.weaponVis.setMode(this.weapon === 2 ? 'aim' : this.weapon === 1 ? 'rifle' : 'none');
+      this.weaponVis.setPitch(this.pitch);
       this.weaponVis.setHidden(!!car || dead);
       this.weaponVis.update(dt);
     }

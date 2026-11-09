@@ -290,13 +290,13 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
 
   // Arrastar a tela gira a câmera (celular)
   const look = make('m-look', hud);
-  const last = new Map<number, number>();
-  look.addEventListener('pointerdown', (e) => { look.setPointerCapture(e.pointerId); last.set(e.pointerId, e.clientX); });
+  const last = new Map<number, { x: number; y: number }>();
+  look.addEventListener('pointerdown', (e) => { look.setPointerCapture(e.pointerId); last.set(e.pointerId, { x: e.clientX, y: e.clientY }); });
   look.addEventListener('pointermove', (e) => {
-    const x0 = last.get(e.pointerId);
-    if (x0 === undefined) return;
-    addLook(e.clientX - x0);
-    last.set(e.pointerId, e.clientX);
+    const p0 = last.get(e.pointerId);
+    if (!p0) return;
+    addLook(e.clientX - p0.x, e.clientY - p0.y);
+    last.set(e.pointerId, { x: e.clientX, y: e.clientY });
   });
   const endLook = (e: PointerEvent): void => { last.delete(e.pointerId); };
   look.addEventListener('pointerup', endLook);

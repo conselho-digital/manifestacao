@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COLLIDERS } from './map';
+import { COLLIDERS, rayBox } from './map';
 import { playShot } from './audio';
 import { Tracers } from './weapons';
 import type { Player } from './player';
@@ -131,19 +131,24 @@ export class Combat {
 
   private fireRifle(player: Player, aiming: boolean): void {
     const { camera, net } = this.d;
-    // A câmera não tem inclinação para cima/baixo: o tiro sai na horizontal, na direção em que ela olha
+    // Direção da mira = para onde a câmera olha (inclui cima/baixo), com um pouco de dispersão
     const dir = camera.getWorldDirection(this.tmpD);
-    dir.y = 0;
-    dir.normalize();
     const spread = aiming ? 0.006 : 0.025;
     dir.x += (Math.random() - 0.5) * spread;
+    dir.y += (Math.random() - 0.5) * spread;
     dir.z += (Math.random() - 0.5) * spread;
-    dir.y += (Math.random() - 0.5) * spread * 0.6;
     dir.normalize();
 
+    // 1) onde o centro da tela aponta; 2) do cano até esse ponto (respeita paredes no meio do caminho)
+    const aim = this.cast(camera.position, dir, RANGE);
+    const target = camera.position.clone().addScaledVector(dir, aim.t);
     const muzzle = player.weaponVis ? player.weaponVis.muzzle(this.tmpO) : this.tmpO.copy(player.object.position).setY(1.3);
-    const hit = this.cast(muzzle, dir, RANGE);
-    const end = muzzle.clone().addScaledVector(dir, hit.t);
+    const toTarget = target.sub(muzzle);
+    const dist = toTarget.length();
+    // alvo colado no cano ou atrás dele: atira reto na direção da mira
+    const shotDir = dist > 1 && toTarget.dot(dir) > 0 ? toTarget.divideScalar(dist) : dir.clone();
+    const hit = this.cast(muzzle, shotDir, dist > 1 ? dist + 0.5 : RANGE);
+    const end = muzzle.clone().addScaledVector(shotDir, hit.t);
 
     this.tracers.add(muzzle, end);
     player.weaponVis?.flash();
@@ -176,7 +181,7 @@ export class Combat {
     let head = false;
     if (d.y < -1e-4) { const tg = -o.y / d.y; if (tg > 0 && tg < best) best = tg; }
     for (const b of COLLIDERS) {
-      const t = rayBox(o, d, b.minX, b.bottom ?? 0, b.minZ, b.maxX, b.top, b.maxZ);
+      const t = rayBox(o.x, o.y, o.z, d.x, d.y, d.z, b.minX, b.bottom ?? 0, b.minZ, b.maxX, b.top, b.maxZ);
       if (t !== null && t < best) best = t;
     }
     for (const r of this.d.remotes.values()) {
@@ -247,25 +252,6 @@ export class Combat {
 }
 
 // ---------- geometria dos raios ----------
-
-/** Raio contra caixa alinhada aos eixos; devolve a distância ou null. */
-function rayBox(o: THREE.Vector3, d: THREE.Vector3, x0: number, y0: number, z0: number, x1: number, y1: number, z1: number): number | null {
-  let t0 = 0;
-  let t1 = Infinity;
-  for (const [oo, dd, lo, hi] of [[o.x, d.x, x0, x1], [o.y, d.y, y0, y1], [o.z, d.z, z0, z1]] as const) {
-    if (Math.abs(dd) < 1e-9) {
-      if (oo < lo || oo > hi) return null;
-    } else {
-      let a = (lo - oo) / dd;
-      let b = (hi - oo) / dd;
-      if (a > b) [a, b] = [b, a];
-      t0 = Math.max(t0, a);
-      t1 = Math.min(t1, b);
-      if (t0 > t1) return null;
-    }
-  }
-  return t0;
-}
 
 /** Raio contra um "cilindro" fino vertical (o corpo): ponto mais próximo entre o raio e o segmento. */
 function rayVerticalSegment(o: THREE.Vector3, d: THREE.Vector3, base: THREE.Vector3, height: number, radius: number): { t: number; s: number } | null {

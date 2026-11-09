@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COLLIDERS, MAP, type Box } from './map';
+import { COLLIDERS, MAP, rayBox, type Box } from './map';
 import type { InputState } from './input';
 import { CARS, type Car } from './vehicle';
 import type { Animator, Armed } from './anim';
@@ -13,7 +13,6 @@ const JUMP_V = 6.8;
 const RADIUS = 0.4;
 const STEP = 0.45; // desnível que se sobe andando
 const CAM_DISTANCE = 6;
-const CAM_HEIGHT = 3.5;
 
 // Escalada: pular(0.63s) -> puxar(1.43s) -> levantar(0.4s)
 const CLIMB_T = { grab: 0.633, pull: 2.066, end: 2.466 };
@@ -355,19 +354,41 @@ export class Player {
     }
   }
 
-  /** Câmera em terceira pessoa, atrás do jogador. */
-  followCamera(camera: THREE.PerspectiveCamera, dt: number, yaw: number): void {
+  /**
+   * Câmera orbital em terceira pessoa. `yaw` gira para os lados, `pitch` inclina (positivo = olha para baixo).
+   * `aimK` (0 a 1) aproxima a câmera e a passa para o ombro direito ao mirar.
+   * A câmera não atravessa prédios nem o chão.
+   */
+  followCamera(camera: THREE.PerspectiveCamera, dt: number, yaw: number, pitch: number, aimK: number): void {
     const p = this.object.position;
     const driving = this.mode === 'drive';
-    const dist = driving ? 9 : CAM_DISTANCE;
-    const height = driving ? 4.5 : CAM_HEIGHT;
-    const target = new THREE.Vector3(
-      p.x - Math.sin(yaw) * dist,
-      p.y + height,
-      p.z - Math.cos(yaw) * dist,
-    );
-    camera.position.lerp(target, Math.min(1, dt * 8));
-    camera.lookAt(p.x, p.y + 1.2, p.z);
+    const dist = driving ? 9 : THREE.MathUtils.lerp(CAM_DISTANCE, 3.4, aimK);
+    const shoulder = driving ? 0 : 0.75 * aimK;
+    const target = new THREE.Vector3(p.x, p.y + (driving ? 1.6 : 1.45), p.z);
+    const cp = Math.cos(pitch);
+    // direção para onde a câmera olha
+    const dir = new THREE.Vector3(Math.sin(yaw) * cp, -Math.sin(pitch), Math.cos(yaw) * cp);
+    const right = new THREE.Vector3(-Math.cos(yaw), 0, Math.sin(yaw));
+    // ponto ideal: atrás do alvo, no ombro, e nunca abaixo do chão
+    const from = target.clone().addScaledVector(right, shoulder);
+    let d = dist;
+    // colisão: do alvo até a câmera, encurta se bater em prédio
+    const back = dir.clone().negate();
+    for (const b of COLLIDERS) {
+      const t = rayBox(from.x, from.y, from.z, back.x, back.y, back.z, b.minX - 0.25, b.bottom ?? 0, b.minZ - 0.25, b.maxX + 0.25, b.top + 0.25, b.maxZ + 0.25);
+      if (t !== null && t < d) d = Math.max(0.9, t - 0.1);
+    }
+    const desired = from.clone().addScaledVector(back, d);
+    desired.y = Math.max(desired.y, 0.35);
+    // segue rápido (a câmera acompanha o dedo sem "atraso" perceptível)
+    camera.position.lerp(desired, 1 - Math.exp(-dt * 22));
+    camera.lookAt(camera.position.x + dir.x, camera.position.y + dir.y, camera.position.z + dir.z);
+  }
+
+  /** Inclinação da mira: a arma e os braços acompanham para onde a câmera olha. */
+  setAimPitch(pitch: number): void {
+    this.weaponVis?.setPitch(pitch);
+    this.animator?.setAimPitch(pitch);
   }
 }
 

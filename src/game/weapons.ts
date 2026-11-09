@@ -67,6 +67,11 @@ export class WeaponVisual {
     this.apply();
   }
 
+  /** Inclina a arma para onde a câmera mira (positivo = para baixo). */
+  setPitch(p: number): void {
+    this.anchor.rotation.x = p * 0.9;
+  }
+
   /** Esconde (morto, no carro) sem perder o modo. */
   setHidden(hidden: boolean): void {
     this.anchor.visible = !hidden && this.ready && this.mode !== 'none';

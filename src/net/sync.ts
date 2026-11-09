@@ -21,6 +21,8 @@ export interface MoveMsg {
   v: number;
   /** arma: 0 punho, 1 fuzil, 2 fuzil mirando */
   w: number;
+  /** inclinação da mira (rad) */
+  pt: number;
 }
 
 /** Tiro: de (x1,y1,z1) até (x2,y2,z2). h = id de quem foi acertado ('' = ninguém). */
@@ -87,7 +89,8 @@ function cleanMove(raw: unknown): MoveMsg | null {
   const a = typeof m.a === 'string' && /^[a-z0-9_]{1,24}$/.test(m.a) && m.a.length <= MAX_ANIM ? m.a : 'idle';
   const v = typeof m.v === 'number' && Number.isInteger(m.v) && m.v >= -1 && m.v < 8 ? m.v : -1;
   const w = m.w === 1 || m.w === 2 ? m.w : 0;
-  return { id: m.id, x, y, z, ry, a, v, w };
+  const pt = finite(m.pt ?? 0, 1.6) ?? 0;
+  return { id: m.id, x, y, z, ry, a, v, w, pt };
 }
 
 function cleanShot(raw: unknown): ShotMsg | null {
@@ -183,7 +186,7 @@ export class Net {
   }
 
   /** Envia posição no máximo ~12x por segundo. */
-  sendMove(x: number, y: number, z: number, ry: number, a: string, v: number, w: number, now: number): void {
+  sendMove(x: number, y: number, z: number, ry: number, a: string, v: number, w: number, pt: number, now: number): void {
     if (now - this.lastSent < SEND_INTERVAL_MS) return;
     this.lastSent = now;
     this.send('move', {
@@ -192,7 +195,7 @@ export class Net {
       y: Math.round(y * 100) / 100,
       z: Math.round(z * 100) / 100,
       ry: Math.round(ry * 100) / 100,
-      a, v, w,
+      a, v, w, pt: Math.round(pt * 20) / 20,
     });
   }
 
