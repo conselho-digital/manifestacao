@@ -391,14 +391,30 @@ export class Animator {
     const pitch = THREE.MathUtils.lerp(RIFLE_LOW.pitch + this.aimPitch * 0.5, this.aimPitch, k);
     const yaw = THREE.MathUtils.lerp(RIFLE_LOW.yaw, RIFLE_AIM.yaw, k);
     const q = new THREE.Quaternion().setFromAxisAngle(Y, yaw).multiply(new THREE.Quaternion().setFromAxisAngle(X, pitch));
-    // clipe feito para segurar o fuzil: a empunhadura fica na mão direita do clipe (a mira no ombro continua por IK)
+    // clipe feito para segurar o fuzil: a arma fica entre as duas mãos do clipe (direita na empunhadura, esquerda no guarda-mão)
     const right = this.arms.find((a) => a.side < 0);
-    if (right && OWN_HOLD(this.clipName)) {
-      const hand = this.posIn(right.h, new THREE.Vector3());
-      const elbow = this.posIn(right.f, new THREE.Vector3());
-      hand.addScaledVector(hand.clone().sub(elbow).normalize(), 0.04); // palma um pouco além do pulso
-      const byHand = hand.sub(GRIP_REAR.clone().applyQuaternion(q));
-      pos.lerp(byHand, 1 - k);
+    const left = this.arms.find((a) => a.side > 0);
+    if (right && left && OWN_HOLD(this.clipName) && k < 0.999) {
+      const palm = (arm: Arm): THREE.Vector3 => {
+        const hand = this.posIn(arm.h, new THREE.Vector3());
+        const elbow = this.posIn(arm.f, new THREE.Vector3());
+        return hand.addScaledVector(hand.clone().sub(elbow).normalize(), 0.04);
+      };
+      const hr = palm(right);
+      const hl = palm(left);
+      const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(delta);
+      const axis = hl.clone().sub(hr);
+      // o eixo da arma vai da mão direita para a esquerda; se as mãos estão quase juntas, segue a frente do peito
+      const len = axis.length();
+      axis.normalize().multiplyScalar(THREE.MathUtils.clamp(len / 0.25, 0, 1)).addScaledVector(fwd, 1 - THREE.MathUtils.clamp(len / 0.25, 0, 1)).normalize();
+      if (axis.dot(fwd) < 0.2) axis.addScaledVector(fwd, 0.6).normalize(); // nunca aponta para o próprio corpo
+      const xAxis = new THREE.Vector3().crossVectors(Y, axis).normalize();
+      const yAxis = new THREE.Vector3().crossVectors(axis, xAxis);
+      const qh = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, axis));
+      const mid = GRIP_REAR.clone().add(GRIP_FRONT).multiplyScalar(0.5).applyQuaternion(qh);
+      const byHands = hr.clone().add(hl).multiplyScalar(0.5).sub(mid).addScaledVector(axis, 0.07); // um pouco à frente: a coronha não encosta no queixo
+      pos.lerp(byHands, 1 - k);
+      q.slerp(qh, 1 - k);
     }
     return { pos, q };
   }
