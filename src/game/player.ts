@@ -12,7 +12,7 @@ const GRAVITY = -20;
 const JUMP_V = 6.8;
 const RADIUS = 0.4;
 const STEP = 0.45; // desnível que se sobe andando
-const CAM_DISTANCE = 6;
+const CAM_DISTANCE = 4.3;
 
 // Escalada: pular(0.63s) -> puxar(1.43s) -> levantar(0.4s)
 const CLIMB_T = { grab: 0.633, pull: 2.066, end: 2.466 };
@@ -362,8 +362,8 @@ export class Player {
   followCamera(camera: THREE.PerspectiveCamera, dt: number, yaw: number, pitch: number, aimK: number): void {
     const p = this.object.position;
     const driving = this.mode === 'drive';
-    const dist = driving ? 9 : THREE.MathUtils.lerp(CAM_DISTANCE, 3.4, aimK);
-    const shoulder = driving ? 0 : 0.75 * aimK;
+    const dist = driving ? 9 : THREE.MathUtils.lerp(CAM_DISTANCE, 2.9, aimK);
+    const shoulder = driving ? 0 : 0.85 + 0.3 * aimK;
     const target = new THREE.Vector3(p.x, p.y + (driving ? 1.6 : 1.45), p.z);
     const cp = Math.cos(pitch);
     // direção para onde a câmera olha

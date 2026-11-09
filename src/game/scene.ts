@@ -1,19 +1,29 @@
 import * as THREE from 'three';
 
+const BLUR_KEY = 'arena:blur';
+const BLUR_DEFAULT = 0.5;
+
+/** Desfoque leve da imagem 3D (px). Vem de ?blur=N, do que o jogador salvou ou do padrão 0,5. */
+export function getBlur(): number {
+  const params = new URLSearchParams(location.search);
+  if (params.has('blur')) { const q = Number(params.get('blur')); if (Number.isFinite(q)) return Math.min(Math.max(q, 0), 3); }
+  try { const v = Number(localStorage.getItem(BLUR_KEY)); if (localStorage.getItem(BLUR_KEY) !== null && Number.isFinite(v)) return Math.min(Math.max(v, 0), 3); } catch { /* sem armazenamento */ }
+  return BLUR_DEFAULT;
+}
+
+export function applyBlur(canvas: HTMLCanvasElement, px: number, save = false): void {
+  canvas.style.filter = px > 0 ? `blur(${px}px)` : '';
+  canvas.style.transform = px > 0 ? 'scale(1.004)' : ''; // esconde a borda translúcida do desfoque
+  if (save) { try { localStorage.setItem(BLUR_KEY, String(px)); } catch { /* sem armazenamento */ } }
+}
+
 export function createRenderer(): THREE.WebGLRenderer {
   const renderer = new THREE.WebGLRenderer({ antialias: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
-  // Desfoque bem leve na imagem do jogo para disfarçar serrilhado e arestas (o HUD fica nítido, pois é HTML).
-  // ?blur=0 desliga; ?blur=0.8 aumenta (valor em pixels).
-  const q = Number(new URLSearchParams(location.search).get('blur'));
-  const blur = Number.isFinite(q) && new URLSearchParams(location.search).has('blur') ? q : 0.45;
-  if (blur > 0) {
-    renderer.domElement.style.filter = `blur(${blur}px)`;
-    renderer.domElement.style.transform = 'scale(1.004)'; // esconde a borda translúcida do desfoque
-  }
+  applyBlur(renderer.domElement, getBlur());
   document.body.appendChild(renderer.domElement);
   return renderer;
 }
