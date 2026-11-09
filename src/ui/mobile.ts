@@ -81,21 +81,21 @@ const CSS = `
 .m-change{right:calc(var(--u)*.8);top:calc(var(--u)*33);width:calc(var(--u)*12.5);height:calc(var(--u)*12.5)}
 .m-fire{right:calc(var(--u)*17.5);bottom:calc(var(--u)*24);width:calc(var(--u)*15.5);height:calc(var(--u)*15.5)}
 .m-aim{right:calc(var(--u)*2.5);bottom:calc(var(--u)*29);width:calc(var(--u)*13.5);height:calc(var(--u)*13.5)}
-.m-jump{right:calc(var(--u)*2.5);bottom:calc(var(--u)*9.5);width:calc(var(--u)*17);height:calc(var(--u)*17)}
-.m-door{right:calc(var(--u)*36.5);bottom:calc(var(--u)*7);width:calc(var(--u)*12);height:calc(var(--u)*12)}
+.m-jump{right:calc(var(--u)*1.2);bottom:calc(var(--u)*9.5);width:calc(var(--u)*17);height:calc(var(--u)*17)}
+.m-door{right:calc(var(--u)*19.4);bottom:calc(var(--u)*8);width:calc(var(--u)*14);height:calc(var(--u)*14)}
 /* o botão de entrar no carro só aparece perto de um carro (e ocupa o lugar do Sprint) */
 .m-hud:not(.near-car):not(.driving) .m-door{display:none}
 .m-hud.near-car .m-sprint{display:none}
 .m-hud.driving .m-door{bottom:auto;top:calc(var(--u)*33);right:calc(var(--u)*2.5);width:calc(var(--u)*13);height:calc(var(--u)*13)}
 /* Sprint à direita (o Escalar saiu: escala sozinho ao pular perto de um obstáculo) */
-.m-sprint{right:calc(var(--u)*36.5);bottom:calc(var(--u)*7);width:calc(var(--u)*12);height:calc(var(--u)*12);font-size:calc(var(--u)*2.9)}
+.m-sprint{right:calc(var(--u)*19.4);bottom:calc(var(--u)*8);width:calc(var(--u)*14);height:calc(var(--u)*14);font-size:calc(var(--u)*3.2)}
 .m-anim{left:50%;top:calc(var(--u)*1.5);transform:translateX(-50%);width:auto;height:calc(var(--u)*8);border-radius:calc(var(--u)*4);padding:0 calc(var(--u)*3);
   flex-direction:row;gap:calc(var(--u)*1.2);font-size:calc(var(--u)*3);position:fixed}
 .m-anim .ico{width:calc(var(--u)*4.4);height:calc(var(--u)*4.4)}
 /* carro */
-.m-gas{right:calc(var(--u)*2.5);bottom:calc(var(--u)*9.5);width:calc(var(--u)*17);height:calc(var(--u)*17)}
-.m-brake{right:calc(var(--u)*20.5);bottom:calc(var(--u)*8);width:calc(var(--u)*14);height:calc(var(--u)*14)}
-.m-hand{right:calc(var(--u)*36.5);bottom:calc(var(--u)*7);width:calc(var(--u)*12);height:calc(var(--u)*12)}
+.m-gas{right:calc(var(--u)*1.2);bottom:calc(var(--u)*9.5);width:calc(var(--u)*17);height:calc(var(--u)*17)}
+.m-brake{right:calc(var(--u)*19.4);bottom:calc(var(--u)*8);width:calc(var(--u)*14);height:calc(var(--u)*14)}
+.m-hand{right:calc(var(--u)*34.6);bottom:calc(var(--u)*7);width:calc(var(--u)*12);height:calc(var(--u)*12)}
 .m-kmh{position:fixed;right:calc(var(--u)*17);top:calc(var(--u)*2.2);font-size:calc(var(--u)*6.5);color:#fff;text-align:right}
 .m-kmh small{display:block;font-size:calc(var(--u)*2.6);color:#ccc}
 .m-stick{position:fixed;left:calc(var(--u)*8);bottom:calc(var(--u)*9);width:calc(var(--u)*28);height:calc(var(--u)*28);border-radius:50%;pointer-events:auto;touch-action:none;
@@ -110,8 +110,8 @@ const CSS = `
 .m-chat{position:fixed;left:calc(var(--u)*1.4);bottom:calc(var(--u)*.8);font-size:calc(var(--u)*3.3);line-height:1.2;max-width:calc(var(--u)*60);text-transform:none}
 .m-chat p{margin:0}
 .m-chat em,.m-score em{font-style:normal;color:#f1c40f}
-.m-chatbtn{left:calc(var(--u)*1.4);bottom:calc(var(--u)*9);width:calc(var(--u)*6);height:calc(var(--u)*6);font-size:calc(var(--u)*2.4)}
-.m-chatbox{position:fixed;left:calc(var(--u)*1.4);bottom:calc(var(--u)*1);width:calc(var(--u)*70);display:none;pointer-events:auto;gap:calc(var(--u)*1);z-index:8}
+.m-chatbtn{left:50%;transform:translateX(-50%);bottom:calc(var(--u)*1.5);width:calc(var(--u)*8);height:calc(var(--u)*8);font-size:calc(var(--u)*2.6)}
+.m-chatbox{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--u)*1);width:calc(var(--u)*70);display:none;pointer-events:auto;gap:calc(var(--u)*1);z-index:8}
 .m-chatbox.open{display:flex}
 .m-chatbox input{flex:1;min-width:0;font-size:calc(var(--u)*4);padding:calc(var(--u)*1.4);border-radius:calc(var(--u)*1);border:2px solid #fff;background:rgba(0,0,0,.75);color:#fff;text-transform:none}
 .m-chatbox button{font-size:calc(var(--u)*3.4);padding:0 calc(var(--u)*2.5);border-radius:calc(var(--u)*1);border:0;background:#2f6b2f;color:#fff;font-weight:800}
