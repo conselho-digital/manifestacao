@@ -11,8 +11,11 @@ export interface PlayerInfo {
 export interface MoveMsg {
   id: string;
   x: number;
+  y: number;
   z: number;
   ry: number;
+  /** nome do clipe de animação atual */
+  a: string;
 }
 
 export interface NetHandlers {
@@ -71,12 +74,14 @@ export class Net {
   }
 
   /** Envia posição no máximo ~12x por segundo. */
-  sendMove(x: number, z: number, ry: number, now: number): void {
+  sendMove(x: number, y: number, z: number, ry: number, a: string, now: number): void {
     if (!this.channel || !this.ready || now - this.lastSent < SEND_INTERVAL_MS) return;
     this.lastSent = now;
     const payload: MoveMsg = {
       id: this.id,
       x: Math.round(x * 100) / 100,
+      y: Math.round(y * 100) / 100,
+      a,
       z: Math.round(z * 100) / 100,
       ry: Math.round(ry * 100) / 100,
     };

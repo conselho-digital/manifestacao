@@ -33,7 +33,7 @@ export class RemotePlayer {
   private ready = false;
   private pending: MoveMsg | null = null;
   private animator: Animator | null = null;
-  private speed = 0;
+  private anim = 'idle';
 
   constructor(readonly info: PlayerInfo) {
     this.root.add(makeLabel(info.name));
@@ -47,8 +47,9 @@ export class RemotePlayer {
 
   setTarget(m: MoveMsg, snap = false): void {
     this.pending = m;
-    this.target.set(m.x, 0, m.z);
+    this.target.set(m.x, m.y ?? 0, m.z);
     this.targetRy = m.ry;
+    this.anim = m.a || 'idle';
     if (snap || !this.ready) {
       this.root.position.copy(this.target);
       this.root.rotation.y = m.ry;
@@ -57,12 +58,9 @@ export class RemotePlayer {
 
   update(dt: number): void {
     const k = 1 - Math.exp(-dt * 12);
-    const before = this.root.position.clone();
     this.root.position.lerp(this.target, k);
-    if (this.animator && dt > 0) {
-      const inst = before.distanceTo(this.root.position) / dt;
-      this.speed += (inst - this.speed) * Math.min(1, dt * 8);
-      this.animator.set(this.speed > 3.2 ? 'run' : this.speed > 0.6 ? 'walk' : 'idle');
+    if (this.animator) {
+      this.animator.play(this.anim);
       this.animator.update(dt);
     }
     let d = this.targetRy - this.root.rotation.y;

@@ -55,3 +55,8 @@ Arena multiplayer no navegador. Mapa pequeno, personagens low-poly. Plano **grá
 - Uma etapa por vez, testar no navegador.
 - Perguntar antes de serviço pago ou dependência pesada.
 - Explicar alterações em frases curtas.
+
+## Controles
+- PC: WASD move · Shift anda · Q sprint · Espaço pula · E (ou C) escala · arrastar o mouse gira a câmera · G abre o menu de animações.
+- Celular: joystick (pouco = anda, muito = corre), Pular, Escalar, Correr+, arrastar a tela gira a câmera, botão "Animações".
+- Dados de animação: `public/anims/ped*.json` (esqueleto GTA SA, Law1-9) e `carlos*.json` (baked). Os `-extra` carregam em segundo plano.

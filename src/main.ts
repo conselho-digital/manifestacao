@@ -2,9 +2,10 @@ import * as THREE from 'three';
 import { createCamera, createRenderer, createScene, handleResize } from './game/scene';
 import { createMap } from './game/map';
 import { createCharacter } from './game/characters';
-import { readInput } from './game/input';
+import { readInput, takeLook } from './game/input';
 import { Player } from './game/player';
 import { showLobby } from './ui/lobby';
+import { createHud } from './ui/touch';
 import { Animator } from './game/anim';
 import { Net } from './net/sync';
 import { RemotePlayer } from './game/remote';
@@ -28,6 +29,7 @@ const net = new Net();
 const remotes = new Map<string, RemotePlayer>();
 
 void showLobby().then(async (profile) => {
+  createHud();
   const obj = await createCharacter(profile.character);
   obj.position.set(0, 0, 8);
   scene.add(obj);
@@ -54,10 +56,11 @@ void showLobby().then(async (profile) => {
 function loop(): void {
   const dt = Math.min(clock.getDelta(), 0.05);
   if (player) {
+    yaw -= takeLook() * 0.006;
     player.update(dt, readInput(), yaw);
     player.followCamera(camera, dt, yaw + camOffset);
     const p = player.object;
-    net.sendMove(p.position.x, p.position.z, p.rotation.y, performance.now());
+    net.sendMove(p.position.x, p.position.y, p.position.z, p.rotation.y, player.animName, performance.now());
   }
   remotes.forEach((r) => r.update(dt));
   renderer.render(scene, camera);
