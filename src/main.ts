@@ -15,6 +15,8 @@ const camera = createCamera();
 handleResize(renderer, camera);
 scene.add(createMap());
 
+// Ângulo extra da câmera (para inspecionar de lado): ?camoffset=1.57
+const camOffset = Number(new URLSearchParams(location.search).get('camoffset') ?? 0) || 0;
 let yaw = 0; // câmera olha para +Z
 window.addEventListener('mousemove', (e) => {
   if (e.buttons & 1) yaw -= e.movementX * 0.005;
@@ -53,7 +55,7 @@ function loop(): void {
   const dt = Math.min(clock.getDelta(), 0.05);
   if (player) {
     player.update(dt, readInput(), yaw);
-    player.followCamera(camera, dt, yaw);
+    player.followCamera(camera, dt, yaw + camOffset);
     const p = player.object;
     net.sendMove(p.position.x, p.position.z, p.rotation.y, performance.now());
   }

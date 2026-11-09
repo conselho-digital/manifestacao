@@ -46,7 +46,7 @@ Arena multiplayer no navegador. Mapa pequeno, personagens low-poly. Plano **grá
 2. ✅ Personagem com WASD, câmera 3ª pessoa
 3. ✅ Tela de entrada: nome + 8 personagens
 4. ✅ Multiplayer Supabase: presence + broadcast + interpolação
-5. ✅ Animação (ped.ifp: parado, andar, correr; Shift anda). Falta: Carlos e modelos sem esqueleto GTA
+5. ✅ Animação (ped.ifp: parado, andar, correr; Shift anda). Carlos e Law1-9 animados. Falta: modelos sem esqueleto (Helena, Stewart, Bennyse, Amanda, Garota1, Gordao, Cesar, Akiyama)
 6. Veículos
 7. Deploy Vercel
 8. Chat, ranking, roupas
