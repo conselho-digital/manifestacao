@@ -10,6 +10,8 @@ export interface InputState {
   /** disparados uma vez por toque/tecla */
   jump: boolean;
   climb: boolean;
+  /** alterna agachado */
+  crouch: boolean;
   /** entrar/sair do carro */
   interact: boolean;
   /** id de animação pedida no menu (emote ou ação) */
@@ -34,6 +36,7 @@ let touchActive = false;
 let sprintHeld = false;
 let jumpQ = false;
 let climbQ = false;
+let crouchQ = false;
 let interactQ = false;
 let reloadQ = false;
 let switchQ = false;
@@ -55,6 +58,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') { jumpQ = true; e.preventDefault(); }
   if (e.code === 'KeyE' || e.code === 'KeyC') climbQ = true;
   if (e.code === 'KeyF') interactQ = true;
+  if (e.code === 'KeyZ' || e.code === 'ControlLeft') { crouchQ = true; if (e.code === 'ControlLeft') e.preventDefault(); }
   if (e.code === 'KeyR') reloadQ = true;
   if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'KeyX') switchQ = true;
 });
@@ -62,6 +66,7 @@ window.addEventListener('keyup', (e) => keys.delete(e.code));
 window.addEventListener('blur', () => { keys.clear(); mouseFire = false; mouseAim = false; });
 
 export const queueJump = (): void => { jumpQ = true; };
+export const queueCrouch = (): void => { crouchQ = true; };
 export const queueClimb = (): void => { climbQ = true; };
 export const queueInteract = (): void => { interactQ = true; };
 export const queueReload = (): void => { reloadQ = true; };
@@ -122,7 +127,7 @@ export function readInput(): InputState {
   const state: InputState = {
     x, y, mag: len, walk,
     sprint: keys.has('KeyQ') || sprintHeld,
-    jump: jumpQ, climb: climbQ, interact: interactQ, emote: emoteQ, walkClip,
+    jump: jumpQ, climb: climbQ, crouch: crouchQ, interact: interactQ, emote: emoteQ, walkClip,
     fire: fireHeld || mouseFire,
     aim: aimOn || mouseAim,
     reload: reloadQ, switchWeapon: switchQ,
@@ -132,6 +137,7 @@ export function readInput(): InputState {
   };
   jumpQ = false;
   climbQ = false;
+  crouchQ = false;
   interactQ = false;
   reloadQ = false;
   switchQ = false;

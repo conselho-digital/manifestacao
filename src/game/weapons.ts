@@ -3,6 +3,8 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 export type ArmedMode = 'none' | 'rifle' | 'aim';
 
+import type { Animator } from './anim';
+
 const loader = new GLTFLoader();
 let rifleSrc: Promise<THREE.Object3D> | null = null;
 const loadRifle = (): Promise<THREE.Object3D> => (rifleSrc ??= loader.loadAsync('/models/weapons/AK47.glb').then((g) => g.scene));
@@ -30,6 +32,9 @@ export class WeaponVisual {
   private flashT = 0;
   private mode: ArmedMode = 'none';
   private ready = false;
+  private bound = false;
+  private hidden = false;
+  private suppressed = false;
 
   constructor(root: THREE.Object3D) {
     this.anchor.visible = false;
@@ -61,6 +66,12 @@ export class WeaponVisual {
     });
   }
 
+  /** A posição da arma passa a ser dada pelo animador (acompanha o peito e as mãos). */
+  bind(animator: Animator): void {
+    this.bound = true;
+    animator.attachWeapon(this.anchor);
+  }
+
   setMode(mode: ArmedMode): void {
     if (mode === this.mode) return;
     this.mode = mode;
@@ -69,17 +80,29 @@ export class WeaponVisual {
 
   /** Inclina a arma para onde a câmera mira (positivo = para baixo). */
   setPitch(p: number): void {
-    this.anchor.rotation.x = p * 0.9;
+    if (!this.bound) this.anchor.rotation.x = p * 0.9;
   }
 
   /** Esconde (morto, no carro) sem perder o modo. */
   setHidden(hidden: boolean): void {
-    this.anchor.visible = !hidden && this.ready && this.mode !== 'none';
+    this.hidden = hidden;
+    this.refresh();
+  }
+
+  /** Some enquanto o animador não segura a arma (escalando, rolando, emote). */
+  setSuppressed(v: boolean): void {
+    if (v === this.suppressed) return;
+    this.suppressed = v;
+    this.refresh();
+  }
+
+  private refresh(): void {
+    this.anchor.visible = this.ready && this.mode !== 'none' && !this.hidden && !this.suppressed;
   }
 
   private apply(): void {
-    this.anchor.visible = this.ready && this.mode !== 'none';
-    this.anchor.position.set(0.02, this.mode === 'aim' ? 1.34 : 1.2, 0.18);
+    this.refresh();
+    if (!this.bound) this.anchor.position.set(0.02, this.mode === 'aim' ? 1.34 : 1.2, 0.18);
   }
 
   /** Mostra o clarão por ~50 ms. */

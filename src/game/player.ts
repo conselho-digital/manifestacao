@@ -8,6 +8,8 @@ import type { WeaponVisual } from './weapons';
 const RUN_SPEED = 5;
 const WALK_SPEED = 1.8;
 const SPRINT_SPEED = 7.5;
+const CROUCH_SPEED = 1.9;
+const AIM_SPEED = 2.7; // andando com o fuzil no ombro
 const GRAVITY = -20;
 const JUMP_V = 6.8;
 const RADIUS = 0.4;
@@ -44,10 +46,21 @@ export class Player {
   private climb: Climb | null = null;
   private car: Car | null = null;
   private armed: Armed = 'none';
+  private crouching = false;
+  private crouchK = 0; // 0 em pé, 1 agachado (suaviza a câmera)
+  /** direção do movimento em relação ao corpo: frente(+) e esquerda(+) */
+  private moveF = 0;
+  private moveL = 0;
   private lie = 0; // 0 em pé, 1 deitado (morto)
   private modelBaseY: number | null = null;
   /** arma visual (fuzil na mão), definida pelo main */
   weaponVis: WeaponVisual | null = null;
+
+  /** Liga a arma visual: o animador passa a posicioná-la (peito e mãos). */
+  attachWeapon(w: WeaponVisual): void {
+    this.weaponVis = w;
+    if (this.animator) w.bind(this.animator);
+  }
 
   constructor(object: THREE.Object3D, private animator: Animator | null = null) {
     this.object = object;
@@ -60,6 +73,7 @@ export class Player {
     const p = this.object.position;
     return CARS.some((c) => c.driver === null && Math.hypot(c.x - p.x, c.z - p.z) < 3.5);
   }
+  get isCrouching(): boolean { return this.crouching; }
   get isDriving(): boolean { return this.mode === 'drive'; }
   get carSpeed(): number { return this.car ? this.car.speed : 0; }
   /** 0 punho, 1 fuzil, 2 fuzil mirando (enviado aos outros) */
@@ -76,6 +90,7 @@ export class Player {
   die(): void {
     if (this.car) this.exitCar();
     this.mode = 'dead';
+    this.crouching = false;
     this.emote = null;
     this.climb = null;
     this.special = null;
@@ -122,6 +137,9 @@ export class Player {
     if (input.interact && this.mode === 'ground' && this.tryEnterCar()) return;
     if (input.climb && this.tryClimb()) { this.finish(dt); return; }
 
+    if (input.crouch && this.mode === 'ground') this.crouching = !this.crouching;
+    if (input.jump) this.crouching = false;
+
     // Pular perto de um obstáculo alto escala sozinho
     if (input.jump && this.mode === 'ground' && this.tryClimb(1.05, 1.6)) { this.finish(dt); return; }
     if (input.jump && this.mode === 'ground') {
@@ -138,10 +156,15 @@ export class Player {
     const right = new THREE.Vector3(-forward.z, 0, forward.x);
     const move = forward.multiplyScalar(input.y).add(right.multiplyScalar(input.x));
     if (moving && move.lengthSq() > 1e-6) {
-      const speed = input.sprint ? SPRINT_SPEED : input.walk ? WALK_SPEED : RUN_SPEED;
+      const speed = this.crouching ? CROUCH_SPEED
+        : this.armed === 'aim' ? (input.walk ? WALK_SPEED : AIM_SPEED)
+          : input.sprint ? SPRINT_SPEED : input.walk ? WALK_SPEED : RUN_SPEED;
       const dir = move.clone().normalize();
       this.moveHoriz(dir.x * speed * dt, dir.z * speed * dt);
       this.heading = Math.atan2(dir.x, dir.z);
+      // direção em relação ao corpo quando ele olha para onde a câmera aponta
+      this.moveF = dir.x * Math.sin(yaw) + dir.z * Math.cos(yaw);
+      this.moveL = dir.x * Math.cos(yaw) - dir.z * Math.sin(yaw);
     }
     // Armado (em pé, andando, mirando ou atirando): o corpo acompanha para onde a câmera aponta
     if (this.armed !== 'none') this.heading = yaw;
@@ -180,11 +203,21 @@ export class Player {
       this.landT -= dt;
       if (!moving) return; // termina o pouso parado
     }
-    if (moving) {
+    const armed = this.armed !== 'none';
+    if (this.crouching) {
+      // agachado: andar para a frente ou para trás (de lado usa o andar para a frente)
+      a.play(moving ? (armed && this.moveF < -0.5 ? 'crouch_bwd' : 'crouch_fwd') : 'crouch_idle');
+    } else if (moving && armed && !input.sprint) {
+      // com o fuzil o corpo olha para a mira: anda de frente, de costas ou de lado
+      let clip: string;
+      if (Math.abs(this.moveF) >= Math.abs(this.moveL)) clip = this.moveF >= 0 ? (this.armed === 'aim' || input.walk ? 'gun_fwd' : 'run_armed') : 'gun_bwd';
+      else clip = this.moveL > 0 ? 'gun_left' : 'gun_right';
+      a.play(a.has(clip) ? clip : 'run');
+    } else if (moving) {
       const clip = input.sprint ? 'sprint' : input.walk ? input.walkClip : 'run';
       a.play(a.has(clip) ? clip : input.walk ? 'walk' : 'run');
     } else if (this.emote && a.has(this.emote)) a.play(this.emote);
-    else a.play('idle');
+    else a.play(armed && a.has('gun_idle') ? 'gun_idle' : 'idle');
   }
 
   /** Emote (loop até mexer) ou ação (rolar, mergulhar). */
@@ -341,6 +374,7 @@ export class Player {
     diff = Math.atan2(Math.sin(diff), Math.cos(diff));
     this.object.rotation.y += diff * Math.min(1, dt * 18);
     this.animator?.update(dt);
+    if (this.animator) this.weaponVis?.setSuppressed(!this.animator.holdsWeapon);
     // Morto: deita de costas
     const target = this.mode === 'dead' ? 1 : 0;
     if (this.lie !== target) {
@@ -362,9 +396,10 @@ export class Player {
   followCamera(camera: THREE.PerspectiveCamera, dt: number, yaw: number, pitch: number, aimK: number): void {
     const p = this.object.position;
     const driving = this.mode === 'drive';
-    const dist = driving ? 9 : THREE.MathUtils.lerp(CAM_DISTANCE, 2.9, aimK);
-    const shoulder = driving ? 0 : 0.85 + 0.3 * aimK;
-    const target = new THREE.Vector3(p.x, p.y + (driving ? 1.6 : 1.25), p.z);
+    const dist = driving ? 9 : THREE.MathUtils.lerp(CAM_DISTANCE, 3.2, aimK);
+    const shoulder = driving ? 0 : 0.85 - 0.05 * aimK;
+    this.crouchK += ((this.crouching && !driving ? 1 : 0) - this.crouchK) * Math.min(1, dt * 8);
+    const target = new THREE.Vector3(p.x, p.y + (driving ? 1.6 : 1.25 - 0.45 * this.crouchK), p.z);
     const cp = Math.cos(pitch);
     // direção para onde a câmera olha
     const dir = new THREE.Vector3(Math.sin(yaw) * cp, -Math.sin(pitch), Math.cos(yaw) * cp);

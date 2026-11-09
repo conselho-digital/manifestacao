@@ -51,7 +51,7 @@ export class RemotePlayer {
       this.root.add(m);
       this.model = m;
       this.weaponVis = new WeaponVisual(this.root);
-      void Animator.create(m).then((a) => (this.animator = a));
+      void Animator.create(m).then((a) => { this.animator = a; if (a) this.weaponVis?.bind(a); });
       this.ready = true;
       if (this.pending) this.setTarget(this.pending, true);
     });
@@ -96,6 +96,7 @@ export class RemotePlayer {
       this.weaponVis.setMode(this.weapon === 2 ? 'aim' : this.weapon === 1 ? 'rifle' : 'none');
       this.weaponVis.setPitch(this.pitch);
       this.weaponVis.setHidden(!!car || dead);
+      if (this.animator) this.weaponVis.setSuppressed(!this.animator.holdsWeapon);
       this.weaponVis.update(dt);
     }
     // Morto: deita de costas

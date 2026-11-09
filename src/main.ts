@@ -61,7 +61,7 @@ void showLobby().then(async (profile) => {
   obj.position.set(startQ?.[0] ?? 25, 0, startQ?.[1] ?? 16);
   scene.add(obj);
   player = new Player(obj, await Animator.create(obj));
-  player.weaponVis = new WeaponVisual(obj);
+  player.attachWeapon(new WeaponVisual(obj));
   combat = new Combat({ scene, camera, net, name: profile.name, remotes, log: (t) => hud?.addChat(t) });
 
   try {
@@ -134,7 +134,7 @@ function loop(): void {
         health: combat.health, armor: combat.armor, money: combat.money,
         weapon: combat.weapon === 0 ? 'ak' : 'fist', weaponName: combat.weaponName,
         mag: combat.mag, reserve: combat.reserve, reloading: combat.reloading,
-        aiming: input.aim, dead: combat.dead, respawnIn: combat.respawnIn,
+        aiming: input.aim, crouching: player.isCrouching, dead: combat.dead, respawnIn: combat.respawnIn,
         hitTick: combat.hitTick, hurtTick: combat.hurtTick, nearCar: player.nearCar,
         scores: combat.statRows().map((r) => ({ name: r.name, k: r.k, d: r.d, me: r.id === my.id })),
       }, dt);

@@ -1,7 +1,7 @@
 import { ICON } from './icons';
 import { CARS } from '../game/vehicle';
 import { COLLIDERS, MAP, PARKS, placeName, ROADS } from '../game/map';
-import { addLook, queueInteract, queueJump, queueReload, queueSwitch, setAim, setFire, setPedals, setSprint, setTouchVector } from '../game/input';
+import { addLook, queueCrouch, queueInteract, queueJump, queueReload, queueSwitch, setAim, setFire, setPedals, setSprint, setTouchVector } from '../game/input';
 
 /** Dados do jogo que o HUD mostra (preenchidos pelo main a cada quadro). */
 export interface HudState {
@@ -23,6 +23,7 @@ export interface HudState {
   reserve: number;
   reloading: boolean;
   aiming: boolean;
+  crouching: boolean;
   dead: boolean;
   respawnIn: number;
   /** sobem a cada acerto dado / dano recebido (disparam a animação) */
@@ -78,6 +79,8 @@ const CSS = `
 .m-btn.spin .ico{animation:mspin .6s linear}
 @keyframes mspin{to{transform:rotate(-360deg)}}
 .m-reload{right:calc(var(--u)*13.5);top:calc(var(--u)*33);width:calc(var(--u)*12);height:calc(var(--u)*12)}
+.m-crouch{right:calc(var(--u)*26.8);top:calc(var(--u)*33);width:calc(var(--u)*12);height:calc(var(--u)*12)}
+.m-crouch.on{background:rgba(70,150,90,.85)}
 .m-change{right:calc(var(--u)*.8);top:calc(var(--u)*33);width:calc(var(--u)*12.5);height:calc(var(--u)*12.5)}
 .m-fire{right:calc(var(--u)*17.5);bottom:calc(var(--u)*24);width:calc(var(--u)*15.5);height:calc(var(--u)*15.5)}
 .m-aim{right:calc(var(--u)*2.5);bottom:calc(var(--u)*29);width:calc(var(--u)*13.5);height:calc(var(--u)*13.5)}
@@ -340,6 +343,8 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
 
   holdButton(circle(hud, 'm-reload foot', ICON.reload, 'Recarga'), queueReload);
   holdButton(circle(hud, 'm-change foot', ICON.swap, 'Arma'), queueSwitch);
+  const crouchBtn = circle(hud, 'm-crouch foot', ICON.crouch, 'Agachar');
+  holdButton(crouchBtn, queueCrouch);
 
   // Ações da direita (a pé)
   holdButton(circle(hud, 'm-fire foot', ICON.bullet, null), () => setFire(true), () => setFire(false));
@@ -470,6 +475,7 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
 
       cross.classList.toggle('show', s.weapon === 'ak' && !s.driving && !s.dead);
       cross.classList.toggle('aim', s.aiming);
+      crouchBtn.classList.toggle('on', s.crouching);
       if (s.hitTick !== lastHit) { lastHit = s.hitTick; retrigger(hitMark); }
       if (s.hurtTick !== lastHurt) { lastHurt = s.hurtTick; retrigger(hurt); }
       dead.classList.toggle('show', s.dead);
