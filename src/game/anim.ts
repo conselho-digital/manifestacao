@@ -98,8 +98,9 @@ interface Spine { mid: THREE.Bone; chest: THREE.Bone; neck: THREE.Bone; head: TH
  * Poses do fuzil no espaço do personagem em repouso (x+ = esquerda, y+ = cima, z+ = frente).
  * pos = centro da arma; pitch = cano para baixo (rad); yaw = cano para a esquerda (rad).
  */
-const RIFLE_LOW = { pos: new THREE.Vector3(-0.1, 1.26, 0.27), pitch: 0.3, yaw: 0.12 };
-const RIFLE_AIM = { pos: new THREE.Vector3(-0.12, 1.585, 0.2), pitch: 0, yaw: 0 };
+const RIFLE_LOW = { pos: new THREE.Vector3(-0.1, 1.26, 0.27), pitch: 0.3, yaw: 0.07 };
+// yaw negativo: o cano converge para o ponto da mira (a câmera fica ~0,85 m à direita do personagem)
+const RIFLE_AIM = { pos: new THREE.Vector3(-0.12, 1.585, 0.2), pitch: 0, yaw: -0.05 };
 /** Empunhadura (traseira) e guarda-mão (frente) no espaço da arma, cano em +Z. */
 const GRIP_REAR = new THREE.Vector3(0, -0.115, 0.04);
 const GRIP_FRONT = new THREE.Vector3(0, -0.05, 0.33);

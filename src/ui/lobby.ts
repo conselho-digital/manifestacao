@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { enterLandscape } from './orientation';
 import { CHARACTERS, createCharacter, type CharacterName } from '../game/characters';
+import { Animator } from '../game/anim';
 
 export interface Profile {
   name: string;
@@ -80,9 +81,10 @@ export function showLobby(): Promise<Profile> {
   const scene = new THREE.Scene();
   scene.add(new THREE.HemisphereLight(0xffffff, 0x556070, 1.6));
   const cam = new THREE.PerspectiveCamera(35, 1, 0.1, 50);
-  cam.position.set(0, 1.1, 4.6);
+  cam.position.set(0, 1.05, 3.7);
   cam.lookAt(0, 0.9, 0);
   let preview: THREE.Object3D | null = null;
+  let previewAnim: Animator | null = null;
   let token = 0;
 
   async function showPreview(name: CharacterName): Promise<void> {
@@ -91,7 +93,13 @@ export function showLobby(): Promise<Profile> {
     if (mine !== token) return; // seleção mudou enquanto carregava
     if (preview) scene.remove(preview);
     preview = obj;
+    previewAnim = null;
     scene.add(obj);
+    // personagens com animação aparecem andando
+    const anim = await Animator.create(obj);
+    if (mine !== token || !anim) return;
+    previewAnim = anim;
+    anim.play('walk');
   }
 
   const buttons = new Map<CharacterName, HTMLButtonElement>();
@@ -115,6 +123,7 @@ export function showLobby(): Promise<Profile> {
   refresh();
   void showPreview(selected);
 
+  const clock = new THREE.Clock();
   let raf = 0;
   function frame(): void {
     const w = canvas.clientWidth;
@@ -124,7 +133,9 @@ export function showLobby(): Promise<Profile> {
       cam.aspect = w / h;
       cam.updateProjectionMatrix();
     }
-    if (preview) preview.rotation.y += 0.01;
+    const dt = Math.min(clock.getDelta(), 0.05);
+    if (preview) preview.rotation.y += dt * 0.6;
+    previewAnim?.update(dt);
     renderer.render(scene, cam);
     raf = requestAnimationFrame(frame);
   }

@@ -11,7 +11,7 @@ export interface TreeSpec { x: number; z: number; h: number; species: Species }
 
 /** Faixa de altura (m) de cada espécie, para quem escolhe. */
 export const HEIGHT: Record<Species, [number, number]> = {
-  oak: [14, 21], pine: [18, 26], maple: [10, 15], birch: [8, 12], bush: [1.1, 2],
+  oak: [8, 12], pine: [10, 15], maple: [6, 9], birch: [5, 7.5], bush: [1.1, 2],
 };
 
 const rng = ((): (() => number) => {

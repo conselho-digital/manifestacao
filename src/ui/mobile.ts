@@ -150,8 +150,26 @@ function make(cls: string, parent: El, tag = 'div'): El {
   return e;
 }
 
-function holdButton(el: El, onDown: () => void, onUp?: () => void): void {
-  el.addEventListener('pointerdown', (e) => { e.preventDefault(); el.setPointerCapture(e.pointerId); el.classList.add('on'); onDown(); });
+/** Botão que fica ativo enquanto o dedo está nele. Com `look`, arrastar o dedo sem soltar também gira a câmera. */
+function holdButton(el: El, onDown: () => void, onUp?: () => void, look = false): void {
+  let lastX = 0;
+  let lastY = 0;
+  el.addEventListener('pointerdown', (e) => {
+    e.preventDefault();
+    el.setPointerCapture(e.pointerId);
+    el.classList.add('on');
+    lastX = e.clientX;
+    lastY = e.clientY;
+    onDown();
+  });
+  if (look) {
+    el.addEventListener('pointermove', (e) => {
+      if (!el.hasPointerCapture(e.pointerId)) return;
+      addLook(e.clientX - lastX, e.clientY - lastY);
+      lastX = e.clientX;
+      lastY = e.clientY;
+    });
+  }
   const up = (): void => { el.classList.remove('on'); onUp?.(); };
   el.addEventListener('pointerup', up);
   el.addEventListener('pointercancel', up);
@@ -347,13 +365,13 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   holdButton(crouchBtn, queueCrouch);
 
   // Ações da direita (a pé)
-  holdButton(circle(hud, 'm-fire foot', ICON.bullet, null), () => setFire(true), () => setFire(false));
+  holdButton(circle(hud, 'm-fire foot', ICON.bullet, null), () => setFire(true), () => setFire(false), true);
   let aimOn = false;
   const aim = circle(hud, 'm-aim foot', ICON.crosshair, null);
   aim.addEventListener('pointerdown', (e) => { e.preventDefault(); aimOn = !aimOn; setAim(aimOn); aim.classList.toggle('on', aimOn); });
-  holdButton(circle(hud, 'm-jump foot', ICON.run, null), queueJump);
+  holdButton(circle(hud, 'm-jump foot', ICON.run, null), queueJump, undefined, true);
   holdButton(circle(hud, 'm-door', ICON.door, null), queueInteract);
-  holdButton(circle(hud, 'm-sprint small foot', null, 'Sprint'), () => setSprint(true), () => setSprint(false));
+  holdButton(circle(hud, 'm-sprint small foot', null, 'Sprint'), () => setSprint(true), () => setSprint(false), true);
 
   // No carro: acelerador, freio e freio de mão
   let gas = false;

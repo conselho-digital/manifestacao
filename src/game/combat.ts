@@ -133,7 +133,7 @@ export class Combat {
     const { camera, net } = this.d;
     // Direção da mira = para onde a câmera olha (inclui cima/baixo), com um pouco de dispersão
     const dir = camera.getWorldDirection(this.tmpD);
-    const spread = aiming ? 0.006 : 0.025;
+    const spread = aiming ? 0.003 : 0.012;
     dir.x += (Math.random() - 0.5) * spread;
     dir.y += (Math.random() - 0.5) * spread;
     dir.z += (Math.random() - 0.5) * spread;
