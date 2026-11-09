@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { addBox, COLLIDERS, MAP, PARKS, ROADS, type Rect } from './map';
+import { addBox, COLLIDERS, MAP, PARKS, PLACES, ROADS, type Rect } from './map';
 
 // Cidade inspirada na maquete da Av. Paulista (SP): avenida larga no meio (leste-oeste),
 // MASP na calçada norte, Parque Trianon do lado sul, torres bege, de vidro e com heliponto.
@@ -242,6 +242,15 @@ export function createCity(): THREE.Group {
   PARKS.length = 0;
   ROADS.push(AVENUE, ...SIDE_STREETS);
   PARKS.push(TRIANON);
+  // Nomes dos lugares (do mais específico para o mais geral)
+  PLACES.length = 0;
+  PLACES.push(
+    { name: 'MASP', rect: { x0: MASP.x - 34, x1: MASP.x + 34, z0: 18, z1: 62 } },
+    { name: 'PARQUE TRIANON', rect: TRIANON },
+    { name: 'AV. PAULISTA', rect: AVENUE },
+    { name: 'CALÇADA DA PAULISTA', rect: { x0: -MAP.halfX, x1: MAP.halfX, z0: -18, z1: 18 } },
+    ...SIDE_STREETS.map((r, i) => ({ name: `RUA TRANSVERSAL ${i + 1}`, rect: r })),
+  );
 
   const W = MAP.halfX * 2;
   const D = MAP.halfZ * 2;

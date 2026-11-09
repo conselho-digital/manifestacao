@@ -12,6 +12,18 @@ export interface Rect { x0: number; x1: number; z0: number; z1: number }
 /** Limites da cidade (metros a partir do centro). */
 export const MAP = { halfX: 100, halfZ: 72 };
 
+/** Lugares com nome, em ordem de prioridade (o primeiro que contém o ponto vence). */
+export const PLACES: { name: string; rect: Rect }[] = [];
+
+/** Nome do lugar onde o jogador está (mostrado no topo do HUD). */
+export function placeName(x: number, z: number): string {
+  for (const p of PLACES) {
+    const r = p.rect;
+    if (x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1) return p.name;
+  }
+  return z >= 0 ? 'QUARTEIRÃO NORTE' : 'QUARTEIRÃO SUL';
+}
+
 export const COLLIDERS: Box[] = [];
 /** Ruas e parques (só para desenhar nos mapas). */
 export const ROADS: Rect[] = [];

@@ -1,6 +1,6 @@
 import { ICON } from './icons';
 import { CARS } from '../game/vehicle';
-import { COLLIDERS, MAP, PARKS, ROADS } from '../game/map';
+import { COLLIDERS, MAP, PARKS, placeName, ROADS } from '../game/map';
 import { addLook, queueInteract, queueJump, queueReload, queueSwitch, setAim, setFire, setPedals, setSprint, setTouchVector } from '../game/input';
 
 /** Dados do jogo que o HUD mostra (preenchidos pelo main a cada quadro). */
@@ -62,7 +62,7 @@ const CSS = `
 .m-bar b{display:block;width:calc(var(--u)*25);height:calc(var(--u)*3);border:calc(var(--u)*.3) solid #000;background:rgba(0,0,0,.55);position:relative}
 .m-bar b span{position:absolute;left:0;top:0;bottom:0;width:100%;transition:width .15s}
 .m-hp span{background:#69b25a}.m-ar span{background:#3d7be0}
-.m-info{position:fixed;left:calc(var(--u)*1.6);top:calc(var(--u)*25);font-size:calc(var(--u)*3.4);line-height:1.18;letter-spacing:.02em}
+.m-place{position:fixed;left:calc(50% + var(--u)*15);top:calc(var(--u)*2.8);font-size:calc(var(--u)*3.8);letter-spacing:.03em;white-space:nowrap}
 .m-money{position:fixed;right:calc(var(--u)*15.8);top:calc(var(--u)*2.2);font-size:calc(var(--u)*5);color:#d9d9d9}
 .m-speed{position:fixed;right:calc(var(--u)*15.8);top:calc(var(--u)*9.5);width:calc(var(--u)*11);height:calc(var(--u)*2);border:calc(var(--u)*.3) solid #000;background:rgba(0,0,0,.5)}
 .m-speed span{display:block;height:100%;background:#c0392b;width:0}
@@ -107,7 +107,7 @@ const CSS = `
 .m-stick .a.r{top:50%;right:calc(var(--u)*.6);transform:translateY(-50%);border-left-color:#fff;border-right-width:0}
 .m-knob{position:absolute;left:50%;top:50%;width:calc(var(--u)*11);height:calc(var(--u)*11);margin:calc(var(--u)*-5.5) 0 0 calc(var(--u)*-5.5);border-radius:50%;
   background:radial-gradient(circle at 35% 30%,#f2f2f2,#bdbdbd);border:calc(var(--u)*.4) solid #222}
-.m-chat{position:fixed;left:calc(var(--u)*1.4);bottom:calc(var(--u)*.8);font-size:calc(var(--u)*3.3);line-height:1.2;max-width:calc(var(--u)*60);text-transform:none}
+.m-chat{position:fixed;left:calc(var(--u)*1.6);top:calc(var(--u)*25);font-size:calc(var(--u)*3.3);line-height:1.22;max-width:calc(var(--u)*62);text-transform:none}
 .m-chat p{margin:0}
 .m-chat em,.m-score em{font-style:normal;color:#f1c40f}
 .m-chatbtn{left:50%;transform:translateX(-50%);bottom:calc(var(--u)*1.5);width:calc(var(--u)*8);height:calc(var(--u)*8);font-size:calc(var(--u)*2.6)}
@@ -162,12 +162,6 @@ function circle(parent: El, cls: string, icon: string | null, label: string | nu
 }
 
 const COLORS = ['#4da3ff', '#f1c40f', '#c77dff', '#ff7a59'];
-
-function zoneName(x: number, z: number): string {
-  if (Math.abs(x) < 6 && Math.abs(z) < 6) return 'CENTRO';
-  if (Math.abs(z) >= Math.abs(x)) return z > 0 ? 'NORTE' : 'SUL';
-  return x > 0 ? 'OESTE' : 'LESTE';
-}
 
 interface View {
   /** rotação da câmera (minimapa gira; mapa grande usa 0 = norte para cima) */
@@ -332,11 +326,8 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   make('', ar, 'i').insertAdjacentHTML('beforeend', ICON.shield);
   const arFill = make('', make('', ar, 'b'), 'span');
 
-  // Textos de local
-  const info = make('m-info m-out', hud);
-  const l1 = make('', info);
-  make('', info).textContent = 'MODO LIVRE - ARENA 1';
-  const l3 = make('', info);
+  // Nome do lugar onde estou (topo, ao lado do botão Animações)
+  const place = make('m-place m-out', hud);
 
   // Dinheiro, velocidade, arma e munição (a pé) / velocímetro (no carro)
   const money = make('m-money m-out foot', hud);
@@ -447,7 +438,7 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   let speed = 0;
   let lastHit = 0;
   let lastHurt = 0;
-  const cache = { l1: '', l3: '', score: '', list: '', money: '', ammo: '', weapon: '' };
+  const cache = { l1: '', score: '', list: '', money: '', ammo: '', weapon: '' };
   const retrigger = (el: El): void => { el.classList.remove('go'); void el.offsetWidth; el.classList.add('go'); };
 
   return {
@@ -483,10 +474,8 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
       dead.classList.toggle('show', s.dead);
       if (s.dead) deadSub.textContent = `Renasce em ${Math.max(0, Math.ceil(s.respawnIn))}s`;
 
-      const t1 = `${s.name} - ${zoneName(s.x, s.z)}`;
-      if (t1 !== cache.l1) { cache.l1 = t1; l1.textContent = t1; }
-      const t3 = `JOGADORES: ${s.players}/${s.maxPlayers}`;
-      if (t3 !== cache.l3) { cache.l3 = t3; l3.textContent = t3; }
+      const pn = placeName(s.x, s.z);
+      if (pn !== cache.l1) { cache.l1 = pn; place.textContent = pn; }
       // Canto inferior direito: só uma linha, com o nome e a equipe
       const sc = s.name;
       if (sc !== cache.score) {
