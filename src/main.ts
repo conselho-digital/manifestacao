@@ -1,19 +1,16 @@
 import * as THREE from 'three';
 import { createCamera, createRenderer, createScene, handleResize } from './game/scene';
 import { createMap } from './game/map';
-import { createCharacter, type CharacterName } from './game/characters';
+import { createCharacter } from './game/characters';
 import { readInput } from './game/input';
 import { Player } from './game/player';
+import { showLobby } from './ui/lobby';
 
 const renderer = createRenderer();
 const scene = createScene();
 const camera = createCamera();
 handleResize(renderer, camera);
 scene.add(createMap());
-
-// Personagem escolhido via ?char=Nome (temporário, até a tela de seleção)
-const param = new URLSearchParams(location.search).get('char') ?? 'Helena';
-const charName = param as CharacterName;
 
 let yaw = 0; // câmera olha para +Z
 window.addEventListener('mousemove', (e) => {
@@ -23,7 +20,8 @@ window.addEventListener('mousemove', (e) => {
 const clock = new THREE.Clock();
 let player: Player | null = null;
 
-createCharacter(charName).then((obj) => {
+void showLobby().then(async (profile) => {
+  const obj = await createCharacter(profile.character);
   obj.position.set(0, 0, 8);
   scene.add(obj);
   player = new Player(obj);
