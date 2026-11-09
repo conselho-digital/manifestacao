@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { addBox, COLLIDERS, MAP, PARKS, PLACES, ROADS, TREES, type Rect } from './map';
 import { buildGrayTower, TOWER } from './tower';
+import { HEIGHT, makeTrees, type Species, type TreeSpec } from './trees';
 
 // Cidade inspirada na maquete da Av. Paulista (SP). O layout é escrito "como na foto" (x para a direita,
 // z para o norte) e convertido para o mundo espelhando o eixo X (R(): x_mundo = -x_foto).
@@ -346,65 +347,6 @@ function addBuilding(b: Batch, s: Spec, helipads: THREE.Mesh[], hpTex: THREE.Tex
   }
 }
 
-// ---------- árvores ----------
-
-const GREENS = ['#2f5d2a', '#3b7231', '#46803a', '#5f8a35', '#7d9a3a', '#2a4f2b'];
-
-interface TreeSpec { x: number; z: number; s: number; kind: 'round' | 'tall' | 'bush' }
-
-function makeTrees(list: TreeSpec[]): THREE.Group {
-  const blobs: { p: THREE.Vector3; s: THREE.Vector3; c: THREE.Color }[] = [];
-  const trunks: { p: THREE.Vector3; h: number; r: number }[] = [];
-  for (const t of list) {
-    const base = new THREE.Color(pick(GREENS));
-    const mk = (dx: number, y: number, dz: number, sx: number, sy: number): void => {
-      const c = base.clone().offsetHSL((rand() - 0.5) * 0.03, 0, (rand() - 0.5) * 0.08);
-      blobs.push({ p: new THREE.Vector3(t.x + dx, y, t.z + dz), s: new THREE.Vector3(sx, sy, sx), c });
-    };
-    const s = t.s;
-    if (t.kind === 'bush') {
-      mk(0, 0.5 * s, 0, 0.8 * s, 0.65 * s);
-      mk(0.5 * s, 0.4 * s, 0.2 * s, 0.55 * s, 0.5 * s);
-    } else if (t.kind === 'tall') {
-      trunks.push({ p: new THREE.Vector3(t.x, 0, t.z), h: 2.6 * s * 0.5, r: 0.2 });
-      addBox(t.x - 0.28, t.x + 0.28, t.z - 0.28, t.z + 0.28, 5, '#5b4333');
-      TREES.push({ x: t.x, y: 2.6 * s * 0.5 + 1.4 * s, z: t.z, r: 1.0 * s });
-      mk(0, 2.6 * s * 0.5 + 1.2 * s, 0, 0.85 * s, 1.35 * s);
-      mk(0, 2.6 * s * 0.5 + 2.5 * s, 0, 0.6 * s, 0.9 * s);
-    } else {
-      trunks.push({ p: new THREE.Vector3(t.x, 0, t.z), h: 2.4 * s * 0.55, r: 0.22 * Math.max(1, s * 0.6) });
-      const y = 2.4 * s * 0.55;
-      const tr = 0.3 + 0.1 * Math.min(2, s);
-      addBox(t.x - tr, t.x + tr, t.z - tr, t.z + tr, 5, '#5b4333');
-      TREES.push({ x: t.x, y: y + 1.2 * s, z: t.z, r: 1.3 * s });
-      mk(0, y + 0.9 * s, 0, 1.0 * s, 0.9 * s);
-      mk(0.75 * s, y + 0.6 * s, 0.3 * s, 0.7 * s, 0.65 * s);
-      mk(-0.7 * s, y + 0.7 * s, -0.4 * s, 0.75 * s, 0.7 * s);
-      mk(0.1 * s, y + 1.7 * s, 0.1 * s, 0.7 * s, 0.6 * s);
-    }
-  }
-  const g = new THREE.Group();
-  const crown = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(1, 0), new THREE.MeshLambertMaterial({ color: 0xffffff }), blobs.length);
-  const m = new THREE.Matrix4();
-  const q = new THREE.Quaternion();
-  blobs.forEach((b, i) => {
-    q.setFromEuler(new THREE.Euler(rand() * 0.5, rand() * 6, rand() * 0.5));
-    m.compose(b.p, q, b.s);
-    crown.setMatrixAt(i, m);
-    crown.setColorAt(i, b.c);
-  });
-  crown.castShadow = true;
-  const trunk = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.7, 1, 1, 6), new THREE.MeshLambertMaterial({ color: 0x5b4333 }), Math.max(1, trunks.length));
-  trunks.forEach((t, i) => {
-    m.compose(new THREE.Vector3(t.p.x, t.h / 2, t.p.z), new THREE.Quaternion(), new THREE.Vector3(t.r, t.h, t.r));
-    trunk.setMatrixAt(i, m);
-  });
-  trunk.count = trunks.length;
-  trunk.castShadow = true;
-  g.add(crown, trunk);
-  return g;
-}
-
 // ---------- chão ----------
 
 function flat(w: number, d: number, x: number, z: number, y: number, tex: THREE.Texture | null, color = 0xffffff, transparent = false): THREE.Mesh {
@@ -674,39 +616,53 @@ export function createCity(): THREE.Group {
     ambient.push({ obj: o, dir, speed });
   }
 
-  // Árvores: parque denso, calçadas da avenida, ruas e praça
+  // Árvores: parque denso (carvalhos, pinheiros, bordos, bétulas), calçadas, ruas e praça. Alturas reais.
   const trees: TreeSpec[] = [];
   const nearBuilding = (x: number, z: number, m = 1.5): boolean => footprints.some((f) => x > f.r.x0 - m && x < f.r.x1 + m && z > f.r.z0 - m && z < f.r.z1 + m);
-  for (let i = 0; i < 260; i++) {
-    const x = TRIANON.x0 + 1.5 + rand() * (TRIANON.x1 - TRIANON.x0 - 3);
-    const z = TRIANON.z0 + 1.5 + rand() * (TRIANON.z1 - TRIANON.z0 - 3);
-    if (Math.abs(x - (TRIANON.x0 + TRIANON.x1) / 2) < 2 || Math.abs(z - (TRIANON.z0 + TRIANON.z1) / 2) < 2 || nearBuilding(x, z)) continue;
-    // as árvores grandes se concentram no lado leste do parque, como na maquete
-    const big = x > 2 && x < 32 ? 3.2 + rand() * 1.8 : 2.0 + rand() * 1.6;
-    trees.push({ x, z, s: big, kind: rand() < 0.2 ? 'tall' : 'round' });
+  const tall = (sp: Species): number => rand() * (HEIGHT[sp][1] - HEIGHT[sp][0]) + HEIGHT[sp][0];
+  const spot = (x: number, z: number, sp: Species): void => { trees.push({ x, z, h: tall(sp), species: sp }); };
+  const pickStreet = (): Species => { const r = rand(); return r < 0.5 ? 'maple' : r < 0.8 ? 'birch' : 'oak'; };
+  const clearedPark = (x: number, z: number): boolean =>
+    Math.abs(x - (TRIANON.x0 + TRIANON.x1) / 2) < 2 || Math.abs(z - (TRIANON.z0 + TRIANON.z1) / 2) < 2;
+  // parque: o lado leste (no mundo, x de 2 a 32) concentra as árvores grandes, como na maquete
+  const parkTrees: { x: number; z: number; gap: number }[] = [];
+  for (let i = 0; i < 160; i++) {
+    if (parkTrees.length >= 62) break;
+    const x = TRIANON.x0 + 2 + rand() * (TRIANON.x1 - TRIANON.x0 - 4);
+    const z = TRIANON.z0 + 2 + rand() * (TRIANON.z1 - TRIANON.z0 - 4);
+    if (clearedPark(x, z)) continue;
+    const dense = x > 2 && x < 32;
+    const r = rand();
+    const sp: Species = dense ? (r < 0.5 ? 'oak' : r < 0.68 ? 'pine' : r < 0.88 ? 'maple' : 'birch') : (r < 0.3 ? 'oak' : r < 0.5 ? 'pine' : r < 0.78 ? 'maple' : 'birch');
+    if (nearBuilding(x, z, sp === 'oak' ? 5 : 3)) continue;
+    // distância mínima entre árvores grandes (troncos sólidos não podem formar parede)
+    const gap = sp === 'oak' ? 7 : sp === 'pine' ? 5 : 4;
+    if (parkTrees.some((t) => Math.hypot(t.x - x, t.z - z) < (t.gap + gap) / 2)) continue;
+    parkTrees.push({ x, z, gap });
+    spot(x, z, sp);
   }
   for (let i = 0; i < 70; i++) {
     const x = TRIANON.x0 + 1 + rand() * (TRIANON.x1 - TRIANON.x0 - 2);
     const z = TRIANON.z0 + 1 + rand() * (TRIANON.z1 - TRIANON.z0 - 2);
-    if (!nearBuilding(x, z, 0.5)) trees.push({ x, z, s: 0.9 + rand() * 0.6, kind: 'bush' });
+    if (!nearBuilding(x, z, 0.5)) trees.push({ x, z, h: HEIGHT.bush[0] + rand() * (HEIGHT.bush[1] - HEIGHT.bush[0]), species: 'bush' });
   }
   const onCrosswalk = (x: number): boolean => STREETS.some((r) => x > r.x0 - 6 && x < r.x1 + 6);
-  for (let x = -104; x <= 104; x += 7) {
+  for (let x = -104; x <= 104; x += 9) {
     if (onCrosswalk(x)) continue;
     const plaza = x > PLAZA.x0 && x < PLAZA.x1;
-    trees.push({ x, z: -16.2, s: 1.5, kind: rand() < 0.3 ? 'tall' : 'round' });
-    if (!plaza) trees.push({ x, z: 16.2, s: 1.5, kind: rand() < 0.3 ? 'tall' : 'round' });
-    else if (rand() < 0.3) trees.push({ x, z: 20.5, s: 1.2, kind: 'bush' });
+    spot(x, -16.4, pickStreet());
+    if (!plaza) spot(x, 16.4, pickStreet());
+    else if (rand() < 0.3) trees.push({ x, z: 20.5, h: 1.5, species: 'bush' });
   }
   for (const r of STREETS) {
     const north = r.z0 > 0;
-    for (let z = north ? 26 : -26; north ? z < HZ - 4 : z > -HZ + 4; z += north ? 13 : -13) {
-      for (const x of [r.x0 - 1.4, r.x1 + 1.4]) if (!nearBuilding(x, z, 0.8)) trees.push({ x, z, s: 1.4, kind: 'round' });
+    for (let z = north ? 26 : -26; north ? z < HZ - 4 : z > -HZ + 4; z += north ? 15 : -15) {
+      for (const x of [r.x0 - 1.6, r.x1 + 1.6]) if (!nearBuilding(x, z, 2)) spot(x, z, rand() < 0.6 ? 'maple' : 'birch');
     }
   }
-  // Fileira de arbustos atrás do MASP e árvores ao redor da praça
-  for (let x = PLAZA.x0 + 3; x < PLAZA.x1 - 2; x += 4.5) trees.push({ x, z: 48.5, s: 1.0, kind: 'bush' });
-  for (const [x, z] of [[PLAZA.x0 + 0.5, 24], [PLAZA.x1 - 0.5, 22], [PLAZA.x1 - 0.5, 36], [PLAZA.x0 + 0.5, 36]] as const) trees.push({ x, z, s: 1.7, kind: 'round' });
+  // fileira de arbustos atrás do MASP e árvores ao redor da praça
+  for (let x = PLAZA.x0 + 3; x < PLAZA.x1 - 2; x += 4.5) trees.push({ x, z: 48.5, h: 1.3, species: 'bush' });
+  for (const [x, z] of [[PLAZA.x0 + 0.5, 24], [PLAZA.x1 - 0.5, 22], [PLAZA.x1 - 0.5, 36], [PLAZA.x0 + 0.5, 36]] as const) spot(x, z, rand() < 0.5 ? 'maple' : 'birch');
   city.add(makeTrees(trees));
 
   // Bancos e jardineiras (dá para escalar)
