@@ -1,6 +1,5 @@
 import * as THREE from 'three';
 import { createCamera, createRenderer, createScene, handleResize } from './game/scene';
-import { createBlurControl } from './ui/blur';
 import { createCity, updateCity } from './game/city';
 import { createCharacter } from './game/characters';
 import { initMouse, readInput, takeLook, type InputState } from './game/input';
@@ -16,7 +15,6 @@ import { Combat } from './game/combat';
 import { WeaponVisual } from './game/weapons';
 
 const renderer = createRenderer();
-createBlurControl(renderer.domElement);
 const scene = createScene();
 const camera = createCamera();
 handleResize(renderer, camera);
