@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { addBox, COLLIDERS, MAP, PARKS, PLACES, ROADS, TREES, type Rect } from './map';
+import { buildGrayTower, TOWER } from './tower';
 
 // Cidade inspirada na maquete da Av. Paulista (SP). O layout é escrito "como na foto" (x para a direita,
 // z para o norte) e convertido para o mundo espelhando o eixo X (R(): x_mundo = -x_foto).
@@ -588,13 +589,24 @@ export function createCity(): THREE.Group {
   S('SL6', -40, -28, -84, -64, 22, 'ochre', { roof: 'gray' });
   S('SL7', -14, -3, -84, -64, 14, 'cream');
   S('SL4', 2, 16, -84, -64, 10, 'house', { roof: 'red' });
-  S('SD', 28, 60, -46, -20, 90, 'dark', { ac: true, antenna: true, plinth: true });
   S('SH2', 50, 72, -84, -60, 80, 'white', { plinth: true, helipad: true });
   S('SLONG', 41, 46, -84, -62, 7, 'house', { roof: 'red' });
   S('SR1', 76, 94, -60, -28, 78, 'cream', { ac: true, plinth: true });
   S('SR2', 96, 108, -40, -19, 40, 'white');
   S('SR3', 96, 108, -84, -46, 22, 'ochre');
   S('SR4', 76, 92, -84, -64, 18, 'cream');
+
+  // Torre de concreto cinza (modelada a partir da foto de referência), de frente para a avenida
+  {
+    const cx = -44;
+    const cz = -33;
+    const rect: Rect = { x0: cx - TOWER.w / 2, x1: cx + TOWER.w / 2, z0: cz - TOWER.d / 2, z1: cz + TOWER.d / 2 };
+    footprints.push({ name: 'SD', r: rect });
+    addBox(rect.x0, rect.x1, rect.z0, rect.z1, TOWER.h, '#6b7f94');
+    const tw = buildGrayTower();
+    tw.position.set(cx, 0, cz);
+    city.add(tw);
+  }
 
   // Postes de luz ao longo da avenida
   for (let x = -100; x <= 100; x += 22) {

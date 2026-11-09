@@ -28,6 +28,8 @@ const camOffset = Number(new URLSearchParams(location.search).get('camoffset') ?
 // Vista aérea (inspeção do mapa, como a foto da maquete): ?vista=aerea
 const aerial = new URLSearchParams(location.search).get('vista') === 'aerea';
 if (aerial) scene.fog = null;
+// Câmera fixa de inspeção: ?cam=x,y,z,alvoX,alvoY,alvoZ
+const fixedCam = new URLSearchParams(location.search).get('cam')?.split(',').map(Number);
 let yaw = 0; // câmera olha para +Z
 const PITCH_DEFAULT = 0.3; // um pouco de cima
 const PITCH_MIN = -0.6; // olhando para cima
@@ -111,6 +113,10 @@ function loop(): void {
     if (aerial) {
       camera.position.set(0, 150, -200);
       camera.lookAt(0, 0, 8);
+    }
+    if (fixedCam && fixedCam.length === 6 && fixedCam.every(Number.isFinite)) {
+      camera.position.set(fixedCam[0]!, fixedCam[1]!, fixedCam[2]!);
+      camera.lookAt(fixedCam[3]!, fixedCam[4]!, fixedCam[5]!);
     }
     const p = player.object;
     const sun = scene.userData.sun as THREE.DirectionalLight;
