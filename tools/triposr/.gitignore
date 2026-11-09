@@ -1,5 +1,0 @@
-# Instalado por setup.sh (não vai para o git): clone do TripoSR, ambiente Python, pesos e saídas.
-TripoSR/
-.venv/
-out/
-.req.txt
