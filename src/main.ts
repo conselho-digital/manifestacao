@@ -119,7 +119,7 @@ function loop(): void {
         weapon: combat.weapon === 0 ? 'ak' : 'fist', weaponName: combat.weaponName,
         mag: combat.mag, reserve: combat.reserve, reloading: combat.reloading,
         aiming: input.aim, dead: combat.dead, respawnIn: combat.respawnIn,
-        hitTick: combat.hitTick, hurtTick: combat.hurtTick,
+        hitTick: combat.hitTick, hurtTick: combat.hurtTick, nearCar: player.nearCar,
         scores: combat.statRows().map((r) => ({ name: r.name, k: r.k, d: r.d, me: r.id === my.id })),
       }, dt);
     }

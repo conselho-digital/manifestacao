@@ -55,6 +55,12 @@ export class Player {
   }
 
   get isDead(): boolean { return this.mode === 'dead'; }
+  /** Há um carro livre a até 3,5 m (a pé)? Só então o botão de entrar aparece. */
+  get nearCar(): boolean {
+    if (this.mode !== 'ground') return false;
+    const p = this.object.position;
+    return CARS.some((c) => c.driver === null && Math.hypot(c.x - p.x, c.z - p.z) < 3.5);
+  }
   get isDriving(): boolean { return this.mode === 'drive'; }
   get carSpeed(): number { return this.car ? this.car.speed : 0; }
   /** 0 punho, 1 fuzil, 2 fuzil mirando (enviado aos outros) */
@@ -117,6 +123,8 @@ export class Player {
     if (input.interact && this.mode === 'ground' && this.tryEnterCar()) return;
     if (input.climb && this.tryClimb()) { this.finish(dt); return; }
 
+    // Pular perto de um obstáculo alto escala sozinho
+    if (input.jump && this.mode === 'ground' && this.tryClimb(1.05, 1.6)) { this.finish(dt); return; }
     if (input.jump && this.mode === 'ground') {
       this.vy = JUMP_V;
       this.mode = 'air';
@@ -250,16 +258,16 @@ export class Player {
   }
 
   /** Procura uma caixa à frente que dê para escalar e começa a subir. */
-  private tryClimb(): boolean {
+  private tryClimb(minTop = STEP + 0.3, reach = 1.2): boolean {
     if (this.mode === 'climb') return false;
     const pos = this.object.position;
     const dx = Math.sin(this.heading);
     const dz = Math.cos(this.heading);
     let best: { box: Box; t: number } | null = null;
     for (const b of COLLIDERS) {
-      if (b.top < STEP + 0.3 || b.top > 3.2 || pos.y > b.top - 0.4) continue;
+      if (b.top < minTop || b.top > 3.2 || (b.bottom ?? 0) > 0 || pos.y > b.top - 0.4) continue;
       const t = rayBoxXZ(pos.x, pos.z, dx, dz, b);
-      if (t !== null && t <= 1.2 && (!best || t < best.t)) best = { box: b, t };
+      if (t !== null && t <= reach && (!best || t < best.t)) best = { box: b, t };
     }
     if (!best) return false;
     const b = best.box;

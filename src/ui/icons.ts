@@ -14,5 +14,11 @@ export const ICON = {
   plus: svg('<path d="M19 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2zm-2 10h-4v4h-2v-4H7v-2h4V7h2v4h4v2z" fill="#9ad88a"/>'),
   shield: svg('<path d="M12 1L3 5v6c0 5.6 3.8 10.7 9 12 5.2-1.3 9-6.4 9-12V5l-9-4z" fill="#7db6ff"/>'),
   climb: svg('<path d="M3 21h18v-2H3zM5 17h4v-4h4V9h4V5h2V3h-8v4H8v4H4v4z"/>'),
+  /** acelerador: pedal estreito com frisos */
+  gas: svg('<path fill-rule="evenodd" d="M8.5 2h7a2 2 0 0 1 2 2v11.5l-2.2 5.5H8.7L6.5 15.5V4a2 2 0 0 1 2-2zM9 5v1.6h6V5H9zm0 3.6v1.6h6V8.6H9zm0 3.6v1.6h6v-1.6H9z"/>'),
+  /** freio: pedal largo e baixo */
+  brake: svg('<path fill-rule="evenodd" d="M5 5h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zm2 3v1.5h10V8H7zm0 3.2v1.5h10v-1.5H7zm0 3.2v1.3h10v-1.3H7z"/><path d="M8 20h8v2H8z"/>'),
+  /** freio de mão: o símbolo (P) do painel */
+  handbrake: svg('<circle cx="12" cy="12" r="5.2" fill="none" stroke="#fff" stroke-width="2"/><path d="M5.2 7a7.6 7.6 0 0 0 0 10M18.8 7a7.6 7.6 0 0 1 0 10" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/><text x="12" y="15.4" text-anchor="middle" font-family="Arial" font-weight="800" font-size="9" fill="#fff">P</text>'),
   anim: svg('<path d="M12 2a2.2 2.2 0 1 1 0 4.4A2.2 2.2 0 0 1 12 2zM9 8h6l1 5-2 .5V22h-2v-6h-2v6H8v-8.5L6 13z"/>'),
 };

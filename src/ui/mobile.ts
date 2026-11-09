@@ -1,7 +1,7 @@
 import { ICON } from './icons';
 import { CARS } from '../game/vehicle';
 import { COLLIDERS, MAP, PARKS, ROADS } from '../game/map';
-import { addLook, queueClimb, queueInteract, queueJump, queueReload, queueSwitch, setAim, setFire, setPedals, setSprint, setTouchVector } from '../game/input';
+import { addLook, queueInteract, queueJump, queueReload, queueSwitch, setAim, setFire, setPedals, setSprint, setTouchVector } from '../game/input';
 
 /** Dados do jogo que o HUD mostra (preenchidos pelo main a cada quadro). */
 export interface HudState {
@@ -28,6 +28,8 @@ export interface HudState {
   /** sobem a cada acerto dado / dano recebido (disparam a animação) */
   hitTick: number;
   hurtTick: number;
+  /** há um carro livre por perto (mostra o botão de entrar) */
+  nearCar: boolean;
   scores: { name: string; k: number; d: number; me: boolean }[];
 }
 
@@ -79,19 +81,21 @@ const CSS = `
 .m-change{right:calc(var(--u)*.8);top:calc(var(--u)*33);width:calc(var(--u)*12.5);height:calc(var(--u)*12.5)}
 .m-fire{right:calc(var(--u)*17.5);bottom:calc(var(--u)*24);width:calc(var(--u)*15.5);height:calc(var(--u)*15.5)}
 .m-aim{right:calc(var(--u)*2.5);bottom:calc(var(--u)*29);width:calc(var(--u)*13.5);height:calc(var(--u)*13.5)}
-.m-jump{right:calc(var(--u)*20.5);bottom:calc(var(--u)*8);width:calc(var(--u)*14);height:calc(var(--u)*14)}
-.m-door{right:calc(var(--u)*2.5);bottom:calc(var(--u)*9.5);width:calc(var(--u)*17);height:calc(var(--u)*17)}
+.m-jump{right:calc(var(--u)*2.5);bottom:calc(var(--u)*9.5);width:calc(var(--u)*17);height:calc(var(--u)*17)}
+.m-door{right:calc(var(--u)*36.5);bottom:calc(var(--u)*7);width:calc(var(--u)*12);height:calc(var(--u)*12)}
+/* o botão de entrar no carro só aparece perto de um carro (e ocupa o lugar do Sprint) */
+.m-hud:not(.near-car):not(.driving) .m-door{display:none}
+.m-hud.near-car .m-sprint{display:none}
 .m-hud.driving .m-door{bottom:auto;top:calc(var(--u)*33);right:calc(var(--u)*2.5);width:calc(var(--u)*13);height:calc(var(--u)*13)}
-/* Sprint à direita (onde era o Escalar) e Escalar à esquerda (onde era o Sprint) */
+/* Sprint à direita (o Escalar saiu: escala sozinho ao pular perto de um obstáculo) */
 .m-sprint{right:calc(var(--u)*36.5);bottom:calc(var(--u)*7);width:calc(var(--u)*12);height:calc(var(--u)*12);font-size:calc(var(--u)*2.9)}
-.m-climb{left:calc(var(--u)*40);bottom:calc(var(--u)*8);width:calc(var(--u)*11);height:calc(var(--u)*11)}
 .m-anim{left:50%;top:calc(var(--u)*1.5);transform:translateX(-50%);width:auto;height:calc(var(--u)*8);border-radius:calc(var(--u)*4);padding:0 calc(var(--u)*3);
   flex-direction:row;gap:calc(var(--u)*1.2);font-size:calc(var(--u)*3);position:fixed}
 .m-anim .ico{width:calc(var(--u)*4.4);height:calc(var(--u)*4.4)}
 /* carro */
-.m-gas{right:calc(var(--u)*3);bottom:calc(var(--u)*6);width:calc(var(--u)*13);height:calc(var(--u)*24);border-radius:calc(var(--u)*3);font-size:calc(var(--u)*3)}
-.m-brake{right:calc(var(--u)*19);bottom:calc(var(--u)*6);width:calc(var(--u)*13);height:calc(var(--u)*17);border-radius:calc(var(--u)*3);font-size:calc(var(--u)*3);background:rgba(120,30,30,.85)}
-.m-hand{right:calc(var(--u)*35);bottom:calc(var(--u)*6);width:calc(var(--u)*13);height:calc(var(--u)*13);font-size:calc(var(--u)*2.3);background:rgba(110,80,20,.85)}
+.m-gas{right:calc(var(--u)*2.5);bottom:calc(var(--u)*9.5);width:calc(var(--u)*17);height:calc(var(--u)*17)}
+.m-brake{right:calc(var(--u)*20.5);bottom:calc(var(--u)*8);width:calc(var(--u)*14);height:calc(var(--u)*14)}
+.m-hand{right:calc(var(--u)*36.5);bottom:calc(var(--u)*7);width:calc(var(--u)*12);height:calc(var(--u)*12)}
 .m-kmh{position:fixed;right:calc(var(--u)*17);top:calc(var(--u)*2.2);font-size:calc(var(--u)*6.5);color:#fff;text-align:right}
 .m-kmh small{display:block;font-size:calc(var(--u)*2.6);color:#ccc}
 .m-stick{position:fixed;left:calc(var(--u)*8);bottom:calc(var(--u)*9);width:calc(var(--u)*28);height:calc(var(--u)*28);border-radius:50%;pointer-events:auto;touch-action:none;
@@ -350,16 +354,15 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   holdButton(circle(hud, 'm-jump foot', ICON.run, null), queueJump);
   holdButton(circle(hud, 'm-door', ICON.door, null), queueInteract);
   holdButton(circle(hud, 'm-sprint small foot', null, 'Sprint'), () => setSprint(true), () => setSprint(false));
-  holdButton(circle(hud, 'm-climb small foot', ICON.climb, 'Escalar'), queueClimb);
 
   // No carro: acelerador, freio e freio de mão
   let gas = false;
   let brake = false;
   let hand = false;
   const pedals = (): void => setPedals(gas, brake, hand);
-  holdButton(circle(hud, 'm-gas car', null, 'Acelerar'), () => { gas = true; pedals(); }, () => { gas = false; pedals(); });
-  holdButton(circle(hud, 'm-brake car', null, 'Freio'), () => { brake = true; pedals(); }, () => { brake = false; pedals(); });
-  holdButton(circle(hud, 'm-hand car', null, 'Freio de mão'), () => { hand = true; pedals(); }, () => { hand = false; pedals(); });
+  holdButton(circle(hud, 'm-gas car', ICON.gas, null), () => { gas = true; pedals(); }, () => { gas = false; pedals(); });
+  holdButton(circle(hud, 'm-brake car', ICON.brake, null), () => { brake = true; pedals(); }, () => { brake = false; pedals(); });
+  holdButton(circle(hud, 'm-hand car', ICON.handbrake, null), () => { hand = true; pedals(); }, () => { hand = false; pedals(); });
 
   // Animações (menu)
   holdButton(circle(hud, 'm-anim', ICON.anim, 'Animações'), opts.onAnimations);
@@ -448,6 +451,7 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
     addChat,
     update(s, dt): void {
       hud.classList.toggle('driving', s.driving);
+      hud.classList.toggle('near-car', s.nearCar);
       if (prev && dt > 0) {
         const inst = Math.hypot(s.x - prev.x, s.z - prev.z) / dt;
         speed += (inst - speed) * Math.min(1, dt * 6);
