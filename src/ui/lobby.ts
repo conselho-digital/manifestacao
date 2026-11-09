@@ -31,10 +31,11 @@ const CSS = `
 .lobby canvas{width:200px;height:260px;border-radius:12px;background:#1b1f2a}
 .lobby label{display:block;font-size:13px;opacity:.8;margin-bottom:6px}
 .lobby input{width:100%;padding:12px;font-size:16px;border-radius:8px;border:2px solid #3b4358;background:#1b1f2a;color:#fff}
-.lobby-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:14px 0}
+.lobby-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:14px 0;max-height:240px;overflow:auto}
 .lobby-grid button{padding:10px 4px;font-size:13px;border-radius:8px;border:2px solid #3b4358;background:#1b1f2a;color:#fff;cursor:pointer}
 .lobby-grid button.sel{border-color:#4cc2ff;background:#25415a}
 .lobby-go{width:100%;padding:14px;font-size:18px;font-weight:700;border:0;border-radius:10px;background:#4cc2ff;color:#10202e;cursor:pointer}
+.lobby-credits{font-size:11px;opacity:.55;margin:10px 0 0}
 .lobby-go:disabled{opacity:.4;cursor:default}
 @media (max-width:560px){.lobby-card{grid-template-columns:1fr}.lobby canvas{width:100%;height:180px}.lobby-grid{grid-template-columns:repeat(2,1fr)}}
 `;
@@ -59,6 +60,7 @@ export function showLobby(): Promise<Profile> {
         <input id="lobby-name" maxlength="${MAX_NAME}" autocomplete="off" placeholder="Digite seu nome" />
         <div class="lobby-grid"></div>
         <button class="lobby-go" disabled>Entrar</button>
+        <p class="lobby-credits">Modelos: Diddy_Blud_117 e Nxrmalman. (CC-BY 4.0) — veja CREDITS.md</p>
       </div>
     </div>`;
   document.body.appendChild(root);

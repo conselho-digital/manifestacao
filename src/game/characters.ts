@@ -4,6 +4,8 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 
 export const CHARACTERS = [
   'Helena', 'Stewart', 'Bennyse', 'Amanda', 'Garota1', 'Carlos', 'Gordao', 'Cesar',
+  'Akiyama',
+  'Law1', 'Law2', 'Law3', 'Law4', 'Law5', 'Law6', 'Law7', 'Law8', 'Law9',
 ] as const;
 export type CharacterName = (typeof CHARACTERS)[number];
 
