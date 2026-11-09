@@ -43,7 +43,7 @@ Arena multiplayer no navegador. Mapa pequeno, personagens low-poly. Plano **grá
 
 ## Plano
 1. ✅ Vite + Three.js, mapa simples
-2. Personagem com WASD, câmera 3ª pessoa
+2. ✅ Personagem com WASD, câmera 3ª pessoa
 3. Tela de entrada: nome + 8 personagens
 4. Multiplayer Supabase: presence + broadcast + interpolação
 5. Animação simples (balanço)
