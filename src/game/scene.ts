@@ -6,6 +6,14 @@ export function createRenderer(): THREE.WebGLRenderer {
   renderer.setSize(window.innerWidth, window.innerHeight);
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
+  // Desfoque bem leve na imagem do jogo para disfarçar serrilhado e arestas (o HUD fica nítido, pois é HTML).
+  // ?blur=0 desliga; ?blur=0.8 aumenta (valor em pixels).
+  const q = Number(new URLSearchParams(location.search).get('blur'));
+  const blur = Number.isFinite(q) && new URLSearchParams(location.search).has('blur') ? q : 0.45;
+  if (blur > 0) {
+    renderer.domElement.style.filter = `blur(${blur}px)`;
+    renderer.domElement.style.transform = 'scale(1.004)'; // esconde a borda translúcida do desfoque
+  }
   document.body.appendChild(renderer.domElement);
   return renderer;
 }
