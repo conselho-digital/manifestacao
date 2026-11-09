@@ -1,6 +1,7 @@
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from './supabase';
-import type { CharacterName } from '../game/characters';
+import { CHARACTERS, type CharacterName } from '../game/characters';
+import { ARENA_SIZE } from '../game/map';
 
 export interface PlayerInfo {
   id: string;
@@ -25,6 +26,37 @@ export interface NetHandlers {
 }
 
 const CHANNEL = 'arena:main';
+export const MAX_NAME = 16;
+const MAX_REMOTE = 30; // limite de jogadores remotos renderizados
+const LIMIT = ARENA_SIZE; // coordenadas fora disso são descartadas
+const MAX_ANIM = 24;
+
+/** Dados vindos da rede nunca são confiáveis: valida tudo antes de usar. */
+export function cleanName(v: unknown): string {
+  const s = typeof v === 'string' ? v : '';
+  // remove caracteres de controle e limita o tamanho
+  const printable = [...s].filter((ch) => ch.charCodeAt(0) > 31 && ch.charCodeAt(0) !== 127).join('');
+  return printable.trim().slice(0, MAX_NAME) || 'Jogador';
+}
+
+function cleanCharacter(v: unknown): CharacterName | null {
+  return typeof v === 'string' && (CHARACTERS as readonly string[]).includes(v) ? (v as CharacterName) : null;
+}
+
+const finite = (v: unknown, lim: number): number | null =>
+  typeof v === 'number' && Number.isFinite(v) && Math.abs(v) <= lim ? v : null;
+
+function cleanMove(raw: unknown): MoveMsg | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const m = raw as Record<string, unknown>;
+  const x = finite(m.x, LIMIT);
+  const y = finite(m.y ?? 0, 50);
+  const z = finite(m.z, LIMIT);
+  const ry = finite(m.ry, 100);
+  if (typeof m.id !== 'string' || m.id.length > 64 || x === null || y === null || z === null || ry === null) return null;
+  const a = typeof m.a === 'string' && /^[a-z0-9_]{1,24}$/.test(m.a) && m.a.length <= MAX_ANIM ? m.a : 'idle';
+  return { id: m.id, x, y, z, ry, a };
+}
 const SEND_INTERVAL_MS = 80; // ~12 envios/s
 
 export class Net {
@@ -46,9 +78,10 @@ export class Net {
       for (const [id, metas] of Object.entries(state)) {
         if (id === this.id || this.known.has(id)) continue;
         const meta = metas[0];
-        if (!meta) continue;
+        const character = cleanCharacter(meta?.character);
+        if (!meta || !character || this.known.size >= MAX_REMOTE) continue;
         this.known.add(id);
-        h.onJoin({ id, name: meta.name, character: meta.character });
+        h.onJoin({ id, name: cleanName(meta.name), character });
       }
       for (const id of [...this.known]) {
         if (!now.has(id)) {
@@ -58,8 +91,8 @@ export class Net {
       }
     });
     channel.on('broadcast', { event: 'move' }, ({ payload }) => {
-      const m = payload as MoveMsg;
-      if (m.id !== this.id) h.onMove(m);
+      const m = cleanMove(payload);
+      if (m && m.id !== this.id) h.onMove(m);
     });
 
     await new Promise<void>((resolve, reject) => {

@@ -57,7 +57,7 @@ export function showLobby(): Promise<Profile> {
       <canvas></canvas>
       <div>
         <label for="lobby-name">Seu nome</label>
-        <input id="lobby-name" maxlength="${MAX_NAME}" autocomplete="off" placeholder="Digite seu nome" />
+        <input id="lobby-name" autocomplete="off" placeholder="Digite seu nome" />
         <div class="lobby-grid"></div>
         <button class="lobby-go" disabled>Entrar</button>
         <p class="lobby-credits">Modelos: Diddy_Blud_117 e Nxrmalman. (CC-BY 4.0) — veja CREDITS.md</p>
@@ -69,6 +69,7 @@ export function showLobby(): Promise<Profile> {
   const grid = root.querySelector('.lobby-grid') as HTMLDivElement;
   const go = root.querySelector('.lobby-go') as HTMLButtonElement;
   const canvas = root.querySelector('canvas') as HTMLCanvasElement;
+  input.maxLength = MAX_NAME;
   input.value = saved.name;
 
   // Prévia 3D

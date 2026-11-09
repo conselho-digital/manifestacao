@@ -6,15 +6,25 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "eslint src",
+    "typecheck": "tsc --noEmit",
+    "check:secrets": "node scripts/scan-secrets.mjs",
+    "check:review": "node scripts/review-checks.mjs",
+    "check:size": "node scripts/size-report.mjs",
+    "audit:prod": "npm audit --omit=dev --audit-level=high",
+    "check": "npm run lint && npm run typecheck && npm run build && npm run check:size && npm run check:secrets && npm run audit:prod"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.0",
     "three": "^0.187.0"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@types/three": "^0.187.0",
-    "typescript": "^7.0.2",
+    "eslint": "^9.39.5",
+    "typescript": "5.9",
+    "typescript-eslint": "^8.72.1",
     "vite": "^8.3.6"
   }
 }
