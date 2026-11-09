@@ -663,12 +663,15 @@ export function createCity(): THREE.Group {
   // fileira de arbustos atrás do MASP e árvores ao redor da praça
   for (let x = PLAZA.x0 + 3; x < PLAZA.x1 - 2; x += 4.5) trees.push({ x, z: 48.5, h: 1.3, species: 'bush' });
   for (const [x, z] of [[PLAZA.x0 + 0.5, 24], [PLAZA.x1 - 0.5, 22], [PLAZA.x1 - 0.5, 36], [PLAZA.x0 + 0.5, 36]] as const) spot(x, z, rand() < 0.5 ? 'maple' : 'birch');
-  city.add(makeTrees(trees));
+  // copa não pode entrar no prédio: tira árvores cuja copa atravessaria uma fachada
+  const crown: Record<string, number> = { oak: 0.4, pine: 0.2, maple: 0.3, birch: 0.2, bush: 0 };
+  const placed = trees.filter((t) => t.species === 'bush' || !nearBuilding(t.x, t.z, crown[t.species]! * t.h + 0.4));
+  city.add(makeTrees(placed));
 
   // Bancos e jardineiras (dá para escalar)
   const benchMat = new THREE.MeshLambertMaterial({ color: 0x8c8f93 });
   const plantMat = new THREE.MeshLambertMaterial({ color: 0x7b6a58 });
-  const shrub = new THREE.MeshLambertMaterial({ color: 0x3f7a35 });
+  const planterBushes: TreeSpec[] = [];
   const props: [number, number, number, number, number, THREE.Material][] = [
     [45, 17.6, 3.2, 3.2, 1.1, plantMat], [5, 17.6, 3.2, 3.2, 1.6, plantMat], [25, 20.4, 6, 0.8, 0.5, benchMat],
     [40, 23, 2.2, 0.7, 0.5, benchMat], [10, 23, 2.2, 0.7, 0.5, benchMat],
@@ -681,12 +684,18 @@ export function createCity(): THREE.Group {
     m.castShadow = true;
     city.add(m);
     if (mat === plantMat) {
-      const top = new THREE.Mesh(new THREE.IcosahedronGeometry(Math.min(w, d) * 0.45, 0), shrub);
-      top.position.set(x, h + 0.35, z);
-      city.add(top);
+      // arbusto de verdade na jardineira (ramos e folhas), em vez de uma forma lisa
+      const n = Math.max(1, Math.round(Math.min(w, d) / 1.6));
+      for (let i = 0; i < n * n; i++) {
+        const ox = ((i % n) + 0.5) / n - 0.5;
+        const oz = (Math.floor(i / n) + 0.5) / n - 0.5;
+        planterBushes.push({ x: x + ox * (w - 1.2), z: z + oz * (d - 1.2), y: h - 0.05, h: 1.2 + rand() * 0.6, species: 'bush' });
+      }
     }
     addBox(x - w / 2, x + w / 2, z - d / 2, z + d / 2, h, '#7b6a58');
   }
+
+  city.add(makeTrees(planterBushes));
 
   validate();
   void loadMasp(city);

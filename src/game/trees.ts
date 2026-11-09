@@ -7,7 +7,9 @@ import { addBox, TREES } from './map';
  * Tronco afunilado com raízes e galhos, copa feita de tufos de folhas recortadas (com buracos).
  */
 export type Species = 'oak' | 'pine' | 'maple' | 'birch' | 'bush';
-export interface TreeSpec { x: number; z: number; h: number; species: Species }
+export interface TreeSpec {
+  /** altura da base (ex.: em cima de uma jardineira) */
+  y?: number; x: number; z: number; h: number; species: Species }
 
 /** Faixa de altura (m) de cada espécie, para quem escolhe. */
 export const HEIGHT: Record<Species, [number, number]> = {
@@ -132,6 +134,38 @@ function limb(a: THREE.Vector3, b: THREE.Vector3, r0: number, r1: number, seg = 
   return g;
 }
 
+/** Arbusto: ramos finos saindo da base, com tufos de folhas dos lados e por dentro (os ramos aparecem pelas frestas). */
+function buildBush(): Template {
+  const parts: THREE.BufferGeometry[] = [];
+  const blobs: Blob[] = [];
+  const V = (x: number, y: number, z: number): THREE.Vector3 => new THREE.Vector3(x, y, z);
+  for (let i = 0; i < 9; i++) {
+    const a = (i / 9) * Math.PI * 2 + rr(-0.3, 0.3);
+    const reach = rr(0.18, 0.42);
+    const top = rr(0.35, 0.75);
+    const mid = V(Math.cos(a) * reach * 0.5, top * 0.5, Math.sin(a) * reach * 0.5);
+    const end = V(Math.cos(a) * reach, top, Math.sin(a) * reach);
+    parts.push(limb(V(0, 0, 0), mid, 0.014, 0.01, 5));
+    parts.push(limb(mid, end, 0.01, 0.005, 4));
+    for (let k = 0; k < 2; k++) { // galhinhos
+      const b = a + (k ? 0.7 : -0.7);
+      parts.push(limb(mid.clone().lerp(end, 0.6), V(Math.cos(b) * reach * 1.1, top + rr(-0.05, 0.08), Math.sin(b) * reach * 1.1), 0.005, 0.002, 3));
+    }
+  }
+  // tufos: casca externa em volta + alguns mais baixos no meio, deixando frestas
+  for (let i = 0; i < 16; i++) {
+    const a = rng() * Math.PI * 2;
+    const u = 0.45 + rng() * 0.55;
+    const e = rng() * Math.PI * 0.45;
+    blobs.push({
+      p: V(Math.cos(a) * Math.cos(e) * 0.5 * u, 0.12 + Math.sin(e) * 0.5 * u + 0.12, Math.sin(a) * Math.cos(e) * 0.5 * u),
+      r: V(rr(0.15, 0.25), rr(0.13, 0.2), rr(0.15, 0.25)),
+    });
+  }
+  blobs.push({ p: V(0, 0.62, 0), r: V(0.2, 0.17, 0.2) });
+  return { trunk: mergeGeometries(parts)!, blobs, trunkHalf: 0, crownBase: 0 };
+}
+
 function buildTemplate(sp: Exclude<Species, 'bush'>): Template {
   const parts: THREE.BufferGeometry[] = [];
   const blobs: Blob[] = [];
@@ -254,11 +288,7 @@ const TINT: Record<Species, string> = { oak: '#ffffff', pine: '#ffffff', maple: 
 export function makeTrees(list: TreeSpec[]): THREE.Group {
   const group = new THREE.Group();
   const sphere = new THREE.IcosahedronGeometry(1, 0);
-  const bushTemplate: Template = {
-    trunk: new THREE.BufferGeometry(),
-    blobs: [{ p: new THREE.Vector3(0, 0.45, 0), r: new THREE.Vector3(0.5, 0.42, 0.5) }, { p: new THREE.Vector3(0.32, 0.3, 0.12), r: new THREE.Vector3(0.33, 0.3, 0.33) }, { p: new THREE.Vector3(-0.3, 0.32, -0.1), r: new THREE.Vector3(0.34, 0.3, 0.34) }, { p: new THREE.Vector3(0.05, 0.28, 0.32), r: new THREE.Vector3(0.3, 0.26, 0.3) }, { p: new THREE.Vector3(0.0, 0.7, 0.0), r: new THREE.Vector3(0.28, 0.24, 0.28) }],
-    trunkHalf: 0, crownBase: 0,
-  };
+  const bushTemplate = buildBush();
   const m = new THREE.Matrix4();
   const q = new THREE.Quaternion();
   const e = new THREE.Euler();
@@ -283,7 +313,7 @@ export function makeTrees(list: TreeSpec[]): THREE.Group {
         const sinY = Math.sin(yaw);
         const px = (b.p.x * cosY - b.p.z * sinY) * t.h + t.x;
         const pz = (b.p.x * sinY + b.p.z * cosY) * t.h + t.z;
-        const py = b.p.y * t.h;
+        const py = b.p.y * t.h + (t.y ?? 0);
         e.set(rng() * 0.4, rng() * 6.3, rng() * 0.4);
         q.setFromEuler(e);
         m.compose(new THREE.Vector3(px, py, pz), q, b.r.clone().multiplyScalar(t.h));
@@ -304,13 +334,13 @@ export function makeTrees(list: TreeSpec[]): THREE.Group {
     group.add(blobs);
 
     // troncos e galhos
-    if (sp !== 'bush') {
+    {
       const bark = new THREE.MeshLambertMaterial({ map: barkTex(sp) });
       (bark.map as THREE.Texture).repeat.set(2, sp === 'pine' ? 6 : 3);
       const trunks = new THREE.InstancedMesh(tpl.trunk, bark, trees.length);
       trees.forEach((t, i) => {
         q.setFromAxisAngle(Y, rng() * 6.3);
-        m.compose(new THREE.Vector3(t.x, 0, t.z), q, new THREE.Vector3(t.h, t.h, t.h));
+        m.compose(new THREE.Vector3(t.x, t.y ?? 0, t.z), q, new THREE.Vector3(t.h, t.h, t.h));
         trunks.setMatrixAt(i, m);
       });
       trunks.castShadow = true;

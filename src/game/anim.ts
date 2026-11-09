@@ -111,6 +111,7 @@ export class Animator {
   private done = false;
   private armW = 0; // 0 = braços do clipe, 1 = braços segurando o fuzil
   private aimK = 0; // 0 = fuzil baixo, 1 = fuzil no ombro
+  private crouchK = 0; // 0 em pé, 1 agachado (tronco desce)
   private armed: Armed = 'none';
   private aimPitch = 0;
   private weapon: THREE.Object3D | null = null;
@@ -305,14 +306,17 @@ export class Animator {
   private pose(dt: number): void {
     this.armW += ((this.holdsWeapon ? 1 : 0) - this.armW) * Math.min(1, dt * 10);
     this.aimK += ((this.armed === 'aim' ? 1 : 0) - this.aimK) * Math.min(1, dt * 9);
-    if (this.armW < 0.01 || !this.spine) {
-      for (const b of this.touched) this.clean.set(b, b.quaternion.clone()); // sem arma: tudo vem do clipe
+    this.crouchK += ((this.clipName.startsWith('crouch_') ? 1 : 0) - this.crouchK) * Math.min(1, dt * 8);
+    const armed = this.armW >= 0.01;
+    if ((!armed && this.crouchK < 0.01) || !this.spine) {
+      for (const b of this.touched) this.clean.set(b, b.quaternion.clone()); // tudo vem do clipe
       return;
     }
     for (const b of this.touched) this.clean.get(b)!.copy(b.quaternion);
     this.dirty = true;
     this.updateRoot();
     this.bendTorso();
+    if (!armed) return;
     this.updateRoot();
     const frame = this.weaponFrame();
     if (this.weapon) {
@@ -346,24 +350,28 @@ export class Animator {
     bone.updateMatrixWorld(true);
   }
 
-  /** Com o fuzil: o tronco inclina junto com a mira e gira um pouco para o lado da arma; a cabeça olha para onde mira. */
+  /** Agachado: o tronco desce para a frente. Com o fuzil: inclina com a mira, gira um pouco e a cabeça olha para onde mira. */
   private bendTorso(): void {
     const sp = this.spine!;
     const w = this.armW;
+    const c = this.crouchK;
     const p = THREE.MathUtils.clamp(this.aimPitch, -1.1, 1.1);
     const turn = 0.12 * this.aimK * w;
     const rot = (pitch: number, yaw: number): THREE.Quaternion =>
       new THREE.Quaternion().setFromAxisAngle(Y, yaw).multiply(new THREE.Quaternion().setFromAxisAngle(X, pitch));
-    // o clipe gira o tronco para a pose do estilo GTA: desfaz parte disso para o peito olhar para a mira
-    const f = new THREE.Vector3(0, 0, 1).applyQuaternion(
-      this.quatIn(sp.chest, new THREE.Quaternion()).multiply(this.chestRest.q.clone().invert()),
-    );
-    const err = Math.atan2(f.x, f.z) * w;
-    this.rotateBone(sp.mid, rot(p * 0.12 * w, turn * 0.4 - err * 0.45));
-    this.rotateBone(sp.chest, rot(p * 0.2 * w, turn * 0.6 - err * 0.4));
-    // cabeça: olha para onde mira e encosta a bochecha na coronha (inclina para o ombro direito)
+    let err = 0;
+    if (w > 0) {
+      // o clipe gira o tronco para a pose do estilo GTA: desfaz parte disso para o peito olhar para a mira
+      const f = new THREE.Vector3(0, 0, 1).applyQuaternion(
+        this.quatIn(sp.chest, new THREE.Quaternion()).multiply(this.chestRest.q.clone().invert()),
+      );
+      err = Math.atan2(f.x, f.z) * w;
+    }
+    this.rotateBone(sp.mid, rot(p * 0.12 * w + 0.32 * c, turn * 0.4 - err * 0.45));
+    this.rotateBone(sp.chest, rot(p * 0.2 * w + 0.3 * c, turn * 0.6 - err * 0.4));
+    // cabeça: olha para onde mira e encosta a bochecha na coronha; agachado levanta para olhar à frente
     const roll = new THREE.Quaternion().setFromAxisAngle(Z, 0.16 * this.aimK * w);
-    this.rotateBone(sp.head, rot(p * 0.3 * w + 0.08 * this.aimK * w, -turn * 0.7).multiply(roll));
+    this.rotateBone(sp.head, rot(p * 0.3 * w + 0.08 * this.aimK * w - 0.3 * c, -turn * 0.7).multiply(roll));
   }
 
   /** Onde fica o fuzil: acompanha o peito e aponta para onde a câmera mira. */
