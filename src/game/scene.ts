@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 
 const BLUR_KEY = 'arena:blur';
-const BLUR_DEFAULT = 0.5;
+const BLUR_DEFAULT = 0.45;
 
-/** Desfoque leve da imagem 3D (px). Vem de ?blur=N, do que o jogador salvou ou do padrão 0,5. */
+/** Desfoque leve da imagem 3D (px). Vem de ?blur=N, do que o jogador salvou ou do padrão 0,45. */
 export function getBlur(): number {
   const params = new URLSearchParams(location.search);
   if (params.has('blur')) { const q = Number(params.get('blur')); if (Number.isFinite(q)) return Math.min(Math.max(q, 0), 3); }

@@ -143,8 +143,8 @@ export class Player {
       this.moveHoriz(dir.x * speed * dt, dir.z * speed * dt);
       this.heading = Math.atan2(dir.x, dir.z);
     }
-    // Armado e atirando/mirando: o corpo olha para onde a câmera aponta
-    if (this.armed !== 'none' && (input.aim || input.fire)) this.heading = yaw;
+    // Armado (em pé, andando, mirando ou atirando): o corpo acompanha para onde a câmera aponta
+    if (this.armed !== 'none') this.heading = yaw;
 
     // Vertical
     const support = supportHeight(pos.x, pos.z, pos.y);
@@ -339,7 +339,7 @@ export class Player {
     // Gira suavemente até a direção do movimento
     let diff = this.heading - this.object.rotation.y;
     diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-    this.object.rotation.y += diff * Math.min(1, dt * 12);
+    this.object.rotation.y += diff * Math.min(1, dt * 18);
     this.animator?.update(dt);
     // Morto: deita de costas
     const target = this.mode === 'dead' ? 1 : 0;
