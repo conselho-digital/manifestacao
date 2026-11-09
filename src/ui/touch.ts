@@ -1,5 +1,5 @@
 import { EMOTES, SPECIALS, WALK_STYLES } from '../game/anim';
-import { addLook, getWalkClip, queueClimb, queueEmote, queueJump, setSprint, setTouchVector, setWalkClip } from '../game/input';
+import { addLook, getWalkClip, queueClimb, queueInteract, queueEmote, queueJump, setSprint, setTouchVector, setWalkClip } from '../game/input';
 
 const CSS = `
 .hud{position:fixed;inset:0;pointer-events:none;z-index:5;font-family:system-ui,sans-serif;user-select:none;-webkit-user-select:none;touch-action:none}
@@ -13,6 +13,7 @@ const CSS = `
 .hud-btn:active,.hud-btn.on{background:rgba(76,194,255,.7)}
 .hud-jump{right:max(24px,env(safe-area-inset-right));bottom:max(30px,env(safe-area-inset-bottom));width:88px;height:88px;font-size:16px}
 .hud-climb{right:calc(max(24px,env(safe-area-inset-right)) + 100px);bottom:max(30px,env(safe-area-inset-bottom));width:70px;height:70px}
+.hud-car{right:calc(max(24px,env(safe-area-inset-right)) + 100px);bottom:calc(max(30px,env(safe-area-inset-bottom)) + 100px);width:70px;height:70px}
 .hud-sprint{right:max(34px,env(safe-area-inset-right));bottom:calc(max(30px,env(safe-area-inset-bottom)) + 100px);width:70px;height:70px}
 .hud-anim{right:10px;top:10px;width:auto;height:40px;border-radius:20px;padding:0 14px;position:fixed}
 .hud-panel{position:fixed;right:10px;top:58px;width:min(440px,calc(100vw - 20px));max-height:calc(100vh - 80px);overflow:auto;pointer-events:auto;
@@ -100,6 +101,7 @@ export function createHud(): void {
     };
     holdButton(mk('hud-jump', 'Pular'), queueJump);
     holdButton(mk('hud-climb', 'Escalar'), queueClimb);
+    holdButton(mk('hud-car', 'Carro'), queueInteract);
     holdButton(mk('hud-sprint', 'Correr+'), () => setSprint(true), () => setSprint(false));
   }
 
@@ -150,7 +152,7 @@ export function createHud(): void {
   help.className = 'hud-help';
   help.textContent = touch
     ? 'Joystick: pouco = anda, muito = corre. Arraste a tela para girar a câmera.'
-    : 'WASD move · Shift anda · Q sprint · Espaço pula · E escala · arraste o mouse para girar · G abre este menu.';
+    : 'WASD move · Shift anda · Q sprint · Espaço pula · E escala · F entra/sai do carro · arraste o mouse para girar · G abre este menu.';
   panel.appendChild(help);
 
   holdButton(btn, () => panel.classList.toggle('open'));

@@ -17,6 +17,8 @@ export interface MoveMsg {
   ry: number;
   /** nome do clipe de animação atual */
   a: string;
+  /** carro que está dirigindo (-1 = nenhum) */
+  v: number;
 }
 
 export interface NetHandlers {
@@ -55,7 +57,8 @@ function cleanMove(raw: unknown): MoveMsg | null {
   const ry = finite(m.ry, 100);
   if (typeof m.id !== 'string' || m.id.length > 64 || x === null || y === null || z === null || ry === null) return null;
   const a = typeof m.a === 'string' && /^[a-z0-9_]{1,24}$/.test(m.a) && m.a.length <= MAX_ANIM ? m.a : 'idle';
-  return { id: m.id, x, y, z, ry, a };
+  const v = typeof m.v === 'number' && Number.isInteger(m.v) && m.v >= -1 && m.v < 8 ? m.v : -1;
+  return { id: m.id, x, y, z, ry, a, v };
 }
 const SEND_INTERVAL_MS = 80; // ~12 envios/s
 
@@ -107,7 +110,7 @@ export class Net {
   }
 
   /** Envia posição no máximo ~12x por segundo. */
-  sendMove(x: number, y: number, z: number, ry: number, a: string, now: number): void {
+  sendMove(x: number, y: number, z: number, ry: number, a: string, v: number, now: number): void {
     if (!this.channel || !this.ready || now - this.lastSent < SEND_INTERVAL_MS) return;
     this.lastSent = now;
     const payload: MoveMsg = {
@@ -115,6 +118,7 @@ export class Net {
       x: Math.round(x * 100) / 100,
       y: Math.round(y * 100) / 100,
       a,
+      v,
       z: Math.round(z * 100) / 100,
       ry: Math.round(ry * 100) / 100,
     };

@@ -10,6 +10,8 @@ export interface InputState {
   /** disparados uma vez por toque/tecla */
   jump: boolean;
   climb: boolean;
+  /** entrar/sair do carro */
+  interact: boolean;
   /** id de animação pedida no menu (emote ou ação) */
   emote: string | null;
   /** clipe usado ao andar (estilo de andar) */
@@ -23,6 +25,7 @@ let touchActive = false;
 let sprintHeld = false;
 let jumpQ = false;
 let climbQ = false;
+let interactQ = false;
 let emoteQ: string | null = null;
 let lookDx = 0;
 let walkClip = 'walk';
@@ -32,12 +35,14 @@ window.addEventListener('keydown', (e) => {
   keys.add(e.code);
   if (e.code === 'Space') { jumpQ = true; e.preventDefault(); }
   if (e.code === 'KeyE' || e.code === 'KeyC') climbQ = true;
+  if (e.code === 'KeyF') interactQ = true;
 });
 window.addEventListener('keyup', (e) => keys.delete(e.code));
 window.addEventListener('blur', () => keys.clear());
 
 export const queueJump = (): void => { jumpQ = true; };
 export const queueClimb = (): void => { climbQ = true; };
+export const queueInteract = (): void => { interactQ = true; };
 export const queueEmote = (id: string): void => { emoteQ = id; };
 export const setSprint = (v: boolean): void => { sprintHeld = v; };
 export const setWalkClip = (id: string): void => { walkClip = id; };
@@ -69,10 +74,11 @@ export function readInput(): InputState {
   const state: InputState = {
     x, y, mag: len, walk,
     sprint: keys.has('KeyQ') || sprintHeld,
-    jump: jumpQ, climb: climbQ, emote: emoteQ, walkClip,
+    jump: jumpQ, climb: climbQ, interact: interactQ, emote: emoteQ, walkClip,
   };
   jumpQ = false;
   climbQ = false;
+  interactQ = false;
   emoteQ = null;
   return state;
 }

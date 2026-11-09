@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ARENA_SIZE, COLLIDERS, type Box } from './map';
 import type { InputState } from './input';
+import { CARS, type Car } from './vehicle';
 import type { Animator } from './anim';
 
 const RUN_SPEED = 5;
@@ -21,7 +22,7 @@ const SPECIAL: Record<string, { dur: number; speed: number }> = {
   dive: { dur: 1.5, speed: 3 },
 };
 
-type Mode = 'ground' | 'air' | 'climb' | 'special';
+type Mode = 'ground' | 'air' | 'climb' | 'special' | 'drive';
 
 interface Climb {
   t: number;
@@ -42,6 +43,7 @@ export class Player {
   private emote: string | null = null;
   private special: { id: string; t: number } | null = null;
   private climb: Climb | null = null;
+  private car: Car | null = null;
 
   constructor(object: THREE.Object3D, private animator: Animator | null = null) {
     this.object = object;
@@ -49,12 +51,23 @@ export class Player {
 
   /** Nome do clipe de animação atual (enviado aos outros jogadores). */
   get animName(): string {
-    return this.animator?.name || 'idle';
+    return this.mode === 'drive' ? 'drive' : this.animator?.name || 'idle';
+  }
+
+  /** Id do carro que está dirigindo (-1 = nenhum). */
+  get carId(): number {
+    return this.car ? this.car.id : -1;
+  }
+
+  /** Direção do carro (a câmera acompanha), ou null a pé. */
+  get driveHeading(): number | null {
+    return this.car ? this.car.heading : null;
   }
 
   update(dt: number, input: InputState, yaw: number): void {
     const pos = this.object.position;
 
+    if (this.mode === 'drive' && this.car) { this.updateDrive(dt, input); return; }
     if (this.mode === 'climb' && this.climb) { this.updateClimb(dt); this.finish(dt); return; }
     if (this.mode === 'special' && this.special) { this.updateSpecial(dt); this.finish(dt); return; }
 
@@ -63,6 +76,7 @@ export class Player {
     if (input.emote) this.startAction(input.emote);
     if (this.mode === 'special') { this.finish(dt); return; }
 
+    if (input.interact && this.mode === 'ground' && this.tryEnterCar()) return;
     if (input.climb && this.tryClimb()) { this.finish(dt); return; }
 
     if (input.jump && this.mode === 'ground') {
@@ -147,6 +161,52 @@ export class Player {
       this.mode = 'ground';
       this.animator?.play('idle');
     }
+  }
+
+  /** Entra no carro livre mais próximo (até 3,5 m). */
+  private tryEnterCar(): boolean {
+    const pos = this.object.position;
+    let best: Car | null = null;
+    let bestD = 3.5;
+    for (const c of CARS) {
+      const d = Math.hypot(c.x - pos.x, c.z - pos.z);
+      if (c.driver === null && d < bestD) { best = c; bestD = d; }
+    }
+    if (!best) return false;
+    best.driver = 'local';
+    this.car = best;
+    this.mode = 'drive';
+    this.emote = null;
+    this.vy = 0;
+    this.object.visible = false;
+    return true;
+  }
+
+  private updateDrive(dt: number, input: InputState): void {
+    const car = this.car!;
+    if (input.interact) { this.exitCar(); return; }
+    // No carro o controle é do carro: W/S acelera e freia, A/D esterça
+    car.drive(dt, input.y, input.x);
+    this.object.position.set(car.x, 0, car.z);
+    this.heading = car.heading;
+    this.object.rotation.y = car.heading;
+  }
+
+  private exitCar(): void {
+    const car = this.car!;
+    // Sai pelo lado direito do carro
+    const rx = -Math.cos(car.heading);
+    const rz = Math.sin(car.heading);
+    this.object.position.set(
+      THREE.MathUtils.clamp(car.x + rx * 2.2, -LIMIT, LIMIT), 0,
+      THREE.MathUtils.clamp(car.z + rz * 2.2, -LIMIT, LIMIT),
+    );
+    car.driver = null;
+    car.speed = 0;
+    this.car = null;
+    this.object.visible = true;
+    this.mode = 'ground';
+    this.animator?.play('idle');
   }
 
   /** Procura uma caixa à frente que dê para escalar e começa a subir. */
@@ -239,10 +299,13 @@ export class Player {
   /** Câmera em terceira pessoa, atrás do jogador. */
   followCamera(camera: THREE.PerspectiveCamera, dt: number, yaw: number): void {
     const p = this.object.position;
+    const driving = this.mode === 'drive';
+    const dist = driving ? 9 : CAM_DISTANCE;
+    const height = driving ? 4.5 : CAM_HEIGHT;
     const target = new THREE.Vector3(
-      p.x - Math.sin(yaw) * CAM_DISTANCE,
-      p.y + CAM_HEIGHT,
-      p.z - Math.cos(yaw) * CAM_DISTANCE,
+      p.x - Math.sin(yaw) * dist,
+      p.y + height,
+      p.z - Math.cos(yaw) * dist,
     );
     camera.position.lerp(target, Math.min(1, dt * 8));
     camera.lookAt(p.x, p.y + 1.2, p.z);

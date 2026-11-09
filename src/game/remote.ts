@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createCharacter } from './characters';
 import { Animator } from './anim';
+import { CARS, type Car } from './vehicle';
 import type { MoveMsg, PlayerInfo } from '../net/sync';
 
 function makeLabel(text: string): THREE.Sprite {
@@ -34,11 +35,15 @@ export class RemotePlayer {
   private pending: MoveMsg | null = null;
   private animator: Animator | null = null;
   private anim = 'idle';
+  private carId = -1;
+  private lastCar: Car | null = null;
+  private model: THREE.Object3D | null = null;
 
   constructor(readonly info: PlayerInfo) {
     this.root.add(makeLabel(info.name));
     void createCharacter(info.character).then((m) => {
       this.root.add(m);
+      this.model = m;
       void Animator.create(m).then((a) => (this.animator = a));
       this.ready = true;
       if (this.pending) this.setTarget(this.pending, true);
@@ -50,6 +55,7 @@ export class RemotePlayer {
     this.target.set(m.x, m.y ?? 0, m.z);
     this.targetRy = m.ry;
     this.anim = m.a || 'idle';
+    this.carId = m.v;
     if (snap || !this.ready) {
       this.root.position.copy(this.target);
       this.root.rotation.y = m.ry;
@@ -59,7 +65,18 @@ export class RemotePlayer {
   update(dt: number): void {
     const k = 1 - Math.exp(-dt * 12);
     this.root.position.lerp(this.target, k);
-    if (this.animator) {
+    const car = this.carId >= 0 ? CARS[this.carId] : undefined;
+    if (car) {
+      // Dirigindo: esconde o boneco e move o carro
+      car.driver = this.info.id;
+      this.lastCar = car;
+      if (this.model) this.model.visible = false;
+      car.setPose(this.root.position.x, this.root.position.z, this.root.rotation.y);
+    } else {
+      if (this.lastCar) { this.lastCar.driver = null; this.lastCar = null; }
+      if (this.model) this.model.visible = true;
+    }
+    if (this.animator && !car) {
       this.animator.play(this.anim);
       this.animator.update(dt);
     }
@@ -69,6 +86,7 @@ export class RemotePlayer {
   }
 
   dispose(): void {
+    if (this.lastCar) this.lastCar.driver = null;
     this.root.removeFromParent();
   }
 }

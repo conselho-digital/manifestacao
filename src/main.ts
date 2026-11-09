@@ -9,12 +9,14 @@ import { createHud } from './ui/touch';
 import { Animator } from './game/anim';
 import { Net } from './net/sync';
 import { RemotePlayer } from './game/remote';
+import { createCars } from './game/vehicle';
 
 const renderer = createRenderer();
 const scene = createScene();
 const camera = createCamera();
 handleResize(renderer, camera);
 scene.add(createMap());
+scene.add(createCars());
 
 // Ângulo extra da câmera (para inspecionar de lado): ?camoffset=1.57
 const camOffset = Number(new URLSearchParams(location.search).get('camoffset') ?? 0) || 0;
@@ -57,10 +59,16 @@ function loop(): void {
   const dt = Math.min(clock.getDelta(), 0.05);
   if (player) {
     yaw -= takeLook() * 0.006;
+    const dh = player.driveHeading;
+    if (dh !== null) {
+      // No carro a câmera fica atrás dele
+      const d = Math.atan2(Math.sin(dh - yaw), Math.cos(dh - yaw));
+      yaw += d * Math.min(1, dt * 2.5);
+    }
     player.update(dt, readInput(), yaw);
     player.followCamera(camera, dt, yaw + camOffset);
     const p = player.object;
-    net.sendMove(p.position.x, p.position.y, p.position.z, p.rotation.y, player.animName, performance.now());
+    net.sendMove(p.position.x, p.position.y, p.position.z, p.rotation.y, player.animName, player.carId, performance.now());
   }
   remotes.forEach((r) => r.update(dt));
   renderer.render(scene, camera);

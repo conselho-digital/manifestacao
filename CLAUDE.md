@@ -47,7 +47,7 @@ Arena multiplayer no navegador. Mapa pequeno, personagens low-poly. Plano **grá
 3. ✅ Tela de entrada: nome + 8 personagens
 4. ✅ Multiplayer Supabase: presence + broadcast + interpolação
 5. ✅ Animação (ped.ifp: parado, andar, correr; Shift anda). Carlos e Law1-9 animados. Falta: modelos sem esqueleto (Helena, Stewart, Bennyse, Amanda, Garota1, Gordao, Cesar, Akiyama)
-6. Veículos
+6. ✅ Veículos (carros provisórios de formas simples; falta trocar por GLB: body + wheel_FL/FR/BL/BR)
 7. Deploy Vercel
 8. Chat, ranking, roupas
 
@@ -58,5 +58,6 @@ Arena multiplayer no navegador. Mapa pequeno, personagens low-poly. Plano **grá
 
 ## Controles
 - PC: WASD move · Shift anda · Q sprint · Espaço pula · E (ou C) escala · arrastar o mouse gira a câmera · G abre o menu de animações.
+- Carros: F entra/sai (botão "Carro" no celular); W/S acelera e freia, A/D esterça.
 - Celular: joystick (pouco = anda, muito = corre), Pular, Escalar, Correr+, arrastar a tela gira a câmera, botão "Animações".
 - Dados de animação: `public/anims/ped*.json` (esqueleto GTA SA, Law1-9) e `carlos*.json` (baked). Os `-extra` carregam em segundo plano.
