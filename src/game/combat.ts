@@ -53,6 +53,7 @@ export class Combat {
 
   private reloadT = 0;
   private cd = 0;
+  private fireHold = 0;
   private invuln = 0;
   private readonly tracers: Tracers;
   private readonly stats = new Map<string, StatRow>();
@@ -110,7 +111,9 @@ export class Combat {
       }
     }
     this.cd -= dt;
-    player.setArmed(this.weapon === 0 ? (input.aim ? 'aim' : 'rifle') : 'none');
+    // atirando: o fuzil sobe para a posição de tiro (cano para a frente) e fica assim um instante depois do último tiro
+    this.fireHold = input.fire ? 0.35 : Math.max(0, this.fireHold - dt);
+    player.setArmed(this.weapon === 0 ? (input.aim || this.fireHold > 0 ? 'aim' : 'rifle') : 'none');
 
     if (input.fire && this.cd <= 0 && !this.reloading) {
       if (this.weapon === 0) {

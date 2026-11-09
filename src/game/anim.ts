@@ -114,6 +114,7 @@ export class Animator {
   private done = false;
   private armW = 0; // 0 = braços do clipe, 1 = braços segurando o fuzil
   private aimK = 0; // 0 = fuzil baixo, 1 = fuzil no ombro
+  private recoil = 0; // coice do último tiro (1 -> 0)
   private crouchK = 0; // 0 em pé, 1 agachado (tronco desce)
   private armed: Armed = 'none';
   private aimPitch = 0;
@@ -282,6 +283,11 @@ export class Animator {
     this.armed = a;
   }
 
+  /** Coice: o fuzil recua e sobe um pouco por um instante. */
+  kick(): void {
+    this.recoil = 1;
+  }
+
   /** O objeto da arma passa a ser posicionado por este animador (seguindo o peito). */
   attachWeapon(anchor: THREE.Object3D): void {
     this.weapon = anchor;
@@ -311,6 +317,7 @@ export class Animator {
     const ikTarget = !this.holdsWeapon ? 0 : OWN_HOLD(this.clipName) ? (this.armed === 'aim' ? 1 : 0) : 1;
     this.armW += (ikTarget - this.armW) * Math.min(1, dt * 10);
     this.aimK += ((this.armed === 'aim' ? 1 : 0) - this.aimK) * Math.min(1, dt * 9);
+    this.recoil = Math.max(0, this.recoil - dt * 9);
     this.crouchK += ((this.clipName.startsWith('crouch_') ? 1 : 0) - this.crouchK) * Math.min(1, dt * 8);
     const armed = this.armW >= 0.01;
     const holding = this.holdsWeapon;
@@ -388,7 +395,7 @@ export class Animator {
     const delta = chestQ.multiply(this.chestRest.q.clone().invert()); // só o movimento do peito
     const k = this.aimK;
     const pos = RIFLE_LOW.pos.clone().lerp(RIFLE_AIM.pos, k).sub(this.chestRest.pos).applyQuaternion(delta).add(chestPos);
-    const pitch = THREE.MathUtils.lerp(RIFLE_LOW.pitch + this.aimPitch * 0.5, this.aimPitch, k);
+    const pitch = THREE.MathUtils.lerp(RIFLE_LOW.pitch + this.aimPitch * 0.5, this.aimPitch, k) - 0.05 * this.recoil;
     const yaw = THREE.MathUtils.lerp(RIFLE_LOW.yaw, RIFLE_AIM.yaw, k);
     const q = new THREE.Quaternion().setFromAxisAngle(Y, yaw).multiply(new THREE.Quaternion().setFromAxisAngle(X, pitch));
     // clipe feito para segurar o fuzil: a arma fica entre as duas mãos do clipe (direita na empunhadura, esquerda no guarda-mão)
@@ -416,6 +423,7 @@ export class Animator {
       pos.lerp(byHands, 1 - k);
       q.slerp(qh, 1 - k);
     }
+    pos.addScaledVector(new THREE.Vector3(0, 0, -1).applyQuaternion(q), 0.05 * this.recoil); // recua no coice
     return { pos, q };
   }
 

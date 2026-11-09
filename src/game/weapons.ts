@@ -33,6 +33,7 @@ export class WeaponVisual {
   private mode: ArmedMode = 'none';
   private ready = false;
   private bound = false;
+  private animator: Animator | null = null;
   private hidden = false;
   private suppressed = false;
 
@@ -69,6 +70,7 @@ export class WeaponVisual {
   /** A posição da arma passa a ser dada pelo animador (acompanha o peito e as mãos). */
   bind(animator: Animator): void {
     this.bound = true;
+    this.animator = animator;
     animator.attachWeapon(this.anchor);
   }
 
@@ -108,6 +110,7 @@ export class WeaponVisual {
   /** Mostra o clarão por ~50 ms. */
   flash(): void {
     this.flashT = 0.05;
+    this.animator?.kick();
     this.flashSprite.visible = true;
   }
 
