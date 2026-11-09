@@ -5,6 +5,7 @@ import { createCharacter } from './game/characters';
 import { readInput } from './game/input';
 import { Player } from './game/player';
 import { showLobby } from './ui/lobby';
+import { Animator } from './game/anim';
 import { Net } from './net/sync';
 import { RemotePlayer } from './game/remote';
 
@@ -28,7 +29,7 @@ void showLobby().then(async (profile) => {
   const obj = await createCharacter(profile.character);
   obj.position.set(0, 0, 8);
   scene.add(obj);
-  player = new Player(obj);
+  player = new Player(obj, await Animator.create(obj));
 
   try {
     await net.join({ name: profile.name, character: profile.character }, {

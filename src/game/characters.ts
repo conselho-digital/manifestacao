@@ -43,6 +43,8 @@ export async function createCharacter(name: CharacterName): Promise<THREE.Group>
     }
   });
 
+  // Modelos GTA SA (Law) olham para +X; gira para olhar para +Z
+  if (name.startsWith('Law')) model.rotation.y = -Math.PI / 2;
   const box = measure(model);
   const size = box.getSize(new THREE.Vector3());
   const scale = CHARACTER_HEIGHT / size.y;

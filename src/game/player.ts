@@ -1,8 +1,10 @@
 import * as THREE from 'three';
 import { ARENA_SIZE } from './map';
 import type { InputState } from './input';
+import type { Animator } from './anim';
 
-const SPEED = 5;
+const RUN_SPEED = 5;
+const WALK_SPEED = 1.8;
 const LIMIT = ARENA_SIZE / 2 - 1;
 const CAM_DISTANCE = 6;
 const CAM_HEIGHT = 3.5;
@@ -11,7 +13,7 @@ export class Player {
   readonly object: THREE.Object3D;
   private heading = 0; // rotação do corpo (rad)
 
-  constructor(object: THREE.Object3D) {
+  constructor(object: THREE.Object3D, private animator: Animator | null = null) {
     this.object = object;
   }
 
@@ -22,11 +24,15 @@ export class Player {
 
     const move = forward.multiplyScalar(input.y).add(right.multiplyScalar(input.x));
     if (move.lengthSq() > 0.0001) {
-      this.object.position.addScaledVector(move, SPEED * dt);
+      this.object.position.addScaledVector(move, (input.walk ? WALK_SPEED : RUN_SPEED) * dt);
       this.object.position.x = THREE.MathUtils.clamp(this.object.position.x, -LIMIT, LIMIT);
       this.object.position.z = THREE.MathUtils.clamp(this.object.position.z, -LIMIT, LIMIT);
       this.heading = Math.atan2(move.x, move.z);
+      this.animator?.set(input.walk ? 'walk' : 'run');
+    } else {
+      this.animator?.set('idle');
     }
+    this.animator?.update(dt);
 
     // Gira suavemente até a direção do movimento
     let diff = this.heading - this.object.rotation.y;

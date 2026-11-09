@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createCharacter } from './characters';
+import { Animator } from './anim';
 import type { MoveMsg, PlayerInfo } from '../net/sync';
 
 function makeLabel(text: string): THREE.Sprite {
@@ -31,11 +32,14 @@ export class RemotePlayer {
   private targetRy = 0;
   private ready = false;
   private pending: MoveMsg | null = null;
+  private animator: Animator | null = null;
+  private speed = 0;
 
   constructor(readonly info: PlayerInfo) {
     this.root.add(makeLabel(info.name));
     void createCharacter(info.character).then((m) => {
       this.root.add(m);
+      void Animator.create(m).then((a) => (this.animator = a));
       this.ready = true;
       if (this.pending) this.setTarget(this.pending, true);
     });
@@ -53,7 +57,14 @@ export class RemotePlayer {
 
   update(dt: number): void {
     const k = 1 - Math.exp(-dt * 12);
+    const before = this.root.position.clone();
     this.root.position.lerp(this.target, k);
+    if (this.animator && dt > 0) {
+      const inst = before.distanceTo(this.root.position) / dt;
+      this.speed += (inst - this.speed) * Math.min(1, dt * 8);
+      this.animator.set(this.speed > 3.2 ? 'run' : this.speed > 0.6 ? 'walk' : 'idle');
+      this.animator.update(dt);
+    }
     let d = this.targetRy - this.root.rotation.y;
     d = Math.atan2(Math.sin(d), Math.cos(d));
     this.root.rotation.y += d * k;
