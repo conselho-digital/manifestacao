@@ -33,7 +33,7 @@ await new Promise((r) => setTimeout(r, 1500)); // clipes extras + rifle carregam
 
 const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
 
-function tile(col: number, cols: number, row: number, rows: number, view: 'side' | 'front' | 'top' | 'cam' | 'closeR' | 'closeB' | 'closeL'): void {
+function tile(col: number, cols: number, row: number, rows: number, view: 'side' | 'front' | 'top' | 'cam' | 'closeR' | 'closeB' | 'closeL' | 'closeF'): void {
   const w = W / cols;
   const h = H / rows;
   const x = col * w;
@@ -45,6 +45,7 @@ function tile(col: number, cols: number, row: number, rows: number, view: 'side'
   const c = new THREE.Vector3(0, 0.95, 0);
   if (view === 'side') cam.position.set(5.2, 1.1, 0);
   else if (view === 'front') cam.position.set(0, 1.1, 5.2);
+  else if (view === 'closeF') { cam.position.set(0, 1.25, 2.6); c.set(0, 1.1, 0); }
   else if (view === 'closeR') { cam.position.set(-2.4, 1.5, 0.3); c.set(0, 1.35, 0.3); }
   else if (view === 'closeL') { cam.position.set(2.4, 1.5, 0.3); c.set(0, 1.35, 0.3); }
   else if (view === 'closeB') { cam.position.set(-0.7, 1.75, -1.7); c.set(0, 1.4, 0.5); }
@@ -69,7 +70,7 @@ const V = {
   },
   clips: (): string[] => [...(animator as unknown as { actions: Map<string, unknown> }).actions.keys()],
   /** n poses de um clipe em 2 vistas (lado em cima, frente embaixo). */
-  sheet(clip: string, n: number, armed: Armed = 'none', pitch = 0, views: ('side' | 'front' | 'top' | 'cam' | 'closeR' | 'closeB' | 'closeL')[] = ['side', 'front']): number {
+  sheet(clip: string, n: number, armed: Armed = 'none', pitch = 0, views: ('side' | 'front' | 'top' | 'cam' | 'closeR' | 'closeB' | 'closeL' | 'closeF')[] = ['side', 'front']): number {
     animator.play(clip);
     animator.setArmed(armed);
     weapon.setMode(armed === 'none' ? 'none' : armed);
