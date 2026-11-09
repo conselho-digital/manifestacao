@@ -1,6 +1,6 @@
 # Arena Online 3D
 
-Arena multiplayer no navegador. Mapa pequeno, personagens low-poly. Plano **grátis** (Vercel + Supabase).
+Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MASP no centro. Personagens low-poly. Plano **grátis** (Vercel + Supabase).
 
 ## Stack
 - Vite + TypeScript + Three.js (front-end)
@@ -12,7 +12,7 @@ Arena multiplayer no navegador. Mapa pequeno, personagens low-poly. Plano **grá
 - `public/models/characters/` — Helena, Stewart, Bennyse, Amanda, Garota1, Carlos, Gordao, Cesar (.glb)
 - `public/models/vehicles/` — carros e motos (a criar)
 - `src/main.ts` — entrada, loop
-- `src/game/` — cena, mapa, câmera, input, física simples
+- `src/game/` — cena, cidade (`city.ts`), câmera, input, física simples, combate, veículos
 - `src/net/` — cliente Supabase, sync
 - `src/ui/` — seleção, nome, HUD
 
@@ -63,3 +63,8 @@ Arena multiplayer no navegador. Mapa pequeno, personagens low-poly. Plano **grá
 - Combate: tiro na horizontal (sem inclinação de câmera). O atirador calcula o acerto, quem leva o tiro aplica o dano em si (casual, sem servidor). AK-47: 20 de dano, 40 na cabeça; colete absorve 60%. Morreu: renasce em 3,5 s.
 - Celular: ao entrar o jogo vai para tela cheia e paisagem (onde o navegador não trava, aparece "Gire o celular"). HUD estilo GTA: minimapa, vida/colete, arma e munição, joystick, Sprint, tiro, mira, pular, porta (carro), escalar, chat e placar. Combate (dano, vida, kills) ainda não existe: munição e contadores são locais.
 - Dados de animação: `public/anims/ped*.json` (esqueleto GTA SA, Law1-9) e `carlos*.json` (baked). Os `-extra` carregam em segundo plano.
+
+## Mapa (cidade)
+- Gerado por código em `src/game/city.ts` (prédios com janelas em geometria fundida, árvores instanciadas). MASP é o modelo `public/models/map/masp.glb` (CC-BY, ver CREDITS.md).
+- Limites em `MAP` (`src/game/map.ts`): 200 x 144 m. Avenida no eixo X (z de -12 a 12), 3 ruas transversais, Parque Trianon ao sul, MASP na calçada norte.
+- Inspeção: `?vista=aerea` (câmera de cima, como a foto da maquete) e `?pos=x,z` (ponto de partida).

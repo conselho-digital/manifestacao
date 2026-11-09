@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ARENA_SIZE, COLLIDERS } from './map';
+import { COLLIDERS, MAP } from './map';
 
 const MAX_SPEED = 14;
 const MAX_REVERSE = 5;
@@ -9,7 +9,7 @@ const DRAG = 3;
 const HAND_BRAKE = 16;
 const TURN_RATE = 1.9;
 const RADIUS = 1.3;
-const LIMIT = ARENA_SIZE / 2 - 1.8;
+
 
 /** Carro provisório: carroceria `body` e rodas `wheel_FL/FR/BL/BR` (como os GLB terão que ter). */
 function buildMesh(color: number): { root: THREE.Group; wheels: Record<string, THREE.Object3D> } {
@@ -81,11 +81,11 @@ export class Car {
 
     // Limites da arena e caixas: para e quica um pouco
     let hit = false;
-    const cx = THREE.MathUtils.clamp(this.x, -LIMIT, LIMIT);
-    const cz = THREE.MathUtils.clamp(this.z, -LIMIT, LIMIT);
+    const cx = THREE.MathUtils.clamp(this.x, -(MAP.halfX - 1.8), MAP.halfX - 1.8);
+    const cz = THREE.MathUtils.clamp(this.z, -(MAP.halfZ - 1.8), MAP.halfZ - 1.8);
     if (cx !== this.x || cz !== this.z) { this.x = cx; this.z = cz; hit = true; }
     for (const b of COLLIDERS) {
-      if (b.top < 0.6) continue; // degraus baixos não bloqueiam
+      if (b.top < 0.6 || (b.bottom ?? 0) > 2.2) continue; // degraus baixos e coisas suspensas não bloqueiam
       const px = THREE.MathUtils.clamp(this.x, b.minX, b.maxX);
       const pz = THREE.MathUtils.clamp(this.z, b.minZ, b.maxZ);
       const dx = this.x - px;
@@ -125,10 +125,12 @@ export const CARS: Car[] = [];
 export function createCars(): THREE.Group {
   CARS.length = 0;
   const group = new THREE.Group();
+  // Avenida: pista sul vai para leste (heading π/2), pista norte para oeste (-π/2)
   const spawn: [number, number, number, number][] = [
-    [-4, 14, Math.PI, 0xc0392b],
-    [5, -14, 0, 0x2e86c1],
-    [15, -4, Math.PI / 2, 0xf1c40f],
+    [34, -8, Math.PI / 2, 0xc0392b],
+    [-26, -8, Math.PI / 2, 0x2e86c1],
+    [10, 8, -Math.PI / 2, 0xf1c40f],
+    [-40, 8, -Math.PI / 2, 0xecf0f1],
   ];
   spawn.forEach(([x, z, h, c], i) => {
     const car = new Car(i, x, z, h, c);

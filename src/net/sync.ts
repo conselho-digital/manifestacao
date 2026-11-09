@@ -1,7 +1,7 @@
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { CHARACTERS, type CharacterName } from '../game/characters';
-import { ARENA_SIZE } from '../game/map';
+import { MAP } from '../game/map';
 
 export interface PlayerInfo {
   id: string;
@@ -51,7 +51,7 @@ const CHANNEL = 'arena:main';
 export const MAX_NAME = 16;
 export const MAX_CHAT = 80;
 const MAX_REMOTE = 30; // limite de jogadores remotos renderizados
-const LIMIT = ARENA_SIZE; // coordenadas fora disso são descartadas
+const LIMIT = Math.max(MAP.halfX, MAP.halfZ) + 10; // coordenadas fora disso são descartadas
 const MAX_ANIM = 24;
 const MIN_SHOT_GAP_MS = 60; // ignora rajadas impossíveis
 const MIN_CHAT_GAP_MS = 400;

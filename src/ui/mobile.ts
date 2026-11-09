@@ -1,6 +1,6 @@
 import { ICON } from './icons';
 import { CARS } from '../game/vehicle';
-import { ARENA_SIZE, COLLIDERS } from '../game/map';
+import { COLLIDERS, MAP, PARKS, ROADS } from '../game/map';
 import { addLook, queueClimb, queueInteract, queueJump, queueReload, queueSwitch, setAim, setFire, setPedals, setSprint, setTouchVector } from '../game/input';
 
 /** Dados do jogo que o HUD mostra (preenchidos pelo main a cada quadro). */
@@ -155,7 +155,6 @@ function circle(parent: El, cls: string, icon: string | null, label: string | nu
   return b;
 }
 
-const HALF = ARENA_SIZE / 2;
 const COLORS = ['#4da3ff', '#f1c40f', '#c77dff', '#ff7a59'];
 
 function zoneName(x: number, z: number): string {
@@ -203,8 +202,15 @@ function drawMap(canvas: HTMLCanvasElement, cssSize: number, s: HudState, v: Vie
   if (v.circle) { g.beginPath(); g.arc(R, R, R, 0, Math.PI * 2); g.clip(); }
   g.fillStyle = '#1d2a1d';
   g.fillRect(0, 0, size, size);
-  poly([proj(-HALF, -HALF), proj(HALF, -HALF), proj(HALF, HALF), proj(-HALF, HALF)], '#5d9a52', '#d8d8d8', 3 * dpr);
-  for (const b of COLLIDERS) poly([proj(b.minX, b.minZ), proj(b.maxX, b.minZ), proj(b.maxX, b.maxZ), proj(b.minX, b.maxZ)], '#8a6f4d');
+  const rect = (r: { x0: number; x1: number; z0: number; z1: number }, fill: string, stroke?: string): void =>
+    poly([proj(r.x0, r.z0), proj(r.x1, r.z0), proj(r.x1, r.z1), proj(r.x0, r.z1)], fill, stroke, 3 * dpr);
+  rect({ x0: -MAP.halfX, x1: MAP.halfX, z0: -MAP.halfZ, z1: MAP.halfZ }, '#b9b3a2', '#e8e8e8');
+  for (const r of PARKS) rect(r, '#5d9a52');
+  for (const r of ROADS) rect(r, '#44484e');
+  for (const b of COLLIDERS) {
+    if ((b.bottom ?? 0) > 0 && b.top - (b.bottom ?? 0) < 20) rect({ x0: b.minX, x1: b.maxX, z0: b.minZ, z1: b.maxZ }, 'rgba(200,60,50,.85)');
+    else rect({ x0: b.minX, x1: b.maxX, z0: b.minZ, z1: b.maxZ }, b.color ?? '#8a6f4d');
+  }
   for (const c of CARS) {
     const sx = Math.sin(c.heading);
     const cz = Math.cos(c.heading);
@@ -487,8 +493,8 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
           score.appendChild(div);
         });
       }
-      drawMap(canvas, mapBox.clientWidth, s, { yaw: s.yaw, cx: s.x, cz: s.z, range: 20, labels: false, circle: true }, dpr);
-      if (mapOpen) drawMap(fullCanvas, fullCanvas.clientWidth, s, { yaw: 0, cx: 0, cz: 0, range: HALF * 1.12, labels: true, circle: false }, dpr);
+      drawMap(canvas, mapBox.clientWidth, s, { yaw: s.yaw, cx: s.x, cz: s.z, range: 32, labels: false, circle: true }, dpr);
+      if (mapOpen) drawMap(fullCanvas, fullCanvas.clientWidth, s, { yaw: 0, cx: 0, cz: 0, range: MAP.halfX * 1.06, labels: true, circle: false }, dpr);
     },
   };
 }

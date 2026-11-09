@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { ARENA_SIZE, COLLIDERS, type Box } from './map';
+import { COLLIDERS, MAP, type Box } from './map';
 import type { InputState } from './input';
 import { CARS, type Car } from './vehicle';
 import type { Animator, Armed } from './anim';
@@ -12,7 +12,6 @@ const GRAVITY = -20;
 const JUMP_V = 6.8;
 const RADIUS = 0.4;
 const STEP = 0.45; // desnível que se sobe andando
-const LIMIT = ARENA_SIZE / 2 - 1;
 const CAM_DISTANCE = 6;
 const CAM_HEIGHT = 3.5;
 
@@ -239,8 +238,8 @@ export class Player {
     const rx = -Math.cos(car.heading);
     const rz = Math.sin(car.heading);
     this.object.position.set(
-      THREE.MathUtils.clamp(car.x + rx * 2.2, -LIMIT, LIMIT), 0,
-      THREE.MathUtils.clamp(car.z + rz * 2.2, -LIMIT, LIMIT),
+      THREE.MathUtils.clamp(car.x + rx * 2.2, -(MAP.halfX - 1), MAP.halfX - 1), 0,
+      THREE.MathUtils.clamp(car.z + rz * 2.2, -(MAP.halfZ - 1), MAP.halfZ - 1),
     );
     car.driver = null;
     car.speed = 0;
@@ -313,10 +312,10 @@ export class Player {
   /** Move com colisão contra as caixas e limites da arena. */
   private moveHoriz(dx: number, dz: number): void {
     const pos = this.object.position;
-    pos.x = THREE.MathUtils.clamp(pos.x + dx, -LIMIT, LIMIT);
-    pos.z = THREE.MathUtils.clamp(pos.z + dz, -LIMIT, LIMIT);
+    pos.x = THREE.MathUtils.clamp(pos.x + dx, -(MAP.halfX - 1), MAP.halfX - 1);
+    pos.z = THREE.MathUtils.clamp(pos.z + dz, -(MAP.halfZ - 1), MAP.halfZ - 1);
     for (const b of COLLIDERS) {
-      if (b.top - pos.y <= STEP) continue; // dá para subir andando
+      if (b.top - pos.y <= STEP || (b.bottom ?? 0) >= pos.y + 1.8) continue; // sobe andando / passa por baixo
       const cx = THREE.MathUtils.clamp(pos.x, b.minX, b.maxX);
       const cz = THREE.MathUtils.clamp(pos.z, b.minZ, b.maxZ);
       const ox = pos.x - cx;
@@ -368,7 +367,7 @@ export class Player {
 function supportHeight(x: number, z: number, feetY: number): number {
   let h = 0;
   for (const b of COLLIDERS) {
-    if (x >= b.minX - 0.1 && x <= b.maxX + 0.1 && z >= b.minZ - 0.1 && z <= b.maxZ + 0.1 && b.top <= feetY + STEP) {
+    if ((b.bottom ?? 0) <= feetY + STEP && x >= b.minX - 0.1 && x <= b.maxX + 0.1 && z >= b.minZ - 0.1 && z <= b.maxZ + 0.1 && b.top <= feetY + STEP) {
       h = Math.max(h, b.top);
     }
   }

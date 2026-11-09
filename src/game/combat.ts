@@ -20,7 +20,7 @@ const HIT_RADIUS = 0.55; // um pouco generoso para facilitar no celular
 const RESPAWN_TIME = 3.5;
 const INVULNERABLE = 2;
 const KILL_MONEY = 100;
-const SPAWNS: [number, number][] = [[0, 8], [-16, -2], [16, 2], [0, -16], [-10, 16], [12, -12]];
+const SPAWNS: [number, number][] = [[25, 16], [-10, -16], [64, 16], [-45, 16], [30, -16], [-60, -16], [-14, 0], [64, -30]];
 
 export interface StatRow { id: string; name: string; k: number; d: number }
 
@@ -176,7 +176,7 @@ export class Combat {
     let head = false;
     if (d.y < -1e-4) { const tg = -o.y / d.y; if (tg > 0 && tg < best) best = tg; }
     for (const b of COLLIDERS) {
-      const t = rayBox(o, d, b.minX, 0, b.minZ, b.maxX, b.top, b.maxZ);
+      const t = rayBox(o, d, b.minX, b.bottom ?? 0, b.minZ, b.maxX, b.top, b.maxZ);
       if (t !== null && t < best) best = t;
     }
     for (const r of this.d.remotes.values()) {

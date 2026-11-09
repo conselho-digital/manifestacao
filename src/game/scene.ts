@@ -13,24 +13,25 @@ export function createRenderer(): THREE.WebGLRenderer {
 export function createScene(): THREE.Scene {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x87b8e8);
-  scene.fog = new THREE.Fog(0x87b8e8, 40, 90);
+  scene.fog = new THREE.Fog(0x87b8e8, 110, 330);
 
   scene.add(new THREE.HemisphereLight(0xffffff, 0x556070, 1.0));
 
   const sun = new THREE.DirectionalLight(0xffffff, 1.6);
   sun.position.set(15, 25, 10);
   sun.castShadow = true;
-  sun.shadow.mapSize.set(1024, 1024);
+  sun.shadow.mapSize.set(2048, 2048);
   const cam = sun.shadow.camera;
-  cam.left = -30; cam.right = 30; cam.top = 30; cam.bottom = -30;
-  cam.near = 1; cam.far = 80;
-  scene.add(sun);
+  cam.left = -45; cam.right = 45; cam.top = 45; cam.bottom = -45;
+  cam.near = 1; cam.far = 160;
+  scene.add(sun, sun.target);
+  scene.userData.sun = sun; // o main faz o sol (e as sombras) seguirem o jogador
 
   return scene;
 }
 
 export function createCamera(): THREE.PerspectiveCamera {
-  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 200);
+  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 600);
   camera.position.set(0, 18, 24);
   camera.lookAt(0, 0, 0);
   return camera;

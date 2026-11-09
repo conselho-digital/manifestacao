@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createCamera, createRenderer, createScene, handleResize } from './game/scene';
-import { createMap } from './game/map';
+import { createCity } from './game/city';
 import { createCharacter } from './game/characters';
 import { initMouse, readInput, takeLook, type InputState } from './game/input';
 import { Player } from './game/player';
@@ -18,12 +18,15 @@ const renderer = createRenderer();
 const scene = createScene();
 const camera = createCamera();
 handleResize(renderer, camera);
-scene.add(createMap());
+const city = createCity();
+scene.add(city);
 scene.add(createCars());
 initMouse(renderer.domElement);
 
 // Ângulo extra da câmera (para inspecionar de lado): ?camoffset=1.57
 const camOffset = Number(new URLSearchParams(location.search).get('camoffset') ?? 0) || 0;
+// Vista aérea (inspeção do mapa, como a foto da maquete): ?vista=aerea
+const aerial = new URLSearchParams(location.search).get('vista') === 'aerea';
 let yaw = 0; // câmera olha para +Z
 
 const clock = new THREE.Clock();
@@ -45,7 +48,9 @@ void showLobby().then(async (profile) => {
   });
   hud.addChat(`Sistema: bem-vindo, ${profile.name}!`);
   const obj = await createCharacter(profile.character);
-  obj.position.set(0, 0, 8);
+  // Ponto de partida (?pos=x,z serve para inspecionar o mapa)
+  const startQ = new URLSearchParams(location.search).get('pos')?.split(',').map(Number);
+  obj.position.set(startQ?.[0] ?? 25, 0, startQ?.[1] ?? 16);
   scene.add(obj);
   player = new Player(obj, await Animator.create(obj));
   player.weaponVis = new WeaponVisual(obj);
@@ -93,7 +98,14 @@ function loop(): void {
     combat.update(dt, input, player);
     player.update(dt, input, yaw);
     player.followCamera(camera, dt, yaw + camOffset);
+    if (aerial) {
+      camera.position.set(0, 120, -150);
+      camera.lookAt(0, 0, 8);
+    }
     const p = player.object;
+    const sun = scene.userData.sun as THREE.DirectionalLight;
+    sun.position.set(p.position.x + 35, 70, p.position.z + 25);
+    sun.target.position.set(p.position.x, 0, p.position.z);
     if (hud) {
       const my = combat.myStats;
       hud.update({
