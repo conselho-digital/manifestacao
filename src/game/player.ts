@@ -376,7 +376,7 @@ export class Player {
     const back = dir.clone().negate();
     for (const b of COLLIDERS) {
       const t = rayBox(from.x, from.y, from.z, back.x, back.y, back.z, b.minX - 0.25, b.bottom ?? 0, b.minZ - 0.25, b.maxX + 0.25, b.top + 0.25, b.maxZ + 0.25);
-      if (t !== null && t < d) d = Math.max(0.9, t - 0.1);
+      if (t !== null && t < d) d = Math.max(1.6, t - 0.1);
     }
     // copas de árvores: a câmera para antes de entrar (se o jogador já está debaixo da copa, ela não atrapalha)
     for (const tr of TREES) {
@@ -390,7 +390,7 @@ export class Player {
       const disc = bq * bq - c;
       if (disc < 0) continue;
       const t = -bq - Math.sqrt(disc);
-      if (t > 0 && t < d) d = Math.max(0.9, t - 0.1);
+      if (t > 0 && t < d) d = Math.max(1.6, t - 0.1);
     }
     const desired = from.clone().addScaledVector(back, d);
     desired.y = Math.max(desired.y, 0.35);

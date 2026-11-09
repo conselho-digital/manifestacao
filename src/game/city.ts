@@ -14,10 +14,10 @@ const R = (sx0: number, sx1: number, sz0: number, sz1: number): Rect => ({ x0: -
 const AVENUE: Rect = { x0: -HX, x1: HX, z0: -12, z1: 12 };
 const WALK: Rect = { x0: -HX, x1: HX, z0: -19, z1: 19 }; // avenida + calçadas
 const N_STREETS = [R(-85, -77, 12, HZ), R(6, 16, 12, HZ), R(48, 58, 12, HZ)];
-const S_STREETS = [R(-74, -64, -HZ, -12), R(18, 27, -HZ, -12)];
+const S_STREETS = [R(-68, -58, -HZ, -12), R(18, 27, -HZ, -12)];
 const STREETS = [...N_STREETS, ...S_STREETS];
-const TRIANON = R(-62, -8, -60, -34);
-const PAVERS_S = R(-62, 16, -34, -19);
+const TRIANON = R(-54, -8, -60, -34);
+const PAVERS_S = R(-54, 16, -34, -19);
 const PLAZA = R(-58, 8, 19, 46);
 const PARKING = R(28, 40, -84, -60);
 
@@ -176,7 +176,7 @@ class Batch {
   constructor() {
     const lam = (m: THREE.MeshLambertMaterialParameters): THREE.MeshLambertMaterial => new THREE.MeshLambertMaterial(m);
     const t = (k: string, mat: THREE.Material): void => { this.materials.set(k, mat); };
-    t('cream', lam({ map: punched('#f1e8d3', '#dcd1b9', '#566b7d', '#a39a85'), vertexColors: true }));
+    t('cream', lam({ map: punched('#f1e8d3', '#dcd1b9', '#3f5266', '#7d7360'), vertexColors: true }));
     t('ochre', lam({ map: punched('#ecd4a6', '#d3b983', '#52657a', '#9c855a'), vertexColors: true }));
     t('white', lam({ map: ribbon('#f6f3ec', '#dedacc', '#5f7385'), vertexColors: true }));
     t('glass', lam({ map: curtain('#6f9ac0', '#3f5b78', '#26384a'), vertexColors: true }));
@@ -283,6 +283,12 @@ function addBuilding(b: Batch, s: Spec, helipads: THREE.Mesh[], hpTex: THREE.Tex
     b.box('roof', w + 2.6, 0.5, d + 2.6, x, 7, z);
     y0 = 7.5;
   }
+  if (s.roof) {
+    // prédio baixo com telhado de quatro águas (conjuntos de casas da maquete)
+    b.wall(x, z, w, d, h, kind, 0);
+    b.hip(s.roof === 'red' ? 'redroof' : 'grayroof', x, z, w + 0.8, d + 0.8, h, 3.6);
+    return;
+  }
   const crown = h >= 60;
   const total = h - y0;
   const bodyH = crown ? total * 0.72 : total;
@@ -307,7 +313,14 @@ function addBuilding(b: Batch, s: Spec, helipads: THREE.Mesh[], hpTex: THREE.Tex
   b.box('gray', rw * 0.34, 3.2, rd * 0.3, x - rw * 0.18, top, z + rd * 0.12);
   b.cyl('metal', 1.3, 2.4, x + rw * 0.2, top, z - rd * 0.18, 10);
   b.cyl('gray', 1.4, 0.3, x + rw * 0.2, top + 2.4, z - rd * 0.18, 10);
-  for (let i = 0; i < (s.ac ? 5 : 2); i++) b.box('gray', 2, 1.3, 2, x + (rand() - 0.5) * rw * 0.7, top, z + (rand() - 0.5) * rd * 0.7);
+  if (s.ac) {
+    // ventiladores redondos, como no prédio grande da foto
+    for (let i = 0; i < 4; i++) {
+      b.cyl('metal', 1.0, 0.7, x + rw * (-0.3 + i * 0.2), top, z + rd * 0.3, 12);
+      b.cyl('gray', 0.75, 0.15, x + rw * (-0.3 + i * 0.2), top + 0.7, z + rd * 0.3, 12);
+    }
+  }
+  for (let i = 0; i < (s.ac ? 3 : 2); i++) b.box('gray', 2, 1.3, 2, x + (rand() - 0.5) * rw * 0.7, top, z + (rand() - 0.5) * rd * 0.7);
   if (s.antenna) {
     const ax = x + rw * 0.26;
     const az = z - rd * 0.22;
@@ -464,7 +477,7 @@ export function createCity(): THREE.Group {
   PARKS.push(TRIANON);
   PLACES.push(
     { name: 'MASP', rect: PLAZA },
-    { name: 'PARQUE TRIANON', rect: R(-66, -4, -62, -34) },
+    { name: 'PARQUE TRIANON', rect: R(-56, -4, -62, -34) },
     { name: 'AV. PAULISTA', rect: AVENUE },
     { name: 'CALÇADA DA PAULISTA', rect: WALK },
     ...STREETS.map((r, i) => ({ name: `RUA TRANSVERSAL ${i + 1}`, rect: r })),
@@ -507,6 +520,24 @@ export function createCity(): THREE.Group {
   for (const r of S_STREETS) city.add(flat(r.x1 - r.x0, 3.2, (r.x0 + r.x1) / 2, -15.5, 0.04, zebraH, 0xffffff, true));
   for (const r of [...N_STREETS, ...S_STREETS]) city.add(flat(3.2, 24, (r.x0 + r.x1) / 2 + (r.x1 - r.x0) / 2 + 3, 0, 0.04, zebra, 0xffffff, true));
 
+  // Esquinas arredondadas (raio de 4 m) onde as ruas encontram a avenida
+  const fillet = (cx: number, cz: number, sx: 1 | -1, sz: 1 | -1, r = 4): void => {
+    const sh = new THREE.Shape();
+    sh.moveTo(0, 0);
+    sh.lineTo(r, 0);
+    sh.absarc(r, r, r, -Math.PI / 2, -Math.PI, true);
+    sh.lineTo(0, 0);
+    const g = new THREE.ShapeGeometry(sh, 10);
+    g.scale(sx, -sz, 1);
+    const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: asphalt(0.4, 0.4), side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }));
+    m.rotation.x = -Math.PI / 2;
+    m.position.set(cx, 0.025, cz);
+    m.receiveShadow = true;
+    city.add(m);
+  };
+  for (const r of N_STREETS) { fillet(r.x0, 12, -1, 1); fillet(r.x1, 12, 1, 1); }
+  for (const r of S_STREETS) { fillet(r.x0, -12, -1, -1); fillet(r.x1, -12, 1, -1); }
+
   // Parque Trianon (grama) e alamedas
   const grass = canvasTex(64, (g, s) => { g.fillStyle = '#4f8a45'; g.fillRect(0, 0, s, s); for (let i = 0; i < 200; i++) { g.fillStyle = rand() > 0.5 ? '#5d9b52' : '#3f7539'; g.fillRect(rand() * s, rand() * s, 2, 2); } }, 14, 6);
   city.add(flatRect(TRIANON, 0.02, grass));
@@ -548,13 +579,13 @@ export function createCity(): THREE.Group {
   S('NK5', 76, 90, 66, 84, 70, 'white', { ac: true });
   // Sul
   S('SL1', -106, -78, -38, -19, 46, 'cream', { ac: true, plinth: true });
-  S('SL2a', -106, -92, -66, -46, 20, 'ochre');
-  S('SL2b', -90, -78, -80, -56, 26, 'cream');
-  S('SL2c', -106, -92, -82, -70, 16, 'white');
-  S('SL3', -50, -30, -44, -27, 9, 'house', { roof: 'gray' });
+  S('SL2a', -106, -92, -66, -46, 18, 'ochre', { roof: 'red' });
+  S('SL2b', -90, -76, -82, -56, 24, 'cream');
+  S('SL2c', -106, -92, -84, -70, 14, 'cream', { roof: 'gray' });
+  S('SL3', -48, -30, -44, -27, 9, 'house', { roof: 'gray' });
   S('SH', -2, 10, -44, -28, 8, 'house', { roof: 'gray' });
-  S('SL5', -62, -48, -82, -62, 22, 'cream');
-  S('SL6', -46, -32, -84, -64, 24, 'white');
+  S('SL5', -54, -42, -82, -62, 20, 'cream', { roof: 'red' });
+  S('SL6', -40, -28, -84, -64, 22, 'ochre', { roof: 'gray' });
   S('SL7', -14, -3, -84, -64, 14, 'cream');
   S('SL4', 2, 16, -84, -64, 10, 'house', { roof: 'red' });
   S('SD', 28, 60, -46, -20, 90, 'dark', { ac: true, antenna: true, plinth: true });
@@ -599,6 +630,24 @@ export function createCity(): THREE.Group {
   }
   city.add(pk);
 
+  // Carros estacionados junto ao meio-fio das ruas laterais (com colisão)
+  const parked = new THREE.Group();
+  for (const st of STREETS) {
+    const north = st.z0 > 0;
+    let side = rand() < 0.5 ? 1 : -1;
+    for (let z = north ? 30 : -30; north ? z < HZ - 8 : z > -HZ + 8; z += north ? 17 : -17) {
+      side = -side;
+      if (rand() < 0.3) continue;
+      const cx = side > 0 ? st.x1 - 1.7 : st.x0 + 1.7;
+      const car = ambientVehicle(pick(colors), false);
+      car.position.set(cx, 0, z);
+      car.rotation.y = rand() < 0.5 ? 0 : Math.PI;
+      parked.add(car);
+      addBox(cx - 1, cx + 1, z - 2.1, z + 2.1, 1.5, '#8a8f95');
+    }
+  }
+  city.add(parked);
+
   // Trânsito na avenida: pista sul vai para +X (π/2), pista norte para -X
   const lane = 4;
   const veh: [number, number, boolean, 1 | -1, number][] = [
@@ -630,7 +679,7 @@ export function createCity(): THREE.Group {
     if (!nearBuilding(x, z, 0.5)) trees.push({ x, z, s: 0.9 + rand() * 0.6, kind: 'bush' });
   }
   const onCrosswalk = (x: number): boolean => STREETS.some((r) => x > r.x0 - 6 && x < r.x1 + 6);
-  for (let x = -104; x <= 104; x += 8.5) {
+  for (let x = -104; x <= 104; x += 7) {
     if (onCrosswalk(x)) continue;
     const plaza = x > PLAZA.x0 && x < PLAZA.x1;
     trees.push({ x, z: -16.2, s: 1.5, kind: rand() < 0.3 ? 'tall' : 'round' });
