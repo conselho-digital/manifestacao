@@ -15,6 +15,9 @@ export const isOnceClip = (name: string): boolean => ONCE.has(name);
 /** Clipes em que o personagem não segura o fuzil (escalar, rolar, mergulhar, emotes). */
 const FREE_HANDS = (name: string): boolean => name.startsWith('climb_') || name === 'roll' || name === 'dive' || name.startsWith('e_');
 
+/** Clipes feitos para segurar o fuzil (Gun_stand, GunMove_*, WEAPON_crouch...): os braços vêm do clipe e a arma segue a mão. */
+const OWN_HOLD = (name: string): boolean => name.startsWith('gun_') || name.startsWith('crouch_') || name === 'run_armed' || name === 'walk_armed';
+
 /** Velocidade de reprodução (1 = original). Os clipes de arma andam um pouco mais rápido que o jogo. */
 const TIME_SCALE: Record<string, number> = { gun_fwd: 1.2, gun_bwd: 1.2, gun_left: 1.2, gun_right: 1.2, crouch_fwd: 1.1, crouch_bwd: 1.1 };
 
@@ -304,11 +307,14 @@ export class Animator {
   }
 
   private pose(dt: number): void {
-    this.armW += ((this.holdsWeapon ? 1 : 0) - this.armW) * Math.min(1, dt * 10);
+    // braços por IK só quando o clipe não segura o fuzil sozinho (ou ao mirar no ombro)
+    const ikTarget = !this.holdsWeapon ? 0 : OWN_HOLD(this.clipName) ? (this.armed === 'aim' ? 1 : 0) : 1;
+    this.armW += (ikTarget - this.armW) * Math.min(1, dt * 10);
     this.aimK += ((this.armed === 'aim' ? 1 : 0) - this.aimK) * Math.min(1, dt * 9);
     this.crouchK += ((this.clipName.startsWith('crouch_') ? 1 : 0) - this.crouchK) * Math.min(1, dt * 8);
     const armed = this.armW >= 0.01;
-    if ((!armed && this.crouchK < 0.01) || !this.spine) {
+    const holding = this.holdsWeapon;
+    if ((!armed && !holding && this.crouchK < 0.01) || !this.spine) {
       for (const b of this.touched) this.clean.set(b, b.quaternion.clone()); // tudo vem do clipe
       return;
     }
@@ -316,14 +322,14 @@ export class Animator {
     this.dirty = true;
     this.updateRoot();
     this.bendTorso();
-    if (!armed) return;
+    if (!armed && !holding) return;
     this.updateRoot();
     const frame = this.weaponFrame();
     if (this.weapon) {
       this.weapon.position.copy(frame.pos);
       this.weapon.quaternion.copy(frame.q);
     }
-    for (const arm of this.arms) this.poseArm(arm, frame, dt);
+    if (armed) for (const arm of this.arms) this.poseArm(arm, frame, dt);
   }
 
   private updateRoot(): void {
@@ -384,8 +390,16 @@ export class Animator {
     const pos = RIFLE_LOW.pos.clone().lerp(RIFLE_AIM.pos, k).sub(this.chestRest.pos).applyQuaternion(delta).add(chestPos);
     const pitch = THREE.MathUtils.lerp(RIFLE_LOW.pitch + this.aimPitch * 0.5, this.aimPitch, k);
     const yaw = THREE.MathUtils.lerp(RIFLE_LOW.yaw, RIFLE_AIM.yaw, k);
-    const q = new THREE.Quaternion().setFromAxisAngle(Y, yaw)
-      .multiply(new THREE.Quaternion().setFromAxisAngle(X, pitch));
+    const q = new THREE.Quaternion().setFromAxisAngle(Y, yaw).multiply(new THREE.Quaternion().setFromAxisAngle(X, pitch));
+    // clipe feito para segurar o fuzil: a empunhadura fica na mão direita do clipe (a mira no ombro continua por IK)
+    const right = this.arms.find((a) => a.side < 0);
+    if (right && OWN_HOLD(this.clipName)) {
+      const hand = this.posIn(right.h, new THREE.Vector3());
+      const elbow = this.posIn(right.f, new THREE.Vector3());
+      hand.addScaledVector(hand.clone().sub(elbow).normalize(), 0.04); // palma um pouco além do pulso
+      const byHand = hand.sub(GRIP_REAR.clone().applyQuaternion(q));
+      pos.lerp(byHand, 1 - k);
+    }
     return { pos, q };
   }
 
