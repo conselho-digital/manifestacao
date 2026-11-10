@@ -49,6 +49,8 @@ export class Player {
   private swingT = 0;
   private swingAlt = false;
   private punchN = 0;
+  private hitN = 0;
+  private lastHitAt = -1e9;
   private crouchK = 0; // 0 em pé, 1 agachado (suaviza a câmera)
   /** direção do movimento em relação ao corpo: frente(+) e esquerda(+) */
   private moveF = 0;
@@ -81,11 +83,14 @@ export class Player {
   /** 0 nada, 1 fuzil, 2 fuzil mirando, 3 taco, 4 pistola, 5 pistola mirando (enviado aos outros) */
   get weaponCode(): number { return ARMED_CODE[this.armed]; }
 
-  /** Levou um golpe (soco, taco, bandeira): reação de defesa do knife_block. */
+  /** Levou um golpe (soco, taco, bandeira): reações knife_hit_1, 2 e 3 em sequência (volta ao 1 se ficar 2,5 s sem apanhar). */
   flinch(): void {
     if (this.mode !== 'ground') return;
-    this.swingT = 0.5;
-    this.animator?.restart('block');
+    const now = performance.now();
+    this.hitN = now - this.lastHitAt > 2500 ? 1 : this.hitN % 3 + 1;
+    this.lastHitAt = now;
+    this.swingT = this.hitN === 3 ? 0.8 : 0.4;
+    this.animator?.restart(`hit_${this.hitN}`);
   }
 
   /** Soco: combo de 4 animações. */
