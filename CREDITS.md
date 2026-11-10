@@ -32,3 +32,4 @@ O restante da cidade é gerado por código (`src/game/city.ts`), inspirado na ma
 - Motos Harley-Davidson Black Death (freeway.dff) e Triumph Speed Triple (pcj600.dff), convertidas e simplificadas.
 - Moto BMW S1000RR (VietTuan / DiChoiKoCung), convertida e simplificada.
 - Moto Suzuki GSX-R600 (nrg500.dff do pacote), convertida e simplificada.
+- Chevrolet Spin LTZ 2025 PMESP (copcarla.dff do pacote), simplificado para ~86 mil triângulos.

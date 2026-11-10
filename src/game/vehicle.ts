@@ -3,14 +3,14 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { COLLIDERS, MAP } from './map';
 import { EngineSound } from './audio';
 
-export const CAR_MODELS = ['blistac', 'buffalo', 'clover'] as const;
+export const CAR_MODELS = ['blistac', 'buffalo', 'clover', 'spin'] as const;
 export const BIKE_MODELS = ['harley', 'triumph', 'bmw', 'suzuki'] as const;
 /** Assento do piloto (z = para a frente, y = para cima), no espaço do modelo antes de subir até o chão. */
 const SEATS: Record<string, [number, number]> = { harley: [-0.46, 0.14], triumph: [-0.51, 0.42], bmw: [-0.4, 0.47], suzuki: [-0.4, 0.57] };
 /** Pontas do guidão (x lateral, z para a frente, y para cima), mesmo espaço dos assentos. */
 const BARS: Record<string, [number, number, number]> = { harley: [0.37, 0.15, 0.76], triumph: [0.37, 0.17, 0.63], bmw: [0.31, 0.43, 0.4], suzuki: [0.29, 0.46, 0.46] };
 /** Banco do motorista dos carros (x para a esquerda, z para a frente, y para cima) e volante. */
-const CAR_SEATS: Record<string, [number, number, number]> = { blistac: [0.48, -0.25, -0.12], buffalo: [0.54, -0.35, -0.16], clover: [0.51, -0.15, -0.12] };
+const CAR_SEATS: Record<string, [number, number, number]> = { blistac: [0.48, -0.25, -0.12], buffalo: [0.54, -0.35, -0.16], clover: [0.51, -0.15, -0.12], spin: [0.35, 0.42, 0.15] };
 const isBikeModel = (m?: string): boolean => (BIKE_MODELS as readonly string[]).includes(m ?? '');
 const loader = new GLTFLoader();
 const modelCache = new Map<string, Promise<THREE.Object3D>>();
