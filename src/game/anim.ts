@@ -414,7 +414,7 @@ export class Animator {
     this.dirty = true;
     this.updateRoot();
     this.bendTorso();
-    if (this.legK >= 0.01) this.flexLegs();
+    if (this.legK >= 0.01) { this.flexLegs(); this.uprightTorso(); }
     if (jabW > 0) this.applyJab(jabW, jabE, dt);
     this.updateRoot();
     this.groundFeet(dt);
@@ -448,6 +448,26 @@ export class Animator {
     }
     this.groundDrop += (target - this.groundDrop) * Math.min(1, dt * 12);
     if (Math.abs(this.groundDrop) < 1e-4) this.groundDrop = 0;
+  }
+
+  /** Andando agachado o clipe inclina o tronco para o lado esquerdo: desfaz essa inclinação (roll) para ele andar reto. */
+  private uprightTorso(): void {
+    const sp = this.spine!;
+    this.updateRoot();
+    const head = this.posIn(sp.head, new THREE.Vector3());
+    const lean = Math.atan2(head.x, Math.max(0.2, head.y - 0.63)); // + = cabeça para a esquerda do corpo
+    const fix = THREE.MathUtils.clamp(lean, -0.4, 0.4) * this.legK;
+    // roll em torno do eixo de frente (Z): positivo leva a parte de cima para a direita
+    this.rotateBone(sp.mid, new THREE.Quaternion().setFromAxisAngle(Z, fix * 0.5));
+    this.rotateBone(sp.chest, new THREE.Quaternion().setFromAxisAngle(Z, fix * 0.5));
+    // linha dos ombros: nivela mais um pouco
+    const l = this.arms.find((a) => a.side > 0);
+    const r = this.arms.find((a) => a.side < 0);
+    if (l && r) {
+      this.updateRoot();
+      const dy = this.posIn(l.u, new THREE.Vector3()).y - this.posIn(r.u, new THREE.Vector3()).y;
+      this.rotateBone(sp.chest, new THREE.Quaternion().setFromAxisAngle(Z, THREE.MathUtils.clamp(-dy * 2.2, -0.25, 0.25) * this.legK));
+    }
   }
 
   /** Andando agachado: joelhos mais dobrados (coxa para a frente, canela de volta) para o corpo ficar mais baixo. */
