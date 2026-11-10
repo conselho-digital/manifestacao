@@ -31,3 +31,4 @@ O restante da cidade é gerado por código (`src/game/city.ts`), inspirado na ma
 - Bandeira da Turquia (shovel.dff) e placa de trânsito (shovel.dff, créditos do readme: Timske, MFCL).
 - VW Gol 2009 PMESP (BR-Projects: Kastor, Aleandro, Tiago, Caio; edição PMESP: Thiago), simplificado para ~30 mil triângulos.
 - Motos Harley-Davidson Black Death (freeway.dff) e Triumph Speed Triple (pcj600.dff), convertidas e simplificadas.
+- Moto BMW S1000RR (VietTuan / DiChoiKoCung), convertida e simplificada.

@@ -4,7 +4,7 @@ import { COLLIDERS, MAP } from './map';
 import { EngineSound } from './audio';
 
 export const CAR_MODELS = ['blistac', 'buffalo', 'clover', 'gol'] as const;
-export const BIKE_MODELS = ['harley', 'triumph'] as const;
+export const BIKE_MODELS = ['harley', 'triumph', 'bmw'] as const;
 const isBikeModel = (m?: string): boolean => (BIKE_MODELS as readonly string[]).includes(m ?? '');
 const loader = new GLTFLoader();
 const modelCache = new Map<string, Promise<THREE.Object3D>>();
@@ -221,6 +221,7 @@ export function createCars(): THREE.Group {
     [-40, 9, -Math.PI / 2, 0xecf0f1],
     [50, -9, Math.PI / 2, 0x888888],
     [-8, 9, -Math.PI / 2, 0x888888],
+    [30, 9, -Math.PI / 2, 0x888888],
   ];
   spawn.forEach(([x, z, h, c], i) => {
     const model = i < 4 ? CAR_MODELS[i % CAR_MODELS.length] : BIKE_MODELS[i - 4];
