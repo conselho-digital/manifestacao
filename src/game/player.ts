@@ -7,7 +7,7 @@ import type { WeaponVisual } from './weapons';
 
 const WALK_SPEED = 2.1;
 const SPRINT_SPEED = 6.2;
-const CROUCH_SPEED = 1.9;
+const CROUCH_SPEED = 1.0;
 const AIM_SPEED = 2.7; // andando com o fuzil no ombro
 const GRAVITY = -20;
 const JUMP_V = 6.8;

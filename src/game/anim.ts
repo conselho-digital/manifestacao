@@ -26,7 +26,7 @@ const FREE_HANDS = (name: string): boolean => name.startsWith('climb_') || name 
 const OWN_HOLD = (name: string): boolean => name.startsWith('gun_') || name.startsWith('crouch_') || name === 'run_armed' || name === 'walk_armed';
 
 /** Velocidade de reprodução (1 = original). Os clipes de arma andam um pouco mais rápido que o jogo. */
-const TIME_SCALE: Record<string, number> = { hit_3: 2, punch_1: 1.7, punch_2: 1.6, punch_3: 1.6, punch_4: 1.6, bat_swing: 1.3, bat_swing2: 1.5, gun_fwd: 1.2, gun_bwd: 1.2, gun_left: 1.2, gun_right: 1.2, crouch_fwd: 1.1, crouch_bwd: 1.1 };
+const TIME_SCALE: Record<string, number> = { hit_3: 2, punch_1: 1.7, punch_2: 1.6, punch_3: 1.6, punch_4: 1.6, bat_swing: 1.3, bat_swing2: 1.5, gun_fwd: 1.2, gun_bwd: 1.2, gun_left: 1.2, gun_right: 1.2, crouch_fwd: 0.8, crouch_bwd: 0.8 };
 
 /** Animações disponíveis no menu. */
 export const EMOTES: { id: string; label: string }[] = [
@@ -169,7 +169,7 @@ export class Animator {
     });
     this.touched = [...arms.flatMap((a) => [a.u, a.f, a.h, ...(a.c ? [a.c] : [])])];
     if (spine) this.touched.push(spine.mid, spine.chest, spine.neck, spine.head);
-    for (const l of legs) this.touched.push(l.thigh, l.calf);
+    for (const l of legs) this.touched.push(l.thigh, l.calf, l.foot);
     for (const b of this.touched) this.clean.set(b, b.quaternion.clone());
     this.updateRoot();
     this.footRest = this.lowestFoot();
@@ -455,9 +455,13 @@ export class Animator {
     const k = this.legK;
     const thigh = new THREE.Quaternion().setFromAxisAngle(X, -0.7 * k);
     const calf = new THREE.Quaternion().setFromAxisAngle(X, 0.55 * k);
+    // o passo do clipe (GunCrouch) vai na diagonal para a esquerda: gira as pernas para o passo seguir em frente
+    const straighten = new THREE.Quaternion().setFromAxisAngle(Y, -0.5 * k);
+    const unTwist = new THREE.Quaternion().setFromAxisAngle(Y, 0.5 * k);
     for (const l of this.legs) {
-      this.rotateBone(l.thigh, thigh);
+      this.rotateBone(l.thigh, straighten.clone().multiply(thigh));
       this.rotateBone(l.calf, calf);
+      this.rotateBone(l.foot, unTwist); // os pés voltam a apontar para a frente
     }
   }
 
