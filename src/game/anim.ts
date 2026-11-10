@@ -26,7 +26,7 @@ const FREE_HANDS = (name: string): boolean => name.startsWith('climb_') || name 
 const OWN_HOLD = (name: string): boolean => name.startsWith('gun_') || name.startsWith('crouch_') || name === 'run_armed' || name === 'walk_armed';
 
 /** Velocidade de reprodução (1 = original). Os clipes de arma andam um pouco mais rápido que o jogo. */
-const TIME_SCALE: Record<string, number> = { hit_3: 2, punch_1: 1.7, punch_2: 1.6, punch_3: 1.6, punch_4: 1.6, bat_swing: 1.3, bat_swing2: 1.5, gun_fwd: 1.2, gun_bwd: 1.2, gun_left: 1.2, gun_right: 1.2, crouch_fwd: 0.8, crouch_bwd: 0.8 };
+const TIME_SCALE: Record<string, number> = { ko: 1.8, getup: 1.8, car_getin_l: 1, car_getout_l: 1, hit_3: 2, punch_1: 1.7, punch_2: 1.6, punch_3: 1.6, punch_4: 1.6, bat_swing: 1.3, bat_swing2: 1.5, gun_fwd: 1.2, gun_bwd: 1.2, gun_left: 1.2, gun_right: 1.2, crouch_fwd: 0.8, crouch_bwd: 0.8 };
 
 /** Animações disponíveis no menu. */
 export const EMOTES: { id: string; label: string }[] = [
@@ -156,8 +156,9 @@ export class Animator {
   private drops = new Map<string, { t: number[]; y: number[] }>();
   private modelY0: number | null = null;
   private modelZ0 = 0;
+  private modelX0 = 0;
   /** piloto sentado: deslocamento do modelo (y já descontando a altura da pélvis) e z */
-  private ride: { y: number; z: number; grips: [THREE.Vector3, THREE.Vector3] | null } | null = null;
+  private ride: { x: number; y: number; z: number; grips: [THREE.Vector3, THREE.Vector3] | null } | null = null;
   private addClips: (file: Clips<never>) => void = () => undefined;
 
   private constructor(
@@ -366,14 +367,19 @@ export class Animator {
 
   /** Sentado na moto: a pélvis vai para o assento (seat, no espaço do personagem). null = em pé. */
   setRide(seat: THREE.Vector3 | null, grips: [THREE.Vector3, THREE.Vector3] | null = null): void {
-    this.ride = seat ? { y: seat.y - 0.97, z: seat.z, grips } : null;
+    this.ride = seat ? { x: seat.x, y: seat.y - 0.97, z: seat.z, grips } : null;
+  }
+
+  /** Desloca o modelo (entrando/saindo do carro): x para a esquerda, y para cima (pélvis), z para a frente. */
+  setRideRaw(o: { x: number; y: number; z: number } | null): void {
+    this.ride = o ? { x: o.x, y: o.y, z: o.z, grips: null } : null;
   }
 
   /** Mergulho: o corpo desce até o chão (o IFP tem a altura da raiz, que não usamos como osso). */
   private applyDrop(): void {
     const model = this.root.children[0];
     if (!model) return;
-    if (this.modelY0 === null) { this.modelY0 = model.position.y; this.modelZ0 = model.position.z; }
+    if (this.modelY0 === null) { this.modelY0 = model.position.y; this.modelZ0 = model.position.z; this.modelX0 = model.position.x; }
     const d = this.drops.get(this.clipName);
     let y = 0;
     if (d && this.current) {
@@ -386,6 +392,7 @@ export class Animator {
     y += this.groundDrop + (this.ride?.y ?? 0);
     model.position.y = this.modelY0 + y;
     model.position.z = this.modelZ0 + (this.ride?.z ?? 0);
+    model.position.x = this.modelX0 + (this.ride?.x ?? 0);
   }
 
   private pose(dt: number): void {

@@ -195,9 +195,37 @@ export class Car {
         hit = true;
       }
     }
+    // colisão com outros veículos: cada carro é 2 círculos, a moto 1
+    for (const o of CARS) {
+      if (o === this) continue;
+      for (const [ax, az, ar] of this.circles()) for (const [bx, bz, br] of o.circles()) {
+        const dx = ax - bx;
+        const dz = az - bz;
+        const d = Math.hypot(dx, dz);
+        const min = ar + br;
+        if (d >= min || d < 1e-6) continue;
+        const push = (min - d) / d;
+        const share = o.driver === null ? 0.5 : 0; // veículo parado é empurrado; o de outro jogador não
+        this.x += dx * push * (1 - share);
+        this.z += dz * push * (1 - share);
+        if (share > 0) o.setPose(o.x - dx * push * share, o.z - dz * push * share, o.heading);
+        hit = true;
+      }
+    }
     if (hit) this.speed *= -0.25;
     this.apply(steer, dt);
   }
+
+  /** Círculos de colisão (x, z, raio) no chão. */
+  circles(): [number, number, number][] {
+    if (this.bike) return [[this.x, this.z, 0.55]];
+    const fx = Math.sin(this.heading) * 1.15;
+    const fz = Math.cos(this.heading) * 1.15;
+    return [[this.x + fx, this.z + fz, 1.0], [this.x - fx, this.z - fz, 1.0]];
+  }
+
+  /** Velocidade (m/s, sinal da marcha) de quem dirige localmente ou estimada de longe. */
+  get movingSpeed(): number { return this.driver === 'local' ? this.speed : this.seenSpeed; }
 
   /** Motor: toca quando há motorista; mais alto perto de quem ouve (lx, lz). Chame todo quadro. */
   updateEngine(dt: number, lx: number, lz: number): void {

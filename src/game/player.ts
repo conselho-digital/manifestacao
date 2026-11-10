@@ -22,7 +22,7 @@ const SPECIAL: Record<string, { dur: number; speed: number }> = {
   dive: { dur: 1.5, speed: 3 },
 };
 
-type Mode = 'ground' | 'air' | 'climb' | 'special' | 'drive' | 'dead';
+type Mode = 'ground' | 'air' | 'climb' | 'special' | 'drive' | 'dead' | 'enter' | 'exit' | 'ko';
 
 interface Climb {
   t: number;
@@ -47,6 +47,11 @@ export class Player {
   private armed: Armed = 'none';
   private crouching = false;
   private swingT = 0;
+  private seqT = 0; // entrando/saindo do carro
+  private koVel = new THREE.Vector2();
+  private koT = 0;
+  private koCool = 0;
+  private modelRot0: number | null = null;
   private swingAlt = false;
   private punchN = 0;
   private hitN = 0;
@@ -158,7 +163,11 @@ export class Player {
     this.weaponVis?.update(dt);
 
     if (this.mode === 'dead') { this.finish(dt); return; }
+    if (this.mode === 'enter' || this.mode === 'exit') { this.updateSeq(dt); return; }
+    if (this.mode === 'ko') { this.updateKo(dt); return; }
     if (this.mode === 'drive' && this.car) { this.updateDrive(dt, input); return; }
+    if (this.koCool > 0) this.koCool -= dt;
+    else if ((this.mode === 'ground' || this.mode === 'air') && this.checkRunOver()) return;
     if (this.mode === 'climb' && this.climb) { this.updateClimb(dt); this.finish(dt); return; }
     if (this.mode === 'special' && this.special) { this.updateSpecial(dt); this.finish(dt); return; }
 
@@ -294,14 +303,29 @@ export class Player {
     this.emote = null;
     this.vy = 0;
     this.object.visible = true; // o motorista aparece sentado (carro ou moto)
-    best.openDoor(1);
     this.crouching = false;
+    this.weaponVis?.setHidden(true);
+    if (!best.bike) {
+      // carro: caminha até a porta do motorista, abre e entra
+      best.openDoor(1.25);
+      this.mode = 'enter';
+      this.seqT = 0;
+      this.object.position.set(best.x, 0, best.z);
+      this.object.rotation.y = best.heading;
+    } else best.openDoor(1);
     return true;
   }
 
   private updateDrive(dt: number, input: InputState): void {
     const car = this.car!;
-    if (input.interact) { this.exitCar(); return; }
+    if (input.interact) {
+      if (car.bike) { this.exitCar(); return; }
+      car.speed = 0;
+      car.openDoor(1.25);
+      this.mode = 'exit';
+      this.seqT = 0;
+      return;
+    }
     // No carro: acelerador, freio e freio de mão; o joystick (A/D) só esterça
     car.drive(dt, input.gas, input.brake, input.handbrake, input.x, input.wheelie);
     this.object.position.set(car.x, 0, car.z);
@@ -315,15 +339,95 @@ export class Player {
     }
   }
 
+  private resetModelRot(): void {
+    const model = this.object.children[0];
+    if (model && this.modelRot0 !== null) model.rotation.y = this.modelRot0;
+  }
+
+  /** Entrando/saindo do carro: o personagem anda até o banco (ou sai) com a porta aberta. */
+  private updateSeq(dt: number): void {
+    const car = this.car!;
+    const dur = 0.95;
+    this.seqT = Math.min(dur, this.seqT + dt);
+    const entering = this.mode === 'enter';
+    const u = this.seqT / dur;
+    const k = THREE.MathUtils.clamp((u - 0.2) / 0.6, 0, 1);
+    const f = entering ? k * k * (3 - 2 * k) : 1 - k * k * (3 - 2 * k); // 1 = sentado
+    const seat = car.seat ?? new THREE.Vector3(0.48, 0.7, -0.2);
+    const out = { x: 1.6, y: 0, z: seat.z - 0.1 };
+    this.object.position.set(car.x, 0, car.z);
+    this.object.rotation.y = car.heading;
+    this.heading = car.heading;
+    const model = this.object.children[0];
+    if (model) {
+      this.modelRot0 ??= model.rotation.y;
+      model.rotation.y = this.modelRot0 - (Math.PI / 2) * (1 - f); // de frente para a porta até de frente para a rua
+    }
+    this.animator?.setRideRaw({
+      x: THREE.MathUtils.lerp(out.x, seat.x, f),
+      y: THREE.MathUtils.lerp(out.y, seat.y - 0.97, f),
+      z: THREE.MathUtils.lerp(out.z, seat.z, f),
+    });
+    this.animator?.setArmed('none');
+    this.animator?.play(entering ? 'car_getin_l' : 'car_getout_l');
+    this.animator?.update(dt);
+    if (this.seqT >= dur) {
+      if (entering) { this.mode = 'drive'; this.resetModelRot(); } else this.exitCar();
+    }
+  }
+
+  /** Atropelado: leva um tombo (cai, desliza e levanta). */
+  private checkRunOver(): boolean {
+    const p = this.object.position;
+    if (p.y > 1.6) return false;
+    for (const car of CARS) {
+      if (car.driver === null || car.driver === 'local') continue;
+      const sp = car.movingSpeed;
+      if (Math.abs(sp) < 4.5) continue;
+      for (const [cx, cz, r] of car.circles()) {
+        const dx = p.x - cx;
+        const dz = p.z - cz;
+        if (Math.hypot(dx, dz) > RADIUS + r + 0.15) continue;
+        const dir = new THREE.Vector2(Math.sin(car.heading) * Math.sign(sp), Math.cos(car.heading) * Math.sign(sp));
+        this.koVel.copy(dir).multiplyScalar(Math.min(9, Math.abs(sp) * 0.9)).add(new THREE.Vector2(dx, dz).normalize().multiplyScalar(2));
+        this.mode = 'ko';
+        this.koT = 0;
+        this.crouching = false;
+        this.emote = null;
+        this.weaponVis?.setHidden(true);
+        this.animator?.setArmed('none');
+        this.animator?.play('ko');
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private updateKo(dt: number): void {
+    this.koT += dt;
+    this.moveHoriz(this.koVel.x * dt, this.koVel.y * dt);
+    this.koVel.multiplyScalar(Math.exp(-dt * 2.4));
+    this.object.position.y = Math.max(0, this.object.position.y - 20 * dt);
+    if (this.koT > 1.6) this.animator?.play('getup');
+    if (this.koT > 3.2) {
+      this.mode = 'ground';
+      this.koCool = 3;
+      this.weaponVis?.setHidden(false);
+      this.animator?.play('idle');
+    }
+    this.animator?.update(dt);
+  }
+
   private exitCar(): void {
     const car = this.car!;
-    // Sai pelo lado direito do carro
-    const rx = -Math.cos(car.heading);
-    const rz = Math.sin(car.heading);
+    // Sai pelo lado do motorista (esquerdo)
+    const rx = Math.cos(car.heading);
+    const rz = -Math.sin(car.heading);
     this.object.position.set(
-      THREE.MathUtils.clamp(car.x + rx * 2.2, -(MAP.halfX - 1), MAP.halfX - 1), 0,
-      THREE.MathUtils.clamp(car.z + rz * 2.2, -(MAP.halfZ - 1), MAP.halfZ - 1),
+      THREE.MathUtils.clamp(car.x + rx * 1.9, -(MAP.halfX - 1), MAP.halfX - 1), 0,
+      THREE.MathUtils.clamp(car.z + rz * 1.9, -(MAP.halfZ - 1), MAP.halfZ - 1),
     );
+    this.resetModelRot();
     car.driver = null;
     car.speed = 0;
     car.openDoor(1);
@@ -399,6 +503,18 @@ export class Player {
     const pos = this.object.position;
     pos.x = THREE.MathUtils.clamp(pos.x + dx, -(MAP.halfX - 1), MAP.halfX - 1);
     pos.z = THREE.MathUtils.clamp(pos.z + dz, -(MAP.halfZ - 1), MAP.halfZ - 1);
+    if (pos.y < 1.4) {
+      for (const car of CARS) {
+        if (car.driver === 'local') continue;
+        for (const [cx, cz, r] of car.circles()) {
+          const ox = pos.x - cx;
+          const oz = pos.z - cz;
+          const d = Math.hypot(ox, oz);
+          const min = RADIUS + r;
+          if (d < min && d > 1e-6) { pos.x = cx + (ox / d) * min; pos.z = cz + (oz / d) * min; }
+        }
+      }
+    }
     for (const b of COLLIDERS) {
       if (b.top - pos.y <= STEP || (b.bottom ?? 0) >= pos.y + 1.8) continue; // sobe andando / passa por baixo
       const cx = THREE.MathUtils.clamp(pos.x, b.minX, b.maxX);
