@@ -47,7 +47,7 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 3. ✅ Tela de entrada: nome + 8 personagens
 4. ✅ Multiplayer Supabase: presence + broadcast + interpolação
 5. ✅ Animação (ped.ifp: parado, andar, correr; Shift anda). Carlos e Law1-9 animados. Falta: modelos sem esqueleto (Helena, Stewart, Bennyse, Amanda, Garota1, Gordao, Cesar, Akiyama)
-6. ✅ Veículos: Blista e Buffalo (GLB convertidos de DFF GTA SA em `public/models/vehicles/`; nós `body` + `wheel_FL/FR/BL/BR`, material `paint` recebe a cor do carro). Conversor: `exp3.js`/`build3.py` (ver CREDITS)
+6. ✅ Veículos: Blista, Buffalo e Clover (GLB convertidos de DFF GTA SA em `public/models/vehicles/`; nós `body` + `wheel_FL/FR/BL/BR`, material `paint` recebe a cor do carro). Conversor: `exp3.js`/`build3.py` (ver CREDITS)
 7. Deploy Vercel
 8. Chat, ranking, roupas
 

@@ -4,6 +4,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { addBox, COLLIDERS, MAP, PARKS, PLACES, ROADS, TREES, type Rect } from './map';
 import { buildGrayTower, TOWER } from './tower';
 import { HEIGHT, makeTrees, type Species, type TreeSpec } from './trees';
+import { CAR_MODELS, loadCarVisual } from './vehicle';
 
 // Cidade inspirada na maquete da Av. Paulista (SP). O layout é escrito "como na foto" (x para a direita,
 // z para o norte) e convertido para o mundo espelhando o eixo X (R(): x_mundo = -x_foto).
@@ -367,32 +368,10 @@ const flatRect = (r: Rect, y: number, tex: THREE.Texture | null, color = 0xfffff
 interface Ambient { obj: THREE.Object3D; dir: 1 | -1; speed: number }
 const ambient: Ambient[] = [];
 
-function ambientVehicle(color: number, bus: boolean): THREE.Group {
+/** Carro decorativo: os mesmos modelos dos carros dirigíveis (Blista, Buffalo e Clover). */
+function ambientVehicle(color: number, model: string): THREE.Group {
   const g = new THREE.Group();
-  const paint = new THREE.MeshLambertMaterial({ color });
-  const glass = new THREE.MeshLambertMaterial({ color: 0x9fc3d9 });
-  const len = bus ? 11 : 4;
-  const body = new THREE.Mesh(new THREE.BoxGeometry(bus ? 2.5 : 1.8, bus ? 2.6 : 0.7, len), paint);
-  body.position.y = bus ? 1.9 : 0.7;
-  g.add(body);
-  if (bus) {
-    const win = new THREE.Mesh(new THREE.BoxGeometry(2.55, 0.9, len - 0.8), glass);
-    win.position.y = 2.4;
-    g.add(win);
-  } else {
-    const cab = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.55, 2), glass);
-    cab.position.set(0, 1.25, -0.2);
-    g.add(cab);
-  }
-  const tire = new THREE.MeshLambertMaterial({ color: 0x1b1b1b });
-  const wg = new THREE.CylinderGeometry(0.36, 0.36, 0.26, 10);
-  wg.rotateZ(Math.PI / 2);
-  for (const [wx, wz] of bus ? [[1.1, 3.4], [-1.1, 3.4], [1.1, -3.4], [-1.1, -3.4]] : [[0.95, 1.3], [-0.95, 1.3], [0.95, -1.3], [-0.95, -1.3]]) {
-    const w = new THREE.Mesh(wg, tire);
-    w.position.set(wx!, 0.36, wz!);
-    g.add(w);
-  }
-  g.traverse((o) => { o.castShadow = true; });
+  void loadCarVisual(model, color).then((v) => g.add(v));
   return g;
 }
 
@@ -581,7 +560,7 @@ export function createCity(): THREE.Group {
   const pk = new THREE.Group();
   for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) {
     if (rand() < 0.25) continue;
-    const car = ambientVehicle(pick(colors), false);
+    const car = ambientVehicle(pick(colors), pick(CAR_MODELS));
     car.position.set((PARKING.x0 + PARKING.x1) / 2 - 3 + j * 6, 0, PARKING.z0 + 3 + i * 5.4);
     car.rotation.y = j === 0 ? 0 : Math.PI;
     pk.add(car);
@@ -597,23 +576,23 @@ export function createCity(): THREE.Group {
       side = -side;
       if (rand() < 0.3) continue;
       const cx = side > 0 ? st.x1 - 1.7 : st.x0 + 1.7;
-      const car = ambientVehicle(pick(colors), false);
+      const car = ambientVehicle(pick(colors), pick(CAR_MODELS));
       car.position.set(cx, 0, z);
       car.rotation.y = rand() < 0.5 ? 0 : Math.PI;
       parked.add(car);
-      addBox(cx - 1, cx + 1, z - 2.1, z + 2.1, 1.5, '#8a8f95');
+      addBox(cx - 1.1, cx + 1.1, z - 2.5, z + 2.5, 1.5, '#8a8f95');
     }
   }
   city.add(parked);
 
-  // Trânsito na avenida: pista sul vai para +X (π/2), pista norte para -X
+  // Trânsito na avenida (só carros, dos 3 modelos): pista sul vai para +X (π/2), pista norte para -X
   const lane = 4;
-  const veh: [number, number, boolean, 1 | -1, number][] = [
-    [-90, -lane, false, 1, 9], [-40, -lane, true, 1, 7], [10, -lane, false, 1, 10], [70, -lane, false, 1, 8],
-    [90, lane, false, -1, 9], [30, lane, true, -1, 7], [-20, lane, false, -1, 10], [-80, lane, false, -1, 8],
+  const veh: [number, number, 1 | -1, number][] = [
+    [-90, -lane, 1, 9], [-30, -lane, 1, 10], [70, -lane, 1, 8],
+    [90, lane, -1, 9], [20, lane, -1, 10], [-80, lane, -1, 8],
   ];
-  for (const [x, z, bus, dir, speed] of veh) {
-    const o = ambientVehicle(bus ? 0x2e8b57 : pick(colors), bus);
+  for (const [x, z, dir, speed] of veh) {
+    const o = ambientVehicle(pick(colors), pick(CAR_MODELS));
     o.position.set(x, 0, z);
     o.rotation.y = dir === 1 ? Math.PI / 2 : -Math.PI / 2;
     city.add(o);

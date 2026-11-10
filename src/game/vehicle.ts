@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { COLLIDERS, MAP } from './map';
 
-export const CAR_MODELS = ['blistac', 'buffalo'] as const;
+export const CAR_MODELS = ['blistac', 'buffalo', 'clover'] as const;
 const loader = new GLTFLoader();
 const modelCache = new Map<string, Promise<THREE.Object3D>>();
 const loadModel = (name: string): Promise<THREE.Object3D> => {
@@ -21,36 +21,47 @@ const TURN_RATE = 1.9;
 const RADIUS = 1.3;
 
 
-/** Carro provisório: carroceria `body` e rodas `wheel_FL/FR/BL/BR` (como os GLB terão que ter). */
-function buildMesh(color: number): { root: THREE.Group; wheels: Record<string, THREE.Object3D> } {
-  const root = new THREE.Group();
-  const body = new THREE.Group();
-  body.name = 'body';
-  const paint = new THREE.MeshLambertMaterial({ color });
-  const glass = new THREE.MeshLambertMaterial({ color: 0x9fc3d9 });
-  const lower = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.6, 4), paint);
-  lower.position.y = 0.65;
-  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.5, 0.55, 2), glass);
-  cabin.position.set(0, 1.2, -0.2);
-  body.add(lower, cabin);
-  body.traverse((o) => { o.castShadow = true; });
-  root.add(body);
-
-  const tire = new THREE.MeshLambertMaterial({ color: 0x1b1b1b });
-  const geo = new THREE.CylinderGeometry(0.36, 0.36, 0.26, 14);
-  geo.rotateZ(Math.PI / 2);
+/** Monta o visual de um carro a partir do GLB (nós `body` e `wheel_FL/FR/BL/BR`); a pintura (`paint`) recebe a cor. */
+export function buildCarVisual(src: THREE.Object3D, colorHex: number): { group: THREE.Group; wheels: Record<string, THREE.Object3D> } {
+  const model = src.clone(true);
+  const paint = new THREE.Color(colorHex);
+  const done = new Map<THREE.Material, THREE.Material>();
+  model.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    m.castShadow = true;
+    const mats = Array.isArray(m.material) ? m.material : [m.material];
+    const out = mats.map((mat) => {
+      if (mat.name !== 'paint') return mat;
+      let c = done.get(mat);
+      if (!c) { c = mat.clone(); (c as THREE.MeshStandardMaterial).color.copy(paint); done.set(mat, c); }
+      return c;
+    });
+    m.material = Array.isArray(m.material) ? out : out[0]!;
+  });
   const wheels: Record<string, THREE.Object3D> = {};
-  for (const [name, x, z] of [['wheel_FL', 0.95, 1.3], ['wheel_FR', -0.95, 1.3], ['wheel_BL', 0.95, -1.3], ['wheel_BR', -0.95, -1.3]] as const) {
-    const pivot = new THREE.Group(); // pivô permite esterçar sem atrapalhar o giro
+  const group = new THREE.Group();
+  const body = model.getObjectByName('body');
+  if (body) group.add(body);
+  for (const name of ['wheel_FL', 'wheel_FR', 'wheel_BL', 'wheel_BR']) {
+    const node = model.getObjectByName(name);
+    if (!node) continue;
+    const pivot = new THREE.Group(); // pivô: esterça sem atrapalhar o giro
     pivot.name = name;
-    pivot.position.set(x, 0.36, z);
-    const w = new THREE.Mesh(geo, tire);
-    w.castShadow = true;
-    pivot.add(w);
-    root.add(pivot);
+    pivot.position.copy(node.position);
+    node.position.set(0, 0, 0);
+    pivot.add(node);
+    group.add(pivot);
     wheels[name] = pivot;
   }
-  return { root, wheels };
+  // a origem do GLB fica no centro do carro: sobe até as rodas tocarem o chão
+  group.position.y = -new THREE.Box3().setFromObject(group).min.y;
+  return { group, wheels };
+}
+
+/** Visual de um carro parado/decorativo (sem lógica de direção). */
+export function loadCarVisual(model: string, colorHex: number): Promise<THREE.Group> {
+  return loadModel(model).then((src) => buildCarVisual(src, colorHex).group);
 }
 
 export class Car {
@@ -67,9 +78,8 @@ export class Car {
 
   constructor(readonly id: number, x: number, z: number, heading: number, color: number, model?: string) {
     this.color = color;
-    const m = buildMesh(color);
-    this.root = m.root;
-    this.wheels = m.wheels;
+    this.root = new THREE.Group(); // o modelo GLB entra quando carregar
+    this.wheels = {};
     this.x = x;
     this.z = z;
     this.heading = heading;
@@ -77,44 +87,11 @@ export class Car {
     if (model) void loadModel(model).then((src) => this.useModel(src));
   }
 
-  /** Troca o carro provisório pelo modelo GLB (nós `body` e `wheel_FL/FR/BL/BR`); a cor da pintura vem do carro. */
   private useModel(src: THREE.Object3D): void {
-    const model = src.clone(true);
-    const paint = new THREE.Color(this.color);
-    const done = new Map<THREE.Material, THREE.Material>();
-    model.traverse((o) => {
-      const m = o as THREE.Mesh;
-      if (!m.isMesh) return;
-      m.castShadow = true;
-      const mats = Array.isArray(m.material) ? m.material : [m.material];
-      const out = mats.map((mat) => {
-        if (mat.name !== 'paint') return mat;
-        let c = done.get(mat);
-        if (!c) { c = mat.clone(); (c as THREE.MeshStandardMaterial).color.copy(paint); done.set(mat, c); }
-        return c;
-      });
-      m.material = Array.isArray(m.material) ? out : out[0]!;
-    });
-    const wheels: Record<string, THREE.Object3D> = {};
-    const group = new THREE.Group();
-    const body = model.getObjectByName('body');
-    if (body) group.add(body);
-    for (const name of ['wheel_FL', 'wheel_FR', 'wheel_BL', 'wheel_BR']) {
-      const node = model.getObjectByName(name);
-      if (!node) continue;
-      const pivot = new THREE.Group(); // pivô: esterça sem atrapalhar o giro
-      pivot.name = name;
-      pivot.position.copy(node.position);
-      node.position.set(0, 0, 0);
-      pivot.add(node);
-      group.add(pivot);
-      wheels[name] = pivot;
-    }
-    // a origem do GLB fica no centro do carro: sobe até as rodas tocarem o chão
-    group.position.y = -new THREE.Box3().setFromObject(group).min.y;
+    const v = buildCarVisual(src, this.color);
     this.root.clear();
-    this.root.add(group);
-    this.wheels = wheels;
+    this.root.add(v.group);
+    this.wheels = v.wheels;
   }
 
   /** Dirige: acelerador, freio e freio de mão; steer -1..1 (direita +). */

@@ -98,8 +98,8 @@ function loop(): void {
     yaw -= look.dx * 0.006;
     pitch = THREE.MathUtils.clamp(pitch + look.dy * 0.005, PITCH_MIN, PITCH_MAX);
     const dh = player.driveHeading;
-    if (dh !== null) {
-      // No carro a câmera fica atrás dele
+    if (dh !== null && Math.abs(player.carSpeed) > 0.8) {
+      // Em movimento a câmera fica atrás do carro; parado, dá para olhar para todos os lados
       const d = Math.atan2(Math.sin(dh - yaw), Math.cos(dh - yaw));
       yaw += d * Math.min(1, dt * 2.5);
     }
