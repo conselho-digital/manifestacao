@@ -339,7 +339,9 @@ export class Animator {
     this.armW += (ikTarget - this.armW) * Math.min(1, dt * 10);
     this.aimK += ((this.armed === 'aim' ? 1 : 0) - this.aimK) * Math.min(1, dt * 9);
     this.recoil = Math.max(0, this.recoil - dt * 9);
-    this.crouchK += ((this.clipName.startsWith('crouch_') ? 1 : 0) - this.crouchK) * Math.min(1, dt * 8);
+    // agachado parado: tronco desce; andando agachado o clipe já inclina o corpo, então só um pouco
+    const crouchT = this.clipName === 'crouch_idle' ? 1 : this.clipName.startsWith('crouch_') ? 0.2 : 0;
+    this.crouchK += (crouchT - this.crouchK) * Math.min(1, dt * 8);
     const armed = this.armW >= 0.01;
     const holding = this.holdsWeapon;
     if ((!armed && !holding && this.crouchK < 0.01) || !this.spine) {
