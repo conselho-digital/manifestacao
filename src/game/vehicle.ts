@@ -1,5 +1,15 @@
 import * as THREE from 'three';
+import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { COLLIDERS, MAP } from './map';
+
+export const CAR_MODELS = ['blistac', 'buffalo'] as const;
+const loader = new GLTFLoader();
+const modelCache = new Map<string, Promise<THREE.Object3D>>();
+const loadModel = (name: string): Promise<THREE.Object3D> => {
+  let p = modelCache.get(name);
+  if (!p) { p = loader.loadAsync(`/models/vehicles/${name}.glb`).then((g) => g.scene); modelCache.set(name, p); }
+  return p;
+};
 
 const MAX_SPEED = 14;
 const MAX_REVERSE = 5;
@@ -53,8 +63,10 @@ export class Car {
   driver: string | null = null;
   private wheels: Record<string, THREE.Object3D>;
   private spin = 0;
+  private readonly color: number;
 
-  constructor(readonly id: number, x: number, z: number, heading: number, color: number) {
+  constructor(readonly id: number, x: number, z: number, heading: number, color: number, model?: string) {
+    this.color = color;
     const m = buildMesh(color);
     this.root = m.root;
     this.wheels = m.wheels;
@@ -62,6 +74,47 @@ export class Car {
     this.z = z;
     this.heading = heading;
     this.apply(0);
+    if (model) void loadModel(model).then((src) => this.useModel(src));
+  }
+
+  /** Troca o carro provisório pelo modelo GLB (nós `body` e `wheel_FL/FR/BL/BR`); a cor da pintura vem do carro. */
+  private useModel(src: THREE.Object3D): void {
+    const model = src.clone(true);
+    const paint = new THREE.Color(this.color);
+    const done = new Map<THREE.Material, THREE.Material>();
+    model.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      m.castShadow = true;
+      const mats = Array.isArray(m.material) ? m.material : [m.material];
+      const out = mats.map((mat) => {
+        if (mat.name !== 'paint') return mat;
+        let c = done.get(mat);
+        if (!c) { c = mat.clone(); (c as THREE.MeshStandardMaterial).color.copy(paint); done.set(mat, c); }
+        return c;
+      });
+      m.material = Array.isArray(m.material) ? out : out[0]!;
+    });
+    const wheels: Record<string, THREE.Object3D> = {};
+    const group = new THREE.Group();
+    const body = model.getObjectByName('body');
+    if (body) group.add(body);
+    for (const name of ['wheel_FL', 'wheel_FR', 'wheel_BL', 'wheel_BR']) {
+      const node = model.getObjectByName(name);
+      if (!node) continue;
+      const pivot = new THREE.Group(); // pivô: esterça sem atrapalhar o giro
+      pivot.name = name;
+      pivot.position.copy(node.position);
+      node.position.set(0, 0, 0);
+      pivot.add(node);
+      group.add(pivot);
+      wheels[name] = pivot;
+    }
+    // a origem do GLB fica no centro do carro: sobe até as rodas tocarem o chão
+    group.position.y = -new THREE.Box3().setFromObject(group).min.y;
+    this.root.clear();
+    this.root.add(group);
+    this.wheels = wheels;
   }
 
   /** Dirige: acelerador, freio e freio de mão; steer -1..1 (direita +). */
@@ -133,7 +186,7 @@ export function createCars(): THREE.Group {
     [-40, 9, -Math.PI / 2, 0xecf0f1],
   ];
   spawn.forEach(([x, z, h, c], i) => {
-    const car = new Car(i, x, z, h, c);
+    const car = new Car(i, x, z, h, c, CAR_MODELS[i % CAR_MODELS.length]);
     CARS.push(car);
     group.add(car.root);
   });
