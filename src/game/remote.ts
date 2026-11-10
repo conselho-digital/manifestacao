@@ -76,20 +76,21 @@ export class RemotePlayer {
     this.root.position.lerp(this.target, k);
     const car = this.carId >= 0 ? CARS[this.carId] : undefined;
     if (car) {
-      // Dirigindo: esconde o boneco e move o carro
+      // Dirigindo: o boneco aparece sentado e o carro anda
       car.driver = this.info.id;
+      if (this.lastCar !== car) car.openDoor(1);
       this.lastCar = car;
-      if (this.model) this.model.visible = car.bike;
+      if (this.model) this.model.visible = true;
       car.setPose(this.root.position.x, this.root.position.z, this.root.rotation.y);
     } else {
-      if (this.lastCar) { this.lastCar.driver = null; this.lastCar = null; }
+      if (this.lastCar) { this.lastCar.driver = null; this.lastCar.openDoor(1); this.lastCar = null; }
       if (this.model) this.model.visible = true;
     }
     const dead = this.anim === 'dead';
-    if (this.animator && car?.bike) {
+    if (this.animator && car?.seat) {
       this.animator.setRide(car.seat, car.grips);
       this.animator.setArmed('none');
-      this.animator.play('bike_ride');
+      this.animator.play(car.bike ? 'bike_ride' : 'car_sit');
       this.animator.update(dt);
     }
     if (this.animator && !car) {

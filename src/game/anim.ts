@@ -411,7 +411,7 @@ export class Animator {
         jabE = t < 0.32 ? Math.sin((t / 0.32) * Math.PI * 0.5) : Math.pow(1 - (t - 0.32) / 0.68, 1.6);
       }
     }
-    if (this.ride?.grips && this.clipName === 'bike_ride') {
+    if (this.ride?.grips && (this.clipName === 'bike_ride' || this.clipName === 'car_sit')) {
       for (const b of this.touched) this.clean.get(b)!.copy(b.quaternion);
       this.dirty = true;
       this.updateRoot();

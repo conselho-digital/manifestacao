@@ -9,6 +9,8 @@ export const BIKE_MODELS = ['harley', 'triumph', 'bmw', 'suzuki'] as const;
 const SEATS: Record<string, [number, number]> = { harley: [-0.46, 0.14], triumph: [-0.51, 0.42], bmw: [-0.4, 0.47], suzuki: [-0.4, 0.57] };
 /** Pontas do guidão (x lateral, z para a frente, y para cima), mesmo espaço dos assentos. */
 const BARS: Record<string, [number, number, number]> = { harley: [0.37, 0.15, 0.76], triumph: [0.37, 0.17, 0.63], bmw: [0.31, 0.43, 0.4], suzuki: [0.29, 0.46, 0.46] };
+/** Banco do motorista dos carros (x para a esquerda, z para a frente, y para cima) e volante. */
+const CAR_SEATS: Record<string, [number, number, number]> = { blistac: [0.48, -0.25, -0.12], buffalo: [0.54, -0.35, -0.16], clover: [0.51, -0.15, -0.12], gol: [0.43, 0.4, -0.1] };
 const isBikeModel = (m?: string): boolean => (BIKE_MODELS as readonly string[]).includes(m ?? '');
 const loader = new GLTFLoader();
 const modelCache = new Map<string, Promise<THREE.Object3D>>();
@@ -50,7 +52,7 @@ export function buildCarVisual(src: THREE.Object3D, colorHex: number): { group: 
   const group = new THREE.Group();
   const body = model.getObjectByName('body');
   if (body) group.add(body);
-  for (const name of ['wheel_FL', 'wheel_FR', 'wheel_BL', 'wheel_BR', 'wheel_F', 'wheel_R']) {
+  for (const name of ['wheel_FL', 'wheel_FR', 'wheel_BL', 'wheel_BR', 'wheel_F', 'wheel_R', 'door_L', 'door_R']) {
     const node = model.getObjectByName(name);
     if (!node) continue;
     const pivot = new THREE.Group(); // pivô: esterça sem atrapalhar o giro
@@ -108,6 +110,11 @@ export class Car {
     if (model) void loadModel(model).then((src) => this.useModel(src));
   }
 
+  /** portas dianteiras (0 fechada, 1 aberta) e o tempo que ficam abertas */
+  private doorT = 0;
+  private doorOpen = 0;
+  /** abre a porta do motorista por um instante (entrar/sair) */
+  openDoor(sec = 0.9): void { this.doorT = sec; }
   /** onde fica a pélvis do piloto (espaço do carro); null em carros */
   seat: THREE.Vector3 | null = null;
   /** mãos no guidão: [esquerda, direita] (espaço do carro) */
@@ -131,7 +138,17 @@ export class Car {
       const bar = BARS[this.model ?? ''];
       if (bar) { const y = bar[2] + v.group.position.y; this.grips = [new THREE.Vector3(bar[0], y, bar[1]), new THREE.Vector3(-bar[0], y, bar[1])]; }
       this.root.add(inner);
-    } else this.root.add(v.group);
+    } else {
+      this.root.add(v.group);
+      const cs = CAR_SEATS[this.model ?? ''];
+      if (cs) {
+        const lift = v.group.position.y;
+        this.seat = new THREE.Vector3(cs[0], cs[2] + lift, cs[1]);
+        // mãos no volante: um pouco à frente e acima do quadril
+        const w = new THREE.Vector3(0, cs[2] + lift + 0.4, cs[1] + 0.5);
+        this.grips = [w.clone().add(new THREE.Vector3(cs[0] + 0.17, 0, 0)), w.clone().add(new THREE.Vector3(cs[0] - 0.17, 0, 0))];
+      }
+    }
     this.wheels = v.wheels;
   }
 
@@ -182,6 +199,13 @@ export class Car {
 
   /** Motor: toca quando há motorista; mais alto perto de quem ouve (lx, lz). Chame todo quadro. */
   updateEngine(dt: number, lx: number, lz: number): void {
+    // portas: abrem enquanto doorT > 0,25 e fecham no final
+    this.doorOpen += ((this.doorT > 0.25 ? 1 : 0) - this.doorOpen) * Math.min(1, dt * 10);
+    if (this.doorT > 0) this.doorT -= dt;
+    const dl = this.wheels['door_L'];
+    const dr = this.wheels['door_R'];
+    if (dl) dl.rotation.y = -this.doorOpen * 1.0;
+    if (dr) dr.rotation.y = this.doorOpen * 0.35;
     const moved = Math.hypot(this.x - this.lastX, this.z - this.lastZ) / Math.max(dt, 1e-3);
     this.lastX = this.x;
     this.lastZ = this.z;
@@ -209,6 +233,7 @@ export class Car {
       this.body.position.copy(a).sub(a.clone().applyEuler(this.body.rotation)).add(this.bodyBase);
     }
     for (const [name, pivot] of Object.entries(this.wheels)) {
+      if (name.startsWith('door')) continue;
       const front = name.startsWith('wheel_F');
       pivot.rotation.y = front && !this.bike ? -steer * 0.45 : 0;
       (pivot.children[0] as THREE.Object3D).rotation.x = this.spin;
