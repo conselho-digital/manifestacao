@@ -464,8 +464,12 @@ export class Animator {
     }
     const armed = this.armW >= 0.01;
     const holding = this.holdsWeapon;
+    // briga: mãos fechadas em punho; chute 1 ganha um chute de verdade (o clipe original só tem socos)
+    const fist = this.clipName.startsWith('punch_') || this.clipName.startsWith('kick_') || this.clipName === 'combat_idle' || this.clipName.startsWith('hit');
+    const kickT = this.clipName === 'kick_1' && this.current ? this.current.time / this.current.getClip().duration : -1;
+    const kickW = kickT >= 0 ? Math.max(0, Math.sin(Math.PI * THREE.MathUtils.clamp((kickT - 0.3) / 0.45, 0, 1))) : 0;
     if (kind === 'bat' && holding) this.poseBat();
-    if ((!armed && !holding && this.crouchK < 0.01 && this.legK < 0.01 && jabW === 0) || !this.spine) {
+    if ((!armed && !holding && !fist && kickW === 0 && this.crouchK < 0.01 && this.legK < 0.01 && jabW === 0) || !this.spine) {
       this.groundFeet(dt);
       for (const b of this.touched) this.clean.set(b, b.quaternion.clone()); // tudo vem do clipe
       return;
@@ -475,6 +479,8 @@ export class Animator {
     this.updateRoot();
     this.bendTorso();
     if (this.legK >= 0.01) { this.flexLegs(); this.uprightTorso(); }
+    if (kickW > 0) this.applyKick(kickW);
+    if (fist) { this.curlHand(1, 1.4); this.curlHand(-1, 1.4); }
     if (jabW > 0) this.applyJab(jabW, jabE, dt);
     this.updateRoot();
     this.groundFeet(dt);
@@ -548,6 +554,18 @@ export class Animator {
       this.rotateBone(l.calf, calf);
       this.rotateBone(l.foot, unTwist); // os pés voltam a apontar para a frente
     }
+  }
+
+  /** Chute procedural: a perna da frente sobe e estica (dura enquanto kickW > 0). */
+  private applyKick(w: number): void {
+    const leg = this.legs[this.legs.length - 1];
+    if (!leg) return;
+    this.rotateBone(leg.thigh, new THREE.Quaternion().setFromAxisAngle(X, -1.45 * w));
+    this.updateRoot();
+    this.rotateBone(leg.calf, new THREE.Quaternion().setFromAxisAngle(X, 0.55 * w));
+    // tronco recua um pouco para equilibrar
+    if (this.spine) this.rotateBone(this.spine.mid, new THREE.Quaternion().setFromAxisAngle(X, -0.25 * w));
+    this.updateRoot();
   }
 
   private applyJab(w: number, e: number, dt: number): void {
