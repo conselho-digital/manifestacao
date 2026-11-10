@@ -237,6 +237,7 @@ export class Combat {
     if (m.h === this.d.net.id && !this.dead && this.invuln <= 0) {
       const base = m.k === 'f' ? FIST_DAMAGE : m.k === 'b' ? BAT_DAMAGE : m.k === 'p' ? PISTOL_DAMAGE : AK_DAMAGE;
       const dmg = m.hs && (m.k === 'r' || m.k === 'p') ? base * 2 : base;
+      if (m.k === 'f' || m.k === 'b') this.player?.flinch();
       this.damage(dmg, m.id, { f: 'PUNHO', b: 'TACO', p: 'PISTOLA', r: 'AK-47' }[m.k]);
     }
   }

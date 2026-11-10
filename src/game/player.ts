@@ -81,6 +81,13 @@ export class Player {
   /** 0 nada, 1 fuzil, 2 fuzil mirando, 3 taco, 4 pistola, 5 pistola mirando (enviado aos outros) */
   get weaponCode(): number { return ARMED_CODE[this.armed]; }
 
+  /** Levou um golpe (soco, taco, bandeira): reação de defesa do knife_block. */
+  flinch(): void {
+    if (this.mode !== 'ground') return;
+    this.swingT = 0.5;
+    this.animator?.restart('block');
+  }
+
   /** Soco: combo de 4 animações. */
   punch(): void {
     if (this.mode !== 'ground') return;
