@@ -51,7 +51,11 @@ const CSS = `
 .m-hud *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 .m-look{position:fixed;inset:0;pointer-events:auto;touch-action:none}
 .m-hud.desktop .m-look,.m-hud.desktop .m-stick{display:none}
-.m-hud.driving .foot{display:none!important}
+.m-hud.driving .foot,.m-hud.driving .m-stick{display:none!important}
+.m-steerL,.m-steerR{bottom:calc(var(--u)*10);width:calc(var(--u)*17);height:calc(var(--u)*17);}
+.m-steerL .lbl,.m-steerR .lbl{font-size:calc(var(--u)*8)}
+.m-steerL{left:calc(var(--u)*6)}
+.m-steerR{left:calc(var(--u)*25)}
 .m-hud:not(.driving) .car{display:none!important}
 .m-out{text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000,0 2px 3px rgba(0,0,0,.6)}
 .m-map{position:fixed;left:calc(var(--u)*1.6);top:calc(var(--u)*2.2);width:calc(var(--u)*21);height:calc(var(--u)*21);border-radius:50%;pointer-events:auto;touch-action:none;
@@ -382,6 +386,12 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   holdButton(circle(hud, 'm-brake car', ICON.brake, null), () => { brake = true; pedals(); }, () => { brake = false; pedals(); });
   holdButton(circle(hud, 'm-hand car', ICON.handbrake, null), () => { hand = true; pedals(); }, () => { hand = false; pedals(); });
 
+  // No carro: dois botões para virar para os lados (no lugar do joystick)
+  let steer = 0;
+  const applySteer = (): void => setTouchVector(steer, 0, steer !== 0);
+  holdButton(circle(hud, 'm-steerL car', null, '◀'), () => { steer = -1; applySteer(); }, () => { steer = steer === -1 ? 0 : steer; applySteer(); });
+  holdButton(circle(hud, 'm-steerR car', null, '▶'), () => { steer = 1; applySteer(); }, () => { steer = steer === 1 ? 0 : steer; applySteer(); });
+
   // Animações (menu)
   holdButton(circle(hud, 'm-anim', ICON.anim, 'Animações'), opts.onAnimations);
 
@@ -469,6 +479,7 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
     addChat,
     update(s, dt): void {
       hud.classList.toggle('driving', s.driving);
+      if (!s.driving && steer !== 0) { steer = 0; applySteer(); } // saiu do carro com o dedo no botão
       hud.classList.toggle('near-car', s.nearCar);
       if (prev && dt > 0) {
         const inst = Math.hypot(s.x - prev.x, s.z - prev.z) / dt;
