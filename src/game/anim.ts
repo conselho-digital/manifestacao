@@ -2,7 +2,7 @@ import * as THREE from 'three';
 
 interface GtaTrack { id: number; t: number[]; q: number[] }
 interface BoneTrack { bone: string; t: number[]; q: number[] }
-interface ClipData<T> { duration: number; tracks: T[] }
+interface ClipData<T> { duration: number; tracks: T[]; /** descida do corpo (m) ao longo do clipe (mergulho) */ drop?: { t: number[]; y: number[] } }
 type Clips<T> = Record<string, ClipData<T>>;
 type Kind = 'gta' | 'carlos';
 
@@ -127,6 +127,8 @@ export class Animator {
   private clean = new Map<THREE.Bone, THREE.Quaternion>();
   private dirty = false;
   private chestRest = { pos: new THREE.Vector3(), q: new THREE.Quaternion() };
+  private drops = new Map<string, { t: number[]; y: number[] }>();
+  private modelY0: number | null = null;
   private addClips: (file: Clips<never>) => void = () => undefined;
 
   private constructor(
@@ -222,6 +224,7 @@ export class Animator {
           }
         }
         const action = mixer.clipAction(new THREE.AnimationClip(name, clip.duration, tracks));
+        if (clip.drop) a.drops.set(name, clip.drop);
         action.timeScale = TIME_SCALE[name] ?? 1;
         if (ONCE.has(name)) {
           action.setLoop(THREE.LoopOnce, 1);
@@ -312,7 +315,25 @@ export class Animator {
     this.dirty = false;
   }
 
+  /** Mergulho: o corpo desce até o chão (o IFP tem a altura da raiz, que não usamos como osso). */
+  private applyDrop(): void {
+    const model = this.root.children[0];
+    if (!model) return;
+    this.modelY0 ??= model.position.y;
+    const d = this.drops.get(this.clipName);
+    let y = 0;
+    if (d && this.current) {
+      const t = this.current.time;
+      const i = d.t.findIndex((x) => x >= t);
+      if (i <= 0) y = d.y[Math.max(i, 0)] ?? 0;
+      else y = d.y[i - 1]! + ((d.y[i]! - d.y[i - 1]!) * (t - d.t[i - 1]!)) / Math.max(1e-6, d.t[i]! - d.t[i - 1]!);
+      if (i < 0) y = d.y[d.y.length - 1]!;
+    }
+    if (d || model.position.y !== this.modelY0) model.position.y = this.modelY0 + y;
+  }
+
   private pose(dt: number): void {
+    this.applyDrop();
     // braços por IK só quando o clipe não segura o fuzil sozinho (ou ao mirar no ombro)
     const ikTarget = !this.holdsWeapon ? 0 : OWN_HOLD(this.clipName) ? (this.armed === 'aim' ? 1 : 0) : 1;
     this.armW += (ikTarget - this.armW) * Math.min(1, dt * 10);
