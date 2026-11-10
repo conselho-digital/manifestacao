@@ -293,7 +293,8 @@ export class Player {
     this.mode = 'drive';
     this.emote = null;
     this.vy = 0;
-    this.object.visible = false;
+    this.object.visible = best.bike; // moto: o piloto aparece sentado
+    this.crouching = false;
     return true;
   }
 
@@ -305,6 +306,12 @@ export class Player {
     this.object.position.set(car.x, 0, car.z);
     this.heading = car.heading;
     this.object.rotation.y = car.heading;
+    if (car.bike) {
+      this.animator?.setRide(car.seat, car.grips);
+      this.animator?.setArmed('none');
+      this.animator?.play('bike_ride');
+      this.animator?.update(dt);
+    }
   }
 
   private exitCar(): void {
@@ -320,6 +327,7 @@ export class Player {
     car.speed = 0;
     this.car = null;
     this.object.visible = true;
+    this.animator?.setRide(null);
     this.mode = 'ground';
     this.animator?.play('idle');
   }

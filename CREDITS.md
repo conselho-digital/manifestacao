@@ -32,3 +32,4 @@ O restante da cidade é gerado por código (`src/game/city.ts`), inspirado na ma
 - VW Gol 2009 PMESP (BR-Projects: Kastor, Aleandro, Tiago, Caio; edição PMESP: Thiago), simplificado para ~30 mil triângulos.
 - Motos Harley-Davidson Black Death (freeway.dff) e Triumph Speed Triple (pcj600.dff), convertidas e simplificadas.
 - Moto BMW S1000RR (VietTuan / DiChoiKoCung), convertida e simplificada.
+- Moto Suzuki GSX-R600 (nrg500.dff do pacote), convertida e simplificada.

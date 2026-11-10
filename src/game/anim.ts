@@ -155,6 +155,9 @@ export class Animator {
   private chestRest = { pos: new THREE.Vector3(), q: new THREE.Quaternion() };
   private drops = new Map<string, { t: number[]; y: number[] }>();
   private modelY0: number | null = null;
+  private modelZ0 = 0;
+  /** piloto sentado: deslocamento do modelo (y já descontando a altura da pélvis) e z */
+  private ride: { y: number; z: number; grips: [THREE.Vector3, THREE.Vector3] | null } | null = null;
   private addClips: (file: Clips<never>) => void = () => undefined;
 
   private constructor(
@@ -361,11 +364,16 @@ export class Animator {
     this.dirty = false;
   }
 
+  /** Sentado na moto: a pélvis vai para o assento (seat, no espaço do personagem). null = em pé. */
+  setRide(seat: THREE.Vector3 | null, grips: [THREE.Vector3, THREE.Vector3] | null = null): void {
+    this.ride = seat ? { y: seat.y - 0.97, z: seat.z, grips } : null;
+  }
+
   /** Mergulho: o corpo desce até o chão (o IFP tem a altura da raiz, que não usamos como osso). */
   private applyDrop(): void {
     const model = this.root.children[0];
     if (!model) return;
-    this.modelY0 ??= model.position.y;
+    if (this.modelY0 === null) { this.modelY0 = model.position.y; this.modelZ0 = model.position.z; }
     const d = this.drops.get(this.clipName);
     let y = 0;
     if (d && this.current) {
@@ -375,8 +383,9 @@ export class Animator {
       else y = d.y[i - 1]! + ((d.y[i]! - d.y[i - 1]!) * (t - d.t[i - 1]!)) / Math.max(1e-6, d.t[i]! - d.t[i - 1]!);
       if (i < 0) y = d.y[d.y.length - 1]!;
     }
-    y += this.groundDrop;
-    if (d || this.groundDrop !== 0 || model.position.y !== this.modelY0) model.position.y = this.modelY0 + y;
+    y += this.groundDrop + (this.ride?.y ?? 0);
+    model.position.y = this.modelY0 + y;
+    model.position.z = this.modelZ0 + (this.ride?.z ?? 0);
   }
 
   private pose(dt: number): void {
@@ -401,6 +410,13 @@ export class Animator {
         jabW = THREE.MathUtils.clamp(Math.min(t / 0.12, (1 - t) / 0.22), 0, 1);
         jabE = t < 0.32 ? Math.sin((t / 0.32) * Math.PI * 0.5) : Math.pow(1 - (t - 0.32) / 0.68, 1.6);
       }
+    }
+    if (this.ride?.grips && this.clipName === 'bike_ride') {
+      for (const b of this.touched) this.clean.get(b)!.copy(b.quaternion);
+      this.dirty = true;
+      this.updateRoot();
+      for (const arm of this.arms) this.solveArm(arm, arm.side > 0 ? this.ride.grips[0] : this.ride.grips[1], 1, dt);
+      return;
     }
     const armed = this.armW >= 0.01;
     const holding = this.holdsWeapon;

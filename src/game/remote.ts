@@ -79,14 +79,21 @@ export class RemotePlayer {
       // Dirigindo: esconde o boneco e move o carro
       car.driver = this.info.id;
       this.lastCar = car;
-      if (this.model) this.model.visible = false;
+      if (this.model) this.model.visible = car.bike;
       car.setPose(this.root.position.x, this.root.position.z, this.root.rotation.y);
     } else {
       if (this.lastCar) { this.lastCar.driver = null; this.lastCar = null; }
       if (this.model) this.model.visible = true;
     }
     const dead = this.anim === 'dead';
+    if (this.animator && car?.bike) {
+      this.animator.setRide(car.seat, car.grips);
+      this.animator.setArmed('none');
+      this.animator.play('bike_ride');
+      this.animator.update(dt);
+    }
     if (this.animator && !car) {
+      this.animator.setRide(null);
       this.animator.setArmed(ARMED_FROM_CODE[this.weapon] ?? 'none');
       this.animator.setAimPitch(this.pitch);
       this.animator.play(dead ? 'idle' : this.anim);

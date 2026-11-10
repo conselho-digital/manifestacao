@@ -4,7 +4,11 @@ import { COLLIDERS, MAP } from './map';
 import { EngineSound } from './audio';
 
 export const CAR_MODELS = ['blistac', 'buffalo', 'clover', 'gol'] as const;
-export const BIKE_MODELS = ['harley', 'triumph', 'bmw'] as const;
+export const BIKE_MODELS = ['harley', 'triumph', 'bmw', 'suzuki'] as const;
+/** Assento do piloto (z = para a frente, y = para cima), no espaço do modelo antes de subir até o chão. */
+const SEATS: Record<string, [number, number]> = { harley: [-0.46, 0.14], triumph: [-0.51, 0.42], bmw: [-0.4, 0.47], suzuki: [-0.4, 0.57] };
+/** Pontas do guidão (x lateral, z para a frente, y para cima), mesmo espaço dos assentos. */
+const BARS: Record<string, [number, number, number]> = { harley: [0.37, 0.15, 0.76], triumph: [0.37, 0.17, 0.63], bmw: [0.31, 0.43, 0.4], suzuki: [0.29, 0.46, 0.46] };
 const isBikeModel = (m?: string): boolean => (BIKE_MODELS as readonly string[]).includes(m ?? '');
 const loader = new GLTFLoader();
 const modelCache = new Map<string, Promise<THREE.Object3D>>();
@@ -79,6 +83,7 @@ export class Car {
   private spin = 0;
   private readonly color: number;
   readonly bike: boolean;
+  private readonly model?: string;
   private readonly engine: EngineSound;
   /** empinada (rad) e inclinação lateral da moto */
   private tilt = 0;
@@ -92,6 +97,7 @@ export class Car {
   constructor(readonly id: number, x: number, z: number, heading: number, color: number, model?: string) {
     this.color = color;
     this.bike = isBikeModel(model);
+    this.model = model;
     this.engine = new EngineSound(this.bike ? 'bike' : 'car');
     this.root = new THREE.Group(); // o modelo GLB entra quando carregar
     this.wheels = {};
@@ -102,6 +108,10 @@ export class Car {
     if (model) void loadModel(model).then((src) => this.useModel(src));
   }
 
+  /** onde fica a pélvis do piloto (espaço do carro); null em carros */
+  seat: THREE.Vector3 | null = null;
+  /** mãos no guidão: [esquerda, direita] (espaço do carro) */
+  grips: [THREE.Vector3, THREE.Vector3] | null = null;
   private body: THREE.Group | null = null;
   private bodyBase = new THREE.Vector3();
 
@@ -116,6 +126,10 @@ export class Car {
       this.bodyBase.set(0, 0, 0);
       const rear = v.wheels['wheel_R'];
       if (rear) this.axle.set(0, rear.position.y + v.group.position.y, rear.position.z);
+      const sp = SEATS[this.model ?? ''];
+      if (sp) this.seat = new THREE.Vector3(0, sp[1] + v.group.position.y, sp[0]);
+      const bar = BARS[this.model ?? ''];
+      if (bar) { const y = bar[2] + v.group.position.y; this.grips = [new THREE.Vector3(bar[0], y, bar[1]), new THREE.Vector3(-bar[0], y, bar[1])]; }
       this.root.add(inner);
     } else this.root.add(v.group);
     this.wheels = v.wheels;
@@ -222,6 +236,7 @@ export function createCars(): THREE.Group {
     [50, -9, Math.PI / 2, 0x888888],
     [-8, 9, -Math.PI / 2, 0x888888],
     [30, 9, -Math.PI / 2, 0x888888],
+    [-30, -9, Math.PI / 2, 0x888888],
   ];
   spawn.forEach(([x, z, h, c], i) => {
     const model = i < 4 ? CAR_MODELS[i % CAR_MODELS.length] : BIKE_MODELS[i - 4];
