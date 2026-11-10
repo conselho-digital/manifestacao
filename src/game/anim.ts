@@ -119,7 +119,8 @@ const P3 = (x: number, y: number, z: number): THREE.Vector3 => new THREE.Vector3
  */
 const CFG: Record<'rifle' | 'pistol', WeaponCfg> = {
   rifle: {
-    low: { pos: P3(-0.1, 1.26, 0.27), pitch: 0.3, yaw: 0.07 },
+    // referência (foto): o fuzil atravessa o corpo na altura da barriga, cano para a esquerda e levemente para cima
+    low: { pos: P3(-0.05, 1.18, 0.3), pitch: -0.12, yaw: 0.6 },
     // yaw negativo: o cano converge para o ponto da mira (a câmera fica ~0,85 m à direita do personagem)
     aim: { pos: P3(-0.12, 1.585, 0.2), pitch: 0, yaw: -0.05 },
     gripR: P3(0, -0.055, 0.17), // empunhadura (coronha→cano: a arma tem 0,88 m e começa em z=-0,14)
@@ -424,7 +425,7 @@ export class Animator {
     const dbgRoll = (window as unknown as { __ROLL?: number }).__ROLL;
     // segurando arma: palmas viradas uma para a outra (para dentro); no guidão/volante a palma fica para baixo
     this.armRoll = dbgRoll !== undefined ? dbgRoll * (Math.PI / 180) : this.holdsWeapon && kind && !this.ride?.grips ? Math.PI / 2 : 0;
-    const ikTarget = !this.holdsWeapon || kind === 'bat' || !kind ? 0 : kind === 'pistol' ? 1 : OWN_HOLD(this.clipName) ? (this.armed === 'aim' ? 1 : 0) : 1;
+    const ikTarget = !this.holdsWeapon || kind === 'bat' || !kind ? 0 : 1; // braços sempre por IK nas empunhaduras (pose da foto de referência)
     this.armW += (ikTarget - this.armW) * Math.min(1, dt * 10);
     this.aimK += ((isAimPose(this.armed) ? 1 : 0) - this.aimK) * Math.min(1, dt * 9);
     this.recoil = Math.max(0, this.recoil - dt * 9);
@@ -672,7 +673,7 @@ export class Animator {
     // clipe feito para segurar o fuzil: a arma fica entre as duas mãos do clipe (direita na empunhadura, esquerda no guarda-mão)
     const right = this.arms.find((a) => a.side < 0);
     const left = this.arms.find((a) => a.side > 0);
-    if (right && left && cfg === CFG.rifle && OWN_HOLD(this.clipName) && k < 0.999) {
+    if (false as boolean && right && left && cfg === CFG.rifle && OWN_HOLD(this.clipName) && k < 0.999) {
       const palm = (arm: Arm): THREE.Vector3 => {
         const hand = this.posIn(arm.h, new THREE.Vector3());
         const elbow = this.posIn(arm.f, new THREE.Vector3());
