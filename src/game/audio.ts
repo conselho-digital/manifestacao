@@ -39,7 +39,7 @@ export class EngineSound {
   }
 
   /** on: motor ligado; speed em m/s (0 a 14); near: 0 a 1 (distância ao jogador). Volume sempre baixo. */
-  update(on: boolean, speed: number, near: number): void {
+  update(on: boolean, speed: number, near: number, throttle = 1): void {
     if (!on && !this.osc) return;
     if (!this.start() || !ctx || !this.gain || !this.osc || !this.osc2 || !this.filter) return;
     const rpm = Math.min(1, Math.abs(speed) / 14);
@@ -49,8 +49,10 @@ export class EngineSound {
     this.osc.frequency.setTargetAtTime(f, t, 0.08);
     this.osc2.frequency.setTargetAtTime(f * 0.5, t, 0.08);
     this.filter.frequency.setTargetAtTime(bike ? 500 + rpm * 900 : 260 + rpm * 380, t, 0.1);
-    const vol = on ? (0.018 + rpm * 0.03) * Math.max(0, near) : 0;
-    this.gain.gain.setTargetAtTime(vol, t, 0.15);
+    // sem acelerar o barulho cai rápido (a moto mantém a velocidade, só o som diminui)
+    const level = this.kind === 'bike' ? 0.12 + 0.88 * throttle : 1;
+    const vol = on ? (0.018 + rpm * 0.03) * Math.max(0, near) * level : 0;
+    this.gain.gain.setTargetAtTime(vol, t, throttle > 0 || this.kind !== 'bike' ? 0.15 : 0.05);
   }
 }
 

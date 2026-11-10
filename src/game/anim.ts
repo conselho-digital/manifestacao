@@ -415,6 +415,15 @@ export class Animator {
       for (const b of this.touched) this.clean.get(b)!.copy(b.quaternion);
       this.dirty = true;
       this.updateRoot();
+      // deita o tronco para a frente para as mãos alcançarem o guidão (mais nas motos esportivas, onde o guidão é baixo)
+      if (this.spine) {
+        const lean = this.clipName === 'bike_ride' ? 0.62 : 0;
+        this.rotateBone(this.spine.mid, new THREE.Quaternion().setFromAxisAngle(X, lean * 0.4));
+        this.rotateBone(this.spine.chest, new THREE.Quaternion().setFromAxisAngle(X, lean * 0.4));
+        this.rotateBone(this.spine.neck, new THREE.Quaternion().setFromAxisAngle(X, -lean * 0.25));
+        this.rotateBone(this.spine.head, new THREE.Quaternion().setFromAxisAngle(X, -lean * 0.2));
+        this.updateRoot();
+      }
       for (const arm of this.arms) this.solveArm(arm, arm.side > 0 ? this.ride.grips[0] : this.ride.grips[1], 1, dt);
       return;
     }

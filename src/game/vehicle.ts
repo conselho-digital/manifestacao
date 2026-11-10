@@ -88,6 +88,7 @@ export class Car {
   private readonly model?: string;
   private readonly engine: EngineSound;
   /** empinada (rad) e inclinação lateral da moto */
+  private throttle = 0;
   private tilt = 0;
   private lean = 0;
   private axle = new THREE.Vector3(0, 0.35, -0.9);
@@ -156,6 +157,7 @@ export class Car {
   drive(dt: number, gas: boolean, brake: boolean, hand: boolean, steer: number, wheelie = false): void {
     const f = this.speed;
     const bike = this.bike;
+    this.throttle = gas ? 1 : 0;
     const accel = bike ? 15 : ACCEL;
     const maxSpeed = bike ? 20 : MAX_SPEED;
     const turn = bike ? 2.5 : TURN_RATE;
@@ -172,7 +174,7 @@ export class Car {
     // Só esterça andando; com o freio de mão o carro "derrapa" (gira mais)
     const grip = THREE.MathUtils.clamp(this.speed / 4, -1, 1) * (hand ? 1.7 : 1);
     this.heading -= steer * turn * grip * (1 - this.tilt * 0.8) * dt;
-    this.lean += (-steer * Math.min(1, Math.abs(this.speed) / 10) * 0.45 - this.lean) * Math.min(1, dt * 6);
+    this.lean += (steer * Math.min(1, Math.abs(this.speed) / 10) * 0.45 - this.lean) * Math.min(1, dt * 6);
     this.x += Math.sin(this.heading) * this.speed * dt;
     this.z += Math.cos(this.heading) * this.speed * dt;
 
@@ -212,7 +214,7 @@ export class Car {
     const sp = this.driver === null ? 0 : Math.abs(this.speed) > 0.01 ? this.speed : moved;
     this.seenSpeed += (sp - this.seenSpeed) * Math.min(1, dt * 5);
     const d = Math.hypot(this.x - lx, this.z - lz);
-    this.engine.update(this.driver !== null, this.seenSpeed, Math.max(0, 1 - d / 45));
+    this.engine.update(this.driver !== null, this.seenSpeed, Math.max(0, 1 - d / 45), this.driver === null ? 0 : this.throttle);
   }
 
   setPose(x: number, z: number, heading: number): void {
