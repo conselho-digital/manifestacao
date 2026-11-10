@@ -2,6 +2,9 @@ let ctx: AudioContext | null = null;
 
 /** Motor sintético baixo: dois osciladores graves filtrados. Um por carro. */
 export class EngineSound {
+  /** 'car' = grave e baixo; 'bike' = mais agudo e mais rápido a subir de giro (pronto para as motos) */
+  constructor(private readonly kind: 'car' | 'bike' = 'car') {}
+
   private osc: OscillatorNode | null = null;
   private osc2: OscillatorNode | null = null;
   private gain: GainNode | null = null;
@@ -40,11 +43,12 @@ export class EngineSound {
     if (!on && !this.osc) return;
     if (!this.start() || !ctx || !this.gain || !this.osc || !this.osc2 || !this.filter) return;
     const rpm = Math.min(1, Math.abs(speed) / 14);
-    const f = 38 + rpm * 70; // marcha lenta grave, sobe com a velocidade
+    const bike = this.kind === 'bike';
+    const f = bike ? 70 + rpm * 190 : 38 + rpm * 70; // marcha lenta, sobe com a velocidade
     const t = ctx.currentTime;
     this.osc.frequency.setTargetAtTime(f, t, 0.08);
     this.osc2.frequency.setTargetAtTime(f * 0.5, t, 0.08);
-    this.filter.frequency.setTargetAtTime(260 + rpm * 380, t, 0.1);
+    this.filter.frequency.setTargetAtTime(bike ? 500 + rpm * 900 : 260 + rpm * 380, t, 0.1);
     const vol = on ? (0.018 + rpm * 0.03) * Math.max(0, near) : 0;
     this.gain.gain.setTargetAtTime(vol, t, 0.15);
   }
