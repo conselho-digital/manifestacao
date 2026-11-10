@@ -472,6 +472,10 @@ export function createCity(): THREE.Group {
     sh.lineTo(0, 0);
     const g = new THREE.ShapeGeometry(sh, 10);
     g.scale(sx, -sz, 1);
+    if (sx * -sz < 0) { // espelhar inverte a face: desvira os triângulos para a esquina não ficar escura
+      const idx = g.index!;
+      for (let i = 0; i < idx.count; i += 3) { const a = idx.getX(i); idx.setX(i, idx.getX(i + 2)); idx.setX(i + 2, a); }
+    }
     const m = new THREE.Mesh(g, new THREE.MeshLambertMaterial({ map: asphalt(0.4, 0.4), side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3 }));
     m.rotation.x = -Math.PI / 2;
     m.position.set(cx, 0.025, cz);
@@ -678,7 +682,11 @@ export function createCity(): THREE.Group {
     [20, -17.6, 6, 0.8, 0.5, benchMat], [-10, -17.6, 3.2, 3.2, 1.2, plantMat], [60, -17.6, 3.2, 3.2, 1.1, plantMat],
     [-45, 17.6, 3.2, 3.2, 1.6, plantMat], [-64, -17.6, 5, 0.8, 0.5, benchMat],
   ];
-  for (const [x, z, w, d, h, mat] of props) {
+  for (const prop of props) {
+    const [x0, z, w, d, h, mat] = prop;
+    // jardineiras e bancos não ficam em cima das ruas transversais: vão para a calçada ao lado
+    const street = STREETS.find((r) => x0 + w / 2 > r.x0 - 1.5 && x0 - w / 2 < r.x1 + 1.5);
+    const x = street ? street.x1 + 9 + w / 2 : x0;
     const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
     m.position.set(x, h / 2, z);
     m.castShadow = true;

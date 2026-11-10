@@ -95,6 +95,8 @@ interface Arm {
   curU: THREE.Vector3; curF: THREE.Vector3;
 }
 
+interface Leg { thigh: THREE.Bone; calf: THREE.Bone; foot: THREE.Bone }
+
 interface Spine { mid: THREE.Bone; chest: THREE.Bone; neck: THREE.Bone; head: THREE.Bone }
 
 /**
@@ -115,6 +117,9 @@ export class Animator {
   private armW = 0; // 0 = braços do clipe, 1 = braços segurando o fuzil
   private aimK = 0; // 0 = fuzil baixo, 1 = fuzil no ombro
   private recoil = 0; // coice do último tiro (1 -> 0)
+  private legK = 0; // andando agachado: dobra mais os joelhos
+  private footRest = 0; // altura do pé mais baixo em repouso (espaço do modelo)
+  private groundDrop = 0; // quanto o corpo desce para o pé tocar o chão
   private crouchK = 0; // 0 em pé, 1 agachado (tronco desce)
   private armed: Armed = 'none';
   private aimPitch = 0;
@@ -136,15 +141,18 @@ export class Animator {
     private mixer: THREE.AnimationMixer,
     private arms: Arm[],
     private spine: Spine | null,
+    private legs: Leg[],
   ) {
     mixer.addEventListener('finished', (e) => {
       if ((e as unknown as { action: THREE.AnimationAction }).action === this.current) this.done = true;
     });
     this.touched = [...arms.flatMap((a) => [a.u, a.f, a.h, ...(a.c ? [a.c] : [])])];
     if (spine) this.touched.push(spine.mid, spine.chest, spine.neck, spine.head);
+    for (const l of legs) this.touched.push(l.thigh, l.calf);
     for (const b of this.touched) this.clean.set(b, b.quaternion.clone());
+    this.updateRoot();
+    this.footRest = this.lowestFoot();
     if (spine) {
-      this.updateRoot();
       this.chestRest.pos.copy(this.posIn(spine.chest, new THREE.Vector3()));
       this.quatIn(spine.chest, this.chestRest.q);
     }
@@ -174,12 +182,13 @@ export class Animator {
     const kind: Kind = isGta ? 'gta' : 'carlos';
 
     let find: (n: string) => THREE.Bone | undefined;
-    let names: { arm: (p: 'l' | 'r') => [string, string, string, string]; spine: [string, string, string, string] };
+    let names: { arm: (p: 'l' | 'r') => [string, string, string, string]; spine: [string, string, string, string]; leg: (p: 'l' | 'r') => [string, string, string] };
     if (isGta) {
       find = (n) => byGta.get(n);
       names = {
         arm: (p) => [`${p} upperarm`, `${p} forearm`, `${p} hand`, `${p} clavicle`],
         spine: ['spine', 'spine1', 'neck', 'head'],
+        leg: (p) => [`${p} thigh`, `${p} calf`, `${p} foot`],
       };
     } else {
       find = (n) => {
@@ -189,6 +198,7 @@ export class Animator {
       names = {
         arm: (p) => { const w = p === 'l' ? 'left' : 'right'; return [`arm ${w} shoulder 2`, `arm ${w} elbow`, `arm ${w} wrist`, `arm ${w} shoulder 1`]; },
         spine: ['spine middle', 'spine upper', 'head neck lower', 'head neck upper'],
+        leg: (p) => { const w = p === 'l' ? 'left' : 'right'; return [`leg ${w} thigh`, `leg ${w} knee`, `leg ${w} ankle`]; },
       };
     }
 
@@ -200,8 +210,13 @@ export class Animator {
     const sp = names.spine.map((n) => find(n));
     const spine: Spine | null = sp.every(Boolean) ? { mid: sp[0]!, chest: sp[1]!, neck: sp[2]!, head: sp[3]! } : null;
 
+    const legs = (['l', 'r'] as const).flatMap((p) => {
+      const [t, c, f] = names.leg(p).map((n) => find(n));
+      return t && c && f ? [{ thigh: t, calf: c, foot: f }] : [];
+    });
+
     const mixer = new THREE.AnimationMixer(root);
-    const a = new Animator(root, mixer, arms, spine);
+    const a = new Animator(root, mixer, arms, spine, legs);
     a.addClips = (file) => {
       for (const [name, clip] of Object.entries(file)) {
         const tracks: THREE.KeyframeTrack[] = [];
@@ -329,7 +344,8 @@ export class Animator {
       else y = d.y[i - 1]! + ((d.y[i]! - d.y[i - 1]!) * (t - d.t[i - 1]!)) / Math.max(1e-6, d.t[i]! - d.t[i - 1]!);
       if (i < 0) y = d.y[d.y.length - 1]!;
     }
-    if (d || model.position.y !== this.modelY0) model.position.y = this.modelY0 + y;
+    y += this.groundDrop;
+    if (d || this.groundDrop !== 0 || model.position.y !== this.modelY0) model.position.y = this.modelY0 + y;
   }
 
   private pose(dt: number): void {
@@ -342,9 +358,11 @@ export class Animator {
     // agachado parado: tronco desce; andando agachado o clipe já inclina o corpo, então só um pouco
     const crouchT = this.clipName === 'crouch_idle' ? 1 : this.clipName.startsWith('crouch_') ? 0.2 : 0;
     this.crouchK += (crouchT - this.crouchK) * Math.min(1, dt * 8);
+    this.legK += ((this.clipName === 'crouch_fwd' || this.clipName === 'crouch_bwd' ? 1 : 0) - this.legK) * Math.min(1, dt * 8);
     const armed = this.armW >= 0.01;
     const holding = this.holdsWeapon;
-    if ((!armed && !holding && this.crouchK < 0.01) || !this.spine) {
+    if ((!armed && !holding && this.crouchK < 0.01 && this.legK < 0.01) || !this.spine) {
+      this.groundFeet(dt);
       for (const b of this.touched) this.clean.set(b, b.quaternion.clone()); // tudo vem do clipe
       return;
     }
@@ -352,6 +370,9 @@ export class Animator {
     this.dirty = true;
     this.updateRoot();
     this.bendTorso();
+    if (this.legK >= 0.01) this.flexLegs();
+    this.updateRoot();
+    this.groundFeet(dt);
     if (!armed && !holding) return;
     this.updateRoot();
     const frame = this.weaponFrame();
@@ -360,6 +381,39 @@ export class Animator {
       this.weapon.quaternion.copy(frame.q);
     }
     if (armed) for (const arm of this.arms) this.poseArm(arm, frame, dt);
+  }
+
+  /** Pé mais baixo (altura no espaço do modelo, sem contar o quanto o modelo já desceu). */
+  private lowestFoot(): number {
+    const model = this.root.children[0];
+    let low = Infinity;
+    const v = new THREE.Vector3();
+    for (const l of this.legs) low = Math.min(low, this.posIn(l.foot, v).y);
+    return low - (model?.position.y ?? 0);
+  }
+
+  /** Agachado: o corpo desce até o pé mais baixo tocar o chão (sem isso ele fica flutuando). */
+  private groundFeet(dt: number): void {
+    if (this.legs.length === 0) return;
+    const crouching = this.clipName.startsWith('crouch_');
+    let target = 0;
+    if (crouching) {
+      this.updateRoot();
+      target = -Math.max(0, this.lowestFoot() - this.footRest);
+    }
+    this.groundDrop += (target - this.groundDrop) * Math.min(1, dt * 12);
+    if (Math.abs(this.groundDrop) < 1e-4) this.groundDrop = 0;
+  }
+
+  /** Andando agachado: joelhos mais dobrados (coxa para a frente, canela de volta) para o corpo ficar mais baixo. */
+  private flexLegs(): void {
+    const k = this.legK;
+    const thigh = new THREE.Quaternion().setFromAxisAngle(X, -0.7 * k);
+    const calf = new THREE.Quaternion().setFromAxisAngle(X, 0.55 * k);
+    for (const l of this.legs) {
+      this.rotateBone(l.thigh, thigh);
+      this.rotateBone(l.calf, calf);
+    }
   }
 
   private updateRoot(): void {
