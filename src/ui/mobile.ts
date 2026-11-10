@@ -54,7 +54,7 @@ const CSS = `
 .m-hud.desktop .m-look,.m-hud.desktop .m-stick{display:none}
 .m-hud.driving .foot,.m-hud.driving .m-stick{display:none!important}
 .m-steerL,.m-steerR{bottom:calc(var(--u)*10);width:calc(var(--u)*17);height:calc(var(--u)*17);}
-.m-steerL .lbl,.m-steerR .lbl{font-size:calc(var(--u)*8)}
+.m-steerL .lbl,.m-steerR .lbl{font-size:calc(var(--u)*13)!important;line-height:1;max-width:none!important;margin:0!important}
 .m-wheelie{left:calc(var(--u)*44);bottom:calc(var(--u)*10);width:calc(var(--u)*17);height:calc(var(--u)*17)}
 .m-hud:not(.bike) .m-wheelie{display:none!important}
 .m-steerL{left:calc(var(--u)*6)}

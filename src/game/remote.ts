@@ -39,6 +39,8 @@ export class RemotePlayer {
   private carId = -1;
   private lastCar: Car | null = null;
   private model: THREE.Object3D | null = null;
+  /** grupo do modelo: gira com a moto (empinar/inclinar) */
+  private readonly pivot = new THREE.Group();
   private weaponVis: WeaponVisual | null = null;
   private weapon = 0;
   private pitch = 0;
@@ -48,7 +50,8 @@ export class RemotePlayer {
   constructor(readonly info: PlayerInfo) {
     this.root.add(makeLabel(info.name));
     void createCharacter(info.character).then((m) => {
-      this.root.add(m);
+      this.root.add(this.pivot);
+      this.pivot.add(m);
       this.model = m;
       this.weaponVis = new WeaponVisual(this.root);
       void Animator.create(m).then((a) => { this.animator = a; if (a) this.weaponVis?.bind(a); });
@@ -85,6 +88,15 @@ export class RemotePlayer {
     } else {
       if (this.lastCar) { this.lastCar.driver = null; this.lastCar.openDoor(1); this.lastCar = null; }
       if (this.model) this.model.visible = true;
+    }
+    const bp = car?.bikePose();
+    if (bp) {
+      const r = new THREE.Euler(bp.pitch, 0, bp.roll, 'XYZ');
+      this.pivot.rotation.copy(r);
+      this.pivot.position.copy(bp.axle).sub(bp.axle.clone().applyEuler(r));
+    } else if (this.pivot.rotation.x !== 0 || this.pivot.rotation.z !== 0) {
+      this.pivot.rotation.set(0, 0, 0);
+      this.pivot.position.set(0, 0, 0);
     }
     const dead = this.anim === 'dead';
     if (this.animator && car?.seat) {

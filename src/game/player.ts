@@ -331,6 +331,15 @@ export class Player {
     this.object.position.set(car.x, 0, car.z);
     this.heading = car.heading;
     this.object.rotation.y = car.heading;
+    const bp = car.bikePose();
+    if (bp) {
+      // o piloto fica preso à moto: gira junto em torno do eixo traseiro (empinar e inclinar)
+      this.object.rotation.order = 'YXZ';
+      this.object.rotation.set(bp.pitch, car.heading, bp.roll);
+      const r = new THREE.Euler(bp.pitch, 0, bp.roll, 'XYZ');
+      const d = bp.axle.clone().sub(bp.axle.clone().applyEuler(r)).applyAxisAngle(new THREE.Vector3(0, 1, 0), car.heading);
+      this.object.position.add(d);
+    }
     if (car.seat) {
       this.animator?.setRide(car.seat, car.grips);
       this.animator?.setArmed('none');
@@ -431,6 +440,8 @@ export class Player {
     car.driver = null;
     car.speed = 0;
     car.openDoor(1);
+    this.object.rotation.set(0, car.heading, 0);
+    this.object.rotation.order = 'XYZ';
     this.car = null;
     this.object.visible = true;
     this.animator?.setRide(null);

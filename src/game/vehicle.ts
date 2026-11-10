@@ -227,6 +227,11 @@ export class Car {
   /** Velocidade (m/s, sinal da marcha) de quem dirige localmente ou estimada de longe. */
   get movingSpeed(): number { return this.driver === 'local' ? this.speed : this.seenSpeed; }
 
+  /** Empinada, inclinação lateral e eixo traseiro da moto (o piloto acompanha). null em carros. */
+  bikePose(): { pitch: number; roll: number; axle: THREE.Vector3 } | null {
+    return this.bike ? { pitch: -this.tilt, roll: this.lean, axle: this.axle } : null;
+  }
+
   /** Motor: toca quando há motorista; mais alto perto de quem ouve (lx, lz). Chame todo quadro. */
   updateEngine(dt: number, lx: number, lz: number): void {
     // portas: abrem enquanto doorT > 0,25 e fecham no final
