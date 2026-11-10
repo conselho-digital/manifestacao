@@ -19,6 +19,7 @@ const BAT_GAP = 0.9;
 const BAT_RANGE = 2.5;
 const AK_DAMAGE = 20;
 const FIST_DAMAGE = 12;
+const KICK_DAMAGE = 20;
 const RELOAD_TIME = 1.6;
 const AIM_HOLD = 3; // depois de atirar, continua mirando por 3 s
 const AK_GAP = 0.11;
@@ -148,7 +149,7 @@ export class Combat {
           this.fireGun(player, aiming, this.weapon === 0 ? 'r' : 'p');
         } else { this.cd = 0.3; playShot(0.6, true); this.startReload(); }
       } else if (this.weapon === 2 || this.weapon === 4) { this.cd = BAT_GAP; player.swing(); this.melee(player, BAT_RANGE, 'b'); }
-      else { this.cd = FIST_GAP; player.punch(); this.melee(player, FIST_RANGE, 'f'); }
+      else { this.cd = FIST_GAP; const kind = player.punch(); this.melee(player, kind === 'k' ? FIST_RANGE + 0.3 : FIST_RANGE, kind); }
     }
   }
 
@@ -193,7 +194,7 @@ export class Combat {
     net.sendShot({ x1: muzzle.x, y1: muzzle.y, z1: muzzle.z, x2: end.x, y2: end.y, z2: end.z, h: hit.id ?? '', k: kind, hs: hit.head });
   }
 
-  private melee(player: Player, range: number, kind: 'f' | 'b'): void {
+  private melee(player: Player, range: number, kind: 'f' | 'b' | 'k'): void {
     const p = player.object.position;
     const fx = Math.sin(player.object.rotation.y);
     const fz = Math.cos(player.object.rotation.y);
@@ -258,10 +259,10 @@ export class Combat {
       playShot(1 / (1 + dist * 0.12));
     }
     if (m.h === this.d.net.id && !this.dead && this.invuln <= 0) {
-      const base = m.k === 'f' ? FIST_DAMAGE : m.k === 'b' ? BAT_DAMAGE : m.k === 'p' ? PISTOL_DAMAGE : AK_DAMAGE;
+      const base = m.k === 'k' ? KICK_DAMAGE : m.k === 'f' ? FIST_DAMAGE : m.k === 'b' ? BAT_DAMAGE : m.k === 'p' ? PISTOL_DAMAGE : AK_DAMAGE;
       const dmg = m.hs && (m.k === 'r' || m.k === 'p') ? base * 2 : base;
-      if (m.k === 'f' || m.k === 'b') this.player?.flinch();
-      this.damage(dmg, m.id, { f: 'PUNHO', b: 'TACO', p: 'PISTOLA', r: 'AK-47' }[m.k]);
+      if (m.k === 'f' || m.k === 'b' || m.k === 'k') this.player?.flinch(m.k);
+      this.damage(dmg, m.id, { f: 'PUNHO', k: 'CHUTE', b: 'TACO', p: 'PISTOLA', r: 'AK-47' }[m.k]);
     }
   }
 

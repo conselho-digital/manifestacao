@@ -54,7 +54,9 @@ export class Player {
   private modelRot0: number | null = null;
   private swingAlt = false;
   private punchN = 0;
+  private kickAlt = false;
   private hitN = 0;
+  private hitAlt = false;
   private combatT = 0; // tempo restante em modo de combate (guarda) depois de socar
   private lastHitAt = -1e9;
   private crouchK = 0; // 0 em pé, 1 agachado (suaviza a câmera)
@@ -91,22 +93,35 @@ export class Player {
   get weaponCode(): number { return ARMED_CODE[this.armed]; }
 
   /** Levou um golpe (soco, taco, bandeira): reações knife_hit_1, 2 e 3 em sequência (volta ao 1 se ficar 2,5 s sem apanhar). */
-  flinch(): void {
+  flinch(kind: 'f' | 'b' | 'k' = 'f'): void {
     if (this.mode !== 'ground') return;
     const now = performance.now();
     this.hitN = now - this.lastHitAt > 2500 ? 1 : this.hitN % 3 + 1;
     this.lastHitAt = now;
+    if (kind === 'k') {
+      this.hitAlt = !this.hitAlt;
+      this.swingT = 0.6;
+      this.animator?.restart(this.hitAlt ? 'hitk_2' : 'hitk_1');
+      return;
+    }
     this.swingT = this.hitN === 3 ? 0.8 : 0.4;
     this.animator?.restart(`hit_${this.hitN}`);
   }
 
-  /** Soco: combo de 4 animações. */
-  punch(): void {
-    if (this.mode !== 'ground') return;
-    this.punchN = this.punchN % 4 + 1; // combo: knife_1, 2, 3, 4 do seu arquivo
-    this.swingT = 0.55;
+  /** Combo corpo a corpo: soco, soco, soco e chute (alternando os 2 chutes). Retorna 'k' se foi chute. */
+  punch(): 'f' | 'k' {
+    if (this.mode !== 'ground') return 'f';
+    this.punchN = this.punchN % 4 + 1;
     this.combatT = 3; // fica em guarda por 3 s
+    if (this.punchN === 4) {
+      this.kickAlt = !this.kickAlt;
+      this.swingT = 0.6;
+      this.animator?.restart(this.kickAlt ? 'kick_2' : 'kick_1');
+      return 'k';
+    }
+    this.swingT = 0.55;
     this.animator?.restart(`punch_${this.punchN}`);
+    return 'f';
   }
 
   /** Golpe de taco (animação e trava a troca de clipe até acabar). */

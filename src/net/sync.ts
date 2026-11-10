@@ -31,8 +31,8 @@ export interface ShotMsg {
   x1: number; y1: number; z1: number;
   x2: number; y2: number; z2: number;
   h: string;
-  /** r = fuzil, f = soco, p = pistola, b = taco */
-  k: 'r' | 'f' | 'p' | 'b';
+  /** r = fuzil, f = soco, p = pistola, b = taco, k = chute */
+  k: 'r' | 'f' | 'p' | 'b' | 'k';
   /** tiro na cabeça */
   hs: boolean;
 }
@@ -102,7 +102,7 @@ function cleanShot(raw: unknown): ShotMsg | null {
   return {
     id: m.id,
     x1: n[0]!, y1: n[1]!, z1: n[2]!, x2: n[3]!, y2: n[4]!, z2: n[5]!,
-    h, k: m.k === 'f' || m.k === 'p' || m.k === 'b' ? m.k : 'r', hs: m.hs === true,
+    h, k: m.k === 'f' || m.k === 'p' || m.k === 'b' || m.k === 'k' ? m.k : 'r', hs: m.hs === true,
   };
 }
 
