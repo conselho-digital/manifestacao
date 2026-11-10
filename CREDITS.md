@@ -30,3 +30,4 @@ O restante da cidade é gerado por código (`src/game/city.ts`), inspirado na ma
 - Carros Blista Compact e Buffalo (DFF/TXD fornecidos pelo usuário, convertidos para GLB; texturas genéricas de veículo do jogo original ausentes: cores sólidas).
 - Bandeira da Turquia (shovel.dff) e placa de trânsito (shovel.dff, créditos do readme: Timske, MFCL).
 - VW Gol 2009 PMESP (BR-Projects: Kastor, Aleandro, Tiago, Caio; edição PMESP: Thiago), simplificado para ~30 mil triângulos.
+- Motos Harley-Davidson Black Death (freeway.dff) e Triumph Speed Triple (pcj600.dff), convertidas e simplificadas.

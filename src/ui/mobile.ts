@@ -1,7 +1,7 @@
 import { ICON } from './icons';
 import { CARS } from '../game/vehicle';
 import { COLLIDERS, MAP, PARKS, placeName, ROADS } from '../game/map';
-import { addLook, queueCrouch, queueInteract, queueJump, queueReload, queueSwitch, setAim, setFire, setPedals, setSprint, setTouchVector } from '../game/input';
+import { addLook, queueCrouch, queueInteract, queueJump, queueReload, queueSwitch, setAim, setFire, setPedals, setSprint, setTouchVector, setWheelie } from '../game/input';
 
 /** Dados do jogo que o HUD mostra (preenchidos pelo main a cada quadro). */
 export interface HudState {
@@ -10,6 +10,7 @@ export interface HudState {
   z: number;
   yaw: number;
   driving: boolean;
+  bike: boolean;
   kmh: number;
   remotes: { name: string; x: number; z: number }[];
   players: number;
@@ -54,6 +55,8 @@ const CSS = `
 .m-hud.driving .foot,.m-hud.driving .m-stick{display:none!important}
 .m-steerL,.m-steerR{bottom:calc(var(--u)*10);width:calc(var(--u)*17);height:calc(var(--u)*17);}
 .m-steerL .lbl,.m-steerR .lbl{font-size:calc(var(--u)*8)}
+.m-wheelie{left:calc(var(--u)*44);bottom:calc(var(--u)*10);width:calc(var(--u)*17);height:calc(var(--u)*17)}
+.m-hud:not(.bike) .m-wheelie{display:none!important}
 .m-steerL{left:calc(var(--u)*6)}
 .m-steerR{left:calc(var(--u)*25)}
 .m-hud:not(.driving) .car{display:none!important}
@@ -387,12 +390,13 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   holdButton(circle(hud, 'm-hand car', ICON.handbrake, null), () => { hand = true; pedals(); }, () => { hand = false; pedals(); });
 
   // No carro: dois botões para virar para os lados (no lugar do joystick)
+  holdButton(circle(hud, 'm-wheelie car', ICON.up, null), () => setWheelie(true), () => setWheelie(false));
   let steer = 0;
   const applySteer = (): void => setTouchVector(steer, 0, steer !== 0);
   holdButton(circle(hud, 'm-steerL car', null, '◀'), () => { steer = -1; applySteer(); }, () => { steer = steer === -1 ? 0 : steer; applySteer(); });
   holdButton(circle(hud, 'm-steerR car', null, '▶'), () => { steer = 1; applySteer(); }, () => { steer = steer === 1 ? 0 : steer; applySteer(); });
 
-  // Animações (menu)
+
 
   // Joystick (a pé: anda; no carro: só esterça)
   const stick = make('m-stick', hud);
@@ -478,6 +482,7 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
     addChat,
     update(s, dt): void {
       hud.classList.toggle('driving', s.driving);
+      hud.classList.toggle('bike', s.driving && s.bike);
       if (!s.driving && steer !== 0) { steer = 0; applySteer(); } // saiu do carro com o dedo no botão
       hud.classList.toggle('near-car', s.nearCar);
       if (prev && dt > 0) {

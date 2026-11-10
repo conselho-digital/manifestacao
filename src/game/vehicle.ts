@@ -4,11 +4,13 @@ import { COLLIDERS, MAP } from './map';
 import { EngineSound } from './audio';
 
 export const CAR_MODELS = ['blistac', 'buffalo', 'clover', 'gol'] as const;
+export const BIKE_MODELS = ['harley', 'triumph'] as const;
+const isBikeModel = (m?: string): boolean => (BIKE_MODELS as readonly string[]).includes(m ?? '');
 const loader = new GLTFLoader();
 const modelCache = new Map<string, Promise<THREE.Object3D>>();
 const loadModel = (name: string): Promise<THREE.Object3D> => {
   let p = modelCache.get(name);
-  if (!p) { p = loader.loadAsync(`/models/vehicles/${name}.glb`).then((g) => g.scene); modelCache.set(name, p); }
+  if (!p) { p = loader.loadAsync(`/models/${isBikeModel(name) ? 'bikes' : 'vehicles'}/${name}.glb`).then((g) => g.scene); modelCache.set(name, p); }
   return p;
 };
 
@@ -44,7 +46,7 @@ export function buildCarVisual(src: THREE.Object3D, colorHex: number): { group: 
   const group = new THREE.Group();
   const body = model.getObjectByName('body');
   if (body) group.add(body);
-  for (const name of ['wheel_FL', 'wheel_FR', 'wheel_BL', 'wheel_BR']) {
+  for (const name of ['wheel_FL', 'wheel_FR', 'wheel_BL', 'wheel_BR', 'wheel_F', 'wheel_R']) {
     const node = model.getObjectByName(name);
     if (!node) continue;
     const pivot = new THREE.Group(); // pivô: esterça sem atrapalhar o giro
@@ -76,7 +78,12 @@ export class Car {
   private wheels: Record<string, THREE.Object3D>;
   private spin = 0;
   private readonly color: number;
-  private readonly engine = new EngineSound();
+  readonly bike: boolean;
+  private readonly engine: EngineSound;
+  /** empinada (rad) e inclinação lateral da moto */
+  private tilt = 0;
+  private lean = 0;
+  private axle = new THREE.Vector3(0, 0.35, -0.9);
   private lastX = 0;
   private lastZ = 0;
   /** velocidade estimada por quem só vê o carro (motorista remoto) */
@@ -84,6 +91,8 @@ export class Car {
 
   constructor(readonly id: number, x: number, z: number, heading: number, color: number, model?: string) {
     this.color = color;
+    this.bike = isBikeModel(model);
+    this.engine = new EngineSound(this.bike ? 'bike' : 'car');
     this.root = new THREE.Group(); // o modelo GLB entra quando carregar
     this.wheels = {};
     this.x = x;
@@ -93,25 +102,46 @@ export class Car {
     if (model) void loadModel(model).then((src) => this.useModel(src));
   }
 
+  private body: THREE.Group | null = null;
+  private bodyBase = new THREE.Vector3();
+
   private useModel(src: THREE.Object3D): void {
     const v = buildCarVisual(src, this.color);
     this.root.clear();
-    this.root.add(v.group);
+    if (this.bike) {
+      // a moto inteira (corpo e rodas) vai dentro de um grupo que empina/inclina
+      const inner = new THREE.Group();
+      inner.add(v.group);
+      this.body = inner;
+      this.bodyBase.set(0, 0, 0);
+      const rear = v.wheels['wheel_R'];
+      if (rear) this.axle.set(0, rear.position.y + v.group.position.y, rear.position.z);
+      this.root.add(inner);
+    } else this.root.add(v.group);
     this.wheels = v.wheels;
   }
 
   /** Dirige: acelerador, freio e freio de mão; steer -1..1 (direita +). */
-  drive(dt: number, gas: boolean, brake: boolean, hand: boolean, steer: number): void {
+  drive(dt: number, gas: boolean, brake: boolean, hand: boolean, steer: number, wheelie = false): void {
     const f = this.speed;
-    if (gas) this.speed += (f < -0.5 ? BRAKE : ACCEL) * dt;
+    const bike = this.bike;
+    const accel = bike ? 15 : ACCEL;
+    const maxSpeed = bike ? 20 : MAX_SPEED;
+    const turn = bike ? 2.5 : TURN_RATE;
+    const radius = bike ? 0.7 : RADIUS;
+    // empinar: só com velocidade; a roda da frente sobe até ~40° e volta ao soltar
+    const wantTilt = bike && wheelie && this.speed > 3 ? 0.72 : 0;
+    this.tilt += (wantTilt - this.tilt) * Math.min(1, dt * (wantTilt > this.tilt ? 3 : 5));
+    if (gas) this.speed += (f < -0.5 ? BRAKE : accel * (this.tilt > 0.3 ? 1.2 : 1)) * dt;
     else if (brake) this.speed -= (f > 0.5 ? BRAKE : ACCEL * 0.6) * dt; // freia e depois dá ré
     else this.speed -= Math.sign(f) * Math.min(Math.abs(f), DRAG * dt);
     if (hand) this.speed -= Math.sign(this.speed) * Math.min(Math.abs(this.speed), HAND_BRAKE * dt);
-    this.speed = THREE.MathUtils.clamp(this.speed, -MAX_REVERSE, MAX_SPEED);
+    this.speed = THREE.MathUtils.clamp(this.speed, bike ? -4 : -MAX_REVERSE, maxSpeed);
 
     // Só esterça andando; com o freio de mão o carro "derrapa" (gira mais)
     const grip = THREE.MathUtils.clamp(this.speed / 4, -1, 1) * (hand ? 1.7 : 1);
-    this.heading -= steer * TURN_RATE * grip * dt;
+    this.heading -= steer * turn * grip * (1 - this.tilt * 0.8) * dt;
+    this.lean += (-steer * Math.min(1, Math.abs(this.speed) / 10) * 0.45 - this.lean) * Math.min(1, dt * 6);
     this.x += Math.sin(this.heading) * this.speed * dt;
     this.z += Math.cos(this.heading) * this.speed * dt;
 
@@ -127,8 +157,8 @@ export class Car {
       const dx = this.x - px;
       const dz = this.z - pz;
       const d = Math.hypot(dx, dz);
-      if (d < RADIUS) {
-        if (d > 1e-6) { this.x = px + (dx / d) * RADIUS; this.z = pz + (dz / d) * RADIUS; }
+      if (d < radius) {
+        if (d > 1e-6) { this.x = px + (dx / d) * radius; this.z = pz + (dz / d) * radius; }
         hit = true;
       }
     }
@@ -157,10 +187,16 @@ export class Car {
   private apply(steer: number, dt = 0): void {
     this.root.position.set(this.x, 0, this.z);
     this.root.rotation.y = this.heading;
-    this.spin += (this.speed * dt) / 0.36;
+    this.spin += (this.speed * dt) / (this.bike ? 0.33 : 0.36);
+    if (this.bike && this.body) {
+      // empina em torno do eixo traseiro e inclina nas curvas
+      this.body.rotation.set(-this.tilt, 0, this.lean);
+      const a = this.axle;
+      this.body.position.copy(a).sub(a.clone().applyEuler(this.body.rotation)).add(this.bodyBase);
+    }
     for (const [name, pivot] of Object.entries(this.wheels)) {
       const front = name.startsWith('wheel_F');
-      pivot.rotation.y = front ? -steer * 0.45 : 0;
+      pivot.rotation.y = front && !this.bike ? -steer * 0.45 : 0;
       (pivot.children[0] as THREE.Object3D).rotation.x = this.spin;
     }
   }
@@ -183,9 +219,12 @@ export function createCars(): THREE.Group {
     [-26, -9, Math.PI / 2, 0x2e86c1],
     [10, 9, -Math.PI / 2, 0xf1c40f],
     [-40, 9, -Math.PI / 2, 0xecf0f1],
+    [50, -9, Math.PI / 2, 0x888888],
+    [-8, 9, -Math.PI / 2, 0x888888],
   ];
   spawn.forEach(([x, z, h, c], i) => {
-    const car = new Car(i, x, z, h, c, CAR_MODELS[i % CAR_MODELS.length]);
+    const model = i < 4 ? CAR_MODELS[i % CAR_MODELS.length] : BIKE_MODELS[i - 4];
+    const car = new Car(i, x, z, h, c, model);
     CARS.push(car);
     group.add(car.root);
   });

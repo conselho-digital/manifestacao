@@ -27,6 +27,8 @@ export interface InputState {
   gas: boolean;
   brake: boolean;
   handbrake: boolean;
+  /** moto: empinar */
+  wheelie: boolean;
 }
 
 const keys = new Set<string>();
@@ -51,6 +53,7 @@ let mouseAim = false;
 let padGas = false;
 let padBrake = false;
 let padHand = false;
+let padWheelie = false;
 
 window.addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLInputElement) return;
@@ -75,6 +78,7 @@ export const queueEmote = (id: string): void => { emoteQ = id; };
 export const setSprint = (v: boolean): void => { sprintHeld = v; };
 export const setFire = (v: boolean): void => { fireHeld = v; };
 export const setAim = (v: boolean): void => { aimOn = v; };
+export const setWheelie = (v: boolean): void => { padWheelie = v; };
 export const setPedals = (gas: boolean, brake: boolean, hand: boolean): void => { padGas = gas; padBrake = brake; padHand = hand; };
 export const setWalkClip = (id: string): void => { walkClip = id; };
 export const getWalkClip = (): string => walkClip;
@@ -134,6 +138,7 @@ export function readInput(): InputState {
     gas: keys.has('KeyW') || keys.has('ArrowUp') || padGas,
     brake: keys.has('KeyS') || keys.has('ArrowDown') || padBrake,
     handbrake: keys.has('Space') || padHand,
+    wheelie: keys.has('KeyV') || padWheelie,
   };
   jumpQ = false;
   climbQ = false;

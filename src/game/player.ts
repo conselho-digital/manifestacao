@@ -79,6 +79,7 @@ export class Player {
     return CARS.some((c) => c.driver === null && Math.hypot(c.x - p.x, c.z - p.z) < 3.5);
   }
   get isCrouching(): boolean { return this.crouching; }
+  get isBike(): boolean { return !!this.car?.bike; }
   get isDriving(): boolean { return this.mode === 'drive'; }
   get carSpeed(): number { return this.car ? this.car.speed : 0; }
   /** 0 nada, 1 fuzil, 2 fuzil mirando, 3 taco, 4 pistola, 5 pistola mirando (enviado aos outros) */
@@ -300,7 +301,7 @@ export class Player {
     const car = this.car!;
     if (input.interact) { this.exitCar(); return; }
     // No carro: acelerador, freio e freio de mão; o joystick (A/D) só esterça
-    car.drive(dt, input.gas, input.brake, input.handbrake, input.x);
+    car.drive(dt, input.gas, input.brake, input.handbrake, input.x, input.wheelie);
     this.object.position.set(car.x, 0, car.z);
     this.heading = car.heading;
     this.object.rotation.y = car.heading;

@@ -128,6 +128,7 @@ function loop(): void {
         name: profileName,
         x: p.position.x, z: p.position.z, yaw,
         driving: player.isDriving,
+        bike: player.isBike,
         kmh: Math.abs(player.carSpeed) * 3.6,
         remotes: [...remotes.values()].map((r) => ({ name: r.info.name, x: r.root.position.x, z: r.root.position.z })),
         players: remotes.size + 1, maxPlayers: 30,
