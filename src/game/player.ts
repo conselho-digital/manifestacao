@@ -190,8 +190,8 @@ export class Player {
     const move = forward.multiplyScalar(input.y).add(right.multiplyScalar(input.x));
     if (moving && move.lengthSq() > 1e-6) {
       const speed = this.crouching ? CROUCH_SPEED
-        : facesAim(this.armed) ? AIM_SPEED
-          : input.sprint ? SPRINT_SPEED : WALK_SPEED;
+        : this.armed === 'aim' || this.armed === 'pistol_aim' ? AIM_SPEED
+          : input.sprint ? SPRINT_SPEED : facesAim(this.armed) ? AIM_SPEED : WALK_SPEED;
       const dir = move.clone().normalize();
       this.moveHoriz(dir.x * speed * dt, dir.z * speed * dt);
       this.heading = Math.atan2(dir.x, dir.z);

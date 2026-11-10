@@ -163,8 +163,8 @@ export class Car {
     const turn = bike ? 2.5 : TURN_RATE;
     const radius = bike ? 0.7 : RADIUS;
     // empinar: só com velocidade; a roda da frente sobe até ~40° e volta ao soltar
-    const wantTilt = bike && wheelie && this.speed > 3 ? 0.72 : 0;
-    this.tilt += (wantTilt - this.tilt) * Math.min(1, dt * (wantTilt > this.tilt ? 3 : 5));
+    const wantTilt = bike && wheelie && gas && this.speed > 6 ? 0.72 : 0; // só empina acelerando e com velocidade; senão a roda desce
+    this.tilt += (wantTilt - this.tilt) * Math.min(1, dt * (wantTilt > this.tilt ? 3 : (gas ? 7 : 12)));
     if (gas) this.speed += (f < -0.5 ? BRAKE : accel * (this.tilt > 0.3 ? 1.2 : 1)) * dt;
     else if (brake) this.speed -= (f > 0.5 ? BRAKE : ACCEL * 0.6) * dt; // freia e depois dá ré
     else this.speed -= Math.sign(f) * Math.min(Math.abs(f), DRAG * dt);
