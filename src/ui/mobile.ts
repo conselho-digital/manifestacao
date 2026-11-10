@@ -67,7 +67,7 @@ const CSS = `
 .m-bar b{display:block;width:calc(var(--u)*25);height:calc(var(--u)*3);border:calc(var(--u)*.3) solid #000;background:rgba(0,0,0,.55);position:relative}
 .m-bar b span{position:absolute;left:0;top:0;bottom:0;width:100%;transition:width .15s}
 .m-hp span{background:#69b25a}.m-ar span{background:#3d7be0}
-.m-place{position:fixed;left:calc(50% + var(--u)*15);top:calc(var(--u)*2.8);font-size:calc(var(--u)*3.8);letter-spacing:.03em;white-space:nowrap}
+.m-place{position:fixed;left:50%;transform:translateX(-50%);top:calc(var(--u)*2.8);font-size:calc(var(--u)*3.8);letter-spacing:.03em;white-space:nowrap}
 .m-money{position:fixed;right:calc(var(--u)*15.8);top:calc(var(--u)*2.2);font-size:calc(var(--u)*5);color:#d9d9d9}
 .m-speed{position:fixed;right:calc(var(--u)*15.8);top:calc(var(--u)*9.5);width:calc(var(--u)*11);height:calc(var(--u)*2);border:calc(var(--u)*.3) solid #000;background:rgba(0,0,0,.5)}
 .m-speed span{display:block;height:100%;background:#c0392b;width:0}
@@ -393,7 +393,6 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   holdButton(circle(hud, 'm-steerR car', null, '▶'), () => { steer = 1; applySteer(); }, () => { steer = steer === 1 ? 0 : steer; applySteer(); });
 
   // Animações (menu)
-  holdButton(circle(hud, 'm-anim', ICON.anim, 'Animações'), opts.onAnimations);
 
   // Joystick (a pé: anda; no carro: só esterça)
   const stick = make('m-stick', hud);
