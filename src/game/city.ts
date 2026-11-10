@@ -4,7 +4,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { addBox, COLLIDERS, MAP, PARKS, PLACES, ROADS, TREES, type Rect } from './map';
 import { buildGrayTower, TOWER } from './tower';
 import { HEIGHT, makeTrees, type Species, type TreeSpec } from './trees';
-import { CAR_MODELS, loadCarVisual } from './vehicle';
+import { CAR_MODELS, loadCarVisual, TRAFFIC } from './vehicle';
 
 // Cidade inspirada na maquete da Av. Paulista (SP). O layout é escrito "como na foto" (x para a direita,
 // z para o norte) e convertido para o mundo espelhando o eixo X (R(): x_mundo = -x_foto).
@@ -365,23 +365,12 @@ const flatRect = (r: Rect, y: number, tex: THREE.Texture | null, color = 0xfffff
 
 // ---------- trânsito ao fundo (decorativo, sem colisão) ----------
 
-interface Ambient { obj: THREE.Object3D; dir: 1 | -1; speed: number }
-const ambient: Ambient[] = [];
 
 /** Carro decorativo: os mesmos modelos dos carros dirigíveis (Blista, Buffalo e Clover). */
 function ambientVehicle(color: number, model: string): THREE.Group {
   const g = new THREE.Group();
   void loadCarVisual(model, color).then((v) => g.add(v));
   return g;
-}
-
-/** Anda os carros e ônibus do fundo (chame todo quadro). */
-export function updateCity(dt: number): void {
-  for (const a of ambient) {
-    a.obj.position.x += a.dir * a.speed * dt;
-    if (a.obj.position.x > HX + 12) a.obj.position.x = -HX - 12;
-    if (a.obj.position.x < -HX - 12) a.obj.position.x = HX + 12;
-  }
 }
 
 // ---------- a cidade ----------
@@ -393,7 +382,7 @@ export function createCity(): THREE.Group {
   PARKS.length = 0;
   PLACES.length = 0;
   footprints.length = 0;
-  ambient.length = 0;
+  TRAFFIC.length = 0;
   TREES.length = 0;
   ROADS.push(AVENUE, ...STREETS);
   PARKS.push(TRIANON);
@@ -596,7 +585,7 @@ export function createCity(): THREE.Group {
     o.position.set(x, 0, z);
     o.rotation.y = dir === 1 ? Math.PI / 2 : -Math.PI / 2;
     city.add(o);
-    ambient.push({ obj: o, dir, speed });
+    TRAFFIC.push({ obj: o, dir, speed, stopT: 0, wobble: 0 });
   }
 
   // Árvores: parque denso (carvalhos, pinheiros, bordos, bétulas), calçadas, ruas e praça. Alturas reais.

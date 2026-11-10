@@ -212,8 +212,35 @@ export class Car {
         hit = true;
       }
     }
+    // trânsito da avenida: o carro é barrado e o trânsito para e balança
+    for (const t of TRAFFIC) {
+      for (const [ax, az, ar] of this.circles()) for (const [bx, bz, br] of trafficCircles(t)) {
+        const dx = ax - bx;
+        const dz = az - bz;
+        const d = Math.hypot(dx, dz);
+        const min = ar + br;
+        if (d >= min || d < 1e-6) continue;
+        const push = (min - d) / d;
+        this.x += dx * push;
+        this.z += dz * push;
+        if (Math.abs(this.speed) > 3) { t.stopT = Math.max(t.stopT, 1.2); t.wobble = 1; }
+        hit = true;
+      }
+    }
     if (hit) this.speed *= -0.25;
     this.apply(steer, dt);
+  }
+
+  private pushX = 0;
+  private pushZ = 0;
+  private wobble = 0;
+  /** Levou um golpe/tiro: abala e, se estiver parado, desliza um pouco. */
+  bump(dx: number, dz: number, strength: number): void {
+    this.wobble = Math.max(this.wobble, 0.5 + strength * 0.2);
+    if (this.driver !== null) return;
+    const d = Math.hypot(dx, dz) || 1;
+    this.pushX += (dx / d) * strength;
+    this.pushZ += (dz / d) * strength;
   }
 
   /** Círculos de colisão (x, z, raio) no chão. */
@@ -234,6 +261,18 @@ export class Car {
 
   /** Motor: toca quando há motorista; mais alto perto de quem ouve (lx, lz). Chame todo quadro. */
   updateEngine(dt: number, lx: number, lz: number): void {
+    if (Math.abs(this.pushX) + Math.abs(this.pushZ) > 0.01 && this.driver === null) {
+      this.x += this.pushX * dt;
+      this.z += this.pushZ * dt;
+      const k = Math.exp(-dt * 3);
+      this.pushX *= k;
+      this.pushZ *= k;
+      this.root.position.set(this.x, 0, this.z);
+    }
+    if (this.wobble > 0) {
+      this.wobble = Math.max(0, this.wobble - dt * 2.5);
+      this.root.rotation.z = Math.sin(performance.now() * 0.05) * this.wobble * 0.04;
+    }
     // portas: abrem enquanto doorT > 0,25 e fecham no final
     this.doorOpen += ((this.doorT > 0.25 ? 1 : 0) - this.doorOpen) * Math.min(1, dt * 10);
     if (this.doorT > 0) this.doorT -= dt;
@@ -277,6 +316,57 @@ export class Car {
 }
 
 export const CARS: Car[] = [];
+
+/** Carro do trânsito da avenida (anda sozinho, ao longo de X). */
+export interface Traffic { obj: THREE.Object3D; dir: 1 | -1; speed: number; stopT: number; wobble: number }
+export const TRAFFIC: Traffic[] = [];
+
+/** Alvo de colisão: 2 círculos por carro. `vel` = velocidade (m/s) no plano; `hit` aplica um empurrão/abalo. */
+export interface Hittable {
+  circles: [number, number, number][];
+  vx: number; vz: number;
+  hit: (dx: number, dz: number, strength: number) => void;
+}
+
+const trafficCircles = (t: Traffic): [number, number, number][] => [[t.obj.position.x - 1.15, t.obj.position.z, 1.0], [t.obj.position.x + 1.15, t.obj.position.z, 1.0]];
+
+/** Tudo que bate: carros dirigíveis (menos `except`) e o trânsito. */
+export function hittables(except?: Car): Hittable[] {
+  const out: Hittable[] = [];
+  for (const c of CARS) {
+    if (c === except || c.driver === 'local') continue;
+    out.push({
+      circles: c.circles(), vx: Math.sin(c.heading) * c.movingSpeed, vz: Math.cos(c.heading) * c.movingSpeed,
+      hit: (dx, dz, st) => c.bump(dx, dz, st),
+    });
+  }
+  for (const t of TRAFFIC) {
+    out.push({
+      circles: trafficCircles(t), vx: t.stopT > 0 ? 0 : t.dir * t.speed, vz: 0,
+      hit: (dx, dz, st) => { t.stopT = Math.max(t.stopT, 0.6 + st * 0.5); t.wobble = Math.max(t.wobble, 0.5 + st * 0.2); void dx; void dz; },
+    });
+  }
+  return out;
+}
+
+/** Anda o trânsito: para quando algo (jogador ou veículo) está na frente. */
+export function updateTraffic(dt: number, blockers: [number, number][]): void {
+  for (const t of TRAFFIC) {
+    const { x, z } = t.obj.position;
+    let blocked = false;
+    for (const [bx, bz] of blockers) {
+      const ahead = (bx - x) * t.dir;
+      if (ahead > 0 && ahead < 7 && Math.abs(bz - z) < 2.2) { blocked = true; break; }
+    }
+    if (t.stopT > 0) t.stopT -= dt;
+    const go = t.stopT <= 0 && !blocked;
+    t.obj.position.x += t.dir * t.speed * (go ? 1 : 0) * dt;
+    if (t.obj.position.x > 122) t.obj.position.x = -122;
+    if (t.obj.position.x < -122) t.obj.position.x = 122;
+    t.wobble = Math.max(0, t.wobble - dt * 2.5);
+    t.obj.rotation.z = Math.sin(performance.now() * 0.05) * t.wobble * 0.04;
+  }
+}
 
 /** Atualiza o som de motor de todos os carros (o ouvinte é o jogador). */
 export function updateEngines(dt: number, lx: number, lz: number): void {

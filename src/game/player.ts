@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { COLLIDERS, MAP, rayBox, TREES, type Box } from './map';
 import type { InputState } from './input';
-import { CARS, type Car } from './vehicle';
+import { CARS, hittables, type Car } from './vehicle';
 import { ARMED_CODE, facesAim, type Animator, type Armed } from './anim';
 import type { WeaponVisual } from './weapons';
 
@@ -389,16 +389,15 @@ export class Player {
   private checkRunOver(): boolean {
     const p = this.object.position;
     if (p.y > 1.6) return false;
-    for (const car of CARS) {
-      if (car.driver === null || car.driver === 'local') continue;
-      const sp = car.movingSpeed;
-      if (Math.abs(sp) < 4.5) continue;
-      for (const [cx, cz, r] of car.circles()) {
+    for (const h of hittables()) {
+      const sp = Math.hypot(h.vx, h.vz);
+      if (sp < 4.5) continue;
+      for (const [cx, cz, r] of h.circles) {
         const dx = p.x - cx;
         const dz = p.z - cz;
         if (Math.hypot(dx, dz) > RADIUS + r + 0.15) continue;
-        const dir = new THREE.Vector2(Math.sin(car.heading) * Math.sign(sp), Math.cos(car.heading) * Math.sign(sp));
-        this.koVel.copy(dir).multiplyScalar(Math.min(9, Math.abs(sp) * 0.9)).add(new THREE.Vector2(dx, dz).normalize().multiplyScalar(2));
+        const dir = new THREE.Vector2(h.vx / sp, h.vz / sp);
+        this.koVel.copy(dir).multiplyScalar(Math.min(9, sp * 0.9)).add(new THREE.Vector2(dx, dz).normalize().multiplyScalar(2));
         this.mode = 'ko';
         this.koT = 0;
         this.crouching = false;
@@ -515,9 +514,8 @@ export class Player {
     pos.x = THREE.MathUtils.clamp(pos.x + dx, -(MAP.halfX - 1), MAP.halfX - 1);
     pos.z = THREE.MathUtils.clamp(pos.z + dz, -(MAP.halfZ - 1), MAP.halfZ - 1);
     if (pos.y < 1.4) {
-      for (const car of CARS) {
-        if (car.driver === 'local') continue;
-        for (const [cx, cz, r] of car.circles()) {
+      for (const h of hittables()) {
+        for (const [cx, cz, r] of h.circles) {
           const ox = pos.x - cx;
           const oz = pos.z - cz;
           const d = Math.hypot(ox, oz);

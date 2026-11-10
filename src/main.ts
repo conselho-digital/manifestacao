@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createCamera, createRenderer, createScene, handleResize } from './game/scene';
-import { createCity, updateCity } from './game/city';
+import { createCity } from './game/city';
 import { createCharacter } from './game/characters';
 import { initMouse, readInput, takeLook, type InputState } from './game/input';
 import { Player } from './game/player';
@@ -10,7 +10,7 @@ import type { MobileHud } from './ui/mobile';
 import { Animator } from './game/anim';
 import { cleanChat, Net } from './net/sync';
 import { RemotePlayer } from './game/remote';
-import { createCars, updateEngines } from './game/vehicle';
+import { CARS, createCars, updateEngines, updateTraffic } from './game/vehicle';
 import { Combat } from './game/combat';
 import { WeaponVisual } from './game/weapons';
 import { warmUp } from './game/preload';
@@ -156,7 +156,10 @@ function loop(): void {
       combat.dead ? 0 : player.weaponCode, pitch, performance.now(),
     );
   }
-  updateCity(dt);
+  const blockers: [number, number][] = CARS.filter((c) => c.driver !== null).map((c) => [c.x, c.z]);
+  if (player) blockers.push([player.object.position.x, player.object.position.z]);
+  remotes.forEach((r) => blockers.push([r.root.position.x, r.root.position.z]));
+  updateTraffic(dt, blockers);
   if (player) updateEngines(dt, player.object.position.x, player.object.position.z);
   remotes.forEach((r) => r.update(dt));
   renderer.render(scene, camera);

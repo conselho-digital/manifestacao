@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { COLLIDERS, rayBox } from './map';
 import { playShot } from './audio';
 import { Tracers } from './weapons';
+import { hittables } from './vehicle';
 import type { Player } from './player';
 import type { RemotePlayer } from './remote';
 import type { InputState } from './input';
@@ -31,6 +32,8 @@ const KILL_MONEY = 100;
 const SPAWNS: [number, number][] = [[25, 16], [-10, -16], [64, 16], [-45, 16], [30, -16], [-60, -16], [-14, 16], [80, -16]];
 
 export interface StatRow { id: string; name: string; k: number; d: number }
+
+interface CarHit { h: ReturnType<typeof hittables>[number]; dx: number; dz: number; t: number }
 
 interface Hit { t: number; id: string | null; head: boolean }
 
@@ -67,6 +70,7 @@ export class Combat {
   private cd = 0;
   private fireHold = 0;
   private invuln = 0;
+  private lastCarHit: CarHit | null = null;
   private readonly tracers: Tracers;
   private readonly stats = new Map<string, StatRow>();
   private player: Player | null = null;
@@ -168,6 +172,7 @@ export class Combat {
     dir.normalize();
 
     // 1) onde o centro da tela aponta; 2) do cano até esse ponto (respeita paredes no meio do caminho)
+    this.lastCarHit = null;
     const aim = this.cast(camera.position, dir, RANGE);
     const target = camera.position.clone().addScaledVector(dir, aim.t);
     const muzzle = player.weaponVis ? player.weaponVis.muzzle(this.tmpO) : this.tmpO.copy(player.object.position).setY(1.3);
@@ -177,6 +182,9 @@ export class Combat {
     const shotDir = dist > 1 && toTarget.dot(dir) > 0 ? toTarget.divideScalar(dist) : dir.clone();
     const hit = this.cast(muzzle, shotDir, dist > 1 ? dist + 0.5 : RANGE);
     const end = muzzle.clone().addScaledVector(shotDir, hit.t);
+    const ch = this.lastCarHit as CarHit | null;
+    if (ch && Math.abs(ch.t - hit.t) < 1e-3) ch.h.hit(ch.dx, ch.dz, kind === 'p' ? 0.4 : 0.7);
+    this.lastCarHit = null;
 
     this.tracers.add(muzzle, end);
     player.weaponVis?.flash();
@@ -198,6 +206,14 @@ export class Combat {
       const dist = Math.hypot(dx, dz);
       if (dist < bestD && (dx * fx + dz * fz) / (dist || 1) > 0.4) { best = r; bestD = dist; }
     }
+    for (const h of hittables()) {
+      for (const [cx, cz, r] of h.circles) {
+        const dx = cx - p.x;
+        const dz = cz - p.z;
+        const dist = Math.hypot(dx, dz) - r;
+        if (dist < range && (dx * fx + dz * fz) / (Math.hypot(dx, dz) || 1) > 0.5) { h.hit(dx, dz, kind === 'b' ? 3 : 1.5); this.hitTick++; }
+      }
+    }
     if (best) this.hitTick++;
     this.d.net.sendShot({ x1: p.x, y1: p.y + 1.3, z1: p.z, x2: p.x + fx, y2: p.y + 1.3, z2: p.z + fz, h: best ? best.info.id : '', k: kind, hs: false });
   }
@@ -216,6 +232,13 @@ export class Combat {
       if (r.isDead || r.inCar) continue;
       const hit = rayVerticalSegment(o, d, r.root.position, 1.75, HIT_RADIUS);
       if (hit && hit.t < best) { best = hit.t; id = r.info.id; head = hit.s > 0.82; }
+    }
+    // veículos (carros, motos e trânsito): a bala para neles e eles balançam
+    for (const h of hittables()) {
+      for (const [cx, cz, r] of h.circles) {
+        const hit = rayVerticalSegment(o, d, new THREE.Vector3(cx, 0, cz), 1.5, r);
+        if (hit && hit.t < best) { best = hit.t; id = null; head = false; if (hit.t < maxT) this.lastCarHit = { h, dx: d.x, dz: d.z, t: hit.t }; }
+      }
     }
     return { t: best, id, head };
   }
