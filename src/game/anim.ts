@@ -120,9 +120,9 @@ const P3 = (x: number, y: number, z: number): THREE.Vector3 => new THREE.Vector3
 const CFG: Record<'rifle' | 'pistol', WeaponCfg> = {
   rifle: {
     // referência (foto): o fuzil atravessa o corpo na altura da barriga, cano para a esquerda e levemente para cima
-    low: { pos: P3(-0.05, 1.18, 0.3), pitch: -0.12, yaw: 0.6 },
+    low: { pos: P3(-0.02, 1.15, 0.28), pitch: -0.06, yaw: 1.1 },
     // yaw negativo: o cano converge para o ponto da mira (a câmera fica ~0,85 m à direita do personagem)
-    aim: { pos: P3(-0.12, 1.585, 0.2), pitch: 0, yaw: -0.05 },
+    aim: { pos: P3(-0.12, 1.42, 0.2), pitch: 0, yaw: -0.05 },
     gripR: P3(0, -0.055, 0.17), // empunhadura (coronha→cano: a arma tem 0,88 m e começa em z=-0,14)
     gripL: P3(0, -0.02, 0.5), // guarda-mão de madeira
   },
