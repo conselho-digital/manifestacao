@@ -42,7 +42,7 @@ export class EngineSound {
   update(on: boolean, speed: number, near: number, throttle = 1): void {
     if (!on && !this.osc) return;
     if (!this.start() || !ctx || !this.gain || !this.osc || !this.osc2 || !this.filter) return;
-    const rpm = Math.min(1, Math.abs(speed) / 14);
+    const rpm = Math.min(1, Math.abs(speed) / (this.kind === 'bike' ? 20 : 28));
     const bike = this.kind === 'bike';
     const f = bike ? 70 + rpm * 190 : 38 + rpm * 70; // marcha lenta, sobe com a velocidade
     const t = ctx.currentTime;

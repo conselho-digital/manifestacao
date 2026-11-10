@@ -20,12 +20,12 @@ export const loadModel = (name: string): Promise<THREE.Object3D> => {
   return p;
 };
 
-const MAX_SPEED = 14;
+const MAX_SPEED = 28; // 100 km/h (dobro do anterior)
 const MAX_REVERSE = 10; // dobro da ré anterior (5)
-const ACCEL = 11;
-const BRAKE = 20;
+const ACCEL = 18;
+const BRAKE = 30;
 const DRAG = 3;
-const HAND_BRAKE = 16;
+const HAND_BRAKE = 24;
 const TURN_RATE = 1.9;
 const RADIUS = 1.3;
 
@@ -173,7 +173,7 @@ export class Car {
 
     // Só esterça andando; com o freio de mão o carro "derrapa" (gira mais)
     const grip = THREE.MathUtils.clamp(this.speed / 4, -1, 1) * (hand ? 1.7 : 1);
-    this.heading -= steer * turn * grip * (1 - this.tilt * 0.8) * dt;
+    this.heading -= steer * turn * grip * (1 - this.tilt * 0.8) * Math.max(0.4, 1 - Math.abs(this.speed) / 45) * dt; // a alta velocidade a direção fica mais firme
     this.lean += (steer * Math.min(1, Math.abs(this.speed) / 10) * 0.45 - this.lean) * Math.min(1, dt * 6);
     this.x += Math.sin(this.heading) * this.speed * dt;
     this.z += Math.cos(this.heading) * this.speed * dt;

@@ -80,7 +80,10 @@ function gtaKey(name: string): string {
 }
 
 const FADE = 0.2;
+const CURL_AXIS = new THREE.Vector3(0, 0, 1);
 const JAB_TIME = 0.42;
+/** Distância do osso do pulso até o meio da palma (m): é a palma, não o pulso, que segura o cabo. */
+const PALM = 0.1;
 const X = new THREE.Vector3(1, 0, 0);
 const Y = new THREE.Vector3(0, 1, 0);
 const Z = new THREE.Vector3(0, 0, 1);
@@ -102,6 +105,7 @@ interface Arm {
   curU: THREE.Vector3; curF: THREE.Vector3;
 }
 
+interface Hand { fingers: THREE.Bone[]; side: 1 | -1 }
 interface Leg { thigh: THREE.Bone; calf: THREE.Bone; foot: THREE.Bone }
 
 interface Spine { mid: THREE.Bone; chest: THREE.Bone; neck: THREE.Bone; head: THREE.Bone }
@@ -118,8 +122,8 @@ const CFG: Record<'rifle' | 'pistol', WeaponCfg> = {
     low: { pos: P3(-0.1, 1.26, 0.27), pitch: 0.3, yaw: 0.07 },
     // yaw negativo: o cano converge para o ponto da mira (a câmera fica ~0,85 m à direita do personagem)
     aim: { pos: P3(-0.12, 1.585, 0.2), pitch: 0, yaw: -0.05 },
-    gripR: P3(0, -0.115, 0.04),
-    gripL: P3(0, -0.05, 0.33),
+    gripR: P3(0, -0.055, 0.17), // empunhadura (coronha→cano: a arma tem 0,88 m e começa em z=-0,14)
+    gripL: P3(0, -0.02, 0.5), // guarda-mão de madeira
   },
   pistol: {
     low: { pos: P3(-0.2, 1.02, 0.3), pitch: 0.5, yaw: 0 },
@@ -138,6 +142,7 @@ export class Animator {
   private current: THREE.AnimationAction | null = null;
   private clipName = '';
   private done = false;
+  isCarlos = false;
   private armW = 0; // 0 = braços do clipe, 1 = braços segurando o fuzil
   private aimK = 0; // 0 = fuzil baixo, 1 = fuzil no ombro
   private jabT = -1; // soco em andamento (0..1), -1 = nenhum
@@ -172,6 +177,7 @@ export class Animator {
     private arms: Arm[],
     private spine: Spine | null,
     private legs: Leg[],
+    private hands: Hand[],
   ) {
     mixer.addEventListener('finished', (e) => {
       if ((e as unknown as { action: THREE.AnimationAction }).action === this.current) this.done = true;
@@ -179,6 +185,7 @@ export class Animator {
     this.touched = [...arms.flatMap((a) => [a.u, a.f, a.h, ...(a.c ? [a.c] : [])])];
     if (spine) this.touched.push(spine.mid, spine.chest, spine.neck, spine.head);
     for (const l of legs) this.touched.push(l.thigh, l.calf, l.foot);
+    for (const h of hands) this.touched.push(...h.fingers);
     for (const b of this.touched) this.clean.set(b, b.quaternion.clone());
     this.updateRoot();
     this.footRest = this.lowestFoot();
@@ -245,8 +252,16 @@ export class Animator {
       return t && c && f ? [{ thigh: t, calf: c, foot: f }] : [];
     });
 
+    const hands = (['l', 'r'] as const).map((p): Hand => {
+      const names = isGta
+        ? [`${p} finger`, `${p} finger01`]
+        : (() => { const w = p === 'l' ? 'left' : 'right'; return ['1a', '1b', '1c', '2a', '2b', '2c'].map((k) => `arm ${w} finger ${k}`); })();
+      return { side: p === 'l' ? 1 : -1, fingers: names.map((n) => find(n)).filter((b): b is THREE.Bone => !!b) };
+    });
+
     const mixer = new THREE.AnimationMixer(root);
-    const a = new Animator(root, mixer, arms, spine, legs);
+    const a = new Animator(root, mixer, arms, spine, legs, hands);
+    a.isCarlos = !isGta;
     a.addClips = (file) => {
       for (const [name, clip] of Object.entries(file)) {
         const tracks: THREE.KeyframeTrack[] = [];
@@ -437,6 +452,8 @@ export class Animator {
         this.updateRoot();
       }
       for (const arm of this.arms) this.solveArm(arm, arm.side > 0 ? this.ride.grips[0] : this.ride.grips[1], 1, dt);
+      this.curlHand(1, 1);
+      this.curlHand(-1, 1);
       return;
     }
     const armed = this.armW >= 0.01;
@@ -463,6 +480,11 @@ export class Animator {
       this.weapon.quaternion.copy(frame.q);
     }
     if (armed) for (const arm of this.arms) this.poseArm(arm, frame, dt);
+    if (holding) {
+      // mãos fechadas no cabo: fuzil e taco nas duas; pistola na direita (e na esquerda ao mirar)
+      this.curlHand(-1, 1);
+      this.curlHand(1, kind === 'pistol' && this.armed !== 'pistol_aim' ? 0 : 1);
+    }
   }
 
   /** Pé mais baixo (altura no espaço do modelo, sem contar o quanto o modelo já desceu). */
@@ -545,7 +567,7 @@ export class Animator {
     const palm = (arm: Arm): THREE.Vector3 => {
       const hand = this.posIn(arm.h, new THREE.Vector3());
       const elbow = this.posIn(arm.f, new THREE.Vector3());
-      return hand.addScaledVector(hand.clone().sub(elbow).normalize(), 0.04);
+      return hand.addScaledVector(hand.clone().sub(elbow).normalize(), PALM);
     };
     const hr = palm(right);
     const hl = palm(left);
@@ -564,6 +586,22 @@ export class Animator {
     const yAxis = new THREE.Vector3().crossVectors(axis, xAxis);
     this.bat.position.copy(hr);
     this.bat.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, axis));
+  }
+
+  /** Fecha a mão em torno do cabo (w: 0 aberta, 1 fechada). Os dedos dobram no eixo local Z do osso. */
+  private curlHand(side: 1 | -1, w: number): void {
+    if (w < 0.01) return;
+    const hand = this.hands.find((h) => h.side === side);
+    if (!hand) return;
+    const dbg = (window as unknown as { __CURL?: number[] }).__CURL;
+    const ax = dbg ? new THREE.Vector3(dbg[0], dbg[1], dbg[2]) : CURL_AXIS;
+    const ang = (dbg?.[3] ?? 75) * (Math.PI / 180) * side * w;
+    hand.fingers.forEach((b, i) => {
+      const thumb = this.isCarlos ? i < 2 : false;
+      const a = ang * (thumb ? 0.45 : 1) * (this.isCarlos ? 0.75 : 1);
+      b.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(ax, a));
+      b.updateMatrixWorld(true);
+    });
   }
 
   private updateRoot(): void {
@@ -633,7 +671,7 @@ export class Animator {
       const palm = (arm: Arm): THREE.Vector3 => {
         const hand = this.posIn(arm.h, new THREE.Vector3());
         const elbow = this.posIn(arm.f, new THREE.Vector3());
-        return hand.addScaledVector(hand.clone().sub(elbow).normalize(), 0.04);
+        return hand.addScaledVector(hand.clone().sub(elbow).normalize(), PALM);
       };
       const hr = palm(right);
       const hl = palm(left);
@@ -665,7 +703,10 @@ export class Animator {
   }
 
   /** Leva a mão do braço até `wrist` (espaço do personagem) com peso `w` sobre o que o clipe fez. */
-  private solveArm(arm: Arm, wrist: THREE.Vector3, w: number, dt: number): void {
+  private solveArm(arm: Arm, target: THREE.Vector3, w: number, dt: number): void {
+    // o alvo é onde a PALMA deve ficar: o pulso fica um pouco antes, na direção do ombro
+    const sh0 = this.posIn(arm.u, new THREE.Vector3());
+    const wrist = target.clone().addScaledVector(target.clone().sub(sh0).normalize(), -PALM);
     // clavícula: acompanha um pouco o braço (evita o ombro "rasgar" quando o braço sobe)
     if (arm.c) {
       arm.c.updateMatrixWorld(true);
