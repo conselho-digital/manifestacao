@@ -10,7 +10,7 @@ import type { MobileHud } from './ui/mobile';
 import { Animator } from './game/anim';
 import { cleanChat, Net } from './net/sync';
 import { RemotePlayer } from './game/remote';
-import { createCars } from './game/vehicle';
+import { createCars, updateEngines } from './game/vehicle';
 import { Combat } from './game/combat';
 import { WeaponVisual } from './game/weapons';
 
@@ -152,6 +152,7 @@ function loop(): void {
     );
   }
   updateCity(dt);
+  if (player) updateEngines(dt, player.object.position.x, player.object.position.z);
   remotes.forEach((r) => r.update(dt));
   renderer.render(scene, camera);
   requestAnimationFrame(loop);

@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { COLLIDERS, MAP } from './map';
+import { EngineSound } from './audio';
 
 export const CAR_MODELS = ['blistac', 'buffalo', 'clover'] as const;
 const loader = new GLTFLoader();
@@ -12,7 +13,7 @@ const loadModel = (name: string): Promise<THREE.Object3D> => {
 };
 
 const MAX_SPEED = 14;
-const MAX_REVERSE = 5;
+const MAX_REVERSE = 10; // dobro da ré anterior (5)
 const ACCEL = 11;
 const BRAKE = 20;
 const DRAG = 3;
@@ -75,6 +76,11 @@ export class Car {
   private wheels: Record<string, THREE.Object3D>;
   private spin = 0;
   private readonly color: number;
+  private readonly engine = new EngineSound();
+  private lastX = 0;
+  private lastZ = 0;
+  /** velocidade estimada por quem só vê o carro (motorista remoto) */
+  private seenSpeed = 0;
 
   constructor(readonly id: number, x: number, z: number, heading: number, color: number, model?: string) {
     this.color = color;
@@ -130,6 +136,17 @@ export class Car {
     this.apply(steer, dt);
   }
 
+  /** Motor: toca quando há motorista; mais alto perto de quem ouve (lx, lz). Chame todo quadro. */
+  updateEngine(dt: number, lx: number, lz: number): void {
+    const moved = Math.hypot(this.x - this.lastX, this.z - this.lastZ) / Math.max(dt, 1e-3);
+    this.lastX = this.x;
+    this.lastZ = this.z;
+    const sp = this.driver === null ? 0 : Math.abs(this.speed) > 0.01 ? this.speed : moved;
+    this.seenSpeed += (sp - this.seenSpeed) * Math.min(1, dt * 5);
+    const d = Math.hypot(this.x - lx, this.z - lz);
+    this.engine.update(this.driver !== null, this.seenSpeed, Math.max(0, 1 - d / 45));
+  }
+
   setPose(x: number, z: number, heading: number): void {
     this.x = x;
     this.z = z;
@@ -150,6 +167,11 @@ export class Car {
 }
 
 export const CARS: Car[] = [];
+
+/** Atualiza o som de motor de todos os carros (o ouvinte é o jogador). */
+export function updateEngines(dt: number, lx: number, lz: number): void {
+  for (const c of CARS) c.updateEngine(dt, lx, lz);
+}
 
 /** Cria os carros parados do mapa. */
 export function createCars(): THREE.Group {
