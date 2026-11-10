@@ -14,7 +14,7 @@ const CAR_SEATS: Record<string, [number, number, number]> = { blistac: [0.48, -0
 const isBikeModel = (m?: string): boolean => (BIKE_MODELS as readonly string[]).includes(m ?? '');
 const loader = new GLTFLoader();
 const modelCache = new Map<string, Promise<THREE.Object3D>>();
-const loadModel = (name: string): Promise<THREE.Object3D> => {
+export const loadModel = (name: string): Promise<THREE.Object3D> => {
   let p = modelCache.get(name);
   if (!p) { p = loader.loadAsync(`/models/${isBikeModel(name) ? 'bikes' : 'vehicles'}/${name}.glb`).then((g) => g.scene); modelCache.set(name, p); }
   return p;

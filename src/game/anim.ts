@@ -66,7 +66,7 @@ const GTA_BONE_IDS: Record<string, number> = {
 };
 
 const cache = new Map<string, Promise<Clips<never>>>();
-function fetchJson(url: string): Promise<Clips<never>> {
+export function fetchJson(url: string): Promise<Clips<never>> {
   let p = cache.get(url);
   if (!p) {
     p = fetch(url).then((r) => r.json() as Promise<Clips<never>>);
@@ -128,6 +128,11 @@ const CFG: Record<'rifle' | 'pistol', WeaponCfg> = {
     gripL: P3(0.025, -0.075, -0.02),
   },
 };
+
+/** Baixa os dados de animação de antemão (Law e Carlos). */
+export function preloadAnimations(): Promise<unknown> {
+  return Promise.all(['/anims/ped.json', '/anims/ped-extra.json', '/anims/carlos.json', '/anims/carlos-extra.json'].map((u) => fetchJson(u).catch(() => undefined)));
+}
 
 export class Animator {
   private current: THREE.AnimationAction | null = null;

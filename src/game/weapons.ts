@@ -7,13 +7,13 @@ import type { Animator, Armed } from './anim';
 
 const loader = new GLTFLoader();
 let rifleSrc: Promise<THREE.Object3D> | null = null;
-const loadRifle = (): Promise<THREE.Object3D> => (rifleSrc ??= loader.loadAsync('/models/weapons/AK47.glb').then((g) => g.scene));
+export const loadRifle = (): Promise<THREE.Object3D> => (rifleSrc ??= loader.loadAsync('/models/weapons/AK47.glb').then((g) => g.scene));
 
 let flagSrc: Promise<THREE.Object3D> | null = null;
-const loadFlag = (): Promise<THREE.Object3D> => (flagSrc ??= loader.loadAsync('/models/weapons/flag-turkey.glb').then((g) => g.scene));
+export const loadFlag = (): Promise<THREE.Object3D> => (flagSrc ??= loader.loadAsync('/models/weapons/flag-turkey.glb').then((g) => g.scene));
 
 let signSrc: Promise<THREE.Object3D> | null = null;
-const loadSign = (): Promise<THREE.Object3D> => (signSrc ??= loader.loadAsync('/models/weapons/traffic-sign.glb').then((g) => g.scene));
+export const loadSign = (): Promise<THREE.Object3D> => (signSrc ??= loader.loadAsync('/models/weapons/traffic-sign.glb').then((g) => g.scene));
 
 let flashTex: THREE.Texture | null = null;
 function flashTexture(): THREE.Texture {
@@ -29,6 +29,12 @@ function flashTexture(): THREE.Texture {
   g.fillRect(0, 0, 64, 64);
   flashTex = new THREE.CanvasTexture(c);
   return flashTex;
+}
+
+/** Cópia visual de cada arma (para pré-carregar e compilar shaders). */
+export async function loadWeaponModels(): Promise<THREE.Object3D[]> {
+  const all = await Promise.all([loadRifle(), loadFlag(), loadSign()]);
+  return all.map((o) => o.clone(true));
 }
 
 /** AK-47 na mão do personagem (fica na frente do peito) + clarão do cano. */

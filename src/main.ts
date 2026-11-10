@@ -13,6 +13,7 @@ import { RemotePlayer } from './game/remote';
 import { createCars, updateEngines } from './game/vehicle';
 import { Combat } from './game/combat';
 import { WeaponVisual } from './game/weapons';
+import { warmUp } from './game/preload';
 
 const renderer = createRenderer();
 const scene = createScene();
@@ -36,6 +37,9 @@ const PITCH_MIN = -0.6; // olhando para cima
 const PITCH_MAX = 1.2; // quase vista de cima
 let pitch = PITCH_DEFAULT;
 let aimK = 0;
+
+// No menu: pré-carrega e aquece o mapa, os veículos e as armas para o jogo não engasgar
+void warmUp(renderer, scene, camera);
 
 const clock = new THREE.Clock();
 let player: Player | null = null;
