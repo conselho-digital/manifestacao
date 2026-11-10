@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { COLLIDERS, MAP } from './map';
 import { EngineSound } from './audio';
 
-export const CAR_MODELS = ['blistac', 'buffalo', 'clover'] as const;
+export const CAR_MODELS = ['blistac', 'buffalo', 'clover', 'gol'] as const;
 const loader = new GLTFLoader();
 const modelCache = new Map<string, Promise<THREE.Object3D>>();
 const loadModel = (name: string): Promise<THREE.Object3D> => {
