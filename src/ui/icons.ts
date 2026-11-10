@@ -3,6 +3,8 @@ const svg = (inner: string): string =>
   `<svg viewBox="0 0 24 24" width="100%" height="100%" fill="#fff" stroke="none">${inner}</svg>`;
 
 export const ICON = {
+  left: svg('<path d="M4 12l9-8v5h7v6h-7v5z"/>'),
+  right: svg('<path d="M20 12l-9-8v5H4v6h7v5z"/>'),
   up: svg('<path d="M12 4l8 9h-5v7H9v-7H4z"/>'),
   sign: svg('<path d="M12 2L2.5 17h19zM12 6.2L17.9 15H6.1z"/><path d="M11 17h2v5h-2z"/>'),
   pistol: svg('<path d="M3 8h14l2 1.5V12h-6l-1 2.5V18H7v-4.5L6 12H3z"/>'),

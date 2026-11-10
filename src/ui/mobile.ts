@@ -54,7 +54,6 @@ const CSS = `
 .m-hud.desktop .m-look,.m-hud.desktop .m-stick{display:none}
 .m-hud.driving .foot,.m-hud.driving .m-stick{display:none!important}
 .m-steerL,.m-steerR{bottom:calc(var(--u)*10);width:calc(var(--u)*17);height:calc(var(--u)*17);}
-.m-steerL .lbl,.m-steerR .lbl{font-size:calc(var(--u)*13)!important;line-height:1;max-width:none!important;margin:0!important}
 .m-wheelie{left:calc(var(--u)*44);bottom:calc(var(--u)*10);width:calc(var(--u)*17);height:calc(var(--u)*17)}
 .m-hud:not(.bike) .m-wheelie{display:none!important}
 .m-steerL{left:calc(var(--u)*6)}
@@ -393,8 +392,8 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   holdButton(circle(hud, 'm-wheelie car', ICON.up, null), () => setWheelie(true), () => setWheelie(false));
   let steer = 0;
   const applySteer = (): void => setTouchVector(steer, 0, steer !== 0);
-  holdButton(circle(hud, 'm-steerL car', null, '◀'), () => { steer = -1; applySteer(); }, () => { steer = steer === -1 ? 0 : steer; applySteer(); });
-  holdButton(circle(hud, 'm-steerR car', null, '▶'), () => { steer = 1; applySteer(); }, () => { steer = steer === 1 ? 0 : steer; applySteer(); });
+  holdButton(circle(hud, 'm-steerL car', ICON.left, null), () => { steer = -1; applySteer(); }, () => { steer = steer === -1 ? 0 : steer; applySteer(); });
+  holdButton(circle(hud, 'm-steerR car', ICON.right, null), () => { steer = 1; applySteer(); }, () => { steer = steer === 1 ? 0 : steer; applySteer(); });
 
 
 
