@@ -143,6 +143,8 @@ export class Animator {
   private clipName = '';
   private done = false;
   isCarlos = false;
+  /** giro do antebraço e da mão em torno do próprio eixo (rad): palma para dentro ao segurar */
+  armRoll = 0;
   private armW = 0; // 0 = braços do clipe, 1 = braços segurando o fuzil
   private aimK = 0; // 0 = fuzil baixo, 1 = fuzil no ombro
   private jabT = -1; // soco em andamento (0..1), -1 = nenhum
@@ -419,6 +421,9 @@ export class Animator {
     this.applyDrop();
     // braços por IK só quando o clipe não segura o fuzil sozinho (ou ao mirar no ombro)
     const kind = kindOf(this.armed);
+    const dbgRoll = (window as unknown as { __ROLL?: number }).__ROLL;
+    // segurando arma: palmas viradas uma para a outra (para dentro); no guidão/volante a palma fica para baixo
+    this.armRoll = dbgRoll !== undefined ? dbgRoll * (Math.PI / 180) : this.holdsWeapon && kind && !this.ride?.grips ? Math.PI / 2 : 0;
     const ikTarget = !this.holdsWeapon || kind === 'bat' || !kind ? 0 : kind === 'pistol' ? 1 : OWN_HOLD(this.clipName) ? (this.armed === 'aim' ? 1 : 0) : 1;
     this.armW += (ikTarget - this.armW) * Math.min(1, dt * 10);
     this.aimK += ((isAimPose(this.armed) ? 1 : 0) - this.aimK) * Math.min(1, dt * 9);
@@ -595,7 +600,7 @@ export class Animator {
     if (!hand) return;
     const dbg = (window as unknown as { __CURL?: number[] }).__CURL;
     const ax = dbg ? new THREE.Vector3(dbg[0], dbg[1], dbg[2]) : CURL_AXIS;
-    const ang = (dbg?.[3] ?? 75) * (Math.PI / 180) * side * w;
+    const ang = (dbg?.[3] ?? 75) * (Math.PI / 180) * (dbg?.[4] === 0 ? 1 : side) * w;
     hand.fingers.forEach((b, i) => {
       const thumb = this.isCarlos ? i < 2 : false;
       const a = ang * (thumb ? 0.45 : 1) * (this.isCarlos ? 0.75 : 1);
@@ -741,7 +746,8 @@ export class Animator {
     for (let i = 0; i < 3; i++) {
       const bone = bones[i]!;
       this.quatIn(bone.parent!, parentQ);
-      const world = deltas[i]!.clone().multiply(arm.q0[i]!);
+      let world = deltas[i]!.clone().multiply(arm.q0[i]!);
+      if (i > 0 && this.armRoll !== 0) world = new THREE.Quaternion().setFromAxisAngle(arm.curF, this.armRoll * arm.side).multiply(world);
       const target = parentQ.invert().multiply(world);
       bone.quaternion.slerp(target, w);
       bone.updateMatrixWorld(true);
