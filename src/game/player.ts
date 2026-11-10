@@ -2,12 +2,11 @@ import * as THREE from 'three';
 import { COLLIDERS, MAP, rayBox, TREES, type Box } from './map';
 import type { InputState } from './input';
 import { CARS, type Car } from './vehicle';
-import type { Animator, Armed } from './anim';
+import { ARMED_CODE, facesAim, type Animator, type Armed } from './anim';
 import type { WeaponVisual } from './weapons';
 
-const RUN_SPEED = 5;
-const WALK_SPEED = 1.8;
-const SPRINT_SPEED = 7.5;
+const WALK_SPEED = 2.1;
+const SPRINT_SPEED = 6.2;
 const CROUCH_SPEED = 1.9;
 const AIM_SPEED = 2.7; // andando com o fuzil no ombro
 const GRAVITY = -20;
@@ -47,6 +46,7 @@ export class Player {
   private car: Car | null = null;
   private armed: Armed = 'none';
   private crouching = false;
+  private swingT = 0;
   private crouchK = 0; // 0 em pé, 1 agachado (suaviza a câmera)
   /** direção do movimento em relação ao corpo: frente(+) e esquerda(+) */
   private moveF = 0;
@@ -76,8 +76,15 @@ export class Player {
   get isCrouching(): boolean { return this.crouching; }
   get isDriving(): boolean { return this.mode === 'drive'; }
   get carSpeed(): number { return this.car ? this.car.speed : 0; }
-  /** 0 punho, 1 fuzil, 2 fuzil mirando (enviado aos outros) */
-  get weaponCode(): number { return this.armed === 'aim' ? 2 : this.armed === 'rifle' ? 1 : 0; }
+  /** 0 nada, 1 fuzil, 2 fuzil mirando, 3 taco, 4 pistola, 5 pistola mirando (enviado aos outros) */
+  get weaponCode(): number { return ARMED_CODE[this.armed]; }
+
+  /** Golpe de taco (animação e trava a troca de clipe até acabar). */
+  swing(): void {
+    if (this.mode !== 'ground') return;
+    this.swingT = 0.7;
+    this.animator?.restart('bat_swing');
+  }
 
   /** Muda o que o personagem segura (braços e arma na mão). */
   setArmed(a: Armed): void {
@@ -157,8 +164,8 @@ export class Player {
     const move = forward.multiplyScalar(input.y).add(right.multiplyScalar(input.x));
     if (moving && move.lengthSq() > 1e-6) {
       const speed = this.crouching ? CROUCH_SPEED
-        : this.armed === 'aim' ? (input.walk ? WALK_SPEED : AIM_SPEED)
-          : input.sprint ? SPRINT_SPEED : input.walk ? WALK_SPEED : RUN_SPEED;
+        : facesAim(this.armed) ? AIM_SPEED
+          : input.sprint ? SPRINT_SPEED : WALK_SPEED;
       const dir = move.clone().normalize();
       this.moveHoriz(dir.x * speed * dt, dir.z * speed * dt);
       this.heading = Math.atan2(dir.x, dir.z);
@@ -167,7 +174,7 @@ export class Player {
       this.moveL = dir.x * Math.cos(yaw) - dir.z * Math.sin(yaw);
     }
     // Armado (em pé, andando, mirando ou atirando): o corpo acompanha para onde a câmera aponta
-    if (this.armed !== 'none') this.heading = yaw;
+    if (facesAim(this.armed)) this.heading = yaw;
 
     // Vertical
     const support = supportHeight(pos.x, pos.z, pos.y);
@@ -203,21 +210,22 @@ export class Player {
       this.landT -= dt;
       if (!moving) return; // termina o pouso parado
     }
-    const armed = this.armed !== 'none';
+    if (this.swingT > 0) { this.swingT -= dt; return; } // golpe de taco em andamento
+    const armed = facesAim(this.armed); // só o fuzil e a pistola mirando usam os passos de arma (de frente, de costas e de lado)
     if (this.crouching) {
       // agachado: andar para a frente ou para trás (de lado usa o andar para a frente)
       a.play(moving ? (armed && this.moveF < -0.5 ? 'crouch_bwd' : 'crouch_fwd') : 'crouch_idle');
     } else if (moving && armed && !input.sprint) {
       // com o fuzil o corpo olha para a mira: anda de frente, de costas ou de lado
       let clip: string;
-      if (Math.abs(this.moveF) >= Math.abs(this.moveL)) clip = this.moveF >= 0 ? (this.armed === 'aim' || input.walk ? 'gun_fwd' : 'run_armed') : 'gun_bwd';
+      if (Math.abs(this.moveF) >= Math.abs(this.moveL)) clip = this.moveF >= 0 ? ('gun_fwd') : 'gun_bwd';
       else clip = this.moveL > 0 ? 'gun_left' : 'gun_right';
-      a.play(a.has(clip) ? clip : 'run');
+      a.play(a.has(clip) ? clip : 'walk');
     } else if (moving) {
-      const clip = input.sprint ? 'sprint' : input.walk ? input.walkClip : 'run';
-      a.play(a.has(clip) ? clip : input.walk ? 'walk' : 'run');
+      const clip = input.sprint ? 'sprint' : input.walkClip;
+      a.play(a.has(clip) ? clip : 'walk');
     } else if (this.emote && a.has(this.emote)) a.play(this.emote);
-    else a.play(armed && a.has('gun_idle') ? 'gun_idle' : 'idle');
+    else a.play(this.armed === 'bat' && a.has('bat_idle') ? 'bat_idle' : (this.armed === 'rifle' || this.armed === 'aim') && a.has('gun_idle') ? 'gun_idle' : 'idle');
   }
 
   /** Emote (loop até mexer) ou ação (rolar, mergulhar). */

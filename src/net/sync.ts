@@ -19,7 +19,7 @@ export interface MoveMsg {
   a: string;
   /** carro que está dirigindo (-1 = nenhum) */
   v: number;
-  /** arma: 0 punho, 1 fuzil, 2 fuzil mirando */
+  /** arma: 0 nada/punho, 1 fuzil, 2 fuzil mirando, 3 taco, 4 pistola, 5 pistola mirando */
   w: number;
   /** inclinação da mira (rad) */
   pt: number;
@@ -31,8 +31,8 @@ export interface ShotMsg {
   x1: number; y1: number; z1: number;
   x2: number; y2: number; z2: number;
   h: string;
-  /** r = fuzil, f = soco */
-  k: 'r' | 'f';
+  /** r = fuzil, f = soco, p = pistola, b = taco */
+  k: 'r' | 'f' | 'p' | 'b';
   /** tiro na cabeça */
   hs: boolean;
 }
@@ -88,7 +88,7 @@ function cleanMove(raw: unknown): MoveMsg | null {
   if (!idOk(m.id) || x === null || y === null || z === null || ry === null) return null;
   const a = typeof m.a === 'string' && /^[a-z0-9_]{1,24}$/.test(m.a) && m.a.length <= MAX_ANIM ? m.a : 'idle';
   const v = typeof m.v === 'number' && Number.isInteger(m.v) && m.v >= -1 && m.v < 8 ? m.v : -1;
-  const w = m.w === 1 || m.w === 2 ? m.w : 0;
+  const w = typeof m.w === 'number' && Number.isInteger(m.w) && m.w >= 1 && m.w <= 5 ? m.w : 0;
   const pt = finite(m.pt ?? 0, 1.6) ?? 0;
   return { id: m.id, x, y, z, ry, a, v, w, pt };
 }
@@ -102,7 +102,7 @@ function cleanShot(raw: unknown): ShotMsg | null {
   return {
     id: m.id,
     x1: n[0]!, y1: n[1]!, z1: n[2]!, x2: n[3]!, y2: n[4]!, z2: n[5]!,
-    h, k: m.k === 'f' ? 'f' : 'r', hs: m.hs === true,
+    h, k: m.k === 'f' || m.k === 'p' || m.k === 'b' ? m.k : 'r', hs: m.hs === true,
   };
 }
 

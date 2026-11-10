@@ -9,9 +9,17 @@ import type { Net, ShotMsg, KillMsg } from '../net/sync';
 
 export const MAG_SIZE = 30;
 const RESERVE_START = 120;
+const PISTOL_MAG = 12;
+const PISTOL_RESERVE = 60;
+const PISTOL_DAMAGE = 15;
+const PISTOL_GAP = 0.28;
+const BAT_DAMAGE = 30;
+const BAT_GAP = 0.9;
+const BAT_RANGE = 2.3;
 const AK_DAMAGE = 20;
 const FIST_DAMAGE = 12;
 const RELOAD_TIME = 1.6;
+const AIM_HOLD = 3; // depois de atirar, continua mirando por 3 s
 const AK_GAP = 0.11;
 const FIST_GAP = 0.5;
 const FIST_RANGE = 1.7;
@@ -41,9 +49,13 @@ export class Combat {
   health = 100;
   armor = 50;
   money = 0;
-  weapon: 0 | 1 = 0; // 0 = AK-47, 1 = punho
-  mag = MAG_SIZE;
-  reserve = RESERVE_START;
+  /** 0 = AK-47, 1 = punho, 2 = taco, 3 = pistola */
+  weapon: 0 | 1 | 2 | 3 = 0;
+  private ammo = [{ mag: MAG_SIZE, reserve: RESERVE_START }, { mag: 0, reserve: 0 }, { mag: 0, reserve: 0 }, { mag: PISTOL_MAG, reserve: PISTOL_RESERVE }];
+  get mag(): number { return this.ammo[this.weapon]!.mag; }
+  get reserve(): number { return this.ammo[this.weapon]!.reserve; }
+  /** tem mira (fuzil ou pistola) */
+  get isGun(): boolean { return this.weapon === 0 || this.weapon === 3; }
   reloading = false;
   dead = false;
   respawnIn = 0;
@@ -66,7 +78,9 @@ export class Combat {
     this.ensure(d.net.id, d.name);
   }
 
-  get weaponName(): string { return this.weapon === 0 ? 'AK-47' : 'PUNHO'; }
+  private get magSize(): number { return this.weapon === 3 ? PISTOL_MAG : MAG_SIZE; }
+
+  get weaponName(): string { return ['AK-47', 'PUNHO', 'TACO', 'PISTOLA'][this.weapon]!; }
 
   /** Placar: eu e os outros jogadores, do que mais matou para o que menos. */
   statRows(): StatRow[] {
@@ -99,32 +113,43 @@ export class Combat {
     }
     if (player.isDriving) { player.setArmed('none'); return; }
 
-    if (input.switchWeapon) { this.weapon = this.weapon === 0 ? 1 : 0; this.reloading = false; }
+    if (input.switchWeapon) {
+      const order = [0, 3, 2, 1] as const; // fuzil, pistola, taco, punho
+      this.weapon = order[(order.indexOf(this.weapon) + 1) % order.length]!;
+      this.reloading = false;
+    }
     if (input.reload) this.startReload();
     if (this.reloading) {
       this.reloadT -= dt;
       if (this.reloadT <= 0) {
-        const take = Math.min(MAG_SIZE - this.mag, this.reserve);
-        this.mag += take;
-        this.reserve -= take;
+        const a = this.ammo[this.weapon]!;
+        const take = Math.min(this.magSize - a.mag, a.reserve);
+        a.mag += take;
+        a.reserve -= take;
         this.reloading = false;
       }
     }
     this.cd -= dt;
     // atirando: o fuzil sobe para a posição de tiro (cano para a frente) e fica assim um instante depois do último tiro
-    this.fireHold = input.fire ? 0.35 : Math.max(0, this.fireHold - dt);
-    player.setArmed(this.weapon === 0 ? (input.aim || this.fireHold > 0 ? 'aim' : 'rifle') : 'none');
+    this.fireHold = input.fire ? AIM_HOLD : Math.max(0, this.fireHold - dt);
+    const aiming = input.aim || this.fireHold > 0;
+    player.setArmed(this.weapon === 0 ? (aiming ? 'aim' : 'rifle') : this.weapon === 3 ? (aiming ? 'pistol_aim' : 'pistol') : this.weapon === 2 ? 'bat' : 'none');
 
     if (input.fire && this.cd <= 0 && !this.reloading) {
-      if (this.weapon === 0) {
-        if (this.mag > 0) { this.mag--; this.cd = AK_GAP; this.fireRifle(player, input.aim); }
-        else { this.cd = 0.3; playShot(0.6, true); this.startReload(); }
-      } else { this.cd = FIST_GAP; this.punch(player); }
+      const a = this.ammo[this.weapon]!;
+      if (this.weapon === 0 || this.weapon === 3) {
+        if (a.mag > 0) {
+          a.mag--;
+          this.cd = this.weapon === 0 ? AK_GAP : PISTOL_GAP;
+          this.fireGun(player, aiming, this.weapon === 0 ? 'r' : 'p');
+        } else { this.cd = 0.3; playShot(0.6, true); this.startReload(); }
+      } else if (this.weapon === 2) { this.cd = BAT_GAP; player.swing(); this.melee(player, BAT_RANGE, 'b'); }
+      else { this.cd = FIST_GAP; this.melee(player, FIST_RANGE, 'f'); }
     }
   }
 
   private startReload(): void {
-    if (this.weapon === 0 && !this.reloading && this.mag < MAG_SIZE && this.reserve > 0) {
+    if (this.isGun && !this.reloading && this.mag < this.magSize && this.reserve > 0) {
       this.reloading = true;
       this.reloadT = RELOAD_TIME;
     }
@@ -132,7 +157,7 @@ export class Combat {
 
   // ---------- tiro ----------
 
-  private fireRifle(player: Player, aiming: boolean): void {
+  private fireGun(player: Player, aiming: boolean, kind: 'r' | 'p'): void {
     const { camera, net } = this.d;
     // Direção da mira = para onde a câmera olha (inclui cima/baixo), com um pouco de dispersão
     const dir = camera.getWorldDirection(this.tmpD);
@@ -155,17 +180,17 @@ export class Combat {
 
     this.tracers.add(muzzle, end);
     player.weaponVis?.flash();
-    playShot(1);
+    playShot(kind === 'p' ? 0.7 : 1);
     if (hit.id) this.hitTick++;
-    net.sendShot({ x1: muzzle.x, y1: muzzle.y, z1: muzzle.z, x2: end.x, y2: end.y, z2: end.z, h: hit.id ?? '', k: 'r', hs: hit.head });
+    net.sendShot({ x1: muzzle.x, y1: muzzle.y, z1: muzzle.z, x2: end.x, y2: end.y, z2: end.z, h: hit.id ?? '', k: kind, hs: hit.head });
   }
 
-  private punch(player: Player): void {
+  private melee(player: Player, range: number, kind: 'f' | 'b'): void {
     const p = player.object.position;
     const fx = Math.sin(player.object.rotation.y);
     const fz = Math.cos(player.object.rotation.y);
     let best: RemotePlayer | null = null;
-    let bestD = FIST_RANGE;
+    let bestD = range;
     for (const r of this.d.remotes.values()) {
       if (r.isDead || r.inCar) continue;
       const dx = r.root.position.x - p.x;
@@ -174,7 +199,7 @@ export class Combat {
       if (dist < bestD && (dx * fx + dz * fz) / (dist || 1) > 0.4) { best = r; bestD = dist; }
     }
     if (best) this.hitTick++;
-    this.d.net.sendShot({ x1: p.x, y1: p.y + 1.3, z1: p.z, x2: p.x + fx, y2: p.y + 1.3, z2: p.z + fz, h: best ? best.info.id : '', k: 'f', hs: false });
+    this.d.net.sendShot({ x1: p.x, y1: p.y + 1.3, z1: p.z, x2: p.x + fx, y2: p.y + 1.3, z2: p.z + fz, h: best ? best.info.id : '', k: kind, hs: false });
   }
 
   /** Raio contra chão, caixas e jogadores. */
@@ -200,7 +225,7 @@ export class Combat {
   /** Alguém atirou: desenha o rastro/som e, se me acertou, aplica o dano em mim. */
   onShot(m: ShotMsg): void {
     const shooter = this.d.remotes.get(m.id);
-    if (m.k === 'r') {
+    if (m.k === 'r' || m.k === 'p') {
       const from = new THREE.Vector3(m.x1, m.y1, m.z1);
       const to = new THREE.Vector3(m.x2, m.y2, m.z2);
       this.tracers.add(from, to);
@@ -210,8 +235,9 @@ export class Combat {
       playShot(1 / (1 + dist * 0.12));
     }
     if (m.h === this.d.net.id && !this.dead && this.invuln <= 0) {
-      const dmg = m.k === 'f' ? FIST_DAMAGE : m.hs ? AK_DAMAGE * 2 : AK_DAMAGE;
-      this.damage(dmg, m.id, m.k === 'f' ? 'PUNHO' : 'AK-47');
+      const base = m.k === 'f' ? FIST_DAMAGE : m.k === 'b' ? BAT_DAMAGE : m.k === 'p' ? PISTOL_DAMAGE : AK_DAMAGE;
+      const dmg = m.hs && (m.k === 'r' || m.k === 'p') ? base * 2 : base;
+      this.damage(dmg, m.id, { f: 'PUNHO', b: 'TACO', p: 'PISTOLA', r: 'AK-47' }[m.k]);
     }
   }
 
@@ -245,8 +271,8 @@ export class Combat {
     this.player?.respawn(x, z);
     this.health = 100;
     this.armor = 50;
-    this.mag = MAG_SIZE;
-    this.reserve = RESERVE_START;
+    this.ammo[0] = { mag: MAG_SIZE, reserve: RESERVE_START };
+    this.ammo[3] = { mag: PISTOL_MAG, reserve: PISTOL_RESERVE };
     this.reloading = false;
     this.weapon = 0;
     this.dead = false;

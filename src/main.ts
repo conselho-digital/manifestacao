@@ -107,7 +107,7 @@ function loop(): void {
     lastInput = input;
     combat.update(dt, input, player);
     player.update(dt, input, yaw);
-    aimK += ((input.aim && combat.weapon === 0 && !player.isDriving ? 1 : 0) - aimK) * Math.min(1, dt * 9);
+    aimK += ((input.aim && combat.isGun && !player.isDriving ? 1 : 0) - aimK) * Math.min(1, dt * 9);
     player.followCamera(camera, dt, yaw + camOffset, pitch, aimK);
     player.setAimPitch(pitch);
     if (aerial) {
@@ -132,7 +132,7 @@ function loop(): void {
         remotes: [...remotes.values()].map((r) => ({ name: r.info.name, x: r.root.position.x, z: r.root.position.z })),
         players: remotes.size + 1, maxPlayers: 30,
         health: combat.health, armor: combat.armor, money: combat.money,
-        weapon: combat.weapon === 0 ? 'ak' : 'fist', weaponName: combat.weaponName,
+        weapon: (['ak', 'fist', 'bat', 'pistol'] as const)[combat.weapon], weaponName: combat.weaponName,
         mag: combat.mag, reserve: combat.reserve, reloading: combat.reloading,
         aiming: input.aim, crouching: player.isCrouching, dead: combat.dead, respawnIn: combat.respawnIn,
         hitTick: combat.hitTick, hurtTick: combat.hurtTick, nearCar: player.nearCar,
@@ -140,7 +140,7 @@ function loop(): void {
       }, dt);
     }
     // Mira: aproxima a câmera suavemente
-    const fov = lastInput?.aim && combat.weapon === 0 ? BASE_FOV * 0.7 : BASE_FOV;
+    const fov = lastInput?.aim && combat.isGun ? BASE_FOV * 0.7 : BASE_FOV;
     if (Math.abs(camera.fov - fov) > 0.05) {
       camera.fov += (fov - camera.fov) * Math.min(1, dt * 10);
       camera.updateProjectionMatrix();

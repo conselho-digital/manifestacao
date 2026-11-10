@@ -17,7 +17,7 @@ export interface HudState {
   health: number;
   armor: number;
   money: number;
-  weapon: 'ak' | 'fist';
+  weapon: 'ak' | 'fist' | 'bat' | 'pistol';
   weaponName: string;
   mag: number;
   reserve: number;
@@ -123,7 +123,7 @@ const CSS = `
 .m-chatbox input{flex:1;min-width:0;font-size:calc(var(--u)*4);padding:calc(var(--u)*1.4);border-radius:calc(var(--u)*1);border:2px solid #fff;background:rgba(0,0,0,.75);color:#fff;text-transform:none}
 .m-chatbox button{font-size:calc(var(--u)*3.4);padding:0 calc(var(--u)*2.5);border-radius:calc(var(--u)*1);border:0;background:#2f6b2f;color:#fff;font-weight:800}
 .m-score{position:fixed;right:calc(var(--u)*1);bottom:calc(var(--u)*.8);text-align:right;font-size:calc(var(--u)*3.3);line-height:1.2}
-.m-cross{position:fixed;left:50%;top:44%;width:calc(var(--u)*3);height:calc(var(--u)*3);margin:calc(var(--u)*-1.5) 0 0 calc(var(--u)*-1.5);border:2px solid rgba(255,255,255,.9);border-radius:50%;
+.m-cross{position:fixed;left:50%;top:50%;width:calc(var(--u)*3);height:calc(var(--u)*3);margin:calc(var(--u)*-1.5) 0 0 calc(var(--u)*-1.5);border:2px solid rgba(255,255,255,.9);border-radius:50%;
   box-shadow:0 0 0 1px rgba(0,0,0,.6);transition:transform .12s;display:none}
 .m-cross.show{display:block}.m-cross.aim{transform:scale(.6);border-color:#ff5a4a}
 .m-hit{position:fixed;left:50%;top:44%;width:calc(var(--u)*6);height:calc(var(--u)*6);margin:calc(var(--u)*-3) 0 0 calc(var(--u)*-3);opacity:0;pointer-events:none}
@@ -497,12 +497,12 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
       if (s.weapon !== cache.weapon) {
         cache.weapon = s.weapon;
         weaponBox.textContent = '';
-        weaponBox.insertAdjacentHTML('beforeend', s.weapon === 'ak' ? ICON.rifle : ICON.fist);
+        weaponBox.insertAdjacentHTML('beforeend', s.weapon === 'ak' ? ICON.rifle : s.weapon === 'pistol' ? ICON.pistol : s.weapon === 'bat' ? ICON.bat : ICON.fist);
       }
-      const am = s.weapon === 'fist' ? '--' : s.reloading ? '...' : `${s.mag}/${s.reserve}`;
+      const am = s.weapon === 'fist' || s.weapon === 'bat' ? '--' : s.reloading ? '...' : `${s.mag}/${s.reserve}`;
       if (am !== cache.ammo) { cache.ammo = am; ammo.textContent = am; }
 
-      cross.classList.toggle('show', s.weapon === 'ak' && !s.driving && !s.dead);
+      cross.classList.toggle('show', (s.weapon === 'ak' || s.weapon === 'pistol') && !s.driving && !s.dead);
       cross.classList.toggle('aim', s.aiming);
       crouchBtn.classList.toggle('on', s.crouching);
       if (s.hitTick !== lastHit) { lastHit = s.hitTick; retrigger(hitMark); }

@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { createCharacter } from './characters';
-import { Animator } from './anim';
+import { ARMED_FROM_CODE, Animator } from './anim';
 import { CARS, type Car } from './vehicle';
 import { WeaponVisual } from './weapons';
 import type { MoveMsg, PlayerInfo } from '../net/sync';
@@ -87,13 +87,13 @@ export class RemotePlayer {
     }
     const dead = this.anim === 'dead';
     if (this.animator && !car) {
-      this.animator.setArmed(this.weapon === 2 ? 'aim' : this.weapon === 1 ? 'rifle' : 'none');
+      this.animator.setArmed(ARMED_FROM_CODE[this.weapon] ?? 'none');
       this.animator.setAimPitch(this.pitch);
       this.animator.play(dead ? 'idle' : this.anim);
       this.animator.update(dt);
     }
     if (this.weaponVis) {
-      this.weaponVis.setMode(this.weapon === 2 ? 'aim' : this.weapon === 1 ? 'rifle' : 'none');
+      this.weaponVis.setMode(ARMED_FROM_CODE[this.weapon] ?? 'none');
       this.weaponVis.setPitch(this.pitch);
       this.weaponVis.setHidden(!!car || dead);
       if (this.animator) this.weaponVis.setSuppressed(!this.animator.holdsWeapon);

@@ -6,10 +6,17 @@ interface ClipData<T> { duration: number; tracks: T[]; /** descida do corpo (m) 
 type Clips<T> = Record<string, ClipData<T>>;
 type Kind = 'gta' | 'carlos';
 
-export type Armed = 'none' | 'rifle' | 'aim';
+export type Armed = 'none' | 'rifle' | 'aim' | 'pistol' | 'pistol_aim' | 'bat';
+export const ARMED_CODE: Record<Armed, number> = { none: 0, rifle: 1, aim: 2, bat: 3, pistol: 4, pistol_aim: 5 };
+export const ARMED_FROM_CODE: Armed[] = ['none', 'rifle', 'aim', 'bat', 'pistol', 'pistol_aim'];
+/** O corpo olha para onde a câmera mira (fuzil, ou pistola levantada). */
+export const facesAim = (a: Armed): boolean => a === 'rifle' || a === 'aim' || a === 'pistol_aim';
+const isAimPose = (a: Armed): boolean => a === 'aim' || a === 'pistol_aim';
+type Kind3 = 'rifle' | 'pistol' | 'bat';
+const kindOf = (a: Armed): Kind3 | null => (a === 'rifle' || a === 'aim' ? 'rifle' : a === 'pistol' || a === 'pistol_aim' ? 'pistol' : a === 'bat' ? 'bat' : null);
 
 /** Clipes que tocam uma vez e param no último quadro. */
-const ONCE = new Set(['jump_launch', 'jump_land', 'climb_jump', 'climb_pull', 'climb_stand', 'roll', 'dive']);
+const ONCE = new Set(['bat_swing', 'jump_launch', 'jump_land', 'climb_jump', 'climb_pull', 'climb_stand', 'roll', 'dive']);
 export const isOnceClip = (name: string): boolean => ONCE.has(name);
 
 /** Clipes em que o personagem não segura o fuzil (escalar, rolar, mergulhar, emotes). */
@@ -19,7 +26,7 @@ const FREE_HANDS = (name: string): boolean => name.startsWith('climb_') || name 
 const OWN_HOLD = (name: string): boolean => name.startsWith('gun_') || name.startsWith('crouch_') || name === 'run_armed' || name === 'walk_armed';
 
 /** Velocidade de reprodução (1 = original). Os clipes de arma andam um pouco mais rápido que o jogo. */
-const TIME_SCALE: Record<string, number> = { gun_fwd: 1.2, gun_bwd: 1.2, gun_left: 1.2, gun_right: 1.2, crouch_fwd: 1.1, crouch_bwd: 1.1 };
+const TIME_SCALE: Record<string, number> = { bat_swing: 2, gun_fwd: 1.2, gun_bwd: 1.2, gun_left: 1.2, gun_right: 1.2, crouch_fwd: 1.1, crouch_bwd: 1.1 };
 
 /** Animações disponíveis no menu. */
 export const EMOTES: { id: string; label: string }[] = [
@@ -91,7 +98,6 @@ interface Arm {
   /** direção do cotovelo (para onde ele aponta) com o fuzil */
   pole: THREE.Vector3;
   /** ponto de empunhadura no fuzil (no espaço da arma) */
-  grip: THREE.Vector3;
   curU: THREE.Vector3; curF: THREE.Vector3;
 }
 
@@ -99,16 +105,28 @@ interface Leg { thigh: THREE.Bone; calf: THREE.Bone; foot: THREE.Bone }
 
 interface Spine { mid: THREE.Bone; chest: THREE.Bone; neck: THREE.Bone; head: THREE.Bone }
 
+interface PoseCfg { pos: THREE.Vector3; pitch: number; yaw: number }
+interface WeaponCfg { low: PoseCfg; aim: PoseCfg; gripR: THREE.Vector3; gripL: THREE.Vector3 }
+const P3 = (x: number, y: number, z: number): THREE.Vector3 => new THREE.Vector3(x, y, z);
 /**
- * Poses do fuzil no espaço do personagem em repouso (x+ = esquerda, y+ = cima, z+ = frente).
- * pos = centro da arma; pitch = cano para baixo (rad); yaw = cano para a esquerda (rad).
+ * Poses das armas no espaço do personagem em repouso (x+ = esquerda, y+ = cima, z+ = frente).
+ * pos = centro da arma; pitch = cano para baixo (rad); yaw = cano para a esquerda (rad). Empunhadura/guarda-mão no espaço da arma (cano em +Z).
  */
-const RIFLE_LOW = { pos: new THREE.Vector3(-0.1, 1.26, 0.27), pitch: 0.3, yaw: 0.07 };
-// yaw negativo: o cano converge para o ponto da mira (a câmera fica ~0,85 m à direita do personagem)
-const RIFLE_AIM = { pos: new THREE.Vector3(-0.12, 1.585, 0.2), pitch: 0, yaw: -0.05 };
-/** Empunhadura (traseira) e guarda-mão (frente) no espaço da arma, cano em +Z. */
-const GRIP_REAR = new THREE.Vector3(0, -0.115, 0.04);
-const GRIP_FRONT = new THREE.Vector3(0, -0.05, 0.33);
+const CFG: Record<'rifle' | 'pistol', WeaponCfg> = {
+  rifle: {
+    low: { pos: P3(-0.1, 1.26, 0.27), pitch: 0.3, yaw: 0.07 },
+    // yaw negativo: o cano converge para o ponto da mira (a câmera fica ~0,85 m à direita do personagem)
+    aim: { pos: P3(-0.12, 1.585, 0.2), pitch: 0, yaw: -0.05 },
+    gripR: P3(0, -0.115, 0.04),
+    gripL: P3(0, -0.05, 0.33),
+  },
+  pistol: {
+    low: { pos: P3(-0.2, 1.02, 0.3), pitch: 0.5, yaw: 0 },
+    aim: { pos: P3(-0.07, 1.57, 0.5), pitch: 0, yaw: -0.02 },
+    gripR: P3(0, -0.07, -0.03),
+    gripL: P3(0.025, -0.075, -0.02),
+  },
+};
 
 export class Animator {
   private current: THREE.AnimationAction | null = null;
@@ -124,6 +142,7 @@ export class Animator {
   private armed: Armed = 'none';
   private aimPitch = 0;
   private weapon: THREE.Object3D | null = null;
+  private bat: THREE.Object3D | null = null;
   private readonly actions = new Map<string, THREE.AnimationAction>();
   private readonly tmpM = new THREE.Matrix4();
   private readonly rootInv = new THREE.Matrix4();
@@ -282,7 +301,7 @@ export class Animator {
     this.current = a;
     this.clipName = name;
     this.armW = this.holdsWeapon ? 1 : 0;
-    this.aimK = this.armed === 'aim' ? 1 : 0;
+    this.aimK = isAimPose(this.armed) ? 1 : 0;
     for (let i = 0; i < 2; i++) {
       this.restoreClean();
       a.time = t;
@@ -309,6 +328,11 @@ export class Animator {
   /** O objeto da arma passa a ser posicionado por este animador (seguindo o peito). */
   attachWeapon(anchor: THREE.Object3D): void {
     this.weapon = anchor;
+  }
+
+  /** O taco segue a mão direita (o clipe dá o movimento). */
+  attachBat(anchor: THREE.Object3D): void {
+    this.bat = anchor;
   }
 
   /** Reinicia o mesmo clipe de ação (ex.: pular de novo). */
@@ -351,9 +375,10 @@ export class Animator {
   private pose(dt: number): void {
     this.applyDrop();
     // braços por IK só quando o clipe não segura o fuzil sozinho (ou ao mirar no ombro)
-    const ikTarget = !this.holdsWeapon ? 0 : OWN_HOLD(this.clipName) ? (this.armed === 'aim' ? 1 : 0) : 1;
+    const kind = kindOf(this.armed);
+    const ikTarget = !this.holdsWeapon || kind === 'bat' || !kind ? 0 : kind === 'pistol' ? 1 : OWN_HOLD(this.clipName) ? (this.armed === 'aim' ? 1 : 0) : 1;
     this.armW += (ikTarget - this.armW) * Math.min(1, dt * 10);
-    this.aimK += ((this.armed === 'aim' ? 1 : 0) - this.aimK) * Math.min(1, dt * 9);
+    this.aimK += ((isAimPose(this.armed) ? 1 : 0) - this.aimK) * Math.min(1, dt * 9);
     this.recoil = Math.max(0, this.recoil - dt * 9);
     // agachado parado: tronco desce; andando agachado o clipe já inclina o corpo, então só um pouco
     const crouchT = this.clipName === 'crouch_idle' ? 1 : this.clipName.startsWith('crouch_') ? 0.2 : 0;
@@ -361,6 +386,7 @@ export class Animator {
     this.legK += ((this.clipName === 'crouch_fwd' || this.clipName === 'crouch_bwd' ? 1 : 0) - this.legK) * Math.min(1, dt * 8);
     const armed = this.armW >= 0.01;
     const holding = this.holdsWeapon;
+    if (kind === 'bat' && holding) this.poseBat();
     if ((!armed && !holding && this.crouchK < 0.01 && this.legK < 0.01) || !this.spine) {
       this.groundFeet(dt);
       for (const b of this.touched) this.clean.set(b, b.quaternion.clone()); // tudo vem do clipe
@@ -414,6 +440,21 @@ export class Animator {
       this.rotateBone(l.thigh, thigh);
       this.rotateBone(l.calf, calf);
     }
+  }
+
+  /** Taco na mão direita: a posição vem da mão; a inclinação, da rotação da mão desde o repouso. */
+  private poseBat(): void {
+    const right = this.arms.find((a) => a.side < 0);
+    if (!this.bat || !right) return;
+    this.updateRoot();
+    const hand = this.posIn(right.h, new THREE.Vector3());
+    const elbow = this.posIn(right.f, new THREE.Vector3());
+    hand.addScaledVector(hand.clone().sub(elbow).normalize(), 0.04);
+    const delta = this.quatIn(right.h, new THREE.Quaternion()).multiply(right.q0[2].clone().invert());
+    // em repouso o taco aponta para a frente e para cima (cabo na palma)
+    const rest = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0.55, 0.83).normalize());
+    this.bat.position.copy(hand);
+    this.bat.quaternion.copy(delta.multiply(rest));
   }
 
   private updateRoot(): void {
@@ -471,14 +512,15 @@ export class Animator {
     const chestQ = this.quatIn(sp.chest, new THREE.Quaternion());
     const delta = chestQ.multiply(this.chestRest.q.clone().invert()); // só o movimento do peito
     const k = this.aimK;
-    const pos = RIFLE_LOW.pos.clone().lerp(RIFLE_AIM.pos, k).sub(this.chestRest.pos).applyQuaternion(delta).add(chestPos);
-    const pitch = THREE.MathUtils.lerp(RIFLE_LOW.pitch + this.aimPitch * 0.5, this.aimPitch, k) - 0.05 * this.recoil;
-    const yaw = THREE.MathUtils.lerp(RIFLE_LOW.yaw, RIFLE_AIM.yaw, k);
+    const cfg = CFG[kindOf(this.armed) === 'pistol' ? 'pistol' : 'rifle'];
+    const pos = cfg.low.pos.clone().lerp(cfg.aim.pos, k).sub(this.chestRest.pos).applyQuaternion(delta).add(chestPos);
+    const pitch = THREE.MathUtils.lerp(cfg.low.pitch + this.aimPitch * 0.5, this.aimPitch, k) - 0.05 * this.recoil;
+    const yaw = THREE.MathUtils.lerp(cfg.low.yaw, cfg.aim.yaw, k);
     const q = new THREE.Quaternion().setFromAxisAngle(Y, yaw).multiply(new THREE.Quaternion().setFromAxisAngle(X, pitch));
     // clipe feito para segurar o fuzil: a arma fica entre as duas mãos do clipe (direita na empunhadura, esquerda no guarda-mão)
     const right = this.arms.find((a) => a.side < 0);
     const left = this.arms.find((a) => a.side > 0);
-    if (right && left && OWN_HOLD(this.clipName) && k < 0.999) {
+    if (right && left && cfg === CFG.rifle && OWN_HOLD(this.clipName) && k < 0.999) {
       const palm = (arm: Arm): THREE.Vector3 => {
         const hand = this.posIn(arm.h, new THREE.Vector3());
         const elbow = this.posIn(arm.f, new THREE.Vector3());
@@ -495,7 +537,7 @@ export class Animator {
       const xAxis = new THREE.Vector3().crossVectors(Y, axis).normalize();
       const yAxis = new THREE.Vector3().crossVectors(axis, xAxis);
       const qh = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, axis));
-      const mid = GRIP_REAR.clone().add(GRIP_FRONT).multiplyScalar(0.5).applyQuaternion(qh);
+      const mid = cfg.gripR.clone().add(cfg.gripL).multiplyScalar(0.5).applyQuaternion(qh);
       const byHands = hr.clone().add(hl).multiplyScalar(0.5).sub(mid).addScaledVector(axis, 0.07); // um pouco à frente: a coronha não encosta no queixo
       pos.lerp(byHands, 1 - k);
       q.slerp(qh, 1 - k);
@@ -505,7 +547,11 @@ export class Animator {
   }
 
   private poseArm(arm: Arm, frame: { pos: THREE.Vector3; q: THREE.Quaternion }, dt: number): void {
-    const wrist = arm.grip.clone().applyQuaternion(frame.q).add(frame.pos);
+    const kind = kindOf(this.armed) === 'pistol' ? 'pistol' : 'rifle';
+    // pistola abaixada: só a mão direita segura; a esquerda fica com o clipe
+    const w = kind === 'pistol' && this.armed === 'pistol' && arm.side > 0 ? 0 : this.armW;
+    if (w < 0.01) return;
+    const wrist = (arm.side < 0 ? CFG[kind].gripR : CFG[kind].gripL).clone().applyQuaternion(frame.q).add(frame.pos);
     // clavícula: acompanha um pouco o braço (evita o ombro "rasgar" quando o braço sobe)
     if (arm.c) {
       arm.c.updateMatrixWorld(true);
@@ -514,7 +560,7 @@ export class Animator {
       const dirC = arm.cdir0.clone().lerp(want, 0.3).normalize();
       const world = new THREE.Quaternion().setFromUnitVectors(arm.cdir0, dirC).multiply(arm.cq0);
       const parent = this.quatIn(arm.c.parent!, new THREE.Quaternion());
-      arm.c.quaternion.slerp(parent.invert().multiply(world), this.armW);
+      arm.c.quaternion.slerp(parent.invert().multiply(world), w);
       arm.c.updateMatrixWorld(true);
     }
     const shoulder = this.posIn(arm.u, new THREE.Vector3());
@@ -542,7 +588,7 @@ export class Animator {
       this.quatIn(bone.parent!, parentQ);
       const world = deltas[i]!.clone().multiply(arm.q0[i]!);
       const target = parentQ.invert().multiply(world);
-      bone.quaternion.slerp(target, this.armW);
+      bone.quaternion.slerp(target, w);
       bone.updateMatrixWorld(true);
     }
   }
@@ -573,7 +619,6 @@ function buildArm(side: 1 | -1, u: THREE.Bone, f: THREE.Bone, h: THREE.Bone, c: 
     dir0: [pf.clone().sub(pu).normalize(), ph.clone().sub(pf).normalize()],
     len: [pf.distanceTo(pu), ph.distanceTo(pf)],
     pole: right ? new THREE.Vector3(-0.55, -1, -0.15) : new THREE.Vector3(0.3, -1, -0.25),
-    grip: right ? GRIP_REAR : GRIP_FRONT,
     curU: pf.clone().sub(pu).normalize(),
     curF: ph.clone().sub(pf).normalize(),
   };

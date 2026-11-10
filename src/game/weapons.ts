@@ -1,9 +1,9 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
-export type ArmedMode = 'none' | 'rifle' | 'aim';
+export type ArmedMode = Armed;
 
-import type { Animator } from './anim';
+import type { Animator, Armed } from './anim';
 
 const loader = new GLTFLoader();
 let rifleSrc: Promise<THREE.Object3D> | null = null;
@@ -29,6 +29,9 @@ function flashTexture(): THREE.Texture {
 export class WeaponVisual {
   private readonly anchor = new THREE.Group();
   private readonly flashSprite: THREE.Sprite;
+  private rifleInner: THREE.Object3D | null = null;
+  private readonly pistolInner = buildPistol();
+  private readonly batAnchor = new THREE.Group();
   private flashT = 0;
   private mode: ArmedMode = 'none';
   private ready = false;
@@ -40,6 +43,11 @@ export class WeaponVisual {
   constructor(root: THREE.Object3D) {
     this.anchor.visible = false;
     root.add(this.anchor);
+    this.anchor.add(this.pistolInner);
+    this.pistolInner.visible = false;
+    this.batAnchor.add(buildBat());
+    this.batAnchor.visible = false;
+    root.add(this.batAnchor);
     this.flashSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: flashTexture(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
     this.flashSprite.scale.setScalar(0.5);
     this.flashSprite.position.set(0, 0, 0.78);
@@ -62,6 +70,7 @@ export class WeaponVisual {
       inner.position.z = 0.3;
       inner.traverse((o) => { o.castShadow = true; });
       this.anchor.add(inner);
+      this.rifleInner = inner;
       this.ready = true;
       this.apply();
     });
@@ -72,6 +81,7 @@ export class WeaponVisual {
     this.bound = true;
     this.animator = animator;
     animator.attachWeapon(this.anchor);
+    animator.attachBat(this.batAnchor);
   }
 
   setMode(mode: ArmedMode): void {
@@ -99,12 +109,20 @@ export class WeaponVisual {
   }
 
   private refresh(): void {
-    this.anchor.visible = this.ready && this.mode !== 'none' && !this.hidden && !this.suppressed;
+    const show = this.ready && this.mode !== 'none' && !this.hidden && !this.suppressed;
+    const bat = this.mode === 'bat';
+    const pistol = this.mode === 'pistol' || this.mode === 'pistol_aim';
+    this.anchor.visible = show && !bat;
+    this.batAnchor.visible = show && bat;
+    this.pistolInner.visible = pistol;
+    if (this.rifleInner) this.rifleInner.visible = !pistol;
+    this.flashSprite.position.z = pistol ? 0.2 : 0.78;
+    this.flashSprite.scale.setScalar(pistol ? 0.3 : 0.5);
   }
 
   private apply(): void {
     this.refresh();
-    if (!this.bound) this.anchor.position.set(0.02, this.mode === 'aim' ? 1.34 : 1.2, 0.18);
+    if (!this.bound) this.anchor.position.set(0.02, this.mode === 'aim' || this.mode === 'pistol_aim' ? 1.34 : 1.2, 0.18);
   }
 
   /** Mostra o clarão por ~50 ms. */
@@ -160,4 +178,37 @@ export class Tracers {
       if (e.t <= 0) e.line.visible = false;
     }
   }
+}
+
+const DARK = new THREE.MeshLambertMaterial({ color: 0x2a2d31 });
+
+/** Pistola simples: ferrolho, cano e cabo (cano para +Z, origem perto do cabo). */
+function buildPistol(): THREE.Group {
+  const g = new THREE.Group();
+  const slide = new THREE.Mesh(new THREE.BoxGeometry(0.036, 0.045, 0.22), DARK);
+  slide.position.set(0, 0, 0.06);
+  const grip = new THREE.Mesh(new THREE.BoxGeometry(0.034, 0.1, 0.05), new THREE.MeshLambertMaterial({ color: 0x3b2c22 }));
+  grip.position.set(0, -0.07, -0.03);
+  grip.rotation.x = -0.18;
+  const guard = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.06), DARK);
+  guard.position.set(0, -0.03, 0.03);
+  g.add(slide, grip, guard);
+  g.traverse((o) => { o.castShadow = true; });
+  return g;
+}
+
+/** Taco de madeira: cabo na origem (palma), ponta em +Z. */
+function buildBat(): THREE.Group {
+  const g = new THREE.Group();
+  const wood = new THREE.MeshLambertMaterial({ color: 0xb88a52 });
+  const handle = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.022, 0.35, 8), wood);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.024, 0.5, 10), wood);
+  const knob = new THREE.Mesh(new THREE.SphereGeometry(0.03, 8, 6), wood);
+  for (const m of [handle, barrel]) m.rotation.x = Math.PI / 2;
+  handle.position.z = 0.1;
+  barrel.position.z = 0.53;
+  knob.position.z = -0.08;
+  g.add(handle, barrel, knob);
+  g.traverse((o) => { o.castShadow = true; });
+  return g;
 }

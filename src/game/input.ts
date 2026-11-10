@@ -119,14 +119,14 @@ export function readInput(): InputState {
   if (keys.has('KeyS') || keys.has('ArrowDown')) y -= 1;
   let len = Math.hypot(x, y);
   if (len > 1) { x /= len; y /= len; len = 1; }
-  let walk = keys.has('ShiftLeft') || keys.has('ShiftRight');
+  // andar devagar é o padrão (joystick ou WASD, não importa o quanto empurra); só o Sprint corre
+  const walk = true;
   if (touchActive && Math.hypot(touchX, touchY) > 0.02) {
     x = touchX; y = touchY; len = Math.min(1, Math.hypot(x, y));
-    walk = len < 0.5; // empurrar pouco = andar, empurrar muito = correr
   }
   const state: InputState = {
     x, y, mag: len, walk,
-    sprint: keys.has('KeyQ') || sprintHeld,
+    sprint: keys.has('KeyQ') || keys.has('ShiftLeft') || keys.has('ShiftRight') || sprintHeld,
     jump: jumpQ, climb: climbQ, crouch: crouchQ, interact: interactQ, emote: emoteQ, walkClip,
     fire: fireHeld || mouseFire,
     aim: aimOn || mouseAim,
