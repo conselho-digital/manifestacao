@@ -6,14 +6,14 @@ interface ClipData<T> { duration: number; tracks: T[]; /** descida do corpo (m) 
 type Clips<T> = Record<string, ClipData<T>>;
 type Kind = 'gta' | 'carlos';
 
-export type Armed = 'none' | 'rifle' | 'aim' | 'pistol' | 'pistol_aim' | 'bat';
-export const ARMED_CODE: Record<Armed, number> = { none: 0, rifle: 1, aim: 2, bat: 3, pistol: 4, pistol_aim: 5 };
-export const ARMED_FROM_CODE: Armed[] = ['none', 'rifle', 'aim', 'bat', 'pistol', 'pistol_aim'];
+export type Armed = 'none' | 'rifle' | 'aim' | 'pistol' | 'pistol_aim' | 'bat' | 'sign';
+export const ARMED_CODE: Record<Armed, number> = { none: 0, rifle: 1, aim: 2, bat: 3, pistol: 4, pistol_aim: 5, sign: 6 };
+export const ARMED_FROM_CODE: Armed[] = ['none', 'rifle', 'aim', 'bat', 'pistol', 'pistol_aim', 'sign'];
 /** O corpo olha para onde a câmera mira (fuzil, ou pistola levantada). */
 export const facesAim = (a: Armed): boolean => a === 'rifle' || a === 'aim' || a === 'pistol_aim';
 const isAimPose = (a: Armed): boolean => a === 'aim' || a === 'pistol_aim';
 type Kind3 = 'rifle' | 'pistol' | 'bat';
-const kindOf = (a: Armed): Kind3 | null => (a === 'rifle' || a === 'aim' ? 'rifle' : a === 'pistol' || a === 'pistol_aim' ? 'pistol' : a === 'bat' ? 'bat' : null);
+const kindOf = (a: Armed): Kind3 | null => (a === 'rifle' || a === 'aim' ? 'rifle' : a === 'pistol' || a === 'pistol_aim' ? 'pistol' : a === 'bat' || a === 'sign' ? 'bat' : null);
 
 /** Clipes que tocam uma vez e param no último quadro. */
 const ONCE = new Set(['hit_1', 'hit_2', 'hit_3', 'block', 'punch_1', 'punch_2', 'punch_3', 'punch_4', 'bat_swing', 'bat_swing2', 'jump_launch', 'jump_land', 'climb_jump', 'climb_pull', 'climb_stand', 'roll', 'dive']);

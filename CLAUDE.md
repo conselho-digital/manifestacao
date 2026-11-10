@@ -47,7 +47,7 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 3. ✅ Tela de entrada: nome + 8 personagens
 4. ✅ Multiplayer Supabase: presence + broadcast + interpolação
 5. ✅ Animação (ped.ifp: parado, andar, correr; Shift anda). Carlos e Law1-9 animados. Falta: modelos sem esqueleto (Helena, Stewart, Bennyse, Amanda, Garota1, Gordao, Cesar, Akiyama)
-6. ✅ Veículos (carros provisórios de formas simples; falta trocar por GLB: body + wheel_FL/FR/BL/BR)
+6. ✅ Veículos: Blista e Buffalo (GLB convertidos de DFF GTA SA em `public/models/vehicles/`; nós `body` + `wheel_FL/FR/BL/BR`, material `paint` recebe a cor do carro). Conversor: `exp3.js`/`build3.py` (ver CREDITS)
 7. Deploy Vercel
 8. Chat, ranking, roupas
 
@@ -59,7 +59,7 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 ## Controles
 - PC: WASD move · Shift anda · Q sprint · Espaço pula · E (ou C) escala · arrastar o mouse gira a câmera · G abre o menu de animações.
 - Carros: F entra/sai (botão da porta no celular). PC: W acelera, S freia/dá ré, Espaço = freio de mão, A/D esterça. Celular: joystick só esterça; pedais Acelerar, Freio e Freio de mão na direita.
-- Armas (botão Arma alterna): fuzil, pistola, taco (a bandeira flag-turkey.glb, convertida do shovel.dff), punho (combo knife_1 a 4 do arquivo do usuário). Pistola 12/60 (15 de dano), taco 30. Joystick e WASD sempre andam devagar; Sprint (ou Shift/Q) corre. Depois de atirar a mira fica levantada por 3 s. A mira do HUD fica no centro da tela (o tiro sai por ela).
+- Armas (botão Arma alterna): fuzil, pistola, placa de trânsito (traffic-sign.glb, usa as animações do taco), taco (a bandeira flag-turkey.glb, convertida do shovel.dff), punho (combo knife_1 a 4 do arquivo do usuário). Pistola 12/60 (15 de dano), taco 30. Joystick e WASD sempre andam devagar; Sprint (ou Shift/Q) corre. Depois de atirar a mira fica levantada por 3 s. A mira do HUD fica no centro da tela (o tiro sai por ela).
 - Combate (PC): clique no jogo trava o mouse (gira a câmera); botão esquerdo atira, direito mira, R recarrega, 1/2/X troca arma, T/Enter abre o chat, M abre o mapa grande. Celular: botões de tiro, mira, recarga e arma; o Pular é o botão grande e escala sozinho perto de obstáculos altos (a tecla E também escala); o botão da porta só aparece perto de um carro (no lugar do Sprint); toque no minimapa abre o mapa; botão Chat.
 - Câmera orbital: arrastar (dedo ou mouse) gira para os lados e inclina (dedo para cima = olhar para cima). Pitch de -34° a +69°. Ao mirar a câmera aproxima e passa para o ombro direito. Não atravessa prédios. O tiro vai para onde a câmera olha (cima/baixo incluído), saindo do cano. O atirador calcula o acerto, quem leva o tiro aplica o dano em si (casual, sem servidor). AK-47: 20 de dano, 40 na cabeça; colete absorve 60%. Morreu: renasce em 3,5 s.
 - Celular: ao entrar o jogo vai para tela cheia e paisagem (onde o navegador não trava, aparece "Gire o celular"). HUD estilo GTA: minimapa, vida/colete, arma e munição, joystick, Sprint, tiro, mira, pular, porta (carro), escalar, chat e placar. Combate (dano, vida, kills) ainda não existe: munição e contadores são locais.

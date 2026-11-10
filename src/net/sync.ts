@@ -19,7 +19,7 @@ export interface MoveMsg {
   a: string;
   /** carro que está dirigindo (-1 = nenhum) */
   v: number;
-  /** arma: 0 nada/punho, 1 fuzil, 2 fuzil mirando, 3 taco, 4 pistola, 5 pistola mirando */
+  /** arma: 0 nada/punho, 1 fuzil, 2 fuzil mirando, 3 taco, 4 pistola, 5 pistola mirando, 6 placa */
   w: number;
   /** inclinação da mira (rad) */
   pt: number;
@@ -88,7 +88,7 @@ function cleanMove(raw: unknown): MoveMsg | null {
   if (!idOk(m.id) || x === null || y === null || z === null || ry === null) return null;
   const a = typeof m.a === 'string' && /^[a-z0-9_]{1,24}$/.test(m.a) && m.a.length <= MAX_ANIM ? m.a : 'idle';
   const v = typeof m.v === 'number' && Number.isInteger(m.v) && m.v >= -1 && m.v < 8 ? m.v : -1;
-  const w = typeof m.w === 'number' && Number.isInteger(m.w) && m.w >= 1 && m.w <= 5 ? m.w : 0;
+  const w = typeof m.w === 'number' && Number.isInteger(m.w) && m.w >= 1 && m.w <= 6 ? m.w : 0;
   const pt = finite(m.pt ?? 0, 1.6) ?? 0;
   return { id: m.id, x, y, z, ry, a, v, w, pt };
 }

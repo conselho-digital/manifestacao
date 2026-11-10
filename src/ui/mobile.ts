@@ -17,7 +17,7 @@ export interface HudState {
   health: number;
   armor: number;
   money: number;
-  weapon: 'ak' | 'fist' | 'bat' | 'pistol';
+  weapon: 'ak' | 'fist' | 'bat' | 'pistol' | 'sign';
   weaponName: string;
   mag: number;
   reserve: number;
@@ -497,9 +497,9 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
       if (s.weapon !== cache.weapon) {
         cache.weapon = s.weapon;
         weaponBox.textContent = '';
-        weaponBox.insertAdjacentHTML('beforeend', s.weapon === 'ak' ? ICON.rifle : s.weapon === 'pistol' ? ICON.pistol : s.weapon === 'bat' ? ICON.bat : ICON.fist);
+        weaponBox.insertAdjacentHTML('beforeend', s.weapon === 'ak' ? ICON.rifle : s.weapon === 'pistol' ? ICON.pistol : s.weapon === 'bat' ? ICON.bat : s.weapon === 'sign' ? ICON.sign : ICON.fist);
       }
-      const am = s.weapon === 'fist' || s.weapon === 'bat' ? '--' : s.reloading ? '...' : `${s.mag}/${s.reserve}`;
+      const am = s.weapon === 'fist' || s.weapon === 'bat' || s.weapon === 'sign' ? '--' : s.reloading ? '...' : `${s.mag}/${s.reserve}`;
       if (am !== cache.ammo) { cache.ammo = am; ammo.textContent = am; }
 
       cross.classList.toggle('show', (s.weapon === 'ak' || s.weapon === 'pistol') && !s.driving && !s.dead);

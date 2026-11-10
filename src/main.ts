@@ -132,7 +132,7 @@ function loop(): void {
         remotes: [...remotes.values()].map((r) => ({ name: r.info.name, x: r.root.position.x, z: r.root.position.z })),
         players: remotes.size + 1, maxPlayers: 30,
         health: combat.health, armor: combat.armor, money: combat.money,
-        weapon: (['ak', 'fist', 'bat', 'pistol'] as const)[combat.weapon], weaponName: combat.weaponName,
+        weapon: (['ak', 'fist', 'bat', 'pistol', 'sign'] as const)[combat.weapon], weaponName: combat.weaponName,
         mag: combat.mag, reserve: combat.reserve, reloading: combat.reloading,
         aiming: input.aim, crouching: player.isCrouching, dead: combat.dead, respawnIn: combat.respawnIn,
         hitTick: combat.hitTick, hurtTick: combat.hurtTick, nearCar: player.nearCar,

@@ -25,3 +25,7 @@ Funcionam só em esqueletos GTA SA padrão (Law1 a Law9). Carlos e os demais ain
 (https://sketchfab.com/ximboleta), licença CC-BY-4.0. Original em `assets-src/masp-original.glb`. Escalado para 60 m.
 Fonte: https://sketchfab.com/3d-models/masp-museu-de-arte-de-sao-paulo-simplificado-7eb9d1c77f9b43b088128fc5baa249bb
 O restante da cidade é gerado por código (`src/game/city.ts`), inspirado na maquete da Av. Paulista (foto enviada pelo autor do projeto).
+
+## Modelos GTA SA convertidos (verificar licença/autoria antes de publicar)
+- Carros Blista Compact e Buffalo (DFF/TXD fornecidos pelo usuário, convertidos para GLB; texturas genéricas de veículo do jogo original ausentes: cores sólidas).
+- Bandeira da Turquia (shovel.dff) e placa de trânsito (shovel.dff, créditos do readme: Timske, MFCL).

@@ -251,7 +251,7 @@ export class Player {
       const clip = input.sprint ? 'sprint' : input.walkClip;
       a.play(a.has(clip) ? clip : 'walk');
     } else if (this.emote && a.has(this.emote)) a.play(this.emote);
-    else a.play(this.combatT > 0 && this.armed === 'none' && a.has('combat_idle') ? 'combat_idle' : this.armed === 'bat' && a.has('bat_idle') ? 'bat_idle' : (this.armed === 'rifle' || this.armed === 'aim') && a.has('gun_idle') ? 'gun_idle' : 'idle');
+    else a.play(this.combatT > 0 && this.armed === 'none' && a.has('combat_idle') ? 'combat_idle' : (this.armed === 'bat' || this.armed === 'sign') && a.has('bat_idle') ? 'bat_idle' : (this.armed === 'rifle' || this.armed === 'aim') && a.has('gun_idle') ? 'gun_idle' : 'idle');
   }
 
   /** Emote (loop até mexer) ou ação (rolar, mergulhar). */

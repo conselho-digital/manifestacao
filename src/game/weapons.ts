@@ -12,6 +12,9 @@ const loadRifle = (): Promise<THREE.Object3D> => (rifleSrc ??= loader.loadAsync(
 let flagSrc: Promise<THREE.Object3D> | null = null;
 const loadFlag = (): Promise<THREE.Object3D> => (flagSrc ??= loader.loadAsync('/models/weapons/flag-turkey.glb').then((g) => g.scene));
 
+let signSrc: Promise<THREE.Object3D> | null = null;
+const loadSign = (): Promise<THREE.Object3D> => (signSrc ??= loader.loadAsync('/models/weapons/traffic-sign.glb').then((g) => g.scene));
+
 let flashTex: THREE.Texture | null = null;
 function flashTexture(): THREE.Texture {
   if (flashTex) return flashTex;
@@ -35,6 +38,8 @@ export class WeaponVisual {
   private rifleInner: THREE.Object3D | null = null;
   private readonly pistolInner = buildPistol();
   private readonly batAnchor = new THREE.Group();
+  private readonly flagInner = new THREE.Group();
+  private readonly signInner = new THREE.Group();
   private flashT = 0;
   private mode: ArmedMode = 'none';
   private ready = false;
@@ -48,10 +53,13 @@ export class WeaponVisual {
     root.add(this.anchor);
     this.anchor.add(this.pistolInner);
     this.pistolInner.visible = false;
-    this.batAnchor.add(buildBat());
+    const fallbackBat = buildBat();
+    this.batAnchor.add(fallbackBat);
     // o "taco" é a bandeira num mastro (modelo convertido do DFF); enquanto carrega, vale o taco simples
+    this.batAnchor.add(this.flagInner, this.signInner);
     void loadFlag().then((src) => {
-      this.batAnchor.clear();
+      this.batAnchor.remove(fallbackBat);
+      this.flagInner.clear();
       const flag = src.clone(true);
       flag.traverse((o) => { o.castShadow = true; });
       const inner = new THREE.Group();
@@ -59,7 +67,18 @@ export class WeaponVisual {
       inner.rotation.x = Math.PI / 2; // mastro (Y no GLB) passa a apontar para +Z
       inner.scale.setScalar(0.75);
       inner.position.z = 0.1 - 0.35 * 0.75; // a mão direita segura perto da base do mastro (a esquerda, mais acima)
-      this.batAnchor.add(inner);
+      this.flagInner.add(inner);
+    });
+    // placa de trânsito (convertida do DFF): mesma pegada de duas mãos
+    void loadSign().then((src) => {
+      const sign = src.clone(true);
+      sign.traverse((o) => { o.castShadow = true; });
+      const inner = new THREE.Group();
+      inner.add(sign);
+      inner.rotation.x = Math.PI / 2;
+      inner.scale.setScalar(0.65);
+      inner.position.z = 0.2 * 0.65; // mãos a ~40 cm da base do poste
+      this.signInner.add(inner);
     });
     this.batAnchor.visible = false;
     root.add(this.batAnchor);
@@ -125,7 +144,9 @@ export class WeaponVisual {
 
   private refresh(): void {
     const show = this.ready && this.mode !== 'none' && !this.hidden && !this.suppressed;
-    const bat = this.mode === 'bat';
+    const bat = this.mode === 'bat' || this.mode === 'sign';
+    this.flagInner.visible = this.mode === 'bat';
+    this.signInner.visible = this.mode === 'sign';
     const pistol = this.mode === 'pistol' || this.mode === 'pistol_aim';
     this.anchor.visible = show && !bat;
     this.batAnchor.visible = show && bat;
