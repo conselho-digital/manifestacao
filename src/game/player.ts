@@ -48,6 +48,7 @@ export class Player {
   private crouching = false;
   private swingT = 0;
   private swingAlt = false;
+  private punchN = 0;
   private crouchK = 0; // 0 em pé, 1 agachado (suaviza a câmera)
   /** direção do movimento em relação ao corpo: frente(+) e esquerda(+) */
   private moveF = 0;
@@ -80,10 +81,12 @@ export class Player {
   /** 0 nada, 1 fuzil, 2 fuzil mirando, 3 taco, 4 pistola, 5 pistola mirando (enviado aos outros) */
   get weaponCode(): number { return ARMED_CODE[this.armed]; }
 
-  /** Soco (jab de boxe). */
+  /** Soco: combo de 4 animações. */
   punch(): void {
     if (this.mode !== 'ground') return;
-    this.animator?.jab();
+    this.punchN = this.punchN % 4 + 1; // combo: knife_1, 2, 3, 4 do seu arquivo
+    this.swingT = 0.55;
+    this.animator?.restart(`punch_${this.punchN}`);
   }
 
   /** Golpe de taco (animação e trava a troca de clipe até acabar). */

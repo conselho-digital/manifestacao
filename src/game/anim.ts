@@ -16,7 +16,7 @@ type Kind3 = 'rifle' | 'pistol' | 'bat';
 const kindOf = (a: Armed): Kind3 | null => (a === 'rifle' || a === 'aim' ? 'rifle' : a === 'pistol' || a === 'pistol_aim' ? 'pistol' : a === 'bat' ? 'bat' : null);
 
 /** Clipes que tocam uma vez e param no último quadro. */
-const ONCE = new Set(['bat_swing', 'bat_swing2', 'jump_launch', 'jump_land', 'climb_jump', 'climb_pull', 'climb_stand', 'roll', 'dive']);
+const ONCE = new Set(['punch_1', 'punch_2', 'punch_3', 'punch_4', 'bat_swing', 'bat_swing2', 'jump_launch', 'jump_land', 'climb_jump', 'climb_pull', 'climb_stand', 'roll', 'dive']);
 export const isOnceClip = (name: string): boolean => ONCE.has(name);
 
 /** Clipes em que o personagem não segura o fuzil (escalar, rolar, mergulhar, emotes). */
@@ -26,7 +26,7 @@ const FREE_HANDS = (name: string): boolean => name.startsWith('climb_') || name 
 const OWN_HOLD = (name: string): boolean => name.startsWith('gun_') || name.startsWith('crouch_') || name === 'run_armed' || name === 'walk_armed';
 
 /** Velocidade de reprodução (1 = original). Os clipes de arma andam um pouco mais rápido que o jogo. */
-const TIME_SCALE: Record<string, number> = { bat_swing: 1.3, bat_swing2: 1.5, gun_fwd: 1.2, gun_bwd: 1.2, gun_left: 1.2, gun_right: 1.2, crouch_fwd: 1.1, crouch_bwd: 1.1 };
+const TIME_SCALE: Record<string, number> = { punch_1: 1.7, punch_2: 1.6, punch_3: 1.6, punch_4: 1.6, bat_swing: 1.3, bat_swing2: 1.5, gun_fwd: 1.2, gun_bwd: 1.2, gun_left: 1.2, gun_right: 1.2, crouch_fwd: 1.1, crouch_bwd: 1.1 };
 
 /** Animações disponíveis no menu. */
 export const EMOTES: { id: string; label: string }[] = [
