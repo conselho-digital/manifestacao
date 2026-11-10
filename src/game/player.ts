@@ -50,6 +50,7 @@ export class Player {
   private swingAlt = false;
   private punchN = 0;
   private hitN = 0;
+  private combatT = 0; // tempo restante em modo de combate (guarda) depois de socar
   private lastHitAt = -1e9;
   private crouchK = 0; // 0 em pé, 1 agachado (suaviza a câmera)
   /** direção do movimento em relação ao corpo: frente(+) e esquerda(+) */
@@ -98,6 +99,7 @@ export class Player {
     if (this.mode !== 'ground') return;
     this.punchN = this.punchN % 4 + 1; // combo: knife_1, 2, 3, 4 do seu arquivo
     this.swingT = 0.55;
+    this.combatT = 3; // fica em guarda por 3 s
     this.animator?.restart(`punch_${this.punchN}`);
   }
 
@@ -233,6 +235,7 @@ export class Player {
       this.landT -= dt;
       if (!moving) return; // termina o pouso parado
     }
+    if (this.combatT > 0) this.combatT -= dt;
     if (this.swingT > 0) { this.swingT -= dt; return; } // golpe de taco em andamento
     const armed = facesAim(this.armed); // só o fuzil e a pistola mirando usam os passos de arma (de frente, de costas e de lado)
     if (this.crouching) {
@@ -248,7 +251,7 @@ export class Player {
       const clip = input.sprint ? 'sprint' : input.walkClip;
       a.play(a.has(clip) ? clip : 'walk');
     } else if (this.emote && a.has(this.emote)) a.play(this.emote);
-    else a.play(this.armed === 'bat' && a.has('bat_idle') ? 'bat_idle' : (this.armed === 'rifle' || this.armed === 'aim') && a.has('gun_idle') ? 'gun_idle' : 'idle');
+    else a.play(this.combatT > 0 && this.armed === 'none' && a.has('combat_idle') ? 'combat_idle' : this.armed === 'bat' && a.has('bat_idle') ? 'bat_idle' : (this.armed === 'rifle' || this.armed === 'aim') && a.has('gun_idle') ? 'gun_idle' : 'idle');
   }
 
   /** Emote (loop até mexer) ou ação (rolar, mergulhar). */
