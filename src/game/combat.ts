@@ -15,7 +15,7 @@ const PISTOL_DAMAGE = 15;
 const PISTOL_GAP = 0.28;
 const BAT_DAMAGE = 30;
 const BAT_GAP = 0.9;
-const BAT_RANGE = 2.3;
+const BAT_RANGE = 2.5;
 const AK_DAMAGE = 20;
 const FIST_DAMAGE = 12;
 const RELOAD_TIME = 1.6;
@@ -144,7 +144,7 @@ export class Combat {
           this.fireGun(player, aiming, this.weapon === 0 ? 'r' : 'p');
         } else { this.cd = 0.3; playShot(0.6, true); this.startReload(); }
       } else if (this.weapon === 2) { this.cd = BAT_GAP; player.swing(); this.melee(player, BAT_RANGE, 'b'); }
-      else { this.cd = FIST_GAP; this.melee(player, FIST_RANGE, 'f'); }
+      else { this.cd = FIST_GAP; player.punch(); this.melee(player, FIST_RANGE, 'f'); }
     }
   }
 

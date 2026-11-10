@@ -9,6 +9,9 @@ const loader = new GLTFLoader();
 let rifleSrc: Promise<THREE.Object3D> | null = null;
 const loadRifle = (): Promise<THREE.Object3D> => (rifleSrc ??= loader.loadAsync('/models/weapons/AK47.glb').then((g) => g.scene));
 
+let flagSrc: Promise<THREE.Object3D> | null = null;
+const loadFlag = (): Promise<THREE.Object3D> => (flagSrc ??= loader.loadAsync('/models/weapons/flag-turkey.glb').then((g) => g.scene));
+
 let flashTex: THREE.Texture | null = null;
 function flashTexture(): THREE.Texture {
   if (flashTex) return flashTex;
@@ -46,6 +49,18 @@ export class WeaponVisual {
     this.anchor.add(this.pistolInner);
     this.pistolInner.visible = false;
     this.batAnchor.add(buildBat());
+    // o "taco" é a bandeira num mastro (modelo convertido do DFF); enquanto carrega, vale o taco simples
+    void loadFlag().then((src) => {
+      this.batAnchor.clear();
+      const flag = src.clone(true);
+      flag.traverse((o) => { o.castShadow = true; });
+      const inner = new THREE.Group();
+      inner.add(flag);
+      inner.rotation.x = Math.PI / 2; // mastro (Y no GLB) passa a apontar para +Z
+      inner.scale.setScalar(0.75);
+      inner.position.z = -0.1 * 0.75; // a mão segura o mastro um pouco acima da base
+      this.batAnchor.add(inner);
+    });
     this.batAnchor.visible = false;
     root.add(this.batAnchor);
     this.flashSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: flashTexture(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));

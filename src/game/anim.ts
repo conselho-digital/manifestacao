@@ -80,6 +80,7 @@ function gtaKey(name: string): string {
 }
 
 const FADE = 0.2;
+const JAB_TIME = 0.42;
 const X = new THREE.Vector3(1, 0, 0);
 const Y = new THREE.Vector3(0, 1, 0);
 const Z = new THREE.Vector3(0, 0, 1);
@@ -134,6 +135,7 @@ export class Animator {
   private done = false;
   private armW = 0; // 0 = braços do clipe, 1 = braços segurando o fuzil
   private aimK = 0; // 0 = fuzil baixo, 1 = fuzil no ombro
+  private jabT = -1; // soco em andamento (0..1), -1 = nenhum
   private recoil = 0; // coice do último tiro (1 -> 0)
   private legK = 0; // andando agachado: dobra mais os joelhos
   private footRest = 0; // altura do pé mais baixo em repouso (espaço do modelo)
@@ -320,6 +322,11 @@ export class Animator {
     this.armed = a;
   }
 
+  /** Soco direto do boxe (jab): braço da frente estica, o de trás protege o rosto, o tronco gira. */
+  jab(): void {
+    this.jabT = 0;
+  }
+
   /** Coice: o fuzil recua e sobe um pouco por um instante. */
   kick(): void {
     this.recoil = 1;
@@ -384,10 +391,21 @@ export class Animator {
     const crouchT = this.clipName === 'crouch_idle' ? 1 : this.clipName.startsWith('crouch_') ? 0.2 : 0;
     this.crouchK += (crouchT - this.crouchK) * Math.min(1, dt * 8);
     this.legK += ((this.clipName === 'crouch_fwd' || this.clipName === 'crouch_bwd' ? 1 : 0) - this.legK) * Math.min(1, dt * 8);
+    let jabW = 0;
+    let jabE = 0;
+    if (this.jabT >= 0) {
+      this.jabT += dt / JAB_TIME;
+      if (this.jabT >= 1) this.jabT = -1;
+      else {
+        const t = this.jabT;
+        jabW = THREE.MathUtils.clamp(Math.min(t / 0.12, (1 - t) / 0.22), 0, 1);
+        jabE = t < 0.32 ? Math.sin((t / 0.32) * Math.PI * 0.5) : Math.pow(1 - (t - 0.32) / 0.68, 1.6);
+      }
+    }
     const armed = this.armW >= 0.01;
     const holding = this.holdsWeapon;
     if (kind === 'bat' && holding) this.poseBat();
-    if ((!armed && !holding && this.crouchK < 0.01 && this.legK < 0.01) || !this.spine) {
+    if ((!armed && !holding && this.crouchK < 0.01 && this.legK < 0.01 && jabW === 0) || !this.spine) {
       this.groundFeet(dt);
       for (const b of this.touched) this.clean.set(b, b.quaternion.clone()); // tudo vem do clipe
       return;
@@ -397,6 +415,7 @@ export class Animator {
     this.updateRoot();
     this.bendTorso();
     if (this.legK >= 0.01) this.flexLegs();
+    if (jabW > 0) this.applyJab(jabW, jabE, dt);
     this.updateRoot();
     this.groundFeet(dt);
     if (!armed && !holding) return;
@@ -439,6 +458,20 @@ export class Animator {
     for (const l of this.legs) {
       this.rotateBone(l.thigh, thigh);
       this.rotateBone(l.calf, calf);
+    }
+  }
+
+  private applyJab(w: number, e: number, dt: number): void {
+    const sp = this.spine!;
+    const turn = new THREE.Quaternion().setFromAxisAngle(Y, -0.32 * e * w);
+    this.rotateBone(sp.mid, new THREE.Quaternion().setFromAxisAngle(Y, -0.12 * e * w));
+    this.rotateBone(sp.chest, turn);
+    this.updateRoot();
+    for (const arm of this.arms) {
+      const guard = arm.side > 0 ? P3(0.1, 1.37, 0.27) : P3(-0.1, 1.4, 0.25);
+      // braço da frente (esquerdo) estica na altura do ombro; o de trás só protege o rosto
+      const target = arm.side > 0 ? guard.clone().lerp(P3(0.04, 1.5, 0.78), e) : guard;
+      this.solveArm(arm, target, w, dt);
     }
   }
 
@@ -552,6 +585,11 @@ export class Animator {
     const w = kind === 'pistol' && this.armed === 'pistol' && arm.side > 0 ? 0 : this.armW;
     if (w < 0.01) return;
     const wrist = (arm.side < 0 ? CFG[kind].gripR : CFG[kind].gripL).clone().applyQuaternion(frame.q).add(frame.pos);
+    this.solveArm(arm, wrist, w, dt);
+  }
+
+  /** Leva a mão do braço até `wrist` (espaço do personagem) com peso `w` sobre o que o clipe fez. */
+  private solveArm(arm: Arm, wrist: THREE.Vector3, w: number, dt: number): void {
     // clavícula: acompanha um pouco o braço (evita o ombro "rasgar" quando o braço sobe)
     if (arm.c) {
       arm.c.updateMatrixWorld(true);

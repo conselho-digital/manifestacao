@@ -79,6 +79,12 @@ export class Player {
   /** 0 nada, 1 fuzil, 2 fuzil mirando, 3 taco, 4 pistola, 5 pistola mirando (enviado aos outros) */
   get weaponCode(): number { return ARMED_CODE[this.armed]; }
 
+  /** Soco (jab de boxe). */
+  punch(): void {
+    if (this.mode !== 'ground') return;
+    this.animator?.jab();
+  }
+
   /** Golpe de taco (animação e trava a troca de clipe até acabar). */
   swing(): void {
     if (this.mode !== 'ground') return;

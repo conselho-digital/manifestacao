@@ -56,6 +56,21 @@ function tile(col: number, cols: number, row: number, rows: number, view: 'side'
 }
 
 const V = {
+  /** Soco (jab): n instantes do golpe. */
+  jabSheet(n: number, views: ('side' | 'front' | 'cam' | 'closeR' | 'closeF')[] = ['side', 'front']): void {
+    renderer.setScissor(0, 0, W, H);
+    renderer.setViewport(0, 0, W, H);
+    renderer.clear();
+    for (let i = 0; i < n; i++) {
+      animator.play('idle');
+      animator.setArmed('none');
+      animator.seek('idle', 0);
+      animator.jab();
+      const frames = Math.round(((i + 0.5) / n) * 0.42 * 60);
+      for (let f = 0; f < frames; f++) animator.update(1 / 60);
+      views.forEach((v, r) => tile(i, n, r, views.length, v));
+    }
+  },
   /** Simula o jogo: toca o clipe por n quadros de 1/30 s (suavizações reais) e desenha 1 tile. */
   live(clip: string, armed: Armed, pitch: number, frames: number, view: 'side' | 'cam' | 'closeR' | 'closeB' | 'front'): void {
     animator.setArmed(armed);
