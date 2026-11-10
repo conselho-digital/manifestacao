@@ -16,7 +16,7 @@ type Kind3 = 'rifle' | 'pistol' | 'bat';
 const kindOf = (a: Armed): Kind3 | null => (a === 'rifle' || a === 'aim' ? 'rifle' : a === 'pistol' || a === 'pistol_aim' ? 'pistol' : a === 'bat' ? 'bat' : null);
 
 /** Clipes que tocam uma vez e param no último quadro. */
-const ONCE = new Set(['bat_swing', 'jump_launch', 'jump_land', 'climb_jump', 'climb_pull', 'climb_stand', 'roll', 'dive']);
+const ONCE = new Set(['bat_swing', 'bat_swing2', 'jump_launch', 'jump_land', 'climb_jump', 'climb_pull', 'climb_stand', 'roll', 'dive']);
 export const isOnceClip = (name: string): boolean => ONCE.has(name);
 
 /** Clipes em que o personagem não segura o fuzil (escalar, rolar, mergulhar, emotes). */
@@ -26,7 +26,7 @@ const FREE_HANDS = (name: string): boolean => name.startsWith('climb_') || name 
 const OWN_HOLD = (name: string): boolean => name.startsWith('gun_') || name.startsWith('crouch_') || name === 'run_armed' || name === 'walk_armed';
 
 /** Velocidade de reprodução (1 = original). Os clipes de arma andam um pouco mais rápido que o jogo. */
-const TIME_SCALE: Record<string, number> = { bat_swing: 2, gun_fwd: 1.2, gun_bwd: 1.2, gun_left: 1.2, gun_right: 1.2, crouch_fwd: 1.1, crouch_bwd: 1.1 };
+const TIME_SCALE: Record<string, number> = { bat_swing: 1.3, bat_swing2: 1.5, gun_fwd: 1.2, gun_bwd: 1.2, gun_left: 1.2, gun_right: 1.2, crouch_fwd: 1.1, crouch_bwd: 1.1 };
 
 /** Animações disponíveis no menu. */
 export const EMOTES: { id: string; label: string }[] = [
@@ -475,19 +475,34 @@ export class Animator {
     }
   }
 
-  /** Taco na mão direita: a posição vem da mão; a inclinação, da rotação da mão desde o repouso. */
+  /** Taco/bandeira com as duas mãos: o mastro passa pelas mãos (a mão direita segura perto da base; a ponta aponta para o lado da mão esquerda). */
   private poseBat(): void {
     const right = this.arms.find((a) => a.side < 0);
-    if (!this.bat || !right) return;
+    const left = this.arms.find((a) => a.side > 0);
+    if (!this.bat || !right || !left) return;
     this.updateRoot();
-    const hand = this.posIn(right.h, new THREE.Vector3());
-    const elbow = this.posIn(right.f, new THREE.Vector3());
-    hand.addScaledVector(hand.clone().sub(elbow).normalize(), 0.04);
-    const delta = this.quatIn(right.h, new THREE.Quaternion()).multiply(right.q0[2].clone().invert());
-    // em repouso o taco aponta para a frente e para cima (cabo na palma)
-    const rest = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0.55, 0.83).normalize());
-    this.bat.position.copy(hand);
-    this.bat.quaternion.copy(delta.multiply(rest));
+    const palm = (arm: Arm): THREE.Vector3 => {
+      const hand = this.posIn(arm.h, new THREE.Vector3());
+      const elbow = this.posIn(arm.f, new THREE.Vector3());
+      return hand.addScaledVector(hand.clone().sub(elbow).normalize(), 0.04);
+    };
+    const hr = palm(right);
+    const hl = palm(left);
+    const axis = hl.clone().sub(hr);
+    if (axis.length() < 0.08) {
+      // mãos coladas: só a mão direita segura; taco para a frente e para cima
+      const delta = this.quatIn(right.h, new THREE.Quaternion()).multiply(right.q0[2].clone().invert());
+      const rest = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0.55, 0.83).normalize());
+      this.bat.position.copy(hr);
+      this.bat.quaternion.copy(delta.multiply(rest));
+      return;
+    }
+    axis.normalize();
+    const up = Math.abs(axis.y) > 0.95 ? new THREE.Vector3(0, 0, 1) : Y;
+    const xAxis = new THREE.Vector3().crossVectors(up, axis).normalize();
+    const yAxis = new THREE.Vector3().crossVectors(axis, xAxis);
+    this.bat.position.copy(hr);
+    this.bat.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, axis));
   }
 
   private updateRoot(): void {

@@ -47,6 +47,7 @@ export class Player {
   private armed: Armed = 'none';
   private crouching = false;
   private swingT = 0;
+  private swingAlt = false;
   private crouchK = 0; // 0 em pé, 1 agachado (suaviza a câmera)
   /** direção do movimento em relação ao corpo: frente(+) e esquerda(+) */
   private moveF = 0;
@@ -88,8 +89,9 @@ export class Player {
   /** Golpe de taco (animação e trava a troca de clipe até acabar). */
   swing(): void {
     if (this.mode !== 'ground') return;
-    this.swingT = 0.7;
-    this.animator?.restart('bat_swing');
+    this.swingT = 0.75;
+    this.swingAlt = !this.swingAlt;
+    this.animator?.restart(this.swingAlt ? 'bat_swing2' : 'bat_swing');
   }
 
   /** Muda o que o personagem segura (braços e arma na mão). */

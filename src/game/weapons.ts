@@ -58,7 +58,7 @@ export class WeaponVisual {
       inner.add(flag);
       inner.rotation.x = Math.PI / 2; // mastro (Y no GLB) passa a apontar para +Z
       inner.scale.setScalar(0.75);
-      inner.position.z = -0.1 * 0.75; // a mão segura o mastro um pouco acima da base
+      inner.position.z = 0.1 - 0.35 * 0.75; // a mão direita segura perto da base do mastro (a esquerda, mais acima)
       this.batAnchor.add(inner);
     });
     this.batAnchor.visible = false;
