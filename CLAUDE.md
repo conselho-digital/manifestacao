@@ -98,6 +98,7 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 - Migração `supabase/graffiti_and_billboard.sql` (coluna, bucket, políticas, tabela `billboard`, `server_time()`, Realtime). Sem ela o jogo funciona: o grafite usa o desenho padrão e o outdoor fica "sem vídeo".
 - Mão na lata de spray: aberta pela metade, palma para a frente, só a mão gira (`SPRAY_HAND_ROLL` -90° e `SPRAY_HAND_BEND` 70° só no osso da mão em `solveArm`; dedos `SPRAY_CURL`; `CFG_SPRAY.gripR` põe a lata na frente da palma). `/dev/anim-viewer.html` tem as vistas `palmF` e `palmT`, e `window.__HROLL`/`__HBEND` (graus) para testar.
 - Sub agente de revisão: `.claude/agents/revisor-bugs-seguranca.md` (só lê e relata bugs e problemas de segurança: rede, Supabase/RLS, XSS, admin, vazamentos). Chamar pelo nome.
+- Contador de FPS (`m-fps` em mobile.ts): canto superior esquerdo, ao lado do minimapa, atualiza a cada 0,5 s no relógio real; verde ≥ 50, amarelo ≥ 30, vermelho abaixo.
 - HUD do celular: sem arma de fogo (`GUN_IDS`) os botões de mirar e recarregar somem.
 
 ## Mapa (cidade)

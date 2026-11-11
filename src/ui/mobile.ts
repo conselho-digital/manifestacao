@@ -82,6 +82,7 @@ const CSS = `
 .m-bar b{display:block;width:calc(var(--u)*25);height:calc(var(--u)*3);border:calc(var(--u)*.3) solid #000;background:rgba(0,0,0,.55);position:relative}
 .m-bar b span{position:absolute;left:0;top:0;bottom:0;width:100%;transition:width .15s}
 .m-hp span{background:#69b25a}.m-ar span{background:#3d7be0}
+.m-fps{position:fixed;left:calc(var(--u)*24.5);top:calc(var(--u)*2.6);font:800 calc(var(--u)*3.4)/1 system-ui,sans-serif;color:#7CFC7C;text-shadow:0 0 calc(var(--u)*.5) #000,0 0 calc(var(--u)*.9) #000;pointer-events:none}
 .m-place{position:fixed;left:50%;transform:translateX(-50%);top:calc(var(--u)*2.8);font-size:calc(var(--u)*3.8);letter-spacing:.03em;white-space:nowrap}
 .m-money{position:fixed;right:calc(var(--u)*24.5);top:calc(var(--u)*2.2);font-size:calc(var(--u)*5);color:#d9d9d9}
 .m-speed{position:fixed;right:calc(var(--u)*24.5);top:calc(var(--u)*9.5);width:calc(var(--u)*11);height:calc(var(--u)*2);border:calc(var(--u)*.3) solid #000;background:rgba(0,0,0,.5)}
@@ -385,6 +386,9 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
 
   // Nome do lugar onde estou (topo, ao lado do botão Animações)
   const place = make('m-place m-out', hud);
+  const fpsEl = make('m-fps', hud);
+  let fpsFrames = 0;
+  let fpsT = performance.now();
 
   // Dinheiro, velocidade, arma e munição (a pé) / velocímetro (no carro)
   const money = make('m-money m-out foot', hud);
@@ -549,6 +553,16 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
     addChat,
     setVoice,
     update(s, dt): void {
+      // contador de quadros por segundo (conta no relógio real, não no dt do jogo, que é limitado a 50 ms)
+      fpsFrames++;
+      const nowMs = performance.now();
+      if (nowMs - fpsT >= 500) {
+        const fps = Math.round((fpsFrames * 1000) / (nowMs - fpsT));
+        fpsFrames = 0;
+        fpsT = nowMs;
+        fpsEl.textContent = `${fps} FPS`;
+        fpsEl.style.color = fps >= 50 ? '#7CFC7C' : fps >= 30 ? '#ffd84d' : '#ff6b5e';
+      }
       hud.classList.toggle('driving', s.driving);
       hud.classList.toggle('bike', s.driving && s.bike);
       if (!s.driving && steer !== 0) { steer = 0; applySteer(); } // saiu do carro com o dedo no botão
