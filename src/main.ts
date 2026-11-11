@@ -87,7 +87,7 @@ function menuCamera(dt: number): void {
 // No menu: pré-carrega e aquece o mapa, os veículos e as armas para o jogo não engasgar
 // No menu a cidade é desenhada sem recalcular sombras e com resolução 1x (mais leve); o jogo volta ao normal ao entrar
 const GAME_PIXEL_RATIO = pixelRatio();
-void warmUp(renderer, scene, camera).then(() => {
+void warmUp(renderer, scene, camera, menuFog).then(() => {
   if (!inMenu) return;
   renderer.shadowMap.autoUpdate = false;
   renderer.setPixelRatio(1);
