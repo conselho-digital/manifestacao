@@ -5,12 +5,12 @@ import * as THREE from 'three';
 import { addBox } from './map';
 
 const TEXT = 'Safra';
-const PX = 0.009; // metros por pixel do canvas (letra maiúscula ≈ 1,3 m)
-const DEPTH = 0.75; // espessura das letras
-const SLICES = 11;
+const PX = 0.018; // metros por pixel do canvas (letra maiúscula ≈ 2,6 m antes da escala do mapa)
+const DEPTH = 1.5; // espessura das letras
+const SLICES = 20;
 const PILLAR = 1.0; // lado do pilar
 const BASE_Y = 2.3; // onde começa a primeira letra (o S)
-const GAP = 0.12;
+const GAP = 0.24;
 
 /** escala da escultura no mapa (0,5 = metade do tamanho original, ~3,5 m de altura) */
 const SCALE = 0.5;
@@ -77,7 +77,7 @@ export function createSafraSign(): THREE.Group {
     const fm = new THREE.Mesh(fg, new THREE.MeshLambertMaterial({ map: t.front, transparent: true, alphaTest: 0.5, emissive: 0xffffff, emissiveIntensity: 0.85, emissiveMap: t.front }));
     frontMeshes.push(fm);
     letters.add(fm);
-    cursor += w - 0.06 + GAP;
+    cursor += w - 0.12 + GAP;
   }
   void sideGeos;
   const total = cursor - GAP;
