@@ -32,6 +32,8 @@ const FREE_HANDS = (name: string): boolean => name.startsWith('climb_') || name 
 const OWN_HOLD = (name: string): boolean => name.startsWith('gun_') || name.startsWith('crouch_') || name === 'run_armed' || name === 'walk_armed';
 
 /** Velocidade de reprodução (1 = original). Os clipes de arma andam um pouco mais rápido que o jogo. */
+/** Clipes em que as pernas ficam paradas na pose do 1º quadro: o IFP não guarda o deslocamento do corpo, então os passos do soco/tacada faziam as pernas patinarem com o corpo parado. */
+const PLANTED = new Set(['punch_1', 'punch_2', 'punch_3', 'bat_swing']);
 const TIME_SCALE: Record<string, number> = { ko: 1.8, getup: 1.8, ko_front: 1.5, getup_front: 1.8, bike_fall: 1.2, car_getin_l: 0.62, car_getout_l: 0.62, hit_3: 2, punch_1: 2.2, punch_2: 2.2, punch_3: 2.0, punch_4: 1.6, bat_swing: 1.3, bat_swing2: 1.5, bat_swing3: 1.5, bat_hit_1: 1.5, bat_hit_2: 1.6, bat_hit_3: 1.8, gun_fwd: 1.2, gun_bwd: 1.2, gun_left: 1.2, gun_right: 1.2, crouch_fwd: 0.8, crouch_bwd: 0.8 };
 
 /** Animações disponíveis no menu. */
@@ -290,6 +292,48 @@ export class Animator {
     const mixer = new THREE.AnimationMixer(root);
     const a = new Animator(root, mixer, arms, spine, legs, hands);
     a.isCarlos = !isGta;
+    // ossos das pernas: nos socos e na tacada ficam parados (ver PLANTED)
+    const legNames = new Set(legs.flatMap((l) => [l.thigh.name, l.calf.name, l.foot.name]));
+    const planted = (name: string): boolean => PLANTED.has(name);
+    // quadril: ancestral comum das pernas e da coluna (GTA: pélvis; Carlos: root_hips) e o osso da coluna logo abaixo dele
+    let pelvis: THREE.Bone | undefined;
+    let spineRoot: THREE.Bone | undefined;
+    if (legs[0] && spine) {
+      const isUnder = (o: THREE.Object3D, anc: THREE.Object3D): boolean => { for (let n: THREE.Object3D | null = o; n; n = n.parent) if (n === anc) return true; return false; };
+      for (let n = legs[0].thigh.parent; n && !pelvis; n = n.parent) if ((n as THREE.Bone).isBone && isUnder(spine.mid, n)) pelvis = n as THREE.Bone;
+      for (let n: THREE.Object3D | null = spine.mid; n && pelvis; n = n.parent) if (n.parent === pelvis) { spineRoot = n as THREE.Bone; break; }
+    }
+    const keepFeet = (tracks: THREE.KeyframeTrack[], name: string): void => {
+      if (!planted(name)) return;
+      for (let i = 0; i < tracks.length; i++) {
+        const tr = tracks[i]!;
+        if (!legNames.has(tr.name.split('.')[0]!)) continue;
+        tracks[i] = new THREE.QuaternionKeyframeTrack(tr.name, [0], Array.from(tr.values.slice(0, 4)));
+      }
+      // quadril também parado (girar o quadril com as pernas rígidas levantava o pé do chão); o giro vai para a coluna, então o tronco se mexe igual
+      if (!pelvis || !spineRoot) return;
+      const pi = tracks.findIndex((t) => t.name === `${pelvis.name}.quaternion`);
+      const si = tracks.findIndex((t) => t.name === `${spineRoot.name}.quaternion`);
+      const pt = tracks[pi];
+      const st = tracks[si];
+      if (!pt || !st || pt.times.length !== st.times.length) return;
+      const p0 = new THREE.Quaternion().fromArray(pt.values, 0);
+      const p0i = p0.clone().invert();
+      const pv = Array.from(pt.values);
+      const sv = Array.from(st.values);
+      const qp = new THREE.Quaternion();
+      const qs = new THREE.Quaternion();
+      for (let k = 0; k < pt.times.length; k++) {
+        qp.fromArray(pt.values, k * 4);
+        qs.fromArray(st.values, k * 4);
+        // coluna' = quadril_parado⁻¹ · quadril · coluna (a rotação do peito no mundo não muda)
+        qs.premultiply(qp).premultiply(p0i);
+        qs.toArray(sv, k * 4);
+        p0.toArray(pv, k * 4);
+      }
+      tracks[pi] = new THREE.QuaternionKeyframeTrack(pt.name, Array.from(pt.times), pv);
+      tracks[si] = new THREE.QuaternionKeyframeTrack(st.name, Array.from(st.times), sv);
+    };
     a.addClips = (file) => {
       for (const [name, clip] of Object.entries(file)) {
         const tracks: THREE.KeyframeTrack[] = [];
@@ -311,6 +355,7 @@ export class Animator {
             if (bone) tracks.push(new THREE.QuaternionKeyframeTrack(`${bone.name}.quaternion`, tr.t, tr.q));
           }
         }
+        keepFeet(tracks, name);
         const action = mixer.clipAction(new THREE.AnimationClip(name, clip.duration, tracks));
         if (clip.drop) a.drops.set(name, clip.drop);
         action.timeScale = TIME_SCALE[name] ?? 1;
