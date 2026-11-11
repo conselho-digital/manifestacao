@@ -263,6 +263,9 @@ const footprints: { name: string; r: Rect; allowWalk?: boolean }[] = [];
 /** postes e abrigos (para a verificação de desenvolvimento: nada no meio da rua) */
 const propSpots: [string, number, number][] = [];
 
+/** Detalhes de telhado (casa de máquinas, caixa d'água, ventiladores, chaminé, helipontos): quase nunca aparecem vistos da rua, então não são gerados (cidade mais leve). As antenas ficam: aparecem de longe. */
+const ROOF_DETAILS = false;
+
 function addBuilding(b: Batch, s: Spec, helipads: THREE.Mesh[], hpTex: THREE.Texture, name: string): void {
   const r = R(s.sx0, s.sx1, s.sz0, s.sz1);
   const x = (r.x0 + r.x1) / 2;
@@ -277,7 +280,7 @@ function addBuilding(b: Batch, s: Spec, helipads: THREE.Mesh[], hpTex: THREE.Tex
   if (kind === 'house') {
     b.wall(x, z, w, d, h - 2.2 > 3 ? h - 2.2 : h, 'house');
     b.hip(s.roof === 'red' ? 'redroof' : 'grayroof', x, z, w + 0.8, d + 0.8, h - 2.2 > 3 ? h - 2.2 : h, 3.2);
-    b.box('roof', 1, 2, 1, x + w * 0.2, h, z - d * 0.1); // chaminé
+    if (ROOF_DETAILS) b.box('roof', 1, 2, 1, x + w * 0.2, h, z - d * 0.1); // chaminé
     return;
   }
 
@@ -315,17 +318,21 @@ function addBuilding(b: Batch, s: Spec, helipads: THREE.Mesh[], hpTex: THREE.Tex
   const rd = d * (crown ? 0.64 : 1.03);
   b.box('roof', rw, 0.7, rd, x, top, z);
   top += 0.7;
-  b.box('gray', rw * 0.34, 3.2, rd * 0.3, x - rw * 0.18, top, z + rd * 0.12);
-  b.cyl('metal', 1.3, 2.4, x + rw * 0.2, top, z - rd * 0.18, 10);
-  b.cyl('gray', 1.4, 0.3, x + rw * 0.2, top + 2.4, z - rd * 0.18, 10);
-  if (s.ac) {
-    // ventiladores redondos, como no prédio grande da foto
-    for (let i = 0; i < 4; i++) {
-      b.cyl('metal', 1.0, 0.7, x + rw * (-0.3 + i * 0.2), top, z + rd * 0.3, 12);
-      b.cyl('gray', 0.75, 0.15, x + rw * (-0.3 + i * 0.2), top + 0.7, z + rd * 0.3, 12);
+  if (ROOF_DETAILS) {
+    b.box('gray', rw * 0.34, 3.2, rd * 0.3, x - rw * 0.18, top, z + rd * 0.12);
+    b.cyl('metal', 1.3, 2.4, x + rw * 0.2, top, z - rd * 0.18, 10);
+    b.cyl('gray', 1.4, 0.3, x + rw * 0.2, top + 2.4, z - rd * 0.18, 10);
+    if (s.ac) {
+      // ventiladores redondos, como no prédio grande da foto
+      for (let i = 0; i < 4; i++) {
+        b.cyl('metal', 1.0, 0.7, x + rw * (-0.3 + i * 0.2), top, z + rd * 0.3, 12);
+        b.cyl('gray', 0.75, 0.15, x + rw * (-0.3 + i * 0.2), top + 0.7, z + rd * 0.3, 12);
+      }
     }
+    for (let i = 0; i < (s.ac ? 3 : 2); i++) b.box('gray', 2, 1.3, 2, x + (rand() - 0.5) * rw * 0.7, top, z + (rand() - 0.5) * rd * 0.7);
+  } else {
+    for (let i = 0; i < (s.ac ? 6 : 4); i++) rand(); // mantém a sequência do gerador: árvores e fachadas continuam nos mesmos lugares
   }
-  for (let i = 0; i < (s.ac ? 3 : 2); i++) b.box('gray', 2, 1.3, 2, x + (rand() - 0.5) * rw * 0.7, top, z + (rand() - 0.5) * rd * 0.7);
   if (s.antenna) {
     const ax = x + rw * 0.26;
     const az = z - rd * 0.22;
@@ -341,7 +348,7 @@ function addBuilding(b: Batch, s: Spec, helipads: THREE.Mesh[], hpTex: THREE.Tex
       b.box('gray', 1.1, 0.8, 0.5, x + (rand() - 0.5) * (w - 3), fy, z + fz);
     }
   }
-  if (s.helipad) {
+  if (ROOF_DETAILS && s.helipad) {
     const sz = Math.min(rw, rd) * 0.7;
     const hp = new THREE.Mesh(new THREE.PlaneGeometry(sz, sz), new THREE.MeshLambertMaterial({ map: hpTex }));
     hp.rotation.x = -Math.PI / 2;
@@ -602,7 +609,7 @@ export function createCity(): THREE.Group {
     o.position.set(x, 0, z);
     o.rotation.y = dir === 1 ? Math.PI / 2 : -Math.PI / 2;
     city.add(o);
-    TRAFFIC.push({ obj: o, dir, speed, stopT: 0, wobble: 0 });
+    TRAFFIC.push({ obj: o, dir, speed, stopT: 0, wobble: 0, lane: z, off: 0 });
   }
 
   // Árvores: parque denso (carvalhos, pinheiros, bordos, bétulas), calçadas, ruas e praça. Alturas reais.

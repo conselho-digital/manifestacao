@@ -359,7 +359,8 @@ export class Car {
         const min = ar + br;
         if (d >= min || d < 1e-6) continue;
         const push = (min - d) / d;
-        const share = o.driver === null ? 0.5 : 0; // veículo parado é empurrado; o de outro jogador não
+        // veículo parado é empurrado (só se o lugar novo estiver livre: não entra em parede nem em outro carro); o de outro jogador não
+        const share = o.driver === null && o.fits(o.x - dx * push * 0.5, o.z - dz * push * 0.5, this) ? 0.5 : 0;
         this.x += dx * push * (1 - share);
         this.z += dz * push * (1 - share);
         if (share > 0) o.setPose(o.x - dx * push * share, o.z - dz * push * share, o.heading);
@@ -396,6 +397,27 @@ export class Car {
     const d = Math.hypot(dx, dz) || 1;
     this.pushX += (dx / d) * strength;
     this.pushZ += (dz / d) * strength;
+  }
+
+  /** Este veículo cabe em (nx, nz), sem bater em prédio, objeto, trânsito ou outro veículo (menos `except`)? */
+  fits(nx: number, nz: number, except: Car): boolean {
+    const fx = this.bike ? 0 : Math.sin(this.heading) * 1.15;
+    const fz = this.bike ? 0 : Math.cos(this.heading) * 1.15;
+    const r = this.bike ? 0.55 : 1.0;
+    const spots: [number, number][] = this.bike ? [[nx, nz]] : [[nx + fx, nz + fz], [nx - fx, nz - fz]];
+    for (const [sx, sz] of spots) {
+      if (Math.abs(sx) > MAP.halfX - 1.8 || Math.abs(sz) > MAP.halfZ - 1.8) return false;
+      for (const b of COLLIDERS) {
+        if (b.top < 0.6 || (b.bottom ?? 0) > 2.2) continue;
+        if (Math.hypot(sx - THREE.MathUtils.clamp(sx, b.minX, b.maxX), sz - THREE.MathUtils.clamp(sz, b.minZ, b.maxZ)) < r) return false;
+      }
+      for (const o of CARS) {
+        if (o === this || o === except) continue;
+        for (const [bx, bz, br] of o.circles()) if (Math.hypot(sx - bx, sz - bz) < r + br) return false;
+      }
+      for (const t of TRAFFIC) for (const [bx, bz, br] of trafficCircles(t)) if (Math.hypot(sx - bx, sz - bz) < r + br) return false;
+    }
+    return true;
   }
 
   /** Círculos de colisão (x, z, raio) no chão. */
@@ -490,7 +512,7 @@ export class Car {
 export const CARS: Car[] = [];
 
 /** Carro do trânsito da avenida (anda sozinho, ao longo de X). */
-export interface Traffic { obj: THREE.Object3D; dir: 1 | -1; speed: number; stopT: number; wobble: number }
+export interface Traffic { obj: THREE.Object3D; dir: 1 | -1; speed: number; stopT: number; wobble: number; /** z da pista e desvio lateral atual (contornando carro parado) */ lane: number; off: number }
 export const TRAFFIC: Traffic[] = [];
 
 /** Alvo de colisão: 2 círculos por carro. `vel` = velocidade (m/s) no plano; `hit` aplica um empurrão/abalo. */
@@ -501,6 +523,7 @@ export interface Hittable {
 }
 
 const trafficCircles = (t: Traffic): [number, number, number][] => [[t.obj.position.x - 1.15, t.obj.position.z, 1.0], [t.obj.position.x + 1.15, t.obj.position.z, 1.0]];
+
 
 /** Tudo que bate: carros dirigíveis (menos `except`) e o trânsito. */
 export function hittables(except?: Car): Hittable[] {
@@ -521,18 +544,34 @@ export function hittables(except?: Car): Hittable[] {
   return out;
 }
 
-/** Anda o trânsito: para quando algo (jogador ou veículo) está na frente. */
-export function updateTraffic(dt: number, blockers: [number, number][]): void {
+/**
+ * Anda o trânsito: para quando algo (jogador, veículo em movimento) ou outro carro do trânsito está na frente;
+ * veículos parados na pista (`parked`) são contornados pelo lado do centro da avenida (se não der, o trânsito espera).
+ */
+export function updateTraffic(dt: number, blockers: [number, number][], parked: [number, number][] = []): void {
   for (const t of TRAFFIC) {
-    const { x, z } = t.obj.position;
-    let blocked = false;
-    for (const [bx, bz] of blockers) {
+    const { x } = t.obj.position;
+    // contorno: parado à frente, na minha pista, a menos de 14 m → desloca 3,4 m para o centro; senão volta para a pista
+    const side = t.lane > 0 ? -1 : 1;
+    let target = 0;
+    for (const [bx, bz] of parked) {
       const ahead = (bx - x) * t.dir;
-      if (ahead > 0 && ahead < 7 && Math.abs(bz - z) < 2.2) { blocked = true; break; }
+      if (ahead > -4 && ahead < 14 && Math.abs(bz - t.lane) < 2.6) { target = side * 3.4; break; }
     }
+    t.off += (target - t.off) * Math.min(1, dt * 2.2);
+    const zNow = t.lane + t.off;
+    let blocked = false;
+    const check = (bx: number, bz: number): boolean => {
+      const ahead = (bx - x) * t.dir;
+      return ahead > 0 && ahead < 7 && Math.abs(bz - zNow) < 2.3;
+    };
+    for (const [bx, bz] of blockers) if (check(bx, bz)) { blocked = true; break; }
+    if (!blocked) for (const [bx, bz] of parked) if (check(bx, bz)) { blocked = true; break; } // não deu para contornar (ainda ou de todo)
+    if (!blocked) for (const o of TRAFFIC) if (o !== t && check(o.obj.position.x, o.lane + o.off)) { blocked = true; break; } // fila: não passa por dentro do carro da frente
     if (t.stopT > 0) t.stopT -= dt;
     const go = t.stopT <= 0 && !blocked;
     t.obj.position.x += t.dir * t.speed * (go ? 1 : 0) * dt;
+    t.obj.position.z = zNow;
     if (t.obj.position.x > 122) t.obj.position.x = -122;
     if (t.obj.position.x < -122) t.obj.position.x = 122;
     t.wobble = Math.max(0, t.wobble - dt * 2.5);
@@ -586,7 +625,7 @@ export function findVehicleSpot(px: number, pz: number, heading: number): { x: n
       if (b.top < 0.5 || (b.bottom ?? 0) > 2.2) continue;
       if (x > b.minX - 2.2 && x < b.maxX + 2.2 && z > b.minZ - 2.2 && z < b.maxZ + 2.2) return false;
     }
-    for (const o of CARS) if (Math.hypot(o.x - x, o.z - z) < 4.2) return false;
+    for (const o of CARS) if (Math.hypot(o.x - x, o.z - z) < 5.4) return false; // carros têm ~4,5 m: não nasce encostado em outro
     for (const t of TRAFFIC) if (Math.hypot(t.obj.position.x - x, t.obj.position.z - z) < 5) return false;
     return true;
   };

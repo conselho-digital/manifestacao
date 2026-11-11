@@ -12,7 +12,7 @@ import { Animator } from './game/anim';
 import { Net } from './net/sync';
 import { Voice } from './net/voice';
 import { RemotePlayer } from './game/remote';
-import { CARS, createCars, despawnPersonal, findVehicleSpot, PERSONAL, spawnPersonal, updateEngines, updateTraffic } from './game/vehicle';
+import { CARS, createCars, despawnPersonal, TRAFFIC, findVehicleSpot, PERSONAL, spawnPersonal, updateEngines, updateTraffic } from './game/vehicle';
 import { Combat } from './game/combat';
 import { WeaponVisual } from './game/weapons';
 import { warmUp } from './game/preload';
@@ -79,7 +79,13 @@ function menuCamera(dt: number): void {
 }
 
 // No menu: pré-carrega e aquece o mapa, os veículos e as armas para o jogo não engasgar
-void warmUp(renderer, scene, camera);
+// No menu a cidade é desenhada sem recalcular sombras e com resolução 1x (mais leve); o jogo volta ao normal ao entrar
+const GAME_PIXEL_RATIO = Math.min(window.devicePixelRatio, 2);
+void warmUp(renderer, scene, camera).then(() => {
+  if (!inMenu) return;
+  renderer.shadowMap.autoUpdate = false;
+  renderer.setPixelRatio(1);
+});
 
 const clock = new THREE.Clock();
 let player: Player | null = null;
@@ -89,7 +95,7 @@ const BASE_FOV = camera.fov;
 const net = new Net();
 const remotes = new Map<string, RemotePlayer>();
 if (import.meta.env.DEV) (window as unknown as { __net: Net; __game: { ready: () => boolean } }).__net = net;
-if (import.meta.env.DEV) (window as unknown as { __game: { ready: () => boolean; camera: THREE.PerspectiveCamera; scene: THREE.Scene; combat: () => Combat | null; player: () => Player | null } }).__game = { ready: () => !!player, camera, scene, combat: () => combat, player: () => player };
+if (import.meta.env.DEV) (window as unknown as { __game: { ready: () => boolean; camera: THREE.PerspectiveCamera; scene: THREE.Scene; combat: () => Combat | null; player: () => Player | null; sim: { TRAFFIC: typeof TRAFFIC; CARS: typeof CARS; updateTraffic: typeof updateTraffic; spawnPersonal: typeof spawnPersonal } } }).__game = { ready: () => !!player, camera, scene, combat: () => combat, player: () => player, sim: { TRAFFIC, CARS, updateTraffic, spawnPersonal } };
 let profileName = 'Jogador';
 // Voz por proximidade (WebRTC): sinalização pelo canal do Supabase; só liga depois do primeiro toque no botão do microfone
 const voice = new Voice(net.id, (to, k, d) => net.sendRtc(to, k, d), (state, peers) => {
@@ -225,6 +231,9 @@ void showLobby().then(async (profile) => {
   teamId = validTeamId(profile.team);
   inv.load(profile.userId);
   inMenu = false;
+  renderer.shadowMap.autoUpdate = true;
+  renderer.shadowMap.needsUpdate = true;
+  renderer.setPixelRatio(GAME_PIXEL_RATIO);
   scene.fog = menuFog;
   camera.clearViewOffset();
   camera.fov = BASE_FOV;
@@ -379,10 +388,13 @@ function loop(): void {
       combat.dead ? 0 : player.weaponCode, pitch, combat.health, combat.protectT > 0, performance.now(),
     );
   }
-  const blockers: [number, number][] = CARS.filter((c) => c.driver !== null).map((c) => [c.x, c.z]);
+  // quem barra o trânsito: veículos em uso (as duas pontas), jogadores; os parados na pista são contornados
+  const blockers: [number, number][] = [];
+  const parkedCars: [number, number][] = [];
+  for (const c of CARS) for (const [cx, cz] of c.circles()) (c.driver !== null ? blockers : parkedCars).push([cx, cz]);
   if (player) blockers.push([player.object.position.x, player.object.position.z]);
   remotes.forEach((r) => blockers.push([r.root.position.x, r.root.position.z]));
-  updateTraffic(paused ? 0 : dt, blockers);
+  updateTraffic(paused ? 0 : dt, blockers, parkedCars);
   if (player) updateEngines(paused ? 0 : dt);
   remotes.forEach((r) => r.update(dt));
   if (player) {
