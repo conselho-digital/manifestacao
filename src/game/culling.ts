@@ -8,6 +8,10 @@ import { CARS, TRAFFIC } from './vehicle';
 export const FAR_VEHICLES = 150;
 export const FAR_TREES = 170;
 
+/** além destas distâncias (m) o objeto continua aparecendo, mas não projeta sombra (a sombra só cobre ~45 m em volta do jogador) */
+const SHADOW_TREES = 55;
+const SHADOW_CARS = 40;
+
 interface Item { obj: THREE.Object3D; x: number; z: number; r: number; far: number }
 const items: Item[] = [];
 
@@ -27,7 +31,25 @@ export function registerCullChildren(group: THREE.Object3D, far: number): void {
 
 /** Atualiza o que aparece (chamar algumas vezes por segundo, não todo quadro). */
 export function updateCulling(px: number, pz: number): void {
-  for (const it of items) it.obj.visible = Math.hypot(it.x - px, it.z - pz) - it.r < it.far;
-  for (const c of CARS) c.root.visible = Math.hypot(c.x - px, c.z - pz) < FAR_VEHICLES;
-  for (const t of TRAFFIC) t.obj.visible = Math.hypot(t.obj.position.x - px, t.obj.position.z - pz) < FAR_VEHICLES;
+  for (const it of items) {
+    const d = Math.hypot(it.x - px, it.z - pz) - it.r;
+    it.obj.visible = d < it.far;
+    setShadow(it.obj, d < SHADOW_TREES, true);
+  }
+  for (const c of CARS) { const d = Math.hypot(c.x - px, c.z - pz); c.root.visible = d < FAR_VEHICLES; setShadow(c.root, d < SHADOW_CARS, false); }
+  for (const t of TRAFFIC) { const d = Math.hypot(t.obj.position.x - px, t.obj.position.z - pz); t.obj.visible = d < FAR_VEHICLES; setShadow(t.obj, d < SHADOW_CARS, false); }
+}
+
+const shadowOff = new WeakMap<THREE.Mesh, boolean>(); // malhas que não projetam sombra por natureza (não ligar de novo)
+
+/** Liga/desliga a sombra de todas as malhas do objeto sem perder quais eram só "sem sombra" desde o início. Arbustos (`skipBush`) nunca projetam. */
+function setShadow(obj: THREE.Object3D, on: boolean, skipBush: boolean): void {
+  obj.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    if (!shadowOff.has(m)) shadowOff.set(m, !m.castShadow);
+    if (shadowOff.get(m)) return;
+    const bush = skipBush && (m as THREE.InstancedMesh).isInstancedMesh && (m.material as THREE.Material).name === 'bush';
+    m.castShadow = on && !bush;
+  });
 }

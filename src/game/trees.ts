@@ -306,6 +306,7 @@ export function makeTrees(list: TreeSpec[]): THREE.Group {
     const ftex = foliageTex(sp);
     ftex.repeat.set(sp === 'pine' ? 2 : 3, sp === 'pine' ? 2 : 3);
     const mat = new THREE.MeshLambertMaterial({ map: ftex, alphaTest: 0.45, side: THREE.DoubleSide });
+    if (sp === 'bush') mat.name = 'bush'; // arbustos não projetam sombra (culling.ts)
     const bark = new THREE.MeshLambertMaterial({ map: barkTex(sp) });
     (bark.map as THREE.Texture).repeat.set(2, sp === 'pine' ? 6 : 3);
     // as árvores ficam em blocos de CELL m: cada bloco é um objeto próprio, então o que está fora da câmera (ou longe) não é desenhado
