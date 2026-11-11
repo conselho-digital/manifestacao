@@ -105,6 +105,12 @@ export class Player {
   weaponVis: WeaponVisual | null = null;
   /** chamado ao ser atropelado (m/s); devolve false se está protegido (então não há tombo nem dano) */
   onRunOver: ((speed: number) => boolean) | null = null;
+  /** quem pode entrar neste veículo (veículos pessoais só aceitam o dono e a equipe dele) */
+  enterRule: ((c: Car) => boolean) | null = null;
+  /** tentou entrar num veículo de outra equipe */
+  onEnterDenied: ((c: Car) => void) | null = null;
+  /** saiu de um veículo (o dono avisa onde ele ficou) */
+  onExitCar: ((c: Car) => void) | null = null;
 
   /** Liga a arma visual: o animador passa a posicioná-la (peito e mãos). */
   attachWeapon(w: WeaponVisual): void {
@@ -126,8 +132,9 @@ export class Player {
   get nearCar(): boolean {
     if (this.mode !== 'ground') return false;
     const p = this.object.position;
-    return CARS.some((c) => c.driver === null && Math.hypot(c.x - p.x, c.z - p.z) < 3.5);
+    return CARS.some((c) => c.driver === null && this.mayEnter(c) && Math.hypot(c.x - p.x, c.z - p.z) < 3.5);
   }
+  private mayEnter(c: Car): boolean { return !this.enterRule || this.enterRule(c); }
   get isCrouching(): boolean { return this.crouching; }
   get isBike(): boolean { return !!this.car?.bike; }
   get isDriving(): boolean { return this.mode === 'drive'; }
@@ -221,10 +228,18 @@ export class Player {
     return this.animator?.name || 'idle';
   }
 
-  /** Id do carro que está dirigindo (-1 = nenhum). */
+  /** Id do carro que está dirigindo (-1 = nenhum; 8 = veículo pessoal, ver carOwner). */
   get carId(): number {
-    return this.car ? this.car.id : -1;
+    return this.car ? (this.car.ownerId ? 8 : this.car.id) : -1;
   }
+
+  /** Dono do veículo pessoal que está dirigindo ('' = veículo comum ou nenhum). */
+  get carOwner(): string {
+    return this.car?.ownerId ?? '';
+  }
+
+  /** Veículo que está dirigindo (ou null). */
+  get drivenCar(): Car | null { return this.car; }
 
   /** Direção do carro (a câmera acompanha), ou null a pé. */
   get driveHeading(): number | null {
@@ -366,11 +381,13 @@ export class Player {
     const pos = this.object.position;
     let best: Car | null = null;
     let bestD = 3.5;
+    let denied: Car | null = null;
     for (const c of CARS) {
       const d = Math.hypot(c.x - pos.x, c.z - pos.z);
-      if (c.driver === null && d < bestD) { best = c; bestD = d; }
+      if (c.driver !== null || d >= bestD) continue;
+      if (this.mayEnter(c)) { best = c; bestD = d; } else denied = c;
     }
-    if (!best) return false;
+    if (!best) { if (denied) this.onEnterDenied?.(denied); return false; }
     best.driver = 'local';
     this.car = best;
     this.emote = null;
@@ -581,6 +598,7 @@ export class Player {
     car.driver = null;
     car.speed = 0;
     car.openDoor(1);
+    this.onExitCar?.(car);
     this.object.rotation.set(0, car.heading, 0);
     this.object.rotation.order = 'XYZ';
     this.car = null;

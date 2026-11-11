@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createCharacter } from './characters';
 import { ARMED_FROM_CODE, Animator } from './anim';
-import { CARS, type Car } from './vehicle';
+import { CARS, PERSONAL, type Car } from './vehicle';
 import { WeaponVisual } from './weapons';
 import { seatBlend } from './player';
 import { makeTeamRing, type TeamLook } from './teams';
@@ -61,6 +61,7 @@ export class RemotePlayer {
   private animator: Animator | null = null;
   private anim = 'idle';
   private carId = -1;
+  private carOwner = '';
   private lastCar: Car | null = null;
   private model: THREE.Object3D | null = null;
   /** grupo do modelo: gira com a moto (empinar/inclinar) */
@@ -101,6 +102,7 @@ export class RemotePlayer {
     this.hp = m.hp;
     this.shield = m.pr;
     this.carId = m.v;
+    this.carOwner = m.vo;
     this.weapon = m.w;
     this.pitch = m.pt;
     if (snap || !this.ready) {
@@ -114,7 +116,7 @@ export class RemotePlayer {
     if (key !== this.labelKey) { this.labelKey = key; this.redrawLabel(); }
     const k = 1 - Math.exp(-dt * 12);
     this.root.position.lerp(this.target, k);
-    const car = this.carId >= 0 ? CARS[this.carId] : undefined;
+    const car = this.carId === 8 ? PERSONAL.get(this.carOwner) : this.carId >= 0 ? CARS[this.carId] : undefined;
     if (car) {
       // Dirigindo: o boneco aparece sentado e o carro anda
       car.driver = this.info.id;
@@ -201,6 +203,7 @@ export class RemotePlayer {
     this.root.rotation.y = o.root.rotation.y;
     this.anim = o.anim;
     this.carId = o.carId;
+    this.carOwner = o.carOwner;
     this.weapon = o.weapon;
     this.pitch = o.pitch;
     this.hp = o.hp;

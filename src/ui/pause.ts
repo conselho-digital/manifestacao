@@ -1,11 +1,12 @@
 // Menu de pausa (engrenagem): equipe, personagem, armas que o jogador já tem, loja e (só para o admin) gerenciar equipes.
 import type { CharacterName } from '../game/characters';
-import { ALL_WEAPONS, isGunId, SHOP, WEAPON_IMG, WEAPON_NAMES, type Inventory, type ShopItem, type WeaponId } from '../game/inventory';
+import { ALL_WEAPONS, GARAGE_ITEMS, isGunId, SHOP, WEAPON_IMG, WEAPON_NAMES, type Inventory, type ShopItem, type WeaponId } from '../game/inventory';
+import { brl, isReal, loadPrices, loadPurchases, payUrlOf, priceOf, REAL_ITEMS, safeUrl, savePrice } from '../game/shop';
 import { deleteTeam, getTeams, HEX, isAdmin, loadTeams, MAX_TEAM_NAME, saveTeam, type Team } from '../game/teams';
 import { ICON } from './icons';
 import { createCharacterPicker, createTeamPicker, el, PICKER_CSS, swatchStyle } from './pickers';
 
-export type PauseTab = 'team' | 'char' | 'weapons' | 'shop' | 'admin';
+export type PauseTab = 'team' | 'char' | 'weapons' | 'garage' | 'shop' | 'admin' | 'prices';
 
 export interface PauseDeps {
   inv: Inventory;
@@ -21,6 +22,8 @@ export interface PauseDeps {
   buy(item: ShopItem): { ok: boolean; msg: string };
   /** abriu/fechou (o main pausa e retoma o jogo) */
   onToggle(open: boolean): void;
+  /** veículo pessoal: modelo chamado agora ('' = nenhum), chamar um modelo perto do jogador e guardar */
+  garage: { current(): string; call(model: string): string; park(): void };
   /** o admin mudou as equipes (o main reaplica a equipe do jogador) */
   onTeamsChanged(): void;
 }
@@ -39,16 +42,16 @@ const CSS = `
 .ps *{box-sizing:border-box}
 .ps button{font-family:inherit;cursor:pointer}
 .ps-panel{width:min(940px,100%);max-height:100%;display:flex;flex-direction:column;background:#1b2130;border:1px solid rgba(255,255,255,.14);border-radius:18px;overflow:hidden;box-shadow:0 16px 60px rgba(0,0,0,.6)}
-.ps-head{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#141926;border-bottom:1px solid rgba(255,255,255,.1)}
+.ps-head{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:10px 14px;background:#141926;border-bottom:1px solid rgba(255,255,255,.1)}
 .ps-head h2{margin:0;font-size:18px;flex:1;white-space:nowrap}
 .ps-money{font-weight:800;color:#8fe38a;font-size:17px}
 .ps-x{width:38px;height:38px;border-radius:50%;border:0;background:#2a3144;color:#fff;font-size:18px}
-.ps-tabs{display:flex;gap:6px;padding:8px 10px;overflow-x:auto;background:#161c2b;border-bottom:1px solid rgba(255,255,255,.08);scrollbar-width:none}
+.ps-tabs{flex:0 0 auto;display:flex;gap:6px;padding:8px 10px;overflow-x:auto;background:#161c2b;border-bottom:1px solid rgba(255,255,255,.08);scrollbar-width:none}
 .ps-tab{flex:0 0 auto;padding:9px 14px;border-radius:10px;border:2px solid transparent;background:#232b3e;color:#cfd8ea;font-size:14px;font-weight:700}
 .ps-tab.on{border-color:#4cc2ff;background:#25415a;color:#fff}
 .ps-tab.adm{background:#3d2d52}
 .ps-body{flex:1;overflow:auto;padding:14px}
-.ps-foot{display:flex;align-items:center;gap:10px;padding:10px 14px;background:#141926;border-top:1px solid rgba(255,255,255,.1)}
+.ps-foot{flex:0 0 auto;display:flex;align-items:center;gap:10px;padding:10px 14px;background:#141926;border-top:1px solid rgba(255,255,255,.1)}
 .ps-go{padding:11px 22px;font-size:16px;font-weight:800;border:0;border-radius:11px;background:#4cc2ff;color:#10202e}
 .ps-credits{margin-left:auto;font-size:11px;opacity:.6;text-align:right;max-width:55%;line-height:1.3}
 .ps-note{font-size:13px;opacity:.75;margin:0 0 10px}
@@ -75,6 +78,9 @@ const CSS = `
 .ps-save{padding:10px 14px;border:0;border-radius:9px;background:#4cc2ff;color:#10202e;font-weight:800}
 .ps-del{padding:10px 14px;border:0;border-radius:9px;background:#8c2f2f;color:#fff;font-weight:800}
 .ps-add{align-self:flex-start;padding:11px 16px;border:2px dashed #4cc2ff;border-radius:11px;background:transparent;color:#bfe9ff;font-weight:800;font-size:14px}
+.ps-h3{margin:16px 0 8px;font-size:15px;color:#bfe9ff}
+.ps-name{font-weight:800;min-width:130px}
+.ps-row input[type=number]{width:90px;padding:10px;font-size:15px;border-radius:9px;border:2px solid #3b4358;background:#0f1420;color:#fff}
 .ps-center{display:flex;flex-direction:column;align-items:center;gap:12px}
 @media (max-height:520px){.ps-head{padding:6px 12px}.ps-tab{padding:7px 11px;font-size:13px}.ps-body{padding:10px}.ps-go{padding:8px 18px}}
 `;
@@ -103,14 +109,17 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
   let tab: PauseTab = 'team';
   let admin = false;
   let opened = false;
-  void isAdmin().then((a) => { admin = a; if (opened) renderTabs(); });
+  void isAdmin().then((a) => { admin = a; d.inv.admin = a; if (opened) { renderTabs(); renderBody(); } });
+  void loadPrices();
 
   const tabs: { id: PauseTab; label: string; adm?: boolean }[] = [
     { id: 'team', label: 'Equipe' },
     { id: 'char', label: 'Personagem' },
     { id: 'weapons', label: 'Armas' },
+    { id: 'garage', label: 'Garagem' },
     { id: 'shop', label: 'Loja' },
     { id: 'admin', label: 'Gerenciar equipes', adm: true },
+    { id: 'prices', label: 'Preços', adm: true },
   ];
 
   function renderTabs(): void {
@@ -162,28 +171,118 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     body.appendChild(grid);
   }
 
-  function renderShop(): void {
+  function renderGarage(): void {
     const out = msg('');
-    body.append(el('p', 'ps-note', 'Compre armas, munição, vida e colete com o seu dinheiro. Cada abate rende $100.'), out);
+    const cur = d.garage.current();
+    body.append(el('p', 'ps-note', 'Escolha o seu veículo: ele aparece perto de você e só você e a sua equipe podem entrar. Um veículo por vez. As cores são as da sua equipe.'), out);
+    const mine = GARAGE_ITEMS.filter((it) => d.inv.hasItem(it.id));
+    if (mine.length === 0) { body.appendChild(el('p', 'ps-note', 'Você ainda não tem veículos. Compre na Loja.')); return; }
     const grid = el('div', 'ps-grid');
-    for (const it of SHOP) {
+    for (const it of mine) {
       const pic = el('div', 'pic');
       if (it.img) { const img = el('img'); img.src = it.img; img.alt = ''; pic.appendChild(img); }
-      else pic.insertAdjacentHTML('beforeend', it.kind === 'health' ? ICON.plus : it.kind === 'armor' ? ICON.shield : ICON.bullet);
-      const owned = it.kind === 'weapon' && it.weapon !== undefined && d.inv.has(it.weapon);
-      const buy = el('button', 'ps-buy', owned ? 'Você já tem' : 'Comprar');
-      buy.type = 'button';
-      buy.disabled = owned || d.inv.money < it.price;
-      buy.onclick = () => {
-        const r = d.buy(it);
-        out.className = `ps-msg ${r.ok ? 'ok' : 'err'}`;
-        out.textContent = r.msg;
-        updateMoney();
-        if (r.ok) { body.textContent = ''; renderShop(); const o2 = body.querySelector('.ps-msg'); if (o2) { o2.className = 'ps-msg ok'; o2.textContent = r.msg; } }
+      const here = cur === it.model;
+      const go = el('button', 'ps-buy', here ? 'Guardar' : 'Chamar');
+      go.type = 'button';
+      go.onclick = () => {
+        if (here) d.garage.park();
+        else { const r = d.garage.call(it.model!); if (r) { out.className = 'ps-msg err'; out.textContent = r; return; } }
+        api.close();
       };
-      grid.appendChild(el('div', 'ps-card', pic, el('b', '', it.name), el('small', '', it.desc), el('span', 'ps-price', `$${it.price}`), buy));
+      const card = el('div', `ps-card${here ? ' sel' : ''}`, pic, el('b', '', it.name), el('small', '', it.desc));
+      if (here) card.appendChild(el('span', 'ps-tag', 'Perto de você'));
+      card.appendChild(go);
+      grid.appendChild(card);
     }
     body.appendChild(grid);
+  }
+
+  function shopCard(it: ShopItem, out: HTMLElement): HTMLElement {
+    const pic = el('div', 'pic');
+    if (it.img) { const img = el('img'); img.src = it.img; img.alt = ''; pic.appendChild(img); }
+    else pic.insertAdjacentHTML('beforeend', it.kind === 'health' ? ICON.plus : it.kind === 'armor' ? ICON.shield : ICON.bullet);
+    const real = isReal(it);
+    const owned = real && d.inv.hasItem(it.id);
+    const url = payUrlOf(it);
+    const buy = el('button', 'ps-buy', owned ? 'Você já tem' : real ? 'Comprar' : 'Comprar');
+    buy.type = 'button';
+    buy.disabled = owned || (!real && d.inv.money < it.price);
+    buy.onclick = () => {
+      if (real) {
+        const u = safeUrl(url);
+        out.className = 'ps-msg err';
+        if (!u) { out.textContent = 'O pagamento deste item ainda não foi configurado.'; return; }
+        window.open(u, '_blank', 'noopener');
+        out.className = 'ps-msg ok';
+        out.textContent = 'Pagamento aberto em outra aba. Depois de pagar, toque em "Já paguei" para atualizar.';
+        return;
+      }
+      const r = d.buy(it);
+      out.className = `ps-msg ${r.ok ? 'ok' : 'err'}`;
+      out.textContent = r.msg;
+      updateMoney();
+      if (r.ok) { body.textContent = ''; renderShop(); const o2 = body.querySelector('.ps-msg'); if (o2) { o2.className = 'ps-msg ok'; o2.textContent = r.msg; } }
+    };
+    return el('div', 'ps-card', pic, el('b', '', it.name), el('small', '', it.desc), el('span', 'ps-price', real ? brl(priceOf(it)) : `$${it.price}`), buy);
+  }
+
+  function renderShop(): void {
+    const out = msg('');
+    const paid = el('button', 'ps-save', 'Já paguei');
+    paid.type = 'button';
+    paid.onclick = () => {
+      paid.disabled = true;
+      void loadPurchases(d.inv, admin).then(() => {
+        body.textContent = '';
+        renderShop();
+        const o2 = body.querySelector('.ps-msg');
+        if (o2) { o2.className = 'ps-msg ok'; o2.textContent = 'Compras atualizadas. Se o item ainda não apareceu, a liberação pode levar alguns minutos.'; }
+      });
+    };
+    body.append(el('p', 'ps-note', 'Armas e veículos são vendidos em reais (R$). Munição, vida e colete usam o dinheiro do jogo ($); cada abate rende $100.'), el('div', 'ps-center', paid), out);
+    const sections: [string, ShopItem[]][] = [
+      ['Armas de fogo', SHOP.filter((i) => i.kind === 'weapon' && i.weapon !== undefined && isGunId(i.weapon))],
+      ['Armas brancas', SHOP.filter((i) => i.kind === 'weapon' && i.weapon !== undefined && !isGunId(i.weapon))],
+      ['Veículos', SHOP.filter((i) => i.kind === 'vehicle')],
+      ['Munição, vida e colete', SHOP.filter((i) => !isReal(i))],
+    ];
+    for (const [title, items] of sections) {
+      body.appendChild(el('h3', 'ps-h3', title));
+      const grid = el('div', 'ps-grid');
+      for (const it of items) grid.appendChild(shopCard(it, out));
+      body.appendChild(grid);
+    }
+  }
+
+  function renderPrices(): void {
+    const out = msg('');
+    const list = el('div', 'ps-adm');
+    body.append(el('p', 'ps-note', 'Administrador: preço em reais e link de pagamento (Mercado Pago) de cada arma e veículo. O link precisa começar com https://. Vale para todos os jogadores.'), out, list);
+    for (const it of REAL_ITEMS) {
+      const price = el('input');
+      price.type = 'number';
+      price.min = '0';
+      price.max = '9999';
+      price.step = '0.01';
+      price.value = String(priceOf(it));
+      const link = el('input');
+      link.type = 'text';
+      link.placeholder = 'Link de pagamento (https://...)';
+      link.value = payUrlOf(it);
+      link.maxLength = 500;
+      const save = el('button', 'ps-save', 'Salvar');
+      save.type = 'button';
+      save.onclick = () => {
+        save.disabled = true;
+        void savePrice(it.id, Number(price.value.replace(',', '.')), link.value).then((e) => {
+          out.className = `ps-msg ${e ? 'err' : 'ok'}`;
+          out.textContent = e ?? `${it.name}: salvo.`;
+          save.disabled = false;
+        });
+      };
+      const label = el('span', 'ps-name', it.name);
+      list.appendChild(el('div', 'ps-row', label, el('label', 'ps-col', price, 'R$'), link, save));
+    }
   }
 
   function renderAdmin(): void {
@@ -251,7 +350,9 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     if (tab === 'team') renderTeam();
     else if (tab === 'char') renderChar();
     else if (tab === 'weapons') renderWeapons();
+    else if (tab === 'garage') renderGarage();
     else if (tab === 'shop') renderShop();
+    else if (admin && tab === 'prices') renderPrices();
     else if (admin) renderAdmin();
   }
 
@@ -261,7 +362,7 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     get isOpen(): boolean { return opened; },
     open(t?: PauseTab): void {
       if (t) tab = t;
-      if (tab === 'admin' && !admin) tab = 'team';
+      if ((tab === 'admin' || tab === 'prices') && !admin) tab = 'team';
       if (document.pointerLockElement) document.exitPointerLock();
       opened = true;
       root.classList.add('open');

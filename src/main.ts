@@ -12,13 +12,15 @@ import { Animator } from './game/anim';
 import { Net } from './net/sync';
 import { Voice } from './net/voice';
 import { RemotePlayer } from './game/remote';
-import { CARS, createCars, updateEngines, updateTraffic } from './game/vehicle';
+import { CARS, createCars, despawnPersonal, findVehicleSpot, PERSONAL, spawnPersonal, updateEngines, updateTraffic } from './game/vehicle';
 import { Combat } from './game/combat';
 import { WeaponVisual } from './game/weapons';
 import { warmUp } from './game/preload';
 import { setListener } from './game/audio';
 import { HUD_KEY, Inventory, type WeaponId } from './game/inventory';
-import { lookOf, makeTeamRing, saveTeamId, teamById } from './game/teams';
+import { isAdmin, lookOf, makeTeamRing, saveTeamId, teamById } from './game/teams';
+import { loadPrices, loadPurchases } from './game/shop';
+import type { PlayerInfo, VehInfo } from './net/sync';
 import { createPauseMenu, type PauseMenu } from './ui/pause';
 
 // Endereço oficial: https://gameprotesto.com.br (sem www). Os outros endereços de produção redirecionam para ele
@@ -130,9 +132,53 @@ const saveCharacter = (): void => {
   } catch { /* sem armazenamento */ }
 };
 
-/** Avisa os outros e refaz o anel quando a equipe ou o personagem mudam. */
+/** Cores do meu veículo: as da equipe, ou cinza e preto sem equipe. */
+const myPaint = (): { c1: string; c2: string } => {
+  const t = teamById(teamId);
+  return t ? { c1: t.c1, c2: t.c2 } : { c1: '#c8ccd2', c2: '#2b2e33' };
+};
+
+/** Meu veículo pessoal (o que chamei na Garagem), para a presence: modelo, cores, equipe e onde está parado. */
+function myVehInfo(): VehInfo | null {
+  const c = PERSONAL.get(net.id);
+  if (!c || !c.model) return null;
+  const pt = myPaint();
+  return { m: c.model, c1: pt.c1, c2: pt.c2, t: teamId, x: Math.round(c.x * 10) / 10, z: Math.round(c.z * 10) / 10, h: Math.round(c.heading * 100) / 100 };
+}
+
+/** Avisa os outros e refaz o anel quando a equipe, o personagem ou o veículo mudam. */
 function announceMe(): void {
-  net.updateMe({ name: profileName, character, team: myLook() });
+  net.updateMe({ name: profileName, character, team: myLook(), veh: myVehInfo() });
+}
+
+/** Chama o veículo pessoal para perto de mim (troca o que já existe). Retorna a mensagem de erro, se houver. */
+function callVehicle(model: string): string {
+  if (!player) return 'Entre no jogo primeiro.';
+  if (!inv.hasVehicle(model)) return 'Você não tem este veículo.';
+  if (player.isDriving) return 'Saia do veículo antes de chamar outro.';
+  const old = PERSONAL.get(net.id);
+  if (old && old.driver !== null) return 'Seu veículo está em uso por alguém da equipe.';
+  const o = player.object;
+  const spot = findVehicleSpot(o.position.x, o.position.z, o.rotation.y);
+  const pt = myPaint();
+  if (old && old.model !== model) despawnPersonal(net.id);
+  spawnPersonal(net.id, model, pt, teamId, spot.x, spot.z, o.rotation.y);
+  announceMe();
+  return '';
+}
+
+function parkVehicle(): void {
+  const c = PERSONAL.get(net.id);
+  if (c && c.driver !== null) return;
+  despawnPersonal(net.id);
+  announceMe();
+}
+
+/** Veículo pessoal de outro jogador (vindo da presence): cria, move ou some. */
+function syncRemoteVehicle(p: PlayerInfo): void {
+  if (!p.veh) { despawnPersonal(p.id); return; }
+  const v = p.veh;
+  spawnPersonal(p.id, v.m, { c1: v.c1, c2: v.c2 }, v.t, v.x, v.z, v.h);
 }
 
 function setMyTeam(id: string): void {
@@ -141,8 +187,23 @@ function setMyTeam(id: string): void {
   myRing.removeFromParent();
   myRing = makeTeamRing(myLook());
   player?.object.add(myRing);
+  const mine = PERSONAL.get(net.id);
+  if (mine) { mine.teamId = id; mine.recolor(myPaint()); }
   announceMe();
   hud?.addChat(`Sistema: ${teamById(id) ? `equipe ${teamById(id)!.name}` : 'sem equipe'}.`);
+}
+
+let lastDenied = 0;
+/** Liga ao jogador local as regras de veículo (quem pode entrar), o aviso ao sair e o atropelamento. */
+function wirePlayer(p: Player): void {
+  p.onRunOver = (sp) => combat?.vehicleHit(sp) ?? true;
+  p.enterRule = (c) => !c.ownerId || c.ownerId === net.id || (!!c.teamId && c.teamId === teamId);
+  p.onEnterDenied = () => {
+    if (performance.now() - lastDenied < 3000) return;
+    lastDenied = performance.now();
+    hud?.addChat('Sistema: este veículo é de outra equipe.');
+  };
+  p.onExitCar = (c) => { if (c.ownerId === net.id) announceMe(); };
 }
 
 async function setMyCharacter(name: CharacterName): Promise<void> {
@@ -150,7 +211,7 @@ async function setMyCharacter(name: CharacterName): Promise<void> {
   if (player.isDriving) { hud?.addChat('Sistema: saia do veículo para trocar de personagem.'); return; }
   const old = player;
   const next = await makePlayer(name, old);
-  next.onRunOver = old.onRunOver;
+  wirePlayer(next);
   old.object.removeFromParent();
   player = next;
   character = name;
@@ -180,8 +241,10 @@ void showLobby().then(async (profile) => {
   player.attachWeapon(new WeaponVisual(first));
   myRing = makeTeamRing(myLook());
   first.add(myRing);
+  await Promise.all([loadPrices(), isAdmin().then((a) => loadPurchases(inv, a))]);
+  if (import.meta.env.DEV && new URLSearchParams(location.search).has('admin')) inv.admin = true; // só para testar no npm run dev
   combat = new Combat({ scene, camera, net, name: profile.name, remotes, log: (t) => hud?.addChat(t), inv });
-  player.onRunOver = (sp) => combat?.vehicleHit(sp) ?? true;
+  wirePlayer(player);
 
   pauseMenu = createPauseMenu({
     inv,
@@ -194,6 +257,7 @@ void showLobby().then(async (profile) => {
     equip: (w) => combat?.equip(w),
     ammoOf: (w) => combat?.ammoOf(w) ?? { mag: 0, reserve: 0 },
     buy: (item) => combat?.buy(item) ?? { ok: false, msg: 'Indisponível.' },
+    garage: { current: () => PERSONAL.get(net.id)?.model ?? '', call: callVehicle, park: parkVehicle },
     onToggle: (open) => {
       paused = open;
       if (combat) combat.paused = open;
@@ -207,14 +271,16 @@ void showLobby().then(async (profile) => {
   if (import.meta.env.DEV) (window as unknown as { __pause: PauseMenu }).__pause = pauseMenu;
 
   try {
-    await net.join({ name: profile.name, character: profile.character, team: myLook() }, {
+    await net.join({ name: profile.name, character: profile.character, team: myLook(), veh: myVehInfo() }, {
       onJoin: (p) => {
+        syncRemoteVehicle(p);
         hud?.addChat(`${p.name}: entrou na arena`);
         const r = new RemotePlayer(p);
         remotes.set(p.id, r);
         scene.add(r.root);
       },
       onUpdate: (p) => {
+        syncRemoteVehicle(p);
         const r = remotes.get(p.id);
         if (!r) return;
         if (r.info.character !== p.character) {
@@ -231,6 +297,7 @@ void showLobby().then(async (profile) => {
         if (who) hud?.addChat(`${who}: saiu da arena`);
         remotes.get(id)?.dispose();
         remotes.delete(id);
+        despawnPersonal(id);
         voice.leave(id);
       },
       onMove: (m) => remotes.get(m.id)?.setTarget(m),
@@ -309,7 +376,7 @@ function loop(): void {
     }
     net.sendMove(
       p.position.x, p.position.y, p.position.z, p.rotation.y,
-      combat.dead ? 'dead' : player.animName, player.isDriving ? player.carId : -1,
+      combat.dead ? 'dead' : player.animName, player.isDriving ? player.carId : -1, player.isDriving ? player.carOwner : '',
       combat.dead ? 0 : player.weaponCode, pitch, combat.health, combat.protectT > 0, performance.now(),
     );
   }

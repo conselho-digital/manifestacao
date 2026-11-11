@@ -130,16 +130,13 @@ export class Combat {
   /** Compra um item da loja. Retorna a mensagem (para mostrar) e se deu certo. */
   buy(item: ShopItem): { ok: boolean; msg: string } {
     const inv = this.d.inv;
-    if (item.kind === 'weapon' && item.weapon !== undefined && inv.has(item.weapon)) return { ok: false, msg: 'Você já tem esta arma.' };
+    if (item.kind === 'weapon' || item.kind === 'vehicle') return { ok: false, msg: 'Este item é pago em reais.' };
     if (item.kind === 'ammo' && item.weapon !== undefined && !inv.has(item.weapon)) return { ok: false, msg: 'Compre a arma primeiro.' };
     if (item.kind === 'ammo' && item.weapons && !item.weapons.some((w) => inv.has(w))) return { ok: false, msg: 'Você não tem nenhum fuzil 5,56.' };
     if (item.kind === 'health' && this.health >= 100) return { ok: false, msg: 'Sua vida já está cheia.' };
     if (item.kind === 'armor' && this.armor >= 100) return { ok: false, msg: 'Seu colete já está cheio.' };
     if (!inv.spend(item.price)) return { ok: false, msg: 'Dinheiro insuficiente.' };
-    if (item.kind === 'weapon' && item.weapon !== undefined) {
-      inv.grant(item.weapon);
-      if (isGunId(item.weapon)) this.ammo[item.weapon] = this.startAmmo(item.weapon);
-    } else if (item.kind === 'ammo' && item.weapons) {
+    if (item.kind === 'ammo' && item.weapons) {
       for (const w of item.weapons) if (inv.has(w)) this.ammo[w]!.reserve += item.amount ?? 0;
     } else if (item.kind === 'ammo' && item.weapon !== undefined) this.ammo[item.weapon]!.reserve += item.amount ?? 0;
     else if (item.kind === 'health') this.health = 100;

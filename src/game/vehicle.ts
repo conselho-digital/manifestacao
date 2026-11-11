@@ -33,15 +33,117 @@ const TURN_RATE = 1.9;
 const RADIUS = 1.3;
 
 
-/** Monta o visual de um carro a partir do GLB (nós `body` e `wheel_FL/FR/BL/BR`); a pintura (`paint`) recebe a cor. */
-export function buildCarVisual(src: THREE.Object3D, colorHex: number): { group: THREE.Group; wheels: Record<string, THREE.Object3D> } {
+/** Duas cores da equipe (#rrggbb) para pintar o veículo. */
+export interface PaintLook { c1: string; c2: string }
+
+const BLACK = 0x161616;
+const GRAY = 0x8b8e93;
+const WHITE = 0xe9eaec;
+const lumOf = (c: THREE.Color): number => 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+/** cor básica (preto, cinza ou branco) pelo brilho original */
+const basicColor = (l: number): number => (l < 0.22 ? BLACK : l < 0.62 ? GRAY : WHITE);
+
+/**
+ * Pinta o veículo com as cores da equipe: a pintura (material `paint`, ou o maior material fora das rodas) vira a cor 1;
+ * nos carros a faixa de baixo e o teto levam a cor 2; nas motos o segundo maior material leva a cor 2.
+ * Pneus e detalhes ficam em preto, cinza e branco (sem texturas). Vidros e faróis não mudam.
+ */
+function applyTeamPaint(model: THREE.Object3D, look: PaintLook, bike: boolean): void {
+  const wheelRoots = ['wheel_FL', 'wheel_FR', 'wheel_BL', 'wheel_BR', 'wheel_F', 'wheel_R'].map((n) => model.getObjectByName(n)).filter((o): o is THREE.Object3D => !!o);
+  const inWheel = (o: THREE.Object3D): boolean => wheelRoots.some((r) => { for (let p: THREE.Object3D | null = o; p; p = p.parent) if (p === r) return true; return false; });
+  const meshes: THREE.Mesh[] = [];
+  model.traverse((o) => { if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh); });
+  const matsOf = (m: THREE.Mesh): THREE.Material[] => (Array.isArray(m.material) ? m.material : [m.material]);
+  const triCount = (m: THREE.Mesh): number => (m.geometry.index ? m.geometry.index.count : m.geometry.attributes.position!.count) / 3;
+  const tris = new Map<THREE.Material, number>();
+  const wheelR = new Map<THREE.Material, number>(); // raio da roda (m) por material, para separar pneu e aro
+  for (const m of meshes) {
+    const w = inWheel(m);
+    if (w) {
+      m.geometry.computeBoundingBox();
+      const bb = m.geometry.boundingBox!;
+      const r = Math.max(bb.max.y, -bb.min.y, bb.max.z, -bb.min.z);
+      for (const mat of matsOf(m)) wheelR.set(mat, Math.max(wheelR.get(mat) ?? 0, r));
+    }
+    for (const mat of matsOf(m)) {
+      if (!w) tris.set(mat, (tris.get(mat) ?? 0) + triCount(m) / matsOf(m).length);
+    }
+  }
+  const skip = (mat: THREE.Material): boolean => mat.name === 'glass' || mat.name === 'light';
+  const body = [...tris.entries()].filter(([mat]) => !skip(mat)).sort((x, y) => y[1] - x[1]);
+  const painted = body.filter(([mat]) => mat.name === 'paint').map(([mat]) => mat);
+  const paint1 = painted.length ? painted : body[0] ? [body[0][0]] : [];
+  const second = bike ? body.find(([mat, n]) => !paint1.includes(mat) && n >= (body[0]?.[1] ?? 0) * 0.2 && lumOf((mat as THREE.MeshStandardMaterial).color ?? new THREE.Color(0.5, 0.5, 0.5)) > 0.2)?.[0] : undefined;
+  const c1 = new THREE.Color(look.c1);
+  const c2 = new THREE.Color(look.c2);
+  const clones = new Map<THREE.Material, THREE.Material>();
+  const clonesW = new Map<THREE.Material, THREE.Material>(); // versões para as peças das rodas
+  const recolor = (mat: THREE.Material, onWheel: boolean): THREE.Material => {
+    if (skip(mat)) return mat;
+    let c = (onWheel ? clonesW : clones).get(mat);
+    if (c) return c;
+    const std = mat.clone() as THREE.MeshStandardMaterial;
+    std.map = null;
+    std.userData.teamPaint = false;
+    const l = lumOf(mat instanceof THREE.MeshStandardMaterial ? mat.color : new THREE.Color(0.5, 0.5, 0.5));
+    if (onWheel) { std.color.set(BLACK); addTire(std, wheelR.get(mat) ?? 0.33); } // roda: pneu preto por fora, aro cinza no miolo
+    else if (paint1.includes(mat)) { std.color.copy(c1); std.userData.teamPaint = !bike; std.roughness = 0.45; std.metalness = 0.25; }
+    else if (mat === second) { std.color.copy(c2); std.roughness = 0.45; std.metalness = 0.25; }
+    else std.color.set(basicColor(mat instanceof THREE.MeshStandardMaterial && mat.map ? 0.45 : l));
+    std.userData.c2 = c2;
+    c = std;
+    (onWheel ? clonesW : clones).set(mat, c);
+    return c;
+  };
+  for (const m of meshes) {
+    const w = inWheel(m);
+    m.material = Array.isArray(m.material) ? m.material.map((x) => recolor(x, w)) : recolor(m.material, w);
+  }
+}
+
+/** Roda: pneu preto (raio externo) e aro cinza (miolo), pela distância ao eixo no espaço da roda. */
+function addTire(mat: THREE.MeshStandardMaterial, radius: number): void {
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uRim = { value: radius * 0.68 };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying float vTR;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvTR = length(position.yz);');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vTR;\nuniform float uRim;')
+      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = mix(vec3(0.55, 0.56, 0.58), vec3(0.07), step(uRim, vTR));');
+  };
+  mat.customProgramCacheKey = () => 'teamtire';
+}
+
+/** Acrescenta ao material pintado a segunda cor: faixa de baixo (soleiras e para-choques) e teto, pela altura no mundo. */
+function addTwoTone(mat: THREE.MeshStandardMaterial, c2: THREE.Color, height: number): void {
+  const low = height * 0.3;
+  const roof = height * 0.8;
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uC2 = { value: c2 };
+    sh.uniforms.uLow = { value: low };
+    sh.uniforms.uRoof = { value: roof };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying float vTH;\nvarying float vTU;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvTH = (modelMatrix * vec4(position, 1.0)).y;\nvTU = normalize(mat3(modelMatrix) * normal).y;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vTH;\nvarying float vTU;\nuniform vec3 uC2;\nuniform float uLow;\nuniform float uRoof;')
+      .replace('#include <color_fragment>', '#include <color_fragment>\nfloat tw = max(1.0 - step(uLow, vTH), step(uRoof, vTH) * step(0.55, vTU));\ndiffuseColor.rgb = mix(diffuseColor.rgb, uC2, tw);');
+  };
+  mat.customProgramCacheKey = () => 'teamtwotone';
+}
+
+/** Monta o visual de um carro a partir do GLB (nós `body` e `wheel_FL/FR/BL/BR`); sem `look`, a pintura (`paint`) recebe `colorHex`; com `look`, vale a pintura da equipe. */
+export function buildCarVisual(src: THREE.Object3D, colorHex: number, look?: PaintLook, bike = false): { group: THREE.Group; wheels: Record<string, THREE.Object3D> } {
   const model = src.clone(true);
   const paint = new THREE.Color(colorHex);
   const done = new Map<THREE.Material, THREE.Material>();
+  if (look) applyTeamPaint(model, look, bike);
   model.traverse((o) => {
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;
     m.castShadow = true;
+    if (look) return;
     const mats = Array.isArray(m.material) ? m.material : [m.material];
     const out = mats.map((mat) => {
       if (mat.name !== 'paint') return mat;
@@ -76,6 +178,14 @@ export function buildCarVisual(src: THREE.Object3D, colorHex: number): { group: 
   }
   // a origem do GLB fica no centro do carro: sobe até as rodas tocarem o chão
   group.position.y = -new THREE.Box3().setFromObject(group).min.y;
+  if (look) {
+    const h = new THREE.Box3().setFromObject(group).max.y;
+    group.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      for (const mat of Array.isArray(m.material) ? m.material : [m.material]) if (mat.userData.teamPaint) addTwoTone(mat as THREE.MeshStandardMaterial, mat.userData.c2 as THREE.Color, h);
+    });
+  }
   return { group, wheels };
 }
 
@@ -96,7 +206,7 @@ export class Car {
   private spin = 0;
   private readonly color: number;
   readonly bike: boolean;
-  private readonly model?: string;
+  readonly model?: string;
   private readonly engine: EngineSound;
   /** empinada (rad) e inclinação lateral da moto */
   private throttle = 0;
@@ -117,7 +227,14 @@ export class Car {
   /** velocidade estimada por quem só vê o carro (motorista remoto) */
   private seenSpeed = 0;
 
-  constructor(readonly id: number, x: number, z: number, heading: number, color: number, model?: string) {
+  /** dono (id do jogador) e equipe do dono, se for um veículo pessoal: só o dono e a equipe dele entram */
+  ownerId: string | null = null;
+  teamId = '';
+  private look: PaintLook | null;
+  private srcModel: THREE.Object3D | null = null;
+
+  constructor(readonly id: number, x: number, z: number, heading: number, color: number, model?: string, look: PaintLook | null = null) {
+    this.look = look;
     this.color = color;
     this.bike = isBikeModel(model);
     this.model = model;
@@ -128,7 +245,13 @@ export class Car {
     this.z = z;
     this.heading = heading;
     this.apply(0);
-    if (model) void loadModel(model).then((src) => this.useModel(src));
+    if (model) void loadModel(model).then((src) => { this.srcModel = src; this.useModel(src); });
+  }
+
+  /** Troca as cores da equipe (o dono mudou de equipe). */
+  recolor(look: PaintLook | null): void {
+    this.look = look;
+    if (this.srcModel) this.useModel(this.srcModel);
   }
 
   /** portas dianteiras (0 fechada, 1 aberta) e o tempo que ficam abertas */
@@ -146,7 +269,7 @@ export class Car {
   private bodyBase = new THREE.Vector3();
 
   private useModel(src: THREE.Object3D): void {
-    const v = buildCarVisual(src, this.color);
+    const v = buildCarVisual(src, this.color, this.look ?? undefined, this.bike);
     this.root.clear();
     if (this.bike) {
       // a moto inteira (corpo e rodas) vai dentro de um grupo que empina/inclina
@@ -422,24 +545,82 @@ export function updateEngines(dt: number): void {
   for (const c of CARS) c.updateEngine(dt);
 }
 
+let carsGroup: THREE.Group | null = null;
+/** Veículos pessoais (um por jogador), por id do dono. Também estão em CARS (colisão, motor, entrada). */
+export const PERSONAL = new Map<string, Car>();
+let nextPersonalId = 100;
+
+/** Cria (ou move/recolore) o veículo pessoal de um jogador. */
+export function spawnPersonal(ownerId: string, model: string, look: PaintLook | null, teamId: string, x: number, z: number, heading: number): Car | null {
+  if (!carsGroup) return null;
+  let car = PERSONAL.get(ownerId);
+  if (car && car.model !== model) { despawnPersonal(ownerId); car = undefined; }
+  if (!car) {
+    car = new Car(nextPersonalId++, x, z, heading, 0xffffff, model, look);
+    car.ownerId = ownerId;
+    CARS.push(car);
+    carsGroup.add(car.root);
+    PERSONAL.set(ownerId, car);
+  } else {
+    if (car.driver === null) car.setPose(x, z, heading); // em uso: a posição vem de quem dirige
+    car.recolor(look);
+  }
+  car.teamId = teamId;
+  return car;
+}
+
+export function despawnPersonal(ownerId: string): void {
+  const car = PERSONAL.get(ownerId);
+  if (!car) return;
+  PERSONAL.delete(ownerId);
+  const i = CARS.indexOf(car);
+  if (i >= 0) CARS.splice(i, 1);
+  car.root.removeFromParent();
+}
+
+/** Procura um lugar livre perto de (px, pz), preferindo a frente de `heading`: sem prédio, árvore, banco ou outro veículo. */
+export function findVehicleSpot(px: number, pz: number, heading: number): { x: number; z: number } {
+  const free = (x: number, z: number): boolean => {
+    if (Math.abs(x) > MAP.halfX - 3 || Math.abs(z) > MAP.halfZ - 3) return false;
+    for (const b of COLLIDERS) {
+      if (b.top < 0.5 || (b.bottom ?? 0) > 2.2) continue;
+      if (x > b.minX - 2.2 && x < b.maxX + 2.2 && z > b.minZ - 2.2 && z < b.maxZ + 2.2) return false;
+    }
+    for (const o of CARS) if (Math.hypot(o.x - x, o.z - z) < 4.2) return false;
+    for (const t of TRAFFIC) if (Math.hypot(t.obj.position.x - x, t.obj.position.z - z) < 5) return false;
+    return true;
+  };
+  for (const dist of [5.5, 7, 9, 12]) {
+    for (const da of [0, 0.5, -0.5, 1, -1, 1.5, -1.5, Math.PI]) {
+      const a = heading + da;
+      const x = px + Math.sin(a) * dist;
+      const z = pz + Math.cos(a) * dist;
+      if (free(x, z)) return { x, z };
+    }
+  }
+  return { x: px + Math.sin(heading) * 5.5, z: pz + Math.cos(heading) * 5.5 };
+}
+
 /** Cria os carros parados do mapa. */
 export function createCars(): THREE.Group {
   CARS.length = 0;
+  PERSONAL.clear();
   const group = new THREE.Group();
-  // Avenida: pista sul vai para leste (heading π/2), pista norte para oeste (-π/2)
-  const spawn: [number, number, number, number][] = [
-    [34, -9, Math.PI / 2, 0xc0392b],
-    [-26, -9, Math.PI / 2, 0x2e86c1],
-    [10, 9, -Math.PI / 2, 0xf1c40f],
-    [-40, 9, -Math.PI / 2, 0xecf0f1],
-    [50, -9, Math.PI / 2, 0x888888],
-    [-8, 9, -Math.PI / 2, 0x888888],
-    [30, 9, -Math.PI / 2, 0x888888],
-    [-30, -9, Math.PI / 2, 0x888888],
+  carsGroup = group;
+  // Viaturas da PM (Spin): sem equipe, paradas e abertas a todos. 4 nas pistas da avenida (pista sul vai para leste, heading π/2;
+  // pista norte para oeste, -π/2) e 4 nas calçadas das saídas da cidade, nas pontas da avenida.
+  const spawn: [number, number, number][] = [
+    [34, -9, Math.PI / 2],
+    [-26, -9, Math.PI / 2],
+    [10, 9, -Math.PI / 2],
+    [-40, 9, -Math.PI / 2],
+    [98, -16, Math.PI / 2],
+    [98, 16, -Math.PI / 2],
+    [-98, -16, Math.PI / 2],
+    [-98, 16, -Math.PI / 2],
   ];
-  spawn.forEach(([x, z, h, c], i) => {
-    const model = i < 4 ? CAR_MODELS[i % CAR_MODELS.length] : BIKE_MODELS[i - 4];
-    const car = new Car(i, x, z, h, c, model);
+  spawn.forEach(([x, z, h], i) => {
+    const car = new Car(i, x, z, h, 0xffffff, 'spin');
     CARS.push(car);
     group.add(car.root);
   });

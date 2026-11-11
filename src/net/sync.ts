@@ -3,7 +3,8 @@ import { supabase } from './supabase';
 import { CHARACTERS, type CharacterName } from '../game/characters';
 import { MAP } from '../game/map';
 import { cleanRtc, type RtcKind } from './voice';
-import { cleanLook, type TeamLook } from '../game/teams';
+import { cleanLook, HEX, type TeamLook } from '../game/teams';
+import { BIKE_MODELS, CAR_MODELS } from '../game/vehicle';
 
 export interface PlayerInfo {
   id: string;
@@ -11,6 +12,25 @@ export interface PlayerInfo {
   character: CharacterName;
   /** equipe (nome e duas cores), ou null */
   team: TeamLook | null;
+  /** veículo pessoal chamado da garagem (modelo, cores da equipe, id da equipe e onde está parado), ou null */
+  veh: VehInfo | null;
+}
+
+export interface VehInfo { m: string; c1: string; c2: string; t: string; x: number; z: number; h: number }
+
+/** Valida o veículo pessoal que veio da rede. */
+export function cleanVeh(v: unknown): VehInfo | null {
+  if (typeof v !== 'object' || v === null) return null;
+  const o = v as Record<string, unknown>;
+  const models = [...CAR_MODELS, ...BIKE_MODELS].filter((m) => m !== 'spin') as readonly string[]; // a viatura é do mundo, não pessoal
+  const x = finite(o.x, LIMIT);
+  const z = finite(o.z, LIMIT);
+  const h = finite(o.h, 100);
+  if (typeof o.m !== 'string' || !models.includes(o.m) || x === null || z === null || h === null) return null;
+  const c1 = typeof o.c1 === 'string' && HEX.test(o.c1) ? o.c1.toLowerCase() : '#c8ccd2';
+  const c2 = typeof o.c2 === 'string' && HEX.test(o.c2) ? o.c2.toLowerCase() : '#2b2e33';
+  const t = typeof o.t === 'string' ? o.t.slice(0, 40) : '';
+  return { m: o.m, c1, c2, t, x, z, h };
 }
 
 export interface MoveMsg {
@@ -27,6 +47,8 @@ export interface MoveMsg {
   w: number;
   /** inclinação da mira (rad) */
   pt: number;
+  /** dono do veículo pessoal que está dirigindo (quando v = 8) */
+  vo: string;
   /** vida (0–100) */
   hp: number;
   /** protegido (60 s depois de renascer) */
@@ -100,11 +122,12 @@ function cleanMove(raw: unknown): MoveMsg | null {
   const ry = finite(m.ry, 100);
   if (!idOk(m.id) || x === null || y === null || z === null || ry === null) return null;
   const a = typeof m.a === 'string' && /^[a-z0-9_]{1,24}$/.test(m.a) && m.a.length <= MAX_ANIM ? m.a : 'idle';
-  const v = typeof m.v === 'number' && Number.isInteger(m.v) && m.v >= -1 && m.v < 8 ? m.v : -1;
+  const v = typeof m.v === 'number' && Number.isInteger(m.v) && m.v >= -1 && m.v <= 8 ? m.v : -1;
   const w = typeof m.w === 'number' && Number.isInteger(m.w) && m.w >= 1 && m.w <= 19 ? m.w : 0;
   const pt = finite(m.pt ?? 0, 1.6) ?? 0;
   const hp = typeof m.hp === 'number' && Number.isFinite(m.hp) ? Math.max(0, Math.min(100, Math.round(m.hp))) : 100;
-  return { id: m.id, x, y, z, ry, a, v, w, pt, hp, pr: m.pr === true };
+  const vo = v === 8 && idOk(m.vo) ? m.vo : '';
+  return { id: m.id, x, y, z, ry, a, v: v === 8 && !vo ? -1 : v, vo, w, pt, hp, pr: m.pr === true };
 }
 
 function cleanShot(raw: unknown): ShotMsg | null {
@@ -146,8 +169,9 @@ export class Net {
         const meta = metas[metas.length - 1]; // o último track é o mais novo
         const character = cleanCharacter(meta?.character);
         if (!meta || !character) continue;
-        const info: PlayerInfo = { id, name: cleanName(meta.name), character, team: cleanLook(meta.team) };
-        const sig = `${info.character}|${info.name}|${info.team?.c1 ?? ''}${info.team?.c2 ?? ''}${info.team?.name ?? ''}`;
+        const info: PlayerInfo = { id, name: cleanName(meta.name), character, team: cleanLook(meta.team), veh: cleanVeh(meta.veh) };
+        const v = info.veh;
+        const sig = `${info.character}|${info.name}|${info.team?.c1 ?? ''}${info.team?.c2 ?? ''}${info.team?.name ?? ''}|${v ? `${v.m}${v.c1}${v.c2}${v.t}${v.x.toFixed(1)}${v.z.toFixed(1)}${v.h.toFixed(2)}` : ''}`;
         if (this.known.has(id)) {
           if (this.sigs.get(id) !== sig) { this.sigs.set(id, sig); h.onUpdate(info); }
           continue;
@@ -221,7 +245,7 @@ export class Net {
   }
 
   /** Envia posição no máximo ~12x por segundo. */
-  sendMove(x: number, y: number, z: number, ry: number, a: string, v: number, w: number, pt: number, hp: number, pr: boolean, now: number): void {
+  sendMove(x: number, y: number, z: number, ry: number, a: string, v: number, vo: string, w: number, pt: number, hp: number, pr: boolean, now: number): void {
     if (now - this.lastSent < SEND_INTERVAL_MS) return;
     this.lastSent = now;
     this.send('move', {
@@ -230,7 +254,7 @@ export class Net {
       y: Math.round(y * 100) / 100,
       z: Math.round(z * 100) / 100,
       ry: Math.round(ry * 100) / 100,
-      a, v, w, pt: Math.round(pt * 20) / 20, hp: Math.round(hp), pr,
+      a, v, vo, w, pt: Math.round(pt * 20) / 20, hp: Math.round(hp), pr,
     });
   }
 
