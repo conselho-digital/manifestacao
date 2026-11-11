@@ -119,6 +119,7 @@ const CSS = `
 .m-door{right:calc(var(--u)*3.2);bottom:calc(var(--u)*43.5);width:calc(var(--u)*12);height:calc(var(--u)*12)}
 /* o botão de entrar no carro só aparece perto de um carro */
 .m-hud:not(.near-car):not(.driving) .m-door{display:none}
+.m-hud.nogun .m-aim,.m-hud.nogun .m-reload{display:none!important}
 /* dirigindo, o botão de sair fica acima do acelerar, um pouco afastado */
 .m-hud.driving .m-door{right:calc(var(--u)*3.2);bottom:calc(var(--u)*33);width:calc(var(--u)*13);height:calc(var(--u)*13)}
 /* Sprint à direita (o Escalar saiu: escala sozinho ao pular perto de um obstáculo) */
@@ -583,6 +584,8 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
       const am = !gun ? '--' : s.reloading ? '...' : `${s.mag}/${s.reserve}`;
       if (am !== cache.ammo) { cache.ammo = am; ammo.textContent = am; }
 
+      hud.classList.toggle('nogun', !gun); // sem arma de fogo: nada de mirar nem recarregar
+      if (!gun && aimOn) { aimOn = false; setAim(false); aim.classList.remove('on'); }
       cross.classList.toggle('show', gun && !s.driving && !s.dead);
       cross.classList.toggle('aim', s.aiming);
       crouchBtn.classList.toggle('on', s.crouching);

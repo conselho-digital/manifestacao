@@ -113,6 +113,7 @@ export class WeaponVisual {
   private readonly rifleInners = new Map<RifleKind, THREE.Object3D>();
   private rifleKind: RifleKind = 'ak';
   private readonly pistolInner = buildPistol();
+  private readonly canInner = buildSprayCan();
   private readonly batAnchor = new THREE.Group();
   private readonly flagInner = new THREE.Group();
   private readonly signInner = new THREE.Group();
@@ -130,8 +131,9 @@ export class WeaponVisual {
   constructor(root: THREE.Object3D) {
     this.anchor.visible = false;
     root.add(this.anchor);
-    this.anchor.add(this.pistolInner);
+    this.anchor.add(this.pistolInner, this.canInner);
     this.pistolInner.visible = false;
+    this.canInner.visible = false;
     // o revólver Python .357 troca a pistola simples (que fica só até o arquivo carregar)
     void loadPistol().then((src) => {
       const gun = src.clone(true);
@@ -311,12 +313,15 @@ export class WeaponVisual {
     const pistol = this.mode === 'pistol' || this.mode === 'pistol_aim';
     this.anchor.visible = show && !bat;
     this.batAnchor.visible = show && bat;
+    const spray = this.mode === 'spray' || this.mode === 'spray_aim';
     this.pistolInner.visible = pistol;
-    if (this.rifleInner) this.rifleInner.visible = !pistol && this.rifleKind === 'ak';
-    this.rifleInners.forEach((g, k) => { g.visible = !pistol && this.rifleKind === k; });
+    this.canInner.visible = spray;
+    if (this.rifleInner) this.rifleInner.visible = !pistol && !spray && this.rifleKind === 'ak';
+    this.rifleInners.forEach((g, k) => { g.visible = !pistol && !spray && this.rifleKind === k; });
     // boca do cano medida nos modelos: AK-47 (-0,017; 0,019; 0,738) e pistola (0; 0; 0,17), 1–2 cm à frente da ponta
     const fl = rifleGeo(this.rifleKind).flash;
-    this.flashSprite.position.set(pistol ? PISTOL_FLASH.x : fl.x, pistol ? PISTOL_FLASH.y : fl.y, pistol ? PISTOL_FLASH.z : fl.z);
+    if (spray) this.flashSprite.position.copy(SPRAY_NOZZLE);
+    else this.flashSprite.position.set(pistol ? PISTOL_FLASH.x : fl.x, pistol ? PISTOL_FLASH.y : fl.y, pistol ? PISTOL_FLASH.z : fl.z);
     this.flashSprite.scale.setScalar(pistol ? 0.3 : 0.5);
   }
 
@@ -393,6 +398,26 @@ export function buildPistol(): THREE.Group {
   const guard = new THREE.Mesh(new THREE.BoxGeometry(0.02, 0.02, 0.06), DARK);
   guard.position.set(0, -0.03, 0.03);
   g.add(slide, grip, guard);
+  g.traverse((o) => { o.castShadow = true; });
+  return g;
+}
+
+/** Bico da lata de spray no espaço da arma (de onde sai a tinta). */
+export const SPRAY_NOZZLE = new THREE.Vector3(0, 0.1, 0.045);
+
+/** Lata de spray: corpo na vertical com o centro na palma, bico no alto apontando para +Z. */
+export function buildSprayCan(): THREE.Group {
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(0.033, 0.033, 0.15, 14), new THREE.MeshLambertMaterial({ color: 0xd8dde2 }));
+  const band = new THREE.Mesh(new THREE.CylinderGeometry(0.0335, 0.0335, 0.06, 14), new THREE.MeshLambertMaterial({ color: 0xd62828 }));
+  band.position.y = -0.01;
+  const shoulder = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.033, 0.02, 14), new THREE.MeshLambertMaterial({ color: 0xaab0b7 }));
+  shoulder.position.y = 0.085;
+  const cap = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.025, 12), new THREE.MeshLambertMaterial({ color: 0x1b1d20 }));
+  cap.position.y = 0.105;
+  const nozzle = new THREE.Mesh(new THREE.BoxGeometry(0.012, 0.012, 0.035), new THREE.MeshLambertMaterial({ color: 0x1b1d20 }));
+  nozzle.position.set(0, 0.105, 0.025);
+  g.add(body, band, shoulder, cap, nozzle);
   g.traverse((o) => { o.castShadow = true; });
   return g;
 }

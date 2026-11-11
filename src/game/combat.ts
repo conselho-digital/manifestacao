@@ -10,6 +10,7 @@ import type { Net, ShotMsg, KillMsg } from '../net/sync';
 import { isGunId, type Inventory, type ShopItem, type WeaponId } from './inventory';
 import type { RifleKind } from './rifles';
 import type { Armed } from './anim';
+import { findWall, SPRAY_DURATION, SPRAY_SIZE, type Graffiti } from './graffiti';
 
 export const MAG_SIZE = 30;
 const RESERVE_START = 120;
@@ -62,6 +63,12 @@ interface Deps {
   log: (text: string) => void;
   /** armas e dinheiro do jogador */
   inv: Inventory;
+  /** pinturas nas paredes (lata de spray) */
+  graffiti: Graffiti;
+  /** a cidade (paredes onde se pode pintar) */
+  city: THREE.Object3D;
+  /** equipe do jogador (id e cor 1, para a pintura e a névoa) */
+  myTeam(): { id: string; c1: string };
 }
 
 /** Combate casual: o atirador calcula o acerto; quem foi acertado aplica o dano em si mesmo. */
@@ -75,7 +82,7 @@ export class Combat {
   /** começa de mãos livres (punho); o botão Arma troca */
   weapon: WeaponId = 1;
   /** munição de cada arma (só quem tem a arma recebe) */
-  private ammo = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].map(() => ({ mag: 0, reserve: 0 }));
+  private ammo = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map(() => ({ mag: 0, reserve: 0 }));
   get mag(): number { return this.ammo[this.weapon]!.mag; }
   get reserve(): number { return this.ammo[this.weapon]!.reserve; }
   /** tem mira (fuzil ou pistola) */
@@ -88,6 +95,9 @@ export class Combat {
   hurtTick = 0;
 
   private reloadT = 0;
+  /** segundos restantes pintando com a lata de spray (braço levantado) */
+  private sprayT = 0;
+  private sprayTo = new THREE.Vector3();
   private cd = 0;
   private fireHold = 0;
   private invuln = 0;
@@ -119,7 +129,7 @@ export class Combat {
 
   /** Armas que o jogador tem, na ordem do botão de troca. */
   ownedWeapons(): WeaponId[] {
-    return ([0, 12, 13, 14, 3, 2, 4, 5, 6, 7, 8, 9, 10, 11, 1] as const).filter((w) => this.d.inv.has(w));
+    return ([0, 12, 13, 14, 3, 2, 4, 5, 6, 7, 8, 9, 10, 11, 15, 1] as const).filter((w) => this.d.inv.has(w));
   }
 
   /** Munição de uma arma (para o menu). */
@@ -151,7 +161,7 @@ export class Combat {
 
   private get magSize(): number { return this.weapon === 3 ? PISTOL_MAG : MAG_SIZE; }
 
-  get weaponName(): string { return ['AK-47', 'PUNHO', 'BANDEIRA', 'PISTOLA', 'PLACA', 'TACO', 'TACO', 'GARRAFA', 'CANO', 'CUTELO', 'FOICE', 'MACHADO', 'M4A1', 'M16', 'HONEY BADGER'][this.weapon]!; }
+  get weaponName(): string { return ['AK-47', 'PUNHO', 'BANDEIRA', 'PISTOLA', 'PLACA', 'TACO', 'TACO', 'GARRAFA', 'CANO', 'CUTELO', 'FOICE', 'MACHADO', 'M4A1', 'M16', 'HONEY BADGER', 'SPRAY'][this.weapon]!; }
 
   /** Placar: eu e os outros jogadores, do que mais matou para o que menos. */
   statRows(): StatRow[] {
@@ -212,7 +222,9 @@ export class Combat {
     const aiming = input.aim || this.fireHold > 0;
     const rf = RIFLE_OF[this.weapon];
     if (rf) player.setRifleKind(rf.kind);
-    player.setArmed(rf ? (aiming ? 'aim' : 'rifle') : this.weapon === 3 ? (aiming ? 'pistol_aim' : 'pistol') : (MELEE_ARMED[this.weapon] ?? 'none'));
+    if (this.sprayT > 0) this.sprayT = Math.max(0, this.sprayT - dt);
+    player.setArmed(rf ? (aiming ? 'aim' : 'rifle') : this.weapon === 3 ? (aiming ? 'pistol_aim' : 'pistol') : this.weapon === 15 ? (this.sprayT > 0 ? 'spray_aim' : 'spray') : (MELEE_ARMED[this.weapon] ?? 'none'));
+    if (this.sprayT > 0 && player.weaponVis) this.d.graffiti.mist(player.weaponVis.muzzle(this.tmpO), this.sprayTo, this.d.myTeam().c1);
 
     if (input.fire && this.cd <= 0 && !this.reloading && this.protectT <= 0) {
       const a = this.ammo[this.weapon]!;
@@ -222,9 +234,26 @@ export class Combat {
           this.cd = rf ? rf.gap : PISTOL_GAP;
           this.fireGun(player, aiming, rf ? rf.shot : 'p');
         } else { this.cd = 0.3; playClick(); this.startReload(); }
-      } else if (MELEE_ARMED[this.weapon]) { this.cd = BAT_GAP; player.swing(); this.melee(player, BAT_RANGE, 'b'); }
+      } else if (this.weapon === 15) this.spray(player);
+      else if (MELEE_ARMED[this.weapon]) { this.cd = BAT_GAP; player.swing(); this.melee(player, BAT_RANGE, 'b'); }
       else { this.cd = FIST_GAP; const kind = player.punch(); this.melee(player, kind === 'k' ? FIST_RANGE + 0.3 : FIST_RANGE, kind); }
     }
+  }
+
+  /** Lata de spray: se há uma parede de prédio na frente, levanta a lata e pinta a imagem da equipe. */
+  private spray(player: Player): void {
+    const p = player.object.position;
+    const dir = this.d.camera.getWorldDirection(this.tmpD);
+    const wall = findWall(this.d.city, p.x, p.z, dir.x, dir.z);
+    if (!wall) { this.cd = 1.2; this.d.log('Spray: chegue perto de uma parede lisa, olhando de frente para ela.'); return; }
+    this.cd = 2.6;
+    this.sprayT = SPRAY_DURATION;
+    this.sprayTo.set(wall.x + wall.nx * 0.05, wall.y, wall.z + wall.nz * 0.05);
+    const t = this.d.myTeam();
+    const r2 = (v: number): number => Math.round(v * 100) / 100;
+    const msg = { x: r2(wall.x), y: wall.y, z: r2(wall.z), nx: r2(wall.nx), nz: r2(wall.nz), w: SPRAY_SIZE, t: t.id };
+    this.d.graffiti.add({ id: this.d.net.id, ...msg }, this.d.name);
+    this.d.net.sendSpray(msg);
   }
 
   private startReload(): void {

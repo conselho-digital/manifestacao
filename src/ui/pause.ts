@@ -2,7 +2,8 @@
 import type { CharacterName } from '../game/characters';
 import { ALL_WEAPONS, GARAGE_ITEMS, isGunId, SHOP, WEAPON_IMG, WEAPON_NAMES, type Inventory, type ShopItem, type WeaponId } from '../game/inventory';
 import { brl, isReal, loadPrices, loadPurchases, payUrlOf, priceOf, REAL_ITEMS, safeUrl, savePrice } from '../game/shop';
-import { deleteTeam, getTeams, HEX, isAdmin, loadTeams, MAX_TEAM_NAME, saveTeam, type Team } from '../game/teams';
+import { clearTeamGraffiti, deleteTeam, getTeams, HEX, isAdmin, loadTeams, MAX_TEAM_NAME, saveTeam, saveTeamGraffiti, type Team } from '../game/teams';
+import { toLightImage } from './image';
 import { ICON } from './icons';
 import { createCharacterPicker, createTeamPicker, el, PICKER_CSS, swatchStyle } from './pickers';
 
@@ -81,6 +82,10 @@ const CSS = `
 .ps-h3{margin:16px 0 8px;font-size:15px;color:#bfe9ff}
 .ps-name{font-weight:800;min-width:130px}
 .ps-row input[type=number]{width:90px;padding:10px;font-size:15px;border-radius:9px;border:2px solid #3b4358;background:#0f1420;color:#fff}
+.ps-img{display:flex;align-items:center;gap:8px;flex-basis:100%;padding-top:8px;border-top:1px dashed #3b4358;font-size:13px}
+.ps-img img{width:54px;height:54px;object-fit:contain;border-radius:8px;background:#0f1420;border:2px solid #3b4358}
+.ps-img .none{width:54px;height:54px;border-radius:8px;border:2px dashed #3b4358;display:flex;align-items:center;justify-content:center;font-size:10px;opacity:.7;text-align:center}
+.ps-file{padding:9px 13px;border-radius:9px;background:#3d2d52;color:#fff;font-weight:800;cursor:pointer}
 .ps-center{display:flex;flex-direction:column;align-items:center;gap:12px}
 @media (max-height:520px){.ps-head{padding:6px 12px}.ps-tab{padding:7px 11px;font-size:13px}.ps-body{padding:10px}.ps-go{padding:8px 18px}}
 `;
@@ -335,7 +340,48 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
         };
         kids.push(del);
       }
-      return el('div', 'ps-row', ...kids);
+      const rowEl = el('div', 'ps-row', ...kids);
+      if (t && !t.id.startsWith('padrao-')) rowEl.appendChild(graffitiPart(t));
+      return rowEl;
+    };
+
+    /** Imagem do grafite (lata de spray) da equipe: escolhe o arquivo, converte para webp leve e envia. */
+    const graffitiPart = (t: Team): HTMLElement => {
+      const thumb = t.graffiti ? Object.assign(el('img'), { src: t.graffiti, alt: '' }) : el('span', 'none', 'sem imagem');
+      const input = el('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      input.style.display = 'none';
+      const pick = el('label', 'ps-file', t.graffiti ? 'Trocar imagem do spray' : 'Enviar imagem do spray', input);
+      input.onchange = () => {
+        const f = input.files?.[0];
+        if (!f) return;
+        pick.style.opacity = '.5';
+        out.className = 'ps-msg';
+        out.textContent = 'Convertendo para webp e enviando...';
+        void toLightImage(f).then((blob) => saveTeamGraffiti(t.id, blob).then((e) => ({ e, kb: Math.round(blob.size / 1024) })))
+          .then(({ e, kb }) => {
+            out.className = `ps-msg ${e ? 'err' : 'ok'}`;
+            out.textContent = e ?? `Imagem enviada (${kb} KB, webp). Os jogadores já veem nas próximas pinturas.`;
+            if (!e) { body.textContent = ''; renderAdmin(); const o2 = body.querySelector('.ps-msg'); if (o2) { o2.className = 'ps-msg ok'; o2.textContent = `Imagem enviada (${kb} KB).`; } }
+          })
+          .catch((err: unknown) => { out.className = 'ps-msg err'; out.textContent = err instanceof Error ? err.message : 'Falha ao enviar a imagem.'; })
+          .finally(() => { pick.style.opacity = ''; input.value = ''; });
+      };
+      const kids: Node[] = [thumb, pick, el('span', '', 'Imagem pintada na parede por esta equipe (png, jpg ou webp; fundo transparente fica melhor).')];
+      if (t.graffiti) {
+        const del = el('button', 'ps-del', 'Tirar imagem');
+        del.type = 'button';
+        del.onclick = () => {
+          void clearTeamGraffiti(t.id).then((e) => {
+            out.className = `ps-msg ${e ? 'err' : 'ok'}`;
+            out.textContent = e ?? 'Imagem removida (volta ao desenho padrão).';
+            if (!e) { body.textContent = ''; renderAdmin(); const o2 = body.querySelector('.ps-msg'); if (o2) { o2.className = 'ps-msg ok'; o2.textContent = 'Imagem removida.'; } }
+          });
+        };
+        kids.push(del);
+      }
+      return el('div', 'ps-img', ...kids);
     };
 
     for (const t of getTeams()) list.appendChild(row(t));

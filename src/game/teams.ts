@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { supabase } from '../net/supabase';
 
-export interface Team { id: string; name: string; c1: string; c2: string }
+export interface Team { id: string; name: string; c1: string; c2: string; /** imagem do grafite da equipe (https, enviada pelo admin) */ graffiti?: string }
 /** O que vai pela rede (presence): nome e as duas cores. */
 export interface TeamLook { name: string; c1: string; c2: string }
 
@@ -42,11 +42,17 @@ export const saveTeamId = (id: string): void => { try { localStorage.setItem(STO
 export async function loadTeams(): Promise<Team[]> {
   if (!supabase) return teams;
   try {
-    const { data, error } = await supabase.from('teams').select('id,name,color1,color2').order('sort', { ascending: true }).order('created_at', { ascending: true });
+    // graffiti_url é uma coluna nova: se o banco ainda não a tem, lê sem ela (as equipes continuam funcionando)
+    let res = await supabase.from('teams').select('id,name,color1,color2,graffiti_url').order('sort', { ascending: true }).order('created_at', { ascending: true });
+    if (res.error) res = (await supabase.from('teams').select('id,name,color1,color2').order('sort', { ascending: true }).order('created_at', { ascending: true })) as unknown as typeof res;
+    const { data, error } = res;
     if (!error && data) {
       teams = data
         .filter((r) => HEX.test(String(r.color1)) && HEX.test(String(r.color2)))
-        .map((r) => ({ id: String(r.id), name: String(r.name), c1: String(r.color1).toLowerCase(), c2: String(r.color2).toLowerCase() }));
+        .map((r) => ({
+          id: String(r.id), name: String(r.name), c1: String(r.color1).toLowerCase(), c2: String(r.color2).toLowerCase(),
+          graffiti: typeof (r as { graffiti_url?: unknown }).graffiti_url === 'string' ? safeHttps((r as { graffiti_url: string }).graffiti_url) : undefined,
+        }));
     }
   } catch { /* offline: fica com o que já tem */ }
   return teams;
@@ -59,6 +65,33 @@ export async function isAdmin(): Promise<boolean> {
     const { data } = await supabase.rpc('is_admin');
     return data === true;
   } catch { return false; }
+}
+
+const safeHttps = (u: string): string | undefined => { try { const x = new URL(u); return x.protocol === 'https:' ? x.href : undefined; } catch { return undefined; } };
+
+/** Admin: envia a imagem do grafite da equipe (já convertida para webp) e grava o endereço. Retorna a mensagem de erro, se houver. */
+export async function saveTeamGraffiti(id: string, file: Blob): Promise<string | null> {
+  if (!supabase) return 'Sem conexão com o servidor.';
+  if (id.startsWith('padrao-')) return 'Salve a equipe no banco antes de enviar a imagem (esta é uma equipe padrão sem conexão).';
+  const path = `${id}.${file.type === 'image/png' ? 'png' : 'webp'}`;
+  const up = await supabase.storage.from('graffiti').upload(path, file, { upsert: true, contentType: file.type === 'image/png' ? 'image/png' : 'image/webp', cacheControl: '3600' });
+  if (up.error) return /bucket not found|not found/i.test(up.error.message) ? 'O armazenamento de imagens ainda não foi criado no servidor (migração pendente).' : /row-level security|permission|unauthorized/i.test(up.error.message) ? 'Sem permissão: só o administrador envia imagens.' : up.error.message;
+  const url = `${supabase.storage.from('graffiti').getPublicUrl(path).data.publicUrl}?v=${Date.now()}`;
+  const { data, error } = await supabase.from('teams').update({ graffiti_url: url }).eq('id', id).select('id');
+  if (error) return /graffiti_url|column/i.test(error.message) ? 'A coluna da imagem ainda não existe no servidor (migração pendente).' : friendly(error.message);
+  if (!data || data.length === 0) return 'Sem permissão para alterar (só o administrador).';
+  await loadTeams();
+  return null;
+}
+
+/** Admin: tira a imagem do grafite da equipe (volta ao desenho padrão). */
+export async function clearTeamGraffiti(id: string): Promise<string | null> {
+  if (!supabase) return 'Sem conexão com o servidor.';
+  await supabase.storage.from('graffiti').remove([`${id}.webp`, `${id}.png`]);
+  const { error } = await supabase.from('teams').update({ graffiti_url: null }).eq('id', id);
+  if (error) return friendly(error.message);
+  await loadTeams();
+  return null;
 }
 
 const friendly = (m: string): string => (/permission denied|row-level security|violates/i.test(m) ? 'Sem permissão: só o administrador altera as equipes.' : m);

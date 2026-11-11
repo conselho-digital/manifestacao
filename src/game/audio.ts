@@ -228,6 +228,34 @@ export function playShotAt(x: number, z: number, kind: ShotKind): void {
   } catch { /* sem áudio */ }
 }
 
+/** Chiado da lata de spray (~1,4 s) no ponto (x, z); só se ouve de perto. */
+export function playSprayAt(x: number, z: number): void {
+  const prox = proximity(x, z, 28, 3);
+  if (prox.gain < 0.02) return;
+  const c = audioCtx();
+  const out = audioOut();
+  if (!c || !out) return;
+  try {
+    const dur = 1.4;
+    const len = Math.floor(c.sampleRate * dur);
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.min(1, i / 400) * Math.min(1, (len - i) / 3000);
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    const bp = c.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 5200;
+    bp.Q.value = 0.7;
+    const g = c.createGain();
+    g.gain.value = 0.16 * prox.gain;
+    const pan = c.createStereoPanner();
+    pan.pan.value = prox.pan;
+    src.connect(bp).connect(g).connect(pan).connect(out);
+    src.start();
+  } catch { /* sem áudio */ }
+}
+
 /** Clique de arma vazia (só quem atira ouve). */
 export function playClick(): void {
   const c = audioCtx();

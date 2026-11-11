@@ -5,6 +5,7 @@ import { MAP } from '../game/map';
 import { cleanRtc, type RtcKind } from './voice';
 import { cleanLook, HEX, type TeamLook } from '../game/teams';
 import { BIKE_MODELS, CAR_MODELS } from '../game/vehicle';
+import type { SprayMsg } from '../game/graffiti';
 
 export interface PlayerInfo {
   id: string;
@@ -43,7 +44,7 @@ export interface MoveMsg {
   a: string;
   /** carro que está dirigindo (-1 = nenhum) */
   v: number;
-  /** arma: 0 nada/punho, 1 fuzil, 2 fuzil mirando, 3 bandeira, 4 pistola, 5 pistola mirando, 6 placa, 7 taco de críquete, 8 taco de beisebol, 9–13 garrafa/cano/cutelo/foice/machado, 14–19 M4A1/M16/Honey Badger (par = baixo, ímpar = mirando) */
+  /** arma: 0 nada/punho, 1 fuzil, 2 fuzil mirando, 3 bandeira, 4 pistola, 5 pistola mirando, 6 placa, 7 taco de críquete, 8 taco de beisebol, 9–13 garrafa/cano/cutelo/foice/machado, 14–19 M4A1/M16/Honey Badger (par = baixo, ímpar = mirando), 20 lata de spray, 21 pintando */
   w: number;
   /** inclinação da mira (rad) */
   pt: number;
@@ -79,6 +80,8 @@ export interface NetHandlers {
   onShot(m: ShotMsg): void;
   onKill(m: KillMsg): void;
   onChat(m: ChatMsg): void;
+  /** alguém pintou uma parede com a lata de spray */
+  onSpray(m: SprayMsg): void;
   /** sinalização da voz (WebRTC): oferta, resposta e candidatos ICE de quem fala comigo */
   onRtc(m: { from: string; k: RtcKind; d: unknown }): void;
 }
@@ -123,7 +126,7 @@ function cleanMove(raw: unknown): MoveMsg | null {
   if (!idOk(m.id) || x === null || y === null || z === null || ry === null) return null;
   const a = typeof m.a === 'string' && /^[a-z0-9_]{1,24}$/.test(m.a) && m.a.length <= MAX_ANIM ? m.a : 'idle';
   const v = typeof m.v === 'number' && Number.isInteger(m.v) && m.v >= -1 && m.v <= 8 ? m.v : -1;
-  const w = typeof m.w === 'number' && Number.isInteger(m.w) && m.w >= 1 && m.w <= 19 ? m.w : 0;
+  const w = typeof m.w === 'number' && Number.isInteger(m.w) && m.w >= 1 && m.w <= 21 ? m.w : 0;
   const pt = finite(m.pt ?? 0, 1.6) ?? 0;
   const hp = typeof m.hp === 'number' && Number.isFinite(m.hp) ? Math.max(0, Math.min(100, Math.round(m.hp))) : 100;
   const vo = v === 8 && idOk(m.vo) ? m.vo : '';
@@ -143,6 +146,21 @@ function cleanShot(raw: unknown): ShotMsg | null {
   };
 }
 
+function cleanSpray(raw: unknown): SprayMsg | null {
+  if (typeof raw !== 'object' || raw === null) return null;
+  const m = raw as Record<string, unknown>;
+  const x = finite(m.x, LIMIT);
+  const z = finite(m.z, LIMIT);
+  const y = finite(m.y, 12);
+  const w = finite(m.w, 4);
+  if (!idOk(m.id) || x === null || z === null || y === null || w === null || w < 0.5) return null;
+  const nx = finite(m.nx, 1);
+  const nz = finite(m.nz, 1);
+  if (nx === null || nz === null || Math.abs(Math.hypot(nx, nz) - 1) > 0.05) return null; // direção da parede (horizontal, vetor unitário)
+  return { id: m.id, x, y, z, nx, nz, w, t: typeof m.t === 'string' ? m.t.slice(0, 64) : '' };
+}
+
+const MIN_SPRAY_GAP_MS = 900;
 const SEND_INTERVAL_MS = 80; // ~12 envios/s
 
 export class Net {
@@ -154,6 +172,7 @@ export class Net {
   private sigs = new Map<string, string>();
   private lastShotAt = new Map<string, number>();
   private lastChatAt = new Map<string, number>();
+  private lastSprayAt = new Map<string, number>();
 
   /** Entra na sala. Retorna false se o Supabase não estiver configurado. */
   async join(me: Omit<PlayerInfo, 'id'>, h: NetHandlers): Promise<boolean> {
@@ -187,6 +206,7 @@ export class Net {
           this.sigs.delete(id);
           this.lastShotAt.delete(id);
           this.lastChatAt.delete(id);
+          this.lastSprayAt.delete(id);
           h.onLeave(id);
         }
       }
@@ -216,6 +236,15 @@ export class Net {
       if (!t || now - (this.lastChatAt.get(p.id) ?? 0) < MIN_CHAT_GAP_MS) return;
       this.lastChatAt.set(p.id, now);
       h.onChat({ id: p.id, t });
+    });
+
+    channel.on('broadcast', { event: 'spray' }, ({ payload }) => {
+      const m = cleanSpray(payload);
+      if (!m || m.id === this.id || !this.known.has(m.id)) return;
+      const now = performance.now();
+      if (now - (this.lastSprayAt.get(m.id) ?? 0) < MIN_SPRAY_GAP_MS) return;
+      this.lastSprayAt.set(m.id, now);
+      h.onSpray(m);
     });
 
     channel.on('broadcast', { event: 'rtc' }, ({ payload }) => {
@@ -269,6 +298,10 @@ export class Net {
   /** Sinalização da voz para um jogador. */
   sendRtc(to: string, k: RtcKind, d: unknown): void {
     this.send('rtc', { from: this.id, to, k, d });
+  }
+
+  sendSpray(m: Omit<SprayMsg, 'id'>): void {
+    this.send('spray', { ...m, id: this.id });
   }
 
   sendChat(text: string): void {

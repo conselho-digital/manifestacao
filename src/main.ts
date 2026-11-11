@@ -14,6 +14,7 @@ import { Voice } from './net/voice';
 import { RemotePlayer } from './game/remote';
 import { CARS, createCars, despawnPersonal, TRAFFIC, findVehicleSpot, PERSONAL, spawnPersonal, updateEngines, updateTraffic } from './game/vehicle';
 import { Combat } from './game/combat';
+import { Graffiti } from './game/graffiti';
 import { WeaponVisual } from './game/weapons';
 import { warmUp } from './game/preload';
 import { setListener } from './game/audio';
@@ -97,6 +98,7 @@ let combat: Combat | null = null;
 const BASE_FOV = camera.fov;
 const net = new Net();
 const remotes = new Map<string, RemotePlayer>();
+const graffiti = new Graffiti(scene);
 if (import.meta.env.DEV) (window as unknown as { __net: Net; __game: { ready: () => boolean } }).__net = net;
 if (import.meta.env.DEV) (window as unknown as { __game: { ready: () => boolean; camera: THREE.PerspectiveCamera; scene: THREE.Scene; combat: () => Combat | null; player: () => Player | null; sim: { TRAFFIC: typeof TRAFFIC; CARS: typeof CARS; updateTraffic: typeof updateTraffic; spawnPersonal: typeof spawnPersonal } } }).__game = { ready: () => !!player, camera, scene, combat: () => combat, player: () => player, sim: { TRAFFIC, CARS, updateTraffic, spawnPersonal } };
 let profileName = 'Jogador';
@@ -253,7 +255,7 @@ void showLobby().then(async (profile) => {
   first.add(myRing);
   await Promise.all([loadPrices(), isAdmin().then((a) => loadPurchases(inv, a))]);
   if (import.meta.env.DEV && new URLSearchParams(location.search).has('admin')) inv.admin = true; // só para testar no npm run dev
-  combat = new Combat({ scene, camera, net, name: profile.name, remotes, log: (t) => hud?.addChat(t), inv });
+  combat = new Combat({ scene, camera, net, name: profile.name, remotes, log: (t) => hud?.addChat(t), inv, graffiti, city, myTeam: () => ({ id: teamId, c1: teamById(teamId)?.c1 ?? '#ffffff' }) });
   wirePlayer(player);
 
   pauseMenu = createPauseMenu({
@@ -316,6 +318,7 @@ void showLobby().then(async (profile) => {
         const who = remotes.get(m.id)?.info.name;
         if (who) hud?.addChat(`${who}: ${m.t}`);
       },
+      onSpray: (m) => graffiti.add(m, remotes.get(m.id)?.info.name ?? ''),
       onRtc: (m) => void voice.onSignal(m),
     });
   } catch (e) {
@@ -432,6 +435,7 @@ function loop(): void {
   updateTraffic(paused ? 0 : dt, blockers, parkedCars);
   if (player) updateEngines(paused ? 0 : dt);
   remotes.forEach((r) => r.update(dt));
+  graffiti.update(dt);
   if (player) {
     const others = new Map<string, { x: number; z: number }>();
     remotes.forEach((r, id) => others.set(id, { x: r.root.position.x, z: r.root.position.z }));

@@ -7,19 +7,21 @@ interface ClipData<T> { duration: number; tracks: T[]; /** descida do corpo (m) 
 type Clips<T> = Record<string, ClipData<T>>;
 type Kind = 'gta' | 'carlos';
 
-export type Armed = 'none' | 'rifle' | 'aim' | 'pistol' | 'pistol_aim' | 'bat' | 'sign' | 'cricket' | 'baseball' | ExtraMelee;
+export type Armed = 'none' | 'rifle' | 'aim' | 'pistol' | 'pistol_aim' | 'bat' | 'sign' | 'cricket' | 'baseball' | 'spray' | 'spray_aim' | ExtraMelee;
 /** Armas brancas extras (pacote de armas): garrafa quebrada, cano, cutelo, foice e machado. */
 export const EXTRA_MELEE_KEYS = ['bottle', 'pipe', 'cleaver', 'sickle', 'axe'] as const;
 export type ExtraMelee = (typeof EXTRA_MELEE_KEYS)[number];
-export const ARMED_CODE: Record<Armed, number> = { none: 0, rifle: 1, aim: 2, bat: 3, pistol: 4, pistol_aim: 5, sign: 6, cricket: 7, baseball: 8, bottle: 9, pipe: 10, cleaver: 11, sickle: 12, axe: 13 };
-export const ARMED_FROM_CODE: Armed[] = ['none', 'rifle', 'aim', 'bat', 'pistol', 'pistol_aim', 'sign', 'cricket', 'baseball', 'bottle', 'pipe', 'cleaver', 'sickle', 'axe'];
+export const ARMED_CODE: Record<Armed, number> = { none: 0, rifle: 1, aim: 2, bat: 3, pistol: 4, pistol_aim: 5, sign: 6, cricket: 7, baseball: 8, bottle: 9, pipe: 10, cleaver: 11, sickle: 12, axe: 13, spray: 20, spray_aim: 21 };
+// 14–19 são os fuzis (rifleFromNetCode); 20 e 21 a lata de spray
+export const ARMED_FROM_CODE: Armed[] = ['none', 'rifle', 'aim', 'bat', 'pistol', 'pistol_aim', 'sign', 'cricket', 'baseball', 'bottle', 'pipe', 'cleaver', 'sickle', 'axe', 'none', 'none', 'none', 'none', 'none', 'none', 'spray', 'spray_aim'];
 /** Armas brancas de duas mãos (bandeira, placa, tacos de críquete e de beisebol): usam os clipes do baseball.ifp. */
 export const isBatLike = (a: Armed): boolean => a === 'bat' || a === 'sign' || a === 'cricket' || a === 'baseball' || (EXTRA_MELEE_KEYS as readonly string[]).includes(a);
 /** O corpo gira para onde a câmera mira só ao mirar ou atirar (arma levantada). Com a arma baixa a câmera olha livre e o corpo segue o movimento. */
-export const facesAim = (a: Armed): boolean => a === 'aim' || a === 'pistol_aim';
-const isAimPose = (a: Armed): boolean => a === 'aim' || a === 'pistol_aim';
+export const facesAim = (a: Armed): boolean => a === 'aim' || a === 'pistol_aim' || a === 'spray_aim';
+const isAimPose = (a: Armed): boolean => a === 'aim' || a === 'pistol_aim' || a === 'spray_aim';
+const isSpray = (a: Armed): boolean => a === 'spray' || a === 'spray_aim';
 type Kind3 = 'rifle' | 'pistol' | 'bat';
-const kindOf = (a: Armed): Kind3 | null => (a === 'rifle' || a === 'aim' ? 'rifle' : a === 'pistol' || a === 'pistol_aim' ? 'pistol' : isBatLike(a) ? 'bat' : null);
+const kindOf = (a: Armed): Kind3 | null => (a === 'rifle' || a === 'aim' ? 'rifle' : a === 'pistol' || a === 'pistol_aim' || isSpray(a) ? 'pistol' : isBatLike(a) ? 'bat' : null);
 
 /** Clipes que tocam uma vez e param no último quadro. */
 const ONCE = new Set(['kick_1', 'kick_2', 'hitk_1', 'hitk_2', 'hit_1', 'hit_2', 'hit_3', 'block', 'punch_1', 'punch_2', 'punch_3', 'punch_4', 'bat_swing', 'bat_swing2', 'bat_swing3', 'bat_hit_1', 'bat_hit_2', 'bat_hit_3', 'car_getin_l', 'car_getout_l', 'bike_fall', 'ko_front', 'getup_front', 'jump_launch', 'jump_land', 'climb_jump', 'climb_pull', 'climb_stand', 'roll', 'dive']);
@@ -149,6 +151,16 @@ const CFG: Record<'rifle' | 'pistol', WeaponCfg> = {
     crouchLow: P3(0, 0.1, 0),
     crouchAim: P3(0, -0.16, -0.08),
   },
+};
+
+/** Lata de spray (uma mão só, a direita): abaixada junto ao quadril; ao pintar o braço sobe e estica para a parede (o bico para a frente). */
+const CFG_SPRAY: WeaponCfg = {
+  low: { pos: P3(-0.2, 1.1, 0.22), pitch: 0, yaw: 0 },
+  aim: { pos: P3(-0.1, 1.42, 0.5), pitch: 0, yaw: 0 },
+  gripR: P3(0, 0, -0.012),
+  gripL: P3(0, 0, 0),
+  crouchLow: P3(0, 0.1, 0),
+  crouchAim: P3(0, -0.08, 0),
 };
 
 /** Baixa os dados de animação de antemão (Law e Carlos). */
@@ -423,6 +435,7 @@ export class Animator {
 
   /** Posições de arma em uso: poses do fuzil/pistola e, no fuzil, as mãos do modelo atual. */
   private cfgNow(): WeaponCfg {
+    if (isSpray(this.armed)) return CFG_SPRAY;
     if (kindOf(this.armed) === 'pistol') return CFG.pistol;
     if (this.rifleKind === 'ak') return CFG.rifle;
     const g = rifleGeo(this.rifleKind);
@@ -597,7 +610,7 @@ export class Animator {
     if (holding) {
       // mãos fechadas no cabo: fuzil, taco e pistola (duas mãos, também abaixada)
       this.curlHand(-1, 1);
-      this.curlHand(1, 1);
+      this.curlHand(1, isSpray(this.armed) ? 0 : 1);
     }
   }
 
@@ -886,7 +899,7 @@ export class Animator {
 
   private poseArm(arm: Arm, frame: { pos: THREE.Vector3; q: THREE.Quaternion }, dt: number): void {
     const cfgHold = this.cfgNow();
-    const w = this.armW;
+    const w = isSpray(this.armed) && arm.side > 0 ? 0 : this.armW; // lata de spray: só a mão direita segura
     if (w < 0.01) return;
     const wrist = (arm.side < 0 ? cfgHold.gripR : cfgHold.gripL).clone().applyQuaternion(frame.q).add(frame.pos);
     this.solveArm(arm, wrist, w, dt);
