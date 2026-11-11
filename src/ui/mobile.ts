@@ -517,10 +517,11 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
         if (s.weapon === 'fist') weaponBox.insertAdjacentHTML('beforeend', ICON.fist);
         else weaponBox.insertAdjacentHTML('beforeend', `<img src="/hud/w-${s.weapon}.png" alt="${s.weaponName}" draggable="false">`);
       }
-      const am = s.weapon !== 'ak' && s.weapon !== 'pistol' ? '--' : s.reloading ? '...' : `${s.mag}/${s.reserve}`;
+      const gun = ['ak', 'pistol', 'm4', 'm16', 'hb'].includes(s.weapon);
+      const am = !gun ? '--' : s.reloading ? '...' : `${s.mag}/${s.reserve}`;
       if (am !== cache.ammo) { cache.ammo = am; ammo.textContent = am; }
 
-      cross.classList.toggle('show', (s.weapon === 'ak' || s.weapon === 'pistol') && !s.driving && !s.dead);
+      cross.classList.toggle('show', gun && !s.driving && !s.dead);
       cross.classList.toggle('aim', s.aiming);
       crouchBtn.classList.toggle('on', s.crouching);
       if (s.hitTick !== lastHit) { lastHit = s.hitTick; retrigger(hitMark); }

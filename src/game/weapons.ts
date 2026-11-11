@@ -3,11 +3,21 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 export type ArmedMode = Armed;
 
+import { rifleGeo, RIFLE_KINDS, type RifleKind } from './rifles';
 import { EXTRA_MELEE_KEYS, isBatLike, type Animator, type Armed, type ExtraMelee } from './anim';
 
 const loader = new GLTFLoader();
 let rifleSrc: Promise<THREE.Object3D> | null = null;
 export const loadRifle = (): Promise<THREE.Object3D> => (rifleSrc ??= loader.loadAsync('/models/weapons/AK47.glb').then((g) => g.scene));
+
+const rifleSrcs = new Map<RifleKind, Promise<THREE.Object3D>>();
+/** Modelo do fuzil (AK-47, M4A1, M16 ou Honey Badger). */
+export const loadRifleKind = (k: RifleKind): Promise<THREE.Object3D> => {
+  if (k === 'ak') return loadRifle();
+  let p = rifleSrcs.get(k);
+  if (!p) { p = loader.loadAsync(`/models/weapons/${rifleGeo(k).file}`).then((g) => g.scene); rifleSrcs.set(k, p); }
+  return p;
+};
 
 let flagSrc: Promise<THREE.Object3D> | null = null;
 export const loadFlag = (): Promise<THREE.Object3D> => (flagSrc ??= loader.loadAsync('/models/weapons/flag-turkey.glb').then((g) => g.scene));
@@ -54,7 +64,7 @@ function flashTexture(): THREE.Texture {
 
 /** Cópia visual de cada arma (para pré-carregar e compilar shaders). */
 export async function loadWeaponModels(): Promise<THREE.Object3D[]> {
-  const all = await Promise.all([loadRifle(), loadFlag(), loadSign(), loadCricket(), loadBaseball(), ...EXTRA_MELEE_KEYS.map(loadExtra)]);
+  const all = await Promise.all([loadRifle(), loadFlag(), loadSign(), loadCricket(), loadBaseball(), ...EXTRA_MELEE_KEYS.map(loadExtra), ...RIFLE_KINDS.map(loadRifleKind)]);
   return all.map((o) => o.clone(true));
 }
 
@@ -63,6 +73,9 @@ export class WeaponVisual {
   private readonly anchor = new THREE.Group();
   private readonly flashSprite: THREE.Sprite;
   private rifleInner: THREE.Object3D | null = null;
+  /** M4A1, M16 e Honey Badger (o AK é o rifleInner) */
+  private readonly rifleInners = new Map<RifleKind, THREE.Object3D>();
+  private rifleKind: RifleKind = 'ak';
   private readonly pistolInner = buildPistol();
   private readonly batAnchor = new THREE.Group();
   private readonly flagInner = new THREE.Group();
@@ -155,6 +168,28 @@ export class WeaponVisual {
     this.flashSprite.position.set(-0.017, 0.019, 0.75);
     this.flashSprite.visible = false;
     this.anchor.add(this.flashSprite);
+    for (const k of RIFLE_KINDS) {
+      if (k === 'ak') continue;
+      void loadRifleKind(k).then((src) => {
+        const geo = rifleGeo(k);
+        const model = src.clone(true);
+        const dead: THREE.Object3D[] = [];
+        model.traverse((o) => { if (o.name.toLowerCase().includes('muzzle') || o.name.toLowerCase().includes('flash')) dead.push(o); });
+        dead.forEach((o) => o.removeFromParent());
+        const box = new THREE.Box3().setFromObject(model);
+        model.position.sub(box.getCenter(new THREE.Vector3()));
+        const inner = new THREE.Group();
+        inner.add(model);
+        inner.scale.setScalar(geo.scale);
+        inner.rotation.y = -Math.PI / 2; // cano para +Z (frente)
+        inner.position.set(0, geo.shiftY, 0.3);
+        inner.traverse((o) => { o.castShadow = true; });
+        inner.visible = false;
+        this.anchor.add(inner);
+        this.rifleInners.set(k, inner);
+        this.refresh();
+      });
+    }
     void loadRifle().then((src) => {
       const model = src.clone(true);
       // some o "clarão" que vem no arquivo (usamos o nosso)
@@ -184,6 +219,13 @@ export class WeaponVisual {
     this.animator = animator;
     animator.attachWeapon(this.anchor);
     animator.attachBat(this.batAnchor);
+  }
+
+  /** Troca o modelo do fuzil na mão (AK-47, M4A1, M16, Honey Badger). */
+  setRifleKind(k: RifleKind): void {
+    if (k === this.rifleKind) return;
+    this.rifleKind = k;
+    this.refresh();
   }
 
   setMode(mode: ArmedMode): void {
@@ -222,9 +264,11 @@ export class WeaponVisual {
     this.anchor.visible = show && !bat;
     this.batAnchor.visible = show && bat;
     this.pistolInner.visible = pistol;
-    if (this.rifleInner) this.rifleInner.visible = !pistol;
+    if (this.rifleInner) this.rifleInner.visible = !pistol && this.rifleKind === 'ak';
+    this.rifleInners.forEach((g, k) => { g.visible = !pistol && this.rifleKind === k; });
     // boca do cano medida nos modelos: AK-47 (-0,017; 0,019; 0,738) e pistola (0; 0; 0,17), 1–2 cm à frente da ponta
-    this.flashSprite.position.set(pistol ? 0 : -0.017, pistol ? 0 : 0.019, pistol ? 0.185 : 0.75);
+    const fl = rifleGeo(this.rifleKind).flash;
+    this.flashSprite.position.set(pistol ? 0 : fl.x, pistol ? 0 : fl.y, pistol ? 0.185 : fl.z);
     this.flashSprite.scale.setScalar(pistol ? 0.3 : 0.5);
   }
 

@@ -4,6 +4,7 @@ import type { InputState } from './input';
 import { CARS, hittables, type Car } from './vehicle';
 import { ARMED_CODE, facesAim, isBatLike, type Animator, type Armed } from './anim';
 import type { WeaponVisual } from './weapons';
+import { rifleNetCode, type RifleKind } from './rifles';
 
 const WALK_SPEED = 2.1;
 const SPRINT_SPEED = 6.2;
@@ -75,6 +76,7 @@ export class Player {
   private climb: Climb | null = null;
   private car: Car | null = null;
   private armed: Armed = 'none';
+  private rifleKind: RifleKind = 'ak';
   private crouching = false;
   private swingT = 0;
   private seqT = 0; // entrando/saindo do carro
@@ -108,6 +110,8 @@ export class Player {
   attachWeapon(w: WeaponVisual): void {
     this.weaponVis = w;
     if (this.animator) w.bind(this.animator);
+    w.setRifleKind(this.rifleKind);
+    this.animator?.setRifleKind(this.rifleKind);
   }
 
   constructor(object: THREE.Object3D, private animator: Animator | null = null) {
@@ -129,7 +133,18 @@ export class Player {
   get isDriving(): boolean { return this.mode === 'drive'; }
   get carSpeed(): number { return this.car ? this.car.speed : 0; }
   /** 0 nada, 1 fuzil, 2 fuzil mirando, 3 taco, 4 pistola, 5 pistola mirando (enviado aos outros) */
-  get weaponCode(): number { return ARMED_CODE[this.armed]; }
+  get weaponCode(): number {
+    if ((this.armed === 'rifle' || this.armed === 'aim') && this.rifleKind !== 'ak') return rifleNetCode(this.rifleKind, this.armed === 'aim');
+    return ARMED_CODE[this.armed];
+  }
+
+  /** Qual fuzil está na mão (AK-47, M4A1, M16 ou Honey Badger): muda o modelo e onde ficam as mãos. */
+  setRifleKind(k: RifleKind): void {
+    if (k === this.rifleKind) return;
+    this.rifleKind = k;
+    this.animator?.setRifleKind(k);
+    this.weaponVis?.setRifleKind(k);
+  }
 
   /** Levou um golpe (soco, taco, bandeira): reações knife_hit_1, 2 e 3 em sequência (volta ao 1 se ficar 2,5 s sem apanhar). */
   flinch(kind: 'f' | 'b' | 'k' = 'f'): void {

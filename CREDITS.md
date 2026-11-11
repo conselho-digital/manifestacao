@@ -39,3 +39,4 @@ O restante da cidade é gerado por código (`src/game/city.ts`), inspirado na ma
 - `public/models/weapons/baseball-bat.glb`: taco de beisebol para GTA San Andreas ("Деревянная бита", textura e ícone de Tttt Yyyy, libertycity.ru), convertido de DFF/TXD.
 - Animações das armas brancas (`Bat_*`): `baseball.ifp` do GTA San Andreas (Rockstar North), enviado pelo dono do projeto.
 - Pacote de armas brancas (garrafa quebrada, cano, cutelo, foice, machado): modelos GTA SA enviados pelo dono do projeto (autor não informado no pacote), convertidos de DFF/TXD em `public/models/weapons/`.
+- Fuzis (enviados pelo dono do projeto, convertidos de DFF/TXD): M4A1/HK416 (`m4a1.glb`), M16 do GTA 3 portado para o SA (`m16.glb`, textura lisa) e Honey Badger estilo SA (`honey-badger.glb`, mp5lng.dff). Autores não informados nos pacotes.

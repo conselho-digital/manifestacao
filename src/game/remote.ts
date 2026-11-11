@@ -5,6 +5,7 @@ import { CARS, type Car } from './vehicle';
 import { WeaponVisual } from './weapons';
 import { seatBlend } from './player';
 import { makeTeamRing, type TeamLook } from './teams';
+import { rifleFromNetCode } from './rifles';
 import type { MoveMsg, PlayerInfo } from '../net/sync';
 
 function drawLabel(text: string, team: TeamLook | null, hp = 100, shield = false): THREE.CanvasTexture {
@@ -153,13 +154,17 @@ export class RemotePlayer {
         this.animator.setRide(null);
         if (this.modelRot0 !== null && this.model) { this.model.rotation.y = this.modelRot0; this.modelRot0 = null; }
       }
-      this.animator.setArmed(ARMED_FROM_CODE[this.weapon] ?? 'none');
+      const rf = rifleFromNetCode(this.weapon);
+      this.animator.setRifleKind(rf?.kind ?? 'ak');
+      this.animator.setArmed(rf ? (rf.aiming ? 'aim' : 'rifle') : ARMED_FROM_CODE[this.weapon] ?? 'none');
       this.animator.setAimPitch(this.pitch);
       this.animator.play(dead ? 'idle' : this.anim);
       this.animator.update(dt);
     }
     if (this.weaponVis) {
-      this.weaponVis.setMode(ARMED_FROM_CODE[this.weapon] ?? 'none');
+      const rf2 = rifleFromNetCode(this.weapon);
+      this.weaponVis.setRifleKind(rf2?.kind ?? 'ak');
+      this.weaponVis.setMode(rf2 ? (rf2.aiming ? 'aim' : 'rifle') : ARMED_FROM_CODE[this.weapon] ?? 'none');
       this.weaponVis.setPitch(this.pitch);
       this.weaponVis.setHidden(!!car || dead);
       if (this.animator) this.weaponVis.setSuppressed(!this.animator.holdsWeapon);

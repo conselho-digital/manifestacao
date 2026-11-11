@@ -7,7 +7,8 @@ import type { Player } from './player';
 import type { RemotePlayer } from './remote';
 import type { InputState } from './input';
 import type { Net, ShotMsg, KillMsg } from '../net/sync';
-import type { Inventory, ShopItem, WeaponId } from './inventory';
+import { isGunId, type Inventory, type ShopItem, type WeaponId } from './inventory';
+import type { RifleKind } from './rifles';
 import type { Armed } from './anim';
 
 export const MAG_SIZE = 30;
@@ -24,7 +25,14 @@ const FIST_DAMAGE = 12;
 const KICK_DAMAGE = 20;
 const RELOAD_TIME = 1.6;
 const AIM_HOLD = 3; // depois de atirar, continua mirando por 3 s
-const AK_GAP = 0.11;
+/** fuzis: tipo de modelo, código do tiro na rede, dano e intervalo entre tiros (s) */
+const RIFLE_OF: Partial<Record<number, { kind: RifleKind; shot: 'r' | 'm' | 'q' | 'h'; damage: number; gap: number }>> = {
+  0: { kind: 'ak', shot: 'r', damage: 20, gap: 0.11 },
+  12: { kind: 'm4', shot: 'm', damage: 18, gap: 0.09 },
+  13: { kind: 'm16', shot: 'q', damage: 22, gap: 0.12 },
+  14: { kind: 'hb', shot: 'h', damage: 16, gap: 0.1 },
+};
+const SHOT_DAMAGE: Record<string, number> = { r: 20, m: 18, q: 22, h: 16 };
 const FIST_GAP = 0.5;
 const FIST_RANGE = 1.7;
 const RANGE = 90;
@@ -67,11 +75,11 @@ export class Combat {
   /** começa de mãos livres (punho); o botão Arma troca */
   weapon: WeaponId = 1;
   /** munição de cada arma (só quem tem a arma recebe) */
-  private ammo = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(() => ({ mag: 0, reserve: 0 }));
+  private ammo = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14].map(() => ({ mag: 0, reserve: 0 }));
   get mag(): number { return this.ammo[this.weapon]!.mag; }
   get reserve(): number { return this.ammo[this.weapon]!.reserve; }
   /** tem mira (fuzil ou pistola) */
-  get isGun(): boolean { return this.weapon === 0 || this.weapon === 3; }
+  get isGun(): boolean { return isGunId(this.weapon); }
   reloading = false;
   dead = false;
   respawnIn = 0;
@@ -101,8 +109,12 @@ export class Combat {
 
   /** Enche a munição das armas de fogo que o jogador tem. */
   private refillGuns(): void {
-    if (this.d.inv.has(0)) this.ammo[0] = { mag: MAG_SIZE, reserve: RESERVE_START };
-    if (this.d.inv.has(3)) this.ammo[3] = { mag: PISTOL_MAG, reserve: PISTOL_RESERVE };
+    for (const w of [0, 3, 12, 13, 14] as const) if (this.d.inv.has(w)) this.ammo[w] = this.startAmmo(w);
+  }
+
+  /** Munição inicial de uma arma de fogo. */
+  private startAmmo(w: WeaponId): { mag: number; reserve: number } {
+    return w === 3 ? { mag: PISTOL_MAG, reserve: PISTOL_RESERVE } : { mag: MAG_SIZE, reserve: RESERVE_START };
   }
 
   /** Munição de uma arma (para o menu). */
@@ -120,13 +132,15 @@ export class Combat {
     const inv = this.d.inv;
     if (item.kind === 'weapon' && item.weapon !== undefined && inv.has(item.weapon)) return { ok: false, msg: 'Você já tem esta arma.' };
     if (item.kind === 'ammo' && item.weapon !== undefined && !inv.has(item.weapon)) return { ok: false, msg: 'Compre a arma primeiro.' };
+    if (item.kind === 'ammo' && item.weapons && !item.weapons.some((w) => inv.has(w))) return { ok: false, msg: 'Você não tem nenhum fuzil 5,56.' };
     if (item.kind === 'health' && this.health >= 100) return { ok: false, msg: 'Sua vida já está cheia.' };
     if (item.kind === 'armor' && this.armor >= 100) return { ok: false, msg: 'Seu colete já está cheio.' };
     if (!inv.spend(item.price)) return { ok: false, msg: 'Dinheiro insuficiente.' };
     if (item.kind === 'weapon' && item.weapon !== undefined) {
       inv.grant(item.weapon);
-      if (item.weapon === 0) this.ammo[0] = { mag: MAG_SIZE, reserve: RESERVE_START };
-      if (item.weapon === 3) this.ammo[3] = { mag: PISTOL_MAG, reserve: PISTOL_RESERVE };
+      if (isGunId(item.weapon)) this.ammo[item.weapon] = this.startAmmo(item.weapon);
+    } else if (item.kind === 'ammo' && item.weapons) {
+      for (const w of item.weapons) if (inv.has(w)) this.ammo[w]!.reserve += item.amount ?? 0;
     } else if (item.kind === 'ammo' && item.weapon !== undefined) this.ammo[item.weapon]!.reserve += item.amount ?? 0;
     else if (item.kind === 'health') this.health = 100;
     else if (item.kind === 'armor') this.armor = 100;
@@ -135,7 +149,7 @@ export class Combat {
 
   private get magSize(): number { return this.weapon === 3 ? PISTOL_MAG : MAG_SIZE; }
 
-  get weaponName(): string { return ['AK-47', 'PUNHO', 'BANDEIRA', 'PISTOLA', 'PLACA', 'TACO', 'TACO', 'GARRAFA', 'CANO', 'CUTELO', 'FOICE', 'MACHADO'][this.weapon]!; }
+  get weaponName(): string { return ['AK-47', 'PUNHO', 'BANDEIRA', 'PISTOLA', 'PLACA', 'TACO', 'TACO', 'GARRAFA', 'CANO', 'CUTELO', 'FOICE', 'MACHADO', 'M4A1', 'M16', 'HONEY BADGER'][this.weapon]!; }
 
   /** Placar: eu e os outros jogadores, do que mais matou para o que menos. */
   statRows(): StatRow[] {
@@ -172,7 +186,7 @@ export class Combat {
     if (this.protectT > 0) { this.weapon = 1; this.reloading = false; } // protegido: só as mãos
     else if (input.switchWeapon) {
       // fuzil, pistola, bandeira, placa, punho — só as que o jogador tem
-      const order = ([0, 3, 2, 4, 5, 6, 7, 8, 9, 10, 11, 1] as const).filter((w) => this.d.inv.has(w));
+      const order = ([0, 12, 13, 14, 3, 2, 4, 5, 6, 7, 8, 9, 10, 11, 1] as const).filter((w) => this.d.inv.has(w));
       this.weapon = order[(Math.max(0, order.indexOf(this.weapon)) + 1) % order.length]!;
       this.reloading = false;
     }
@@ -191,15 +205,17 @@ export class Combat {
     // atirando: o fuzil sobe para a posição de tiro (cano para a frente) e fica assim um instante depois do último tiro
     this.fireHold = input.fire ? AIM_HOLD : Math.max(0, this.fireHold - dt);
     const aiming = input.aim || this.fireHold > 0;
-    player.setArmed(this.weapon === 0 ? (aiming ? 'aim' : 'rifle') : this.weapon === 3 ? (aiming ? 'pistol_aim' : 'pistol') : (MELEE_ARMED[this.weapon] ?? 'none'));
+    const rf = RIFLE_OF[this.weapon];
+    if (rf) player.setRifleKind(rf.kind);
+    player.setArmed(rf ? (aiming ? 'aim' : 'rifle') : this.weapon === 3 ? (aiming ? 'pistol_aim' : 'pistol') : (MELEE_ARMED[this.weapon] ?? 'none'));
 
     if (input.fire && this.cd <= 0 && !this.reloading && this.protectT <= 0) {
       const a = this.ammo[this.weapon]!;
-      if (this.weapon === 0 || this.weapon === 3) {
+      if (this.isGun) {
         if (a.mag > 0) {
           a.mag--;
-          this.cd = this.weapon === 0 ? AK_GAP : PISTOL_GAP;
-          this.fireGun(player, aiming, this.weapon === 0 ? 'r' : 'p');
+          this.cd = rf ? rf.gap : PISTOL_GAP;
+          this.fireGun(player, aiming, rf ? rf.shot : 'p');
         } else { this.cd = 0.3; playClick(); this.startReload(); }
       } else if (MELEE_ARMED[this.weapon]) { this.cd = BAT_GAP; player.swing(); this.melee(player, BAT_RANGE, 'b'); }
       else { this.cd = FIST_GAP; const kind = player.punch(); this.melee(player, kind === 'k' ? FIST_RANGE + 0.3 : FIST_RANGE, kind); }
@@ -215,7 +231,7 @@ export class Combat {
 
   // ---------- tiro ----------
 
-  private fireGun(player: Player, aiming: boolean, kind: 'r' | 'p'): void {
+  private fireGun(player: Player, aiming: boolean, kind: 'r' | 'm' | 'q' | 'h' | 'p'): void {
     const { camera, net } = this.d;
     // Direção da mira = para onde a câmera olha (inclui cima/baixo), com um pouco de dispersão
     const dir = camera.getWorldDirection(this.tmpD);
@@ -242,7 +258,7 @@ export class Combat {
 
     this.tracers.add(muzzle, end);
     player.weaponVis?.flash();
-    playShotAt(muzzle.x, muzzle.z, kind === 'p' ? 'pistol' : 'rifle');
+    playShotAt(muzzle.x, muzzle.z, kind === 'p' ? 'pistol' : kind === 'h' ? 'silenced' : 'rifle');
     if (hit.id) this.hitTick++;
     net.sendShot({ x1: muzzle.x, y1: muzzle.y, z1: muzzle.z, x2: end.x, y2: end.y, z2: end.z, h: hit.id ?? '', k: kind, hs: hit.head });
   }
@@ -302,19 +318,19 @@ export class Combat {
   /** Alguém atirou: desenha o rastro/som e, se me acertou, aplica o dano em mim. */
   onShot(m: ShotMsg): void {
     const shooter = this.d.remotes.get(m.id);
-    if (m.k === 'r' || m.k === 'p') {
+    if (m.k === 'r' || m.k === 'm' || m.k === 'q' || m.k === 'h' || m.k === 'p') {
       const from = new THREE.Vector3(m.x1, m.y1, m.z1);
       const to = new THREE.Vector3(m.x2, m.y2, m.z2);
       this.tracers.add(from, to);
       shooter?.flash();
-      playShotAt(from.x, from.z, m.k === 'p' ? 'pistol' : 'rifle'); // volume e lado pela distância ao ouvinte
+      playShotAt(from.x, from.z, m.k === 'p' ? 'pistol' : m.k === 'h' ? 'silenced' : 'rifle'); // volume e lado pela distância ao ouvinte
     }
     if (m.h === this.d.net.id && !this.dead && this.invuln <= 0 && this.protectT <= 0 && !this.paused) {
-      const base = m.k === 'k' ? KICK_DAMAGE : m.k === 'f' ? FIST_DAMAGE : m.k === 'b' ? BAT_DAMAGE : m.k === 'p' ? PISTOL_DAMAGE : AK_DAMAGE;
-      const dmg = m.hs && (m.k === 'r' || m.k === 'p') ? base * 2 : base;
+      const base = m.k === 'k' ? KICK_DAMAGE : m.k === 'f' ? FIST_DAMAGE : m.k === 'b' ? BAT_DAMAGE : m.k === 'p' ? PISTOL_DAMAGE : (SHOT_DAMAGE[m.k] ?? AK_DAMAGE);
+      const dmg = m.hs && m.k !== 'f' && m.k !== 'b' && m.k !== 'k' ? base * 2 : base;
       if (m.k === 'f' || m.k === 'b' || m.k === 'k') this.player?.flinch(m.k);
       else if (performance.now() - this.lastFlinchAt > 700) { this.lastFlinchAt = performance.now(); this.player?.flinch('f'); } // levou tiro: reage (no máximo a cada 0,7 s)
-      this.damage(dmg, m.id, { f: 'PUNHO', k: 'CHUTE', b: 'TACO', p: 'PISTOLA', r: 'AK-47' }[m.k]);
+      this.damage(dmg, m.id, { f: 'PUNHO', k: 'CHUTE', b: 'ARMA BRANCA', p: 'PISTOLA', r: 'AK-47', m: 'M4A1', q: 'M16', h: 'HONEY BADGER' }[m.k]);
     }
   }
 

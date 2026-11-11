@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { buildPistol, loadBaseball, loadCricket, loadExtra, loadFlag, loadRifle, loadSign } from '../src/game/weapons';
 import { EXTRA_MELEE_KEYS } from '../src/game/anim';
+import { loadRifleKind } from '../src/game/weapons';
 
 const W = 256;
 const H = 128;
@@ -56,5 +57,6 @@ out.cricket = fit(cricket, new THREE.Euler(0, 0, -Math.PI / 2 + 0.3)); // taco d
 const baseball = (await loadBaseball()).clone(true);
 out.baseball = fit(baseball, new THREE.Euler(0, 0, -Math.PI / 2 + 0.3));
 for (const k of EXTRA_MELEE_KEYS) out[k] = fit((await loadExtra(k)).clone(true), new THREE.Euler(0, 0, -Math.PI / 2 + 0.3));
+for (const k of ['m4', 'm16', 'hb'] as const) out[k] = fit((await loadRifleKind(k)).clone(true), new THREE.Euler(0, 0, 0));
 (window as unknown as { ICONS: Record<string, string> }).ICONS = out;
 (window as unknown as { READY: boolean }).READY = true;

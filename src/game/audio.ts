@@ -184,19 +184,20 @@ export class EngineSound {
 
 // ---------- tiros ----------
 
-export type ShotKind = 'rifle' | 'pistol';
+export type ShotKind = 'rifle' | 'pistol' | 'silenced';
 const SHOT_RANGE = 130;
 
 /** Tiro no ponto (x, z): volume e lado vêm da distância ao ouvinte. O fuzil é grave e longo; a pistola, seca e curta. */
 export function playShotAt(x: number, z: number, kind: ShotKind): void {
-  const prox = proximity(x, z, SHOT_RANGE, 4);
+  const prox = proximity(x, z, kind === 'silenced' ? SHOT_RANGE * 0.4 : SHOT_RANGE, 4);
   if (prox.gain < 0.01) return;
   const c = audioCtx();
   const out = audioOut();
   if (!c || !out) return;
   try {
     const rifle = kind === 'rifle';
-    const dur = rifle ? 0.16 : 0.09;
+    const quiet = kind === 'silenced'; // Honey Badger: tiro baixo e abafado
+    const dur = rifle ? 0.16 : quiet ? 0.07 : 0.09;
     const len = Math.floor(c.sampleRate * dur);
     const buf = c.createBuffer(1, len, c.sampleRate);
     const d = buf.getChannelData(0);
@@ -206,9 +207,9 @@ export function playShotAt(x: number, z: number, kind: ShotKind): void {
     const lp = c.createBiquadFilter();
     lp.type = 'lowpass';
     // longe, o ar come os agudos
-    lp.frequency.value = (rifle ? 2600 : 4200) * (0.35 + 0.65 * prox.gain);
+    lp.frequency.value = (rifle ? 2600 : quiet ? 1300 : 4200) * (0.35 + 0.65 * prox.gain);
     const g = c.createGain();
-    g.gain.value = (rifle ? 0.3 : 0.24) * prox.gain;
+    g.gain.value = (rifle ? 0.3 : quiet ? 0.07 : 0.24) * prox.gain;
     const pan = c.createStereoPanner();
     pan.pan.value = prox.pan;
     src.connect(lp).connect(g).connect(pan).connect(out);
@@ -219,7 +220,7 @@ export function playShotAt(x: number, z: number, kind: ShotKind): void {
     boom.type = 'sine';
     boom.frequency.setValueAtTime(rifle ? 120 : 170, c.currentTime);
     boom.frequency.exponentialRampToValueAtTime(40, c.currentTime + dur);
-    bg.gain.setValueAtTime(0.22 * prox.gain, c.currentTime);
+    bg.gain.setValueAtTime((quiet ? 0.05 : 0.22) * prox.gain, c.currentTime);
     bg.gain.exponentialRampToValueAtTime(0.001, c.currentTime + dur);
     boom.connect(bg).connect(pan);
     boom.start();

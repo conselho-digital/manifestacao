@@ -23,7 +23,7 @@ export interface MoveMsg {
   a: string;
   /** carro que está dirigindo (-1 = nenhum) */
   v: number;
-  /** arma: 0 nada/punho, 1 fuzil, 2 fuzil mirando, 3 bandeira, 4 pistola, 5 pistola mirando, 6 placa, 7 taco de críquete, 8 taco de beisebol, 9–13 garrafa/cano/cutelo/foice/machado */
+  /** arma: 0 nada/punho, 1 fuzil, 2 fuzil mirando, 3 bandeira, 4 pistola, 5 pistola mirando, 6 placa, 7 taco de críquete, 8 taco de beisebol, 9–13 garrafa/cano/cutelo/foice/machado, 14–19 M4A1/M16/Honey Badger (par = baixo, ímpar = mirando) */
   w: number;
   /** inclinação da mira (rad) */
   pt: number;
@@ -39,8 +39,8 @@ export interface ShotMsg {
   x1: number; y1: number; z1: number;
   x2: number; y2: number; z2: number;
   h: string;
-  /** r = fuzil, f = soco, p = pistola, b = taco, k = chute */
-  k: 'r' | 'f' | 'p' | 'b' | 'k';
+  /** r = AK-47, m = M4A1, q = M16, h = Honey Badger, f = soco, p = pistola, b = arma branca, k = chute */
+  k: 'r' | 'm' | 'q' | 'h' | 'f' | 'p' | 'b' | 'k';
   /** tiro na cabeça */
   hs: boolean;
 }
@@ -101,7 +101,7 @@ function cleanMove(raw: unknown): MoveMsg | null {
   if (!idOk(m.id) || x === null || y === null || z === null || ry === null) return null;
   const a = typeof m.a === 'string' && /^[a-z0-9_]{1,24}$/.test(m.a) && m.a.length <= MAX_ANIM ? m.a : 'idle';
   const v = typeof m.v === 'number' && Number.isInteger(m.v) && m.v >= -1 && m.v < 8 ? m.v : -1;
-  const w = typeof m.w === 'number' && Number.isInteger(m.w) && m.w >= 1 && m.w <= 13 ? m.w : 0;
+  const w = typeof m.w === 'number' && Number.isInteger(m.w) && m.w >= 1 && m.w <= 19 ? m.w : 0;
   const pt = finite(m.pt ?? 0, 1.6) ?? 0;
   const hp = typeof m.hp === 'number' && Number.isFinite(m.hp) ? Math.max(0, Math.min(100, Math.round(m.hp))) : 100;
   return { id: m.id, x, y, z, ry, a, v, w, pt, hp, pr: m.pr === true };
@@ -116,7 +116,7 @@ function cleanShot(raw: unknown): ShotMsg | null {
   return {
     id: m.id,
     x1: n[0]!, y1: n[1]!, z1: n[2]!, x2: n[3]!, y2: n[4]!, z2: n[5]!,
-    h, k: m.k === 'f' || m.k === 'p' || m.k === 'b' || m.k === 'k' ? m.k : 'r', hs: m.hs === true,
+    h, k: m.k === 'f' || m.k === 'p' || m.k === 'b' || m.k === 'k' || m.k === 'm' || m.k === 'q' || m.k === 'h' ? m.k : 'r', hs: m.hs === true,
   };
 }
 

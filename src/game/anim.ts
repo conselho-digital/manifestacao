@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { rifleGeo, type RifleKind } from './rifles';
 
 interface GtaTrack { id: number; t: number[]; q: number[] }
 interface BoneTrack { bone: string; t: number[]; q: number[] }
@@ -170,6 +171,7 @@ export class Animator {
   private crouchK = 0; // 0 em pé, 1 agachado (tronco desce)
   private crouchW = 0; // 0 em pé, 1 em qualquer clipe agachado (a arma não acompanha a curvatura do tronco)
   private armed: Armed = 'none';
+  private rifleKind: RifleKind = 'ak';
   private aimPitch = 0;
   private weapon: THREE.Object3D | null = null;
   private bat: THREE.Object3D | null = null;
@@ -362,6 +364,19 @@ export class Animator {
   /** Inclinação da mira (rad): o tronco, a cabeça e o fuzil acompanham (positivo = olhar para baixo). */
   setAimPitch(p: number): void {
     this.aimPitch = p;
+  }
+
+  /** Qual fuzil está na mão (muda onde ficam as mãos: empunhadura e guarda-mão). */
+  setRifleKind(k: RifleKind): void {
+    this.rifleKind = k;
+  }
+
+  /** Posições de arma em uso: poses do fuzil/pistola e, no fuzil, as mãos do modelo atual. */
+  private cfgNow(): WeaponCfg {
+    if (kindOf(this.armed) === 'pistol') return CFG.pistol;
+    if (this.rifleKind === 'ak') return CFG.rifle;
+    const g = rifleGeo(this.rifleKind);
+    return { ...CFG.rifle, gripR: g.gripR, gripL: g.gripL };
   }
 
   /** Segurando o fuzil: braços na empunhadura, fuzil baixo (rifle) ou no ombro (aim). */
@@ -750,7 +765,7 @@ export class Animator {
     const chestQ = this.quatIn(sp.chest, new THREE.Quaternion());
     const delta = chestQ.multiply(this.chestRest.q.clone().invert()); // só o movimento do peito
     const k = this.aimK;
-    const cfg = CFG[kindOf(this.armed) === 'pistol' ? 'pistol' : 'rifle'];
+    const cfg = this.cfgNow();
     // só o giro do peito para os lados (sem a curvatura): agachado ou mirando, a arma fica à frente do peito em vez de descer com o tronco
     const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(delta);
     const flat = new THREE.Quaternion().setFromAxisAngle(Y, Math.atan2(fwd.x, fwd.z));
@@ -793,10 +808,11 @@ export class Animator {
 
   private poseArm(arm: Arm, frame: { pos: THREE.Vector3; q: THREE.Quaternion }, dt: number): void {
     const kind = kindOf(this.armed) === 'pistol' ? 'pistol' : 'rifle';
+    const cfgHold = this.cfgNow();
     // pistola abaixada: só a mão direita segura; a esquerda fica com o clipe
     const w = kind === 'pistol' && this.armed === 'pistol' && arm.side > 0 ? 0 : this.armW;
     if (w < 0.01) return;
-    const wrist = (arm.side < 0 ? CFG[kind].gripR : CFG[kind].gripL).clone().applyQuaternion(frame.q).add(frame.pos);
+    const wrist = (arm.side < 0 ? cfgHold.gripR : cfgHold.gripL).clone().applyQuaternion(frame.q).add(frame.pos);
     this.solveArm(arm, wrist, w, dt);
   }
 

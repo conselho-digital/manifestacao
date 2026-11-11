@@ -1,6 +1,6 @@
 // Menu de pausa (engrenagem): equipe, personagem, armas que o jogador já tem, loja e (só para o admin) gerenciar equipes.
 import type { CharacterName } from '../game/characters';
-import { ALL_WEAPONS, SHOP, WEAPON_IMG, WEAPON_NAMES, type Inventory, type ShopItem, type WeaponId } from '../game/inventory';
+import { ALL_WEAPONS, isGunId, SHOP, WEAPON_IMG, WEAPON_NAMES, type Inventory, type ShopItem, type WeaponId } from '../game/inventory';
 import { deleteTeam, getTeams, HEX, isAdmin, loadTeams, MAX_TEAM_NAME, saveTeam, type Team } from '../game/teams';
 import { ICON } from './icons';
 import { createCharacterPicker, createTeamPicker, el, PICKER_CSS, swatchStyle } from './pickers';
@@ -151,7 +151,7 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
       const pic = el('div', 'pic');
       const src = WEAPON_IMG[w];
       if (src) { const img = el('img'); img.src = src; img.alt = ''; pic.appendChild(img); } else pic.insertAdjacentHTML('beforeend', ICON.fist);
-      const gun = w === 0 || w === 3;
+      const gun = isGunId(w);
       const a = d.ammoOf(w);
       const card = el('button', `ps-card${cur === w ? ' sel' : ''}`, pic, el('b', '', WEAPON_NAMES[w]), el('small', '', gun ? `Munição: ${a.mag}/${a.reserve}` : 'Corpo a corpo'));
       if (cur === w) card.appendChild(el('span', 'ps-tag', 'Na mão'));
