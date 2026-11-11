@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { COLLIDERS, MAP } from './map';
 import { EngineSound } from './audio';
 
-export const CAR_MODELS = ['blistac', 'buffalo', 'clover', 'spin'] as const;
+export const CAR_MODELS = ['blistac', 'buffalo', 'clover'] as const;
 export const BIKE_MODELS = ['harley', 'triumph', 'bmw', 'suzuki'] as const;
 /** Assento do piloto (z = para a frente, y = para cima), no espaço do modelo antes de subir até o chão. */
 const SEATS: Record<string, [number, number]> = { harley: [-0.46, 0.14], triumph: [-0.51, 0.42], bmw: [-0.4, 0.47], suzuki: [-0.4, 0.57] };
@@ -12,7 +12,7 @@ const BARS: Record<string, [number, number, number]> = { harley: [0.37, 0.15, 0.
 /** quanto o piloto deita o tronco (0 ereto … 1,5 peito no tanque): custom/clássica quase ereto, esportiva deitado */
 const RIDER_LEAN: Record<string, number> = { harley: 0.35, triumph: 0.55, bmw: 1.4, suzuki: 1.5 };
 /** Banco do motorista dos carros (x para a esquerda, z para a frente, y para cima) e volante. */
-const CAR_SEATS: Record<string, [number, number, number]> = { blistac: [0.48, -0.25, -0.12], buffalo: [0.54, -0.35, -0.16], clover: [0.51, -0.15, -0.12], spin: [0.35, 0.42, 0.15] };
+const CAR_SEATS: Record<string, [number, number, number]> = { blistac: [0.48, -0.25, -0.12], buffalo: [0.54, -0.35, -0.16], clover: [0.51, -0.15, -0.12] };
 const isBikeModel = (m?: string): boolean => (BIKE_MODELS as readonly string[]).includes(m ?? '');
 const loader = new GLTFLoader();
 const modelCache = new Map<string, Promise<THREE.Object3D>>();
@@ -34,7 +34,9 @@ const RADIUS = 1.3;
 
 
 /** Duas cores da equipe (#rrggbb) para pintar o veículo. */
-export interface PaintLook { c1: string; c2: string }
+export interface PaintLook { c1: string; c2: string; /** pintura de viatura: teto na cor 1, letreiro "POLÍCIA MILITAR" nas laterais e luzes no teto */ police?: boolean }
+/** Viatura da PM: o Buffalo pintado de branco com a faixa de baixo preta (letreiro e luzes no teto vêm de `police`). */
+export const POLICE_LOOK: PaintLook = { c1: '#f1f2f4', c2: '#16181b', police: true };
 
 const BLACK = 0x161616;
 const GRAY = 0x8b8e93;
@@ -116,9 +118,9 @@ function addTire(mat: THREE.MeshStandardMaterial, radius: number): void {
 }
 
 /** Acrescenta ao material pintado a segunda cor: faixa de baixo (soleiras e para-choques) e teto, pela altura no mundo. */
-function addTwoTone(mat: THREE.MeshStandardMaterial, c2: THREE.Color, height: number): void {
+function addTwoTone(mat: THREE.MeshStandardMaterial, c2: THREE.Color, height: number, roofColored = true): void {
   const low = height * 0.3;
-  const roof = height * 0.8;
+  const roof = roofColored ? height * 0.8 : 1e6; // viatura: o teto fica na cor 1
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uC2 = { value: c2 };
     sh.uniforms.uLow = { value: low };
@@ -183,10 +185,59 @@ export function buildCarVisual(src: THREE.Object3D, colorHex: number, look?: Pai
     group.traverse((o) => {
       const m = o as THREE.Mesh;
       if (!m.isMesh) return;
-      for (const mat of Array.isArray(m.material) ? m.material : [m.material]) if (mat.userData.teamPaint) addTwoTone(mat as THREE.MeshStandardMaterial, mat.userData.c2 as THREE.Color, h);
+      for (const mat of Array.isArray(m.material) ? m.material : [m.material]) if (mat.userData.teamPaint) addTwoTone(mat as THREE.MeshStandardMaterial, mat.userData.c2 as THREE.Color, h, !look.police);
     });
   }
+  if (look?.police) addPoliceDetails(group);
   return { group, wheels };
+}
+
+let policeTex: THREE.CanvasTexture | null = null;
+/** Letreiro lateral: "POLÍCIA MILITAR" em preto com a faixa vermelha embaixo (fundo transparente). */
+function policeDecal(): THREE.CanvasTexture {
+  if (policeTex) return policeTex;
+  const c = document.createElement('canvas');
+  c.width = 512;
+  c.height = 128;
+  const g = c.getContext('2d')!;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.font = '900 62px Impact, "Arial Black", sans-serif';
+  g.fillStyle = '#16181b';
+  g.fillText('POLÍCIA MILITAR', 256, 52);
+  g.fillStyle = '#d4202a';
+  g.fillRect(24, 96, 464, 12);
+  policeTex = new THREE.CanvasTexture(c);
+  policeTex.colorSpace = THREE.SRGBColorSpace;
+  policeTex.anisotropy = 4;
+  return policeTex;
+}
+
+/** Letreiro nas duas portas e luzes vermelha e azul no teto (medidas pelo tamanho do carro). */
+function addPoliceDetails(group: THREE.Group): void {
+  const box = new THREE.Box3().setFromObject(group);
+  const size = box.getSize(new THREE.Vector3());
+  const c = box.getCenter(new THREE.Vector3());
+  const lift = group.position.y; // o grupo já subiu até as rodas tocarem o chão
+  const w = size.x;
+  const mat = new THREE.MeshBasicMaterial({ map: policeDecal(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  for (const side of [1, -1]) {
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(size.z * 0.4, size.z * 0.1), mat);
+    m.position.set(side * (w / 2 + 0.012), box.min.y - lift + size.y * 0.42, c.z + size.z * 0.04);
+    m.rotation.y = side * (Math.PI / 2);
+    group.add(m);
+  }
+  // barra de luzes no teto
+  const bar = new THREE.Group();
+  const lamp = (x: number, color: number): void => {
+    const l = new THREE.Mesh(new THREE.BoxGeometry(w * 0.2, 0.09, 0.2), new THREE.MeshBasicMaterial({ color }));
+    l.position.x = x;
+    bar.add(l);
+  };
+  lamp(-w * 0.11, 0xe02020);
+  lamp(w * 0.11, 0x2060ff);
+  bar.position.set(0, box.max.y - lift + 0.04, c.z - size.z * 0.05);
+  group.add(bar);
 }
 
 /** Visual de um carro parado/decorativo (sem lógica de direção). */
@@ -646,7 +697,7 @@ export function createCars(): THREE.Group {
   PERSONAL.clear();
   const group = new THREE.Group();
   carsGroup = group;
-  // Viaturas da PM (Spin): sem equipe, paradas e abertas a todos. 4 nas pistas da avenida (pista sul vai para leste, heading π/2;
+  // Viaturas da PM (Buffalo pintado de polícia, `POLICE_LOOK`): sem equipe, paradas e abertas a todos. 4 nas pistas da avenida (pista sul vai para leste, heading π/2;
   // pista norte para oeste, -π/2) e 4 nas calçadas das saídas da cidade, nas pontas da avenida.
   const spawn: [number, number, number][] = [
     [34, -9, Math.PI / 2],
@@ -659,7 +710,7 @@ export function createCars(): THREE.Group {
     [-98, 16, -Math.PI / 2],
   ];
   spawn.forEach(([x, z, h], i) => {
-    const car = new Car(i, x, z, h, 0xffffff, 'spin');
+    const car = new Car(i, x, z, h, 0xffffff, 'buffalo', POLICE_LOOK);
     CARS.push(car);
     group.add(car.root);
   });

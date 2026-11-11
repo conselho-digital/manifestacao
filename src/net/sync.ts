@@ -23,7 +23,7 @@ export interface VehInfo { m: string; c1: string; c2: string; t: string; x: numb
 export function cleanVeh(v: unknown): VehInfo | null {
   if (typeof v !== 'object' || v === null) return null;
   const o = v as Record<string, unknown>;
-  const models = [...CAR_MODELS, ...BIKE_MODELS].filter((m) => m !== 'spin') as readonly string[]; // a viatura é do mundo, não pessoal
+  const models = [...CAR_MODELS, ...BIKE_MODELS] as readonly string[];
   const x = finite(o.x, LIMIT);
   const z = finite(o.z, LIMIT);
   const h = finite(o.h, 100);

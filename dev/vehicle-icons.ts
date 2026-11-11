@@ -20,7 +20,6 @@ const cam = new THREE.PerspectiveCamera(24, W / H, 0.1, 100);
 const LOOK = new URLSearchParams(location.search).has('team') ? { c1: '#009c3b', c2: '#ffdf00' } : { c1: '#c8ccd2', c2: '#2b2e33' };
 const out: Record<string, string> = {};
 for (const m of [...CAR_MODELS, ...BIKE_MODELS]) {
-  if (m === 'spin') continue;
   const bike = (BIKE_MODELS as readonly string[]).includes(m);
   const v = buildCarVisual(await loadModel(m), 0xffffff, LOOK, bike).group;
   const holder = new THREE.Group();
