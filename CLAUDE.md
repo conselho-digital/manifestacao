@@ -115,6 +115,10 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 - Viatura (`POLICE_LOOK`): o letreiro "POLÍCIA MILITAR" é posto por raio horizontal na lataria (a caixa do carro inclui os retrovisores, o que fazia o letreiro flutuar).
 - Prédios: metade da altura original (`BUILDING_SCALE` 0,5 em city.ts; mínimo 10 m, 18 m com térreo; casas não mudam) e a torre cinza também (`TOWER.h` 42). Letreiros de prédios: o usuário vai mandar fotos para colocar nas fachadas.
 
+## Prédio de cobre e escultura Safra
+- O prédio `NT` (calçada norte, ao lado do ponto de partida; x -46..-18 no mundo) é do tipo `copper` em city.ts: pilares de cobre escuro e vidro marrom quase preto (`copperTex`), térreo também de cobre. É a referência do Edifício Safra (foto do usuário).
+- Escultura "Safra" (`src/game/safra.ts`, `placeSafraSign`): pilar de latão 1 x 1 m, ~7 m, com as letras brancas de borda dourada empilhadas de lado (leem-se de baixo para cima), em frente ao prédio de cobre, na calçada (-23, 15,6), de frente para a avenida (`rotation.y = π`). As letras não usam fonte 3D: cada uma é desenhada num canvas e "extrudada" em 11 fatias de plano com recorte por transparência (2 chamadas de desenho por letra) + a frente branca. Tem colisão de caixa no pilar. Fica longe do abrigo de ônibus (-30, 14,2).
+
 ## Mapa (cidade)
 - Gerado por código em `src/game/city.ts` (prédios com janelas em geometria fundida, árvores instanciadas). MASP é o modelo `public/models/map/masp.glb` (CC-BY, ver CREDITS.md).
 - Colisão (`COLLIDERS`, vale para jogador, veículos e balas): prédios, torre, MASP, jardineiras, bancos, troncos de árvore (arbustos NÃO colidem), postes de luz (z = ±13,4, deslocados para fora das ruas laterais por `poleX`), abrigos de ônibus, carros parados nas ruas e no estacionamento; carros do trânsito e dirigíveis são círculos (`hittables`). Em desenvolvimento `validate()` avisa se poste/abrigo cair em avenida ou rua lateral. Boca da arma: AK (-0,017; 0,019; 0,75) e pistola (0; 0; 0,185) no espaço da arma (medida nos modelos; `dev/anim-viewer.ts` `V.muzzle` mostra).

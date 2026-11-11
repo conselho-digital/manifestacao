@@ -4,6 +4,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { addBox, COLLIDERS, MAP, PARKS, PLACES, ROADS, TREES, type Rect } from './map';
 import { buildGrayTower, TOWER } from './tower';
 import { registerCullChildren, FAR_TREES } from './culling';
+import { placeSafraSign } from './safra';
 import { HEIGHT, makeTrees, type Species, type TreeSpec } from './trees';
 import { CAR_MODELS, loadCarVisual, TRAFFIC } from './vehicle';
 
@@ -97,6 +98,18 @@ const piers = (): THREE.CanvasTexture =>
     g.fillStyle = '#6d6a63'; g.fillRect(0, s - 4, s, 4);           // laje
   });
 
+/** Fachada de cobre (Edifício Safra): pilares de cobre escuro e vidro marrom quase preto, como na foto de referência. */
+const copperTex = (): THREE.CanvasTexture =>
+  canvasTex(64, (g, s) => {
+    g.fillStyle = '#5a2f20'; g.fillRect(0, 0, s, s);                 // cobre escuro
+    g.fillStyle = '#231510'; g.fillRect(16, 7, s - 18, s - 13);      // vidro marrom-escuro
+    g.fillStyle = 'rgba(255,200,160,.12)'; g.fillRect(16, 7, s - 18, 5);
+    g.fillStyle = '#8c4d33'; g.fillRect(0, 0, 14, s);                 // pilar de cobre
+    g.fillStyle = '#a8603f'; g.fillRect(2, 0, 4, s);                  // brilho do pilar
+    g.fillStyle = '#4a2519'; g.fillRect(12, 0, 2, s);
+    g.fillStyle = '#6e3a27'; g.fillRect(0, s - 4, s, 4);              // laje
+  });
+
 const houseTex = (): THREE.CanvasTexture =>
   canvasTex(64, (g, s) => {
     g.fillStyle = '#eadcc0'; g.fillRect(0, 0, s, s);
@@ -159,7 +172,7 @@ function parkingTex(): THREE.CanvasTexture {
 
 // ---------- prédios (geometria fundida por material) ----------
 
-type Kind = 'cream' | 'white' | 'ochre' | 'glass' | 'dark' | 'house';
+type Kind = 'cream' | 'white' | 'ochre' | 'glass' | 'dark' | 'house' | 'copper';
 interface Spec {
   /** no espaço da foto */
   sx0: number; sx1: number; sz0: number; sz1: number;
@@ -170,7 +183,7 @@ interface Spec {
 
 const KIND_CFG: Record<Kind, { bay: number; floor: number }> = {
   cream: { bay: 3.4, floor: 3.2 }, ochre: { bay: 3.4, floor: 3.2 }, white: { bay: 5.5, floor: 3.4 },
-  glass: { bay: 2.4, floor: 3.6 }, dark: { bay: 4.2, floor: 3.6 }, house: { bay: 3.5, floor: 3.0 },
+  glass: { bay: 2.4, floor: 3.6 }, dark: { bay: 4.2, floor: 3.6 }, house: { bay: 3.5, floor: 3.0 }, copper: { bay: 4.2, floor: 3.6 },
 };
 
 class Batch {
@@ -186,6 +199,7 @@ class Batch {
     t('glass', lam({ map: curtain('#6f9ac0', '#3f5b78', '#26384a'), vertexColors: true }));
     t('dark', lam({ map: piers(), vertexColors: true }));
     t('house', lam({ map: houseTex(), vertexColors: true }));
+    t('copper', lam({ map: copperTex(), vertexColors: true }));
     t('roof', lam({ color: 0xd6d0c1 }));
     t('gray', lam({ color: 0xb9bcc0 }));
     t('metal', lam({ color: 0x5d6168 }));
@@ -277,7 +291,7 @@ function addBuilding(b: Batch, s: Spec, helipads: THREE.Mesh[], hpTex: THREE.Tex
   const d = r.z1 - r.z0;
   const { h, kind } = s;
   footprints.push({ name, r });
-  addBox(r.x0, r.x1, r.z0, r.z1, h, kind === 'house' ? '#a8a08e' : kind === 'glass' || kind === 'dark' ? '#6b7f94' : '#b4ab98');
+  addBox(r.x0, r.x1, r.z0, r.z1, h, kind === 'house' ? '#a8a08e' : kind === 'glass' || kind === 'dark' ? '#6b7f94' : kind === 'copper' ? '#7a4a34' : '#b4ab98');
 
   // Casas: paredes + telhado de quatro águas
   if (kind === 'house') {
@@ -290,7 +304,7 @@ function addBuilding(b: Batch, s: Spec, helipads: THREE.Mesh[], hpTex: THREE.Tex
   // Térreo (loja/hall) mais largo e escuro, com marquise
   let y0 = 0;
   if (s.plinth) {
-    b.wall(x, z, w + 1.4, d + 1.4, 7, 'dark');
+    b.wall(x, z, w + 1.4, d + 1.4, 7, kind === 'copper' ? 'copper' : 'dark');
     b.box('roof', w + 2.6, 0.5, d + 2.6, x, 7, z);
     y0 = 7.5;
   }
@@ -485,7 +499,7 @@ export function createCity(): THREE.Group {
   // Norte, fileira da frente
   S('N2', -104, -86, 19, 40, 46, 'cream');
   S('N1', -77, -58, 19, 41, 70, 'cream', { plinth: true, ac: true });
-  S('NT', 18, 46, 19, 50, 96, 'white', { plinth: true, helipad: true, antenna: true });
+  S('NT', 18, 46, 19, 50, 96, 'copper', { plinth: true, helipad: true, antenna: true });
   S('NG', 60, 79, 19, 44, 78, 'glass', { plinth: true, antenna: true });
   S('NC', 81, 100, 19, 42, 66, 'cream', { plinth: true });
   // Norte, atrás
@@ -703,6 +717,9 @@ export function createCity(): THREE.Group {
   }
 
   city.add(makeTrees(planterBushes));
+
+  // Escultura "Safra" na calçada em frente ao prédio de cobre (NT), de frente para a avenida
+  placeSafraSign(city, -23, 15.6, Math.PI);
 
   validate();
   void loadMasp(city);
