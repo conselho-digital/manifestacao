@@ -32,9 +32,11 @@ const FREE_HANDS = (name: string): boolean => name.startsWith('climb_') || name 
 const OWN_HOLD = (name: string): boolean => name.startsWith('gun_') || name.startsWith('crouch_') || name === 'run_armed' || name === 'walk_armed';
 
 /** Velocidade de reprodução (1 = original). Os clipes de arma andam um pouco mais rápido que o jogo. */
-/** Clipes em que as pernas ficam paradas na pose do 1º quadro: o IFP não guarda o deslocamento do corpo, então os passos do soco/tacada faziam as pernas patinarem com o corpo parado. */
-const PLANTED = new Set(['punch_1', 'punch_2', 'punch_3', 'bat_swing']);
-const TIME_SCALE: Record<string, number> = { ko: 1.8, getup: 1.8, ko_front: 1.5, getup_front: 1.8, bike_fall: 1.2, car_getin_l: 0.62, car_getout_l: 0.62, hit_3: 2, punch_1: 2.2, punch_2: 2.2, punch_3: 2.0, punch_4: 1.6, bat_swing: 1.3, bat_swing2: 1.5, bat_swing3: 1.5, bat_hit_1: 1.5, bat_hit_2: 1.6, bat_hit_3: 1.8, gun_fwd: 1.2, gun_bwd: 1.2, gun_left: 1.2, gun_right: 1.2, crouch_fwd: 0.8, crouch_bwd: 0.8 };
+/** Clipes em que as pernas ficam paradas na pose do 1º quadro (golpes, reações a golpes e as posições de luta): o IFP não guarda o deslocamento do corpo, então os passos do soco/tacada faziam as pernas patinarem com o corpo parado. */
+const PLANTED = new Set(['punch_1', 'punch_2', 'punch_3', 'bat_swing', 'combat_idle', 'bat_idle', 'block', 'bat_block', 'hit_1', 'hit_2', 'hit_3', 'bat_hit_1', 'bat_hit_2', 'bat_hit_3', 'hitk_1', 'hitk_2']);
+const TIME_SCALE: Record<string, number> = { ko: 1.8, getup: 1.8, ko_front: 1.5, getup_front: 1.8, bike_fall: 1.2, car_getin_l: 0.62, car_getout_l: 0.62, hit_3: 2, punch_1: 2.2, punch_2: 2.2, punch_3: 2.0, punch_4: 1.6, bat_swing: 1.3, bat_swing2: 1.5, bat_swing3: 1.5, bat_hit_1: 1.5, bat_hit_2: 1.6, bat_hit_3: 1.8, gun_fwd: 1.2, gun_bwd: 1.0, gun_left: 1.5, gun_right: 1.4, crouch_fwd: 0.6, crouch_bwd: 0.6,
+  // andar/correr: o passo do clipe (medido pelo pé de apoio, ver dev/anim-viewer) é bem menor que a velocidade do jogo (andar 2,1 m/s, correr 6,2 m/s) e os pés patinavam; acelera o clipe até ficar perto, sem passar da cadência natural
+  walk: 1.6, walk_armed: 1.3, sprint: 1.3, w_gang: 1.6, w_drunk: 1.5, w_old: 1.6, w_fat: 1.6, w_sneak: 1.6 };
 
 /** Animações disponíveis no menu. */
 export const EMOTES: { id: string; label: string }[] = [
