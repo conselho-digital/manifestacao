@@ -15,6 +15,7 @@ import { RemotePlayer } from './game/remote';
 import { CARS, createCars, despawnPersonal, TRAFFIC, findVehicleSpot, PERSONAL, spawnPersonal, updateEngines, updateTraffic } from './game/vehicle';
 import { Combat } from './game/combat';
 import { Graffiti } from './game/graffiti';
+import { Billboard } from './game/billboard';
 import { WeaponVisual } from './game/weapons';
 import { warmUp } from './game/preload';
 import { setListener } from './game/audio';
@@ -99,6 +100,8 @@ const BASE_FOV = camera.fov;
 const net = new Net();
 const remotes = new Map<string, RemotePlayer>();
 const graffiti = new Graffiti(scene);
+const billboard = new Billboard(scene);
+void billboard.start();
 if (import.meta.env.DEV) (window as unknown as { __net: Net; __game: { ready: () => boolean } }).__net = net;
 if (import.meta.env.DEV) (window as unknown as { __game: { ready: () => boolean; camera: THREE.PerspectiveCamera; scene: THREE.Scene; combat: () => Combat | null; player: () => Player | null; sim: { TRAFFIC: typeof TRAFFIC; CARS: typeof CARS; updateTraffic: typeof updateTraffic; spawnPersonal: typeof spawnPersonal } } }).__game = { ready: () => !!player, camera, scene, combat: () => combat, player: () => player, sim: { TRAFFIC, CARS, updateTraffic, spawnPersonal } };
 let profileName = 'Jogador';
@@ -260,6 +263,7 @@ void showLobby().then(async (profile) => {
 
   pauseMenu = createPauseMenu({
     inv,
+    billboard,
     getTeamId: () => teamId,
     setTeam: setMyTeam,
     getCharacter: () => character,
@@ -436,6 +440,7 @@ function loop(): void {
   if (player) updateEngines(paused ? 0 : dt);
   remotes.forEach((r) => r.update(dt));
   graffiti.update(dt);
+  if (player) billboard.update(dt, player.object.position.x, player.object.position.z);
   if (player) {
     const others = new Map<string, { x: number; z: number }>();
     remotes.forEach((r, id) => others.set(id, { x: r.root.position.x, z: r.root.position.z }));

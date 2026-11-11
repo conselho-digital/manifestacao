@@ -4,13 +4,16 @@ import { ALL_WEAPONS, GARAGE_ITEMS, isGunId, SHOP, WEAPON_IMG, WEAPON_NAMES, typ
 import { brl, isReal, loadPrices, loadPurchases, payUrlOf, priceOf, REAL_ITEMS, safeUrl, savePrice } from '../game/shop';
 import { clearTeamGraffiti, deleteTeam, getTeams, HEX, isAdmin, loadTeams, MAX_TEAM_NAME, saveTeam, saveTeamGraffiti, type Team } from '../game/teams';
 import { toLightImage } from './image';
+import { checkYoutube, type Billboard } from '../game/billboard';
 import { ICON } from './icons';
 import { createCharacterPicker, createTeamPicker, el, PICKER_CSS, swatchStyle } from './pickers';
 
-export type PauseTab = 'team' | 'char' | 'weapons' | 'garage' | 'shop' | 'admin' | 'prices';
+export type PauseTab = 'team' | 'char' | 'weapons' | 'garage' | 'shop' | 'admin' | 'prices' | 'outdoor';
 
 export interface PauseDeps {
   inv: Inventory;
+  /** outdoor da praça (o admin controla o vídeo) */
+  billboard: Billboard;
   getTeamId(): string;
   setTeam(id: string): void;
   getCharacter(): CharacterName;
@@ -77,6 +80,7 @@ const CSS = `
 .ps-col{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;opacity:.9}
 .ps-row input[type=color]{width:46px;height:38px;padding:0;border:2px solid #3b4358;border-radius:8px;background:#0f1420;cursor:pointer}
 .ps-save{padding:10px 14px;border:0;border-radius:9px;background:#4cc2ff;color:#10202e;font-weight:800}
+.ps-save:disabled,.ps-del:disabled{opacity:.4;cursor:default}
 .ps-del{padding:10px 14px;border:0;border-radius:9px;background:#8c2f2f;color:#fff;font-weight:800}
 .ps-add{align-self:flex-start;padding:11px 16px;border:2px dashed #4cc2ff;border-radius:11px;background:transparent;color:#bfe9ff;font-weight:800;font-size:14px}
 .ps-h3{margin:16px 0 8px;font-size:15px;color:#bfe9ff}
@@ -112,9 +116,9 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
   document.body.appendChild(root);
 
   let tab: PauseTab = 'team';
-  let admin = false;
+  let admin = import.meta.env.DEV && new URLSearchParams(location.search).has('admin'); // ?admin=1 só no npm run dev: mostra as abas do admin para testar a tela
   let opened = false;
-  void isAdmin().then((a) => { admin = a; d.inv.admin = a; if (opened) { renderTabs(); renderBody(); } });
+  void isAdmin().then((a) => { admin = a || admin; d.inv.admin = a; d.billboard.setAdmin(a); if (opened) { renderTabs(); renderBody(); } });
   void loadPrices();
 
   const tabs: { id: PauseTab; label: string; adm?: boolean }[] = [
@@ -125,6 +129,7 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     { id: 'shop', label: 'Loja' },
     { id: 'admin', label: 'Gerenciar equipes', adm: true },
     { id: 'prices', label: 'Preços', adm: true },
+    { id: 'outdoor', label: 'Outdoor', adm: true },
   ];
 
   function renderTabs(): void {
@@ -290,6 +295,96 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     }
   }
 
+  let outdoorTimer = 0;
+  function stopOutdoor(): void {
+    window.clearInterval(outdoorTimer);
+    outdoorTimer = 0;
+    d.billboard.attachPreview(null);
+  }
+
+  const mmss = (s: number): string => {
+    const t = Math.max(0, Math.floor(s));
+    const h = Math.floor(t / 3600);
+    const m = Math.floor((t % 3600) / 60);
+    const sec = t % 60;
+    return `${h > 0 ? `${h}:${String(m).padStart(2, '0')}` : String(m)}:${String(sec).padStart(2, '0')}`;
+  };
+
+  /** Controle do outdoor da praça: vídeo/live do YouTube, play/pause, parar, ±10 s e linha do tempo. */
+  function renderOutdoor(): void {
+    const out = msg('');
+    const url = el('input');
+    url.type = 'text';
+    url.placeholder = 'Link do vídeo ou da live do YouTube';
+    url.maxLength = 300;
+    const check = el('button', 'ps-save', 'Verificar');
+    check.type = 'button';
+    const set = el('button', 'ps-save', 'Colocar no outdoor');
+    set.type = 'button';
+    const clear = el('button', 'ps-del', 'Tirar o vídeo');
+    clear.type = 'button';
+    const preview = el('div', 'ps-prev');
+    preview.style.cssText = 'width:min(100%,360px);aspect-ratio:16/9;background:#000;border-radius:12px;border:2px solid #3b4358;margin:10px auto 0;display:flex;align-items:center;justify-content:center;color:#7f8aa3;font-size:13px';
+    preview.textContent = 'A prévia do vídeo aparece aqui';
+    const btn = (label: string, title: string): HTMLButtonElement => { const b = el('button', 'ps-save', label); b.type = 'button'; b.title = title; b.style.minWidth = '64px'; return b; };
+    const back = btn('⏪ 10', 'Voltar 10 segundos');
+    const playPause = btn('▶ Tocar', 'Tocar ou pausar');
+    const stopB = btn('⏹ Parar', 'Parar e voltar ao início');
+    const fwd = btn('10 ⏩', 'Pular 10 segundos');
+    const bar = el('input');
+    bar.type = 'range';
+    bar.min = '0';
+    bar.max = '1';
+    bar.step = '0.5';
+    bar.value = '0';
+    bar.style.cssText = 'flex:1;min-width:160px;accent-color:#ff2b2b;height:28px';
+    const time = el('span', 'ps-name', '0:00 / 0:00');
+    time.style.minWidth = '110px';
+    const badge = el('span', 'ps-tag', '');
+    badge.style.cssText = 'display:none;background:#d00;color:#fff';
+    const ctl = el('div', 'ps-row', back, playPause, stopB, fwd);
+    const line = el('div', 'ps-row', bar, time, badge);
+    body.append(
+      el('p', 'ps-note', 'Administrador: o vídeo do outdoor da praça do parque, em frente ao museu, toca igual para todos. Quem chega perto vê o quadro do vídeo e ouve; o volume cai com a distância. Aceita vídeos e lives do YouTube (o dono precisa permitir incorporar).'),
+      out, el('div', 'ps-row', url, check, set, clear), preview, ctl, line);
+
+    const run = (p: Promise<string | null>, ok = ''): void => {
+      void p.then((e) => { out.className = `ps-msg ${e ? 'err' : 'ok'}`; out.textContent = e ?? ok; });
+    };
+    check.onclick = () => {
+      out.className = 'ps-msg';
+      out.textContent = 'Verificando...';
+      void checkYoutube(url.value).then((r) => { out.className = `ps-msg ${r.ok ? 'ok' : 'err'}`; out.textContent = r.msg; });
+    };
+    set.onclick = () => run(d.billboard.setVideo(url.value), 'Vídeo colocado no outdoor.');
+    clear.onclick = () => run(d.billboard.clear(), 'Outdoor sem vídeo.');
+    back.onclick = () => run(d.billboard.seekBy(-10));
+    fwd.onclick = () => run(d.billboard.seekBy(10));
+    stopB.onclick = () => run(d.billboard.stop());
+    playPause.onclick = () => run(d.billboard.info().playing ? d.billboard.pause() : d.billboard.play());
+    let dragging = false;
+    bar.oninput = () => { dragging = true; time.textContent = `${mmss(Number(bar.value))} / ${mmss(Number(bar.max))}`; };
+    bar.onchange = () => { dragging = false; run(d.billboard.seekTo(Number(bar.value))); };
+
+    d.billboard.attachPreview(preview);
+    outdoorTimer = window.setInterval(() => {
+      const i = d.billboard.info();
+      playPause.textContent = i.playing ? '⏸ Pausar' : '▶ Tocar';
+      for (const b of [back, playPause, stopB, fwd, clear]) b.disabled = !i.has && b !== clear;
+      clear.disabled = !i.has;
+      badge.style.display = i.live ? 'inline-block' : 'none';
+      badge.textContent = '● AO VIVO';
+      bar.disabled = !i.has || i.live;
+      if (!i.live && !dragging) {
+        const max = Math.max(i.duration, i.time, 1);
+        bar.max = String(Math.ceil(max));
+        bar.value = String(i.time);
+        time.textContent = `${mmss(i.time)} / ${mmss(i.duration)}`;
+      } else if (i.live) time.textContent = 'ao vivo';
+      if (i.error && !out.textContent) { out.className = 'ps-msg err'; out.textContent = i.error; }
+    }, 250);
+  }
+
   function renderAdmin(): void {
     const out = msg('');
     const list = el('div', 'ps-adm');
@@ -392,6 +487,7 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
   }
 
   function renderBody(): void {
+    stopOutdoor();
     body.textContent = '';
     if (tab === 'team') renderTeam();
     else if (tab === 'char') renderChar();
@@ -399,6 +495,7 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     else if (tab === 'garage') renderGarage();
     else if (tab === 'shop') renderShop();
     else if (admin && tab === 'prices') renderPrices();
+    else if (admin && tab === 'outdoor') renderOutdoor();
     else if (admin) renderAdmin();
   }
 
@@ -408,7 +505,7 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     get isOpen(): boolean { return opened; },
     open(t?: PauseTab): void {
       if (t) tab = t;
-      if ((tab === 'admin' || tab === 'prices') && !admin) tab = 'team';
+      if ((tab === 'admin' || tab === 'prices' || tab === 'outdoor') && !admin) tab = 'team';
       if (document.pointerLockElement) document.exitPointerLock();
       opened = true;
       root.classList.add('open');
@@ -420,6 +517,7 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     close(): void {
       if (!opened) return;
       opened = false;
+      stopOutdoor();
       root.classList.remove('open');
       d.onToggle(false);
     },
