@@ -13,8 +13,9 @@ const GRAVITY = -20;
 const JUMP_V = 6.8;
 const RADIUS = 0.4;
 const STEP = 0.45; // desnível que se sobe andando
-/** Terceira pessoa (como na referência do GTA SA): câmera centralizada atrás, corpo inteiro, personagem na metade de baixo da tela. */
-const CAM_DISTANCE = 3.3;
+/** Terceira pessoa: câmera atrás e um pouco à direita (ombro direito), de modo que a mira do centro da tela não caia sobre o personagem. */
+const CAM_DISTANCE = 2.7;
+const CAM_SHOULDER = 0.7;
 /** Mirando (referência): colada atrás do ombro direito, cabeça no canto esquerdo e mira no centro. */
 const CAM_AIM_DISTANCE = 1.35;
 const CAM_AIM_SHOULDER = 0.55;
@@ -683,7 +684,7 @@ export class Player {
     const p = this.object.position;
     const driving = this.mode === 'drive';
     const dist = driving ? (this.car?.bike ? 6.2 : 8) : THREE.MathUtils.lerp(CAM_DISTANCE, CAM_AIM_DISTANCE, aimK);
-    const shoulder = driving ? 0 : CAM_AIM_SHOULDER * aimK; // a pé centralizada; só mirando passa para o ombro direito
+    const shoulder = driving ? 0 : THREE.MathUtils.lerp(CAM_SHOULDER, CAM_AIM_SHOULDER, aimK); // a pé: sempre à direita do personagem
     this.crouchK += ((this.crouching && !driving ? 1 : 0) - this.crouchK) * Math.min(1, dt * 8);
     const target = new THREE.Vector3(p.x, p.y + (driving ? 1.35 : THREE.MathUtils.lerp(CAM_LOOK_HEIGHT, CAM_AIM_HEIGHT, aimK) - 0.5 * this.crouchK), p.z);
     const cp = Math.cos(pitch);

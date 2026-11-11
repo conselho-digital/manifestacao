@@ -90,7 +90,7 @@ export class WeaponVisual {
     root.add(this.batAnchor);
     this.flashSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: flashTexture(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
     this.flashSprite.scale.setScalar(0.5);
-    this.flashSprite.position.set(0, 0, 0.78);
+    this.flashSprite.position.set(-0.017, 0.019, 0.75);
     this.flashSprite.visible = false;
     this.anchor.add(this.flashSprite);
     void loadRifle().then((src) => {
@@ -158,7 +158,8 @@ export class WeaponVisual {
     this.batAnchor.visible = show && bat;
     this.pistolInner.visible = pistol;
     if (this.rifleInner) this.rifleInner.visible = !pistol;
-    this.flashSprite.position.z = pistol ? 0.2 : 0.78;
+    // boca do cano medida nos modelos: AK-47 (-0,017; 0,019; 0,738) e pistola (0; 0; 0,17), 1–2 cm à frente da ponta
+    this.flashSprite.position.set(pistol ? 0 : -0.017, pistol ? 0 : 0.019, pistol ? 0.185 : 0.75);
     this.flashSprite.scale.setScalar(pistol ? 0.3 : 0.5);
   }
 

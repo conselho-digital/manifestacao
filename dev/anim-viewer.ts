@@ -103,6 +103,25 @@ const V = {
     renderer.clear();
     tile(0, 1, 0, 1, view);
   },
+  /** Clarão de tiro na boca da arma (confere de onde o tiro sai). */
+  muzzle(clip: string, armed: Armed, pitch: number, view: 'side' | 'closeR' | 'closeF' | 'closeL' | 'hand'): void {
+    animator.setArmed(armed);
+    weapon.setMode(armed);
+    animator.setAimPitch(pitch);
+    weapon.setPitch(pitch);
+    animator.seek(clip, 0.3);
+    weapon.flash();
+    const m = weapon.muzzle(new THREE.Vector3());
+    const mark = new THREE.Mesh(new THREE.SphereGeometry(0.03), new THREE.MeshBasicMaterial({ color: 0x00ff66, depthTest: false }));
+    mark.position.copy(m);
+    mark.renderOrder = 20;
+    scene.add(mark);
+    renderer.setScissor(0, 0, W, H);
+    renderer.setViewport(0, 0, W, H);
+    renderer.clear();
+    tile(0, 1, 0, 1, view);
+    scene.remove(mark);
+  },
   clips: (): string[] => [...(animator as unknown as { actions: Map<string, unknown> }).actions.keys()],
   /** n poses de um clipe em 2 vistas (lado em cima, frente embaixo). */
   sheet(clip: string, n: number, armed: Armed = 'none', pitch = 0, views: ('side' | 'front' | 'top' | 'cam' | 'closeR' | 'closeB' | 'closeL' | 'closeF' | 'hand' | 'handL')[] = ['side', 'front']): number {

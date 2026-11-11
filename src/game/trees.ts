@@ -328,6 +328,9 @@ export function makeTrees(list: TreeSpec[]): THREE.Group {
       if (sp !== 'bush') {
         const half = tpl.trunkHalf * t.h * 0.9;
         addBox(t.x - half, t.x + half, t.z - half, t.z + half, 5, '#5b4333');
+      } else if (t.y === undefined) {
+        // arbusto do chão também é sólido (os das jardineiras já ficam sobre a jardineira, que tem colisão)
+        addBox(t.x - 0.45, t.x + 0.45, t.z - 0.45, t.z + 0.45, t.h * 0.8, '#3f7a35');
       }
     }
     blobs.castShadow = true;

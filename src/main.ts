@@ -84,7 +84,7 @@ const BASE_FOV = camera.fov;
 const net = new Net();
 const remotes = new Map<string, RemotePlayer>();
 if (import.meta.env.DEV) (window as unknown as { __net: Net; __game: { ready: () => boolean } }).__net = net;
-if (import.meta.env.DEV) (window as unknown as { __game: { ready: () => boolean; camera: THREE.PerspectiveCamera } }).__game = { ready: () => !!player, camera };
+if (import.meta.env.DEV) (window as unknown as { __game: { ready: () => boolean; camera: THREE.PerspectiveCamera; scene: THREE.Scene } }).__game = { ready: () => !!player, camera, scene };
 let profileName = 'Jogador';
 // Voz por proximidade (WebRTC): sinalização pelo canal do Supabase; só liga depois do primeiro toque no botão do microfone
 const voice = new Voice(net.id, (to, k, d) => net.sendRtc(to, k, d), (state, peers) => {

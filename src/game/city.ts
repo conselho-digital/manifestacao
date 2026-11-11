@@ -260,6 +260,8 @@ class Batch {
 }
 
 const footprints: { name: string; r: Rect; allowWalk?: boolean }[] = [];
+/** postes e abrigos (para a verificação de desenvolvimento: nada no meio da rua) */
+const propSpots: [string, number, number][] = [];
 
 function addBuilding(b: Batch, s: Spec, helipads: THREE.Mesh[], hpTex: THREE.Texture, name: string): void {
   const r = R(s.sx0, s.sx1, s.sz0, s.sz1);
@@ -522,13 +524,23 @@ export function createCity(): THREE.Group {
     city.add(tw);
   }
 
-  // Postes de luz ao longo da avenida
-  for (let x = -100; x <= 100; x += 22) {
+  // Postes de luz ao longo da avenida (na calçada, nunca dentro de uma rua lateral) — com colisão
+  const poleX = (x: number, side: number): number => {
+    for (const r of STREETS) {
+      if ((r.z0 > 0) !== (side > 0)) continue; // só as ruas do mesmo lado da avenida
+      if (x > r.x0 - 1.4 && x < r.x1 + 1.4) return x < (r.x0 + r.x1) / 2 ? r.x0 - 1.4 : r.x1 + 1.4;
+    }
+    return x;
+  };
+  for (let x0 = -100; x0 <= 100; x0 += 22) {
     for (const side of [1, -1]) {
+      const x = poleX(x0, side);
       const z = side * 13.4;
       b.cyl('metal', 0.14, 8, x, 0, z, 6);
       b.box('metal', 0.14, 0.14, 2.6, x, 7.8, z - side * 1.2);
       b.box('white2', 0.7, 0.2, 0.35, x, 7.7, z - side * 2.4);
+      addBox(x - 0.2, x + 0.2, z - 0.2, z + 0.2, 8, '#6f7378');
+      propSpots.push(['poste', x, z]);
     }
   }
   // Abrigos de ônibus
@@ -537,6 +549,10 @@ export function createCity(): THREE.Group {
     b.box('glassfx', 4, 2.4, 0.1, x, 0.2, z + (z > 0 ? 0.7 : -0.7));
     b.box('metal', 0.15, 2.6, 0.15, x - 1.9, 0, z);
     b.box('metal', 0.15, 2.6, 0.15, x + 1.9, 0, z);
+    const back = z + (z > 0 ? 0.7 : -0.7);
+    addBox(x - 2, x + 2, back - 0.15, back + 0.15, 2.6, '#8a9aa6'); // vidro do fundo
+    for (const px of [x - 1.9, x + 1.9]) addBox(px - 0.1, px + 0.1, z - 0.1, z + 0.1, 2.6, '#6f7378');
+    propSpots.push(['abrigo', x, z]);
   }
   // Moldura da maquete (bordas)
   for (const [x, z, w, d] of [[0, HZ + 1.5, W + 6, 3], [0, -HZ - 1.5, W + 6, 3], [HX + 1.5, 0, 3, D], [-HX - 1.5, 0, 3, D]] as const) b.box('wood', w, 3, d, x, 0, z);
@@ -553,6 +569,7 @@ export function createCity(): THREE.Group {
     car.position.set((PARKING.x0 + PARKING.x1) / 2 - 3 + j * 6, 0, PARKING.z0 + 3 + i * 5.4);
     car.rotation.y = j === 0 ? 0 : Math.PI;
     pk.add(car);
+    addBox(car.position.x - 1.1, car.position.x + 1.1, car.position.z - 2.5, car.position.z + 2.5, 1.5, '#8a8f95');
   }
   city.add(pk);
 
@@ -634,7 +651,8 @@ export function createCity(): THREE.Group {
   }
   // fileira de arbustos atrás do MASP e árvores ao redor da praça
   for (let x = PLAZA.x0 + 3; x < PLAZA.x1 - 2; x += 4.5) trees.push({ x, z: 48.5, h: 1.3, species: 'bush' });
-  for (const [x, z] of [[PLAZA.x0 + 0.5, 24], [PLAZA.x1 - 0.5, 22], [PLAZA.x1 - 0.5, 36], [PLAZA.x0 + 0.5, 36]] as const) spot(x, z, rand() < 0.5 ? 'maple' : 'birch');
+  // (o canto oeste da praça invade a rua lateral: as árvores dele ficam na calçada da rua, em x = -4,4)
+  for (const [x, z] of [[-4.4, 33.5], [PLAZA.x1 - 0.5, 22], [PLAZA.x1 - 0.5, 36]] as const) spot(x, z, rand() < 0.5 ? 'maple' : 'birch');
   // copa não pode entrar no prédio: tira árvores cuja copa atravessaria uma fachada
   const crown: Record<string, number> = { oak: 0.4, pine: 0.2, maple: 0.3, birch: 0.2, bush: 0 };
   const placed = trees.filter((t) => t.species === 'bush' || !nearBuilding(t.x, t.z, crown[t.species]! * t.h + 0.4));
@@ -691,6 +709,10 @@ function validate(): void {
   }
   for (let i = 0; i < footprints.length; i++) for (let j = i + 1; j < footprints.length; j++) {
     if (hit(footprints[i]!.r, footprints[j]!.r)) bad.push(`${footprints[i]!.name} e ${footprints[j]!.name} se sobrepõem`);
+  }
+  for (const [name, x, z] of propSpots) {
+    if (hit({ x0: x - 0.2, x1: x + 0.2, z0: z - 0.2, z1: z + 0.2 }, AVENUE)) bad.push(`${name} em (${x.toFixed(1)}, ${z.toFixed(1)}) está na avenida`);
+    for (const st of STREETS) if (hit({ x0: x - 0.2, x1: x + 0.2, z0: z - 0.2, z1: z + 0.2 }, st)) bad.push(`${name} em (${x.toFixed(1)}, ${z.toFixed(1)}) está numa rua lateral`);
   }
   if (bad.length) console.warn('CIDADE: problemas no layout:\n' + bad.join('\n'));
   else console.info(`CIDADE: layout ok (${footprints.length} prédios, nenhum em rua ou calçada)`);
