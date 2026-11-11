@@ -1,7 +1,7 @@
 // Ferramenta de desenvolvimento: desenha cada arma de lado, com fundo transparente, para virar ícone do HUD.
 // Uso: abrir /dev/weapon-icons.html e ler window.ICONS (dataURL por arma) — o script scratchpad/icons.js salva em public/hud/.
 import * as THREE from 'three';
-import { buildPistol, loadFlag, loadRifle, loadSign } from '../src/game/weapons';
+import { buildPistol, loadBaseball, loadCricket, loadFlag, loadRifle, loadSign } from '../src/game/weapons';
 
 const W = 256;
 const H = 128;
@@ -50,5 +50,9 @@ out.bat = fit(flag, new THREE.Euler(0, 0, -Math.PI / 2 + 0.35)); // mastro (Y) d
 const sign = (await loadSign()).clone(true);
 sign.rotation.y = Math.PI / 2; // a placa vira de frente para a câmera
 out.sign = fit(sign, new THREE.Euler(0, 0, -Math.PI / 2 + 0.25));
+const cricket = (await loadCricket()).clone(true);
+out.cricket = fit(cricket, new THREE.Euler(0, 0, -Math.PI / 2 + 0.3)); // taco deitado, lâmina para a direita
+const baseball = (await loadBaseball()).clone(true);
+out.baseball = fit(baseball, new THREE.Euler(0, 0, -Math.PI / 2 + 0.3));
 (window as unknown as { ICONS: Record<string, string> }).ICONS = out;
 (window as unknown as { READY: boolean }).READY = true;

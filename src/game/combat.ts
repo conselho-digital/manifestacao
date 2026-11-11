@@ -58,11 +58,11 @@ export class Combat {
   get money(): number { return this.d.inv.money; }
   /** pausado: não leva dano nem atira */
   paused = false;
-  /** 0 = AK-47, 1 = punho, 2 = taco (bandeira), 3 = pistola, 4 = placa de trânsito */
+  /** 0 = AK-47, 1 = punho, 2 = taco (bandeira), 3 = pistola, 4 = placa de trânsito, 5 = taco de críquete, 6 = taco de beisebol */
   /** começa de mãos livres (punho); o botão Arma troca */
-  weapon: 0 | 1 | 2 | 3 | 4 = 1;
+  weapon: WeaponId = 1;
   /** munição de cada arma (só quem tem a arma recebe) */
-  private ammo = [{ mag: 0, reserve: 0 }, { mag: 0, reserve: 0 }, { mag: 0, reserve: 0 }, { mag: 0, reserve: 0 }, { mag: 0, reserve: 0 }];
+  private ammo = [0, 1, 2, 3, 4, 5, 6].map(() => ({ mag: 0, reserve: 0 }));
   get mag(): number { return this.ammo[this.weapon]!.mag; }
   get reserve(): number { return this.ammo[this.weapon]!.reserve; }
   /** tem mira (fuzil ou pistola) */
@@ -127,7 +127,7 @@ export class Combat {
 
   private get magSize(): number { return this.weapon === 3 ? PISTOL_MAG : MAG_SIZE; }
 
-  get weaponName(): string { return ['AK-47', 'PUNHO', 'BANDEIRA', 'PISTOLA', 'PLACA'][this.weapon]!; }
+  get weaponName(): string { return ['AK-47', 'PUNHO', 'BANDEIRA', 'PISTOLA', 'PLACA', 'TACO', 'TACO'][this.weapon]!; }
 
   /** Placar: eu e os outros jogadores, do que mais matou para o que menos. */
   statRows(): StatRow[] {
@@ -162,7 +162,7 @@ export class Combat {
 
     if (input.switchWeapon) {
       // fuzil, pistola, bandeira, placa, punho — só as que o jogador tem
-      const order = ([0, 3, 2, 4, 1] as const).filter((w) => this.d.inv.has(w));
+      const order = ([0, 3, 2, 4, 5, 6, 1] as const).filter((w) => this.d.inv.has(w));
       this.weapon = order[(Math.max(0, order.indexOf(this.weapon)) + 1) % order.length]!;
       this.reloading = false;
     }
@@ -181,7 +181,7 @@ export class Combat {
     // atirando: o fuzil sobe para a posição de tiro (cano para a frente) e fica assim um instante depois do último tiro
     this.fireHold = input.fire ? AIM_HOLD : Math.max(0, this.fireHold - dt);
     const aiming = input.aim || this.fireHold > 0;
-    player.setArmed(this.weapon === 0 ? (aiming ? 'aim' : 'rifle') : this.weapon === 3 ? (aiming ? 'pistol_aim' : 'pistol') : this.weapon === 2 ? 'bat' : this.weapon === 4 ? 'sign' : 'none');
+    player.setArmed(this.weapon === 0 ? (aiming ? 'aim' : 'rifle') : this.weapon === 3 ? (aiming ? 'pistol_aim' : 'pistol') : this.weapon === 2 ? 'bat' : this.weapon === 4 ? 'sign' : this.weapon === 5 ? 'cricket' : this.weapon === 6 ? 'baseball' : 'none');
 
     if (input.fire && this.cd <= 0 && !this.reloading) {
       const a = this.ammo[this.weapon]!;
@@ -191,7 +191,7 @@ export class Combat {
           this.cd = this.weapon === 0 ? AK_GAP : PISTOL_GAP;
           this.fireGun(player, aiming, this.weapon === 0 ? 'r' : 'p');
         } else { this.cd = 0.3; playClick(); this.startReload(); }
-      } else if (this.weapon === 2 || this.weapon === 4) { this.cd = BAT_GAP; player.swing(); this.melee(player, BAT_RANGE, 'b'); }
+      } else if (this.weapon === 2 || this.weapon === 4 || this.weapon === 5 || this.weapon === 6) { this.cd = BAT_GAP; player.swing(); this.melee(player, BAT_RANGE, 'b'); }
       else { this.cd = FIST_GAP; const kind = player.punch(); this.melee(player, kind === 'k' ? FIST_RANGE + 0.3 : FIST_RANGE, kind); }
     }
   }

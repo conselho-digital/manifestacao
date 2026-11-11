@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { COLLIDERS, MAP, rayBox, TREES, type Box } from './map';
 import type { InputState } from './input';
 import { CARS, hittables, type Car } from './vehicle';
-import { ARMED_CODE, BAT_SWING_NAME, facesAim, type Animator, type Armed } from './anim';
+import { ARMED_CODE, facesAim, isBatLike, type Animator, type Armed } from './anim';
 import type { WeaponVisual } from './weapons';
 
 const WALK_SPEED = 2.1;
@@ -89,6 +89,8 @@ export class Player {
   private kickAlt = false;
   private hitN = 0;
   private hitAlt = false;
+  private batN = 0;
+  private lastSwingAt = -1e9;
   private combatT = 0; // tempo restante em modo de combate (guarda) depois de socar
   private lastHitAt = -1e9;
   private crouchK = 0; // 0 em pé, 1 agachado (suaviza a câmera)
@@ -140,7 +142,8 @@ export class Player {
       return;
     }
     this.swingT = this.hitN === 3 ? 0.8 : 0.4;
-    this.animator?.restart(`hit_${this.hitN}`);
+    // levou golpe de arma branca: reações Bat_Hit_1-3 (baseball.ifp); de soco: knife_hit_1-3
+    this.animator?.restart(`${kind === 'b' ? 'bat_hit' : 'hit'}_${this.hitN}`);
   }
 
   /** Combo corpo a corpo: soco, soco, soco e chute (alternando os 2 chutes). Retorna 'k' se foi chute. */
@@ -159,12 +162,14 @@ export class Player {
     return 'f';
   }
 
-  /** Golpe de taco (animação e trava a troca de clipe até acabar). */
+  /** Golpe de arma branca (taco, bandeira, placa): os clipes Bat_1, Bat_2 e Bat_3 do baseball.ifp em sequência (volta ao 1 se ficar 2,5 s sem bater). */
   swing(): void {
     if (this.mode !== 'ground') return;
-    // golpe de beisebol por código (os clipes Bat_* do GTA não são uma rebatida de verdade)
-    this.swingT = 0.8;
-    this.animator?.baseball();
+    const now = performance.now();
+    this.batN = now - this.lastSwingAt > 2500 ? 1 : this.batN % 3 + 1;
+    this.lastSwingAt = now;
+    this.swingT = [0.7, 0.76, 0.82][this.batN - 1]!;
+    this.animator?.restart(['bat_swing', 'bat_swing2', 'bat_swing3'][this.batN - 1]!);
   }
 
   /** Muda o que o personagem segura (braços e arma na mão). */
@@ -196,7 +201,6 @@ export class Player {
   /** Nome do clipe de animação atual (enviado aos outros jogadores). */
   get animName(): string {
     if (this.mode === 'drive') return 'drive';
-    if (this.swingT > 0 && (this.armed === 'bat' || this.armed === 'sign')) return BAT_SWING_NAME; // os outros repetem a rebatida
     return this.animator?.name || 'idle';
   }
 
@@ -314,7 +318,7 @@ export class Player {
       const clip = input.sprint ? 'sprint' : input.walkClip;
       a.play(a.has(clip) ? clip : 'walk');
     } else if (this.emote && a.has(this.emote)) a.play(this.emote);
-    else a.play(this.combatT > 0 && this.armed === 'none' && a.has('combat_idle') ? 'combat_idle' : (this.armed === 'bat' || this.armed === 'sign') && a.has('bat_idle') ? 'bat_idle' : (this.armed === 'rifle' || this.armed === 'aim') && a.has('gun_idle') ? 'gun_idle' : 'idle');
+    else a.play(this.combatT > 0 && this.armed === 'none' && a.has('combat_idle') ? 'combat_idle' : isBatLike(this.armed) && a.has('bat_idle') ? 'bat_idle' : (this.armed === 'rifle' || this.armed === 'aim') && a.has('gun_idle') ? 'gun_idle' : 'idle');
   }
 
   /** Emote (loop até mexer) ou ação (rolar, mergulhar). */

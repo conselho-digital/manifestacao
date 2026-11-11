@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 export type ArmedMode = Armed;
 
-import type { Animator, Armed } from './anim';
+import { isBatLike, type Animator, type Armed } from './anim';
 
 const loader = new GLTFLoader();
 let rifleSrc: Promise<THREE.Object3D> | null = null;
@@ -11,6 +11,12 @@ export const loadRifle = (): Promise<THREE.Object3D> => (rifleSrc ??= loader.loa
 
 let flagSrc: Promise<THREE.Object3D> | null = null;
 export const loadFlag = (): Promise<THREE.Object3D> => (flagSrc ??= loader.loadAsync('/models/weapons/flag-turkey.glb').then((g) => g.scene));
+
+let cricketSrc: Promise<THREE.Object3D> | null = null;
+export const loadCricket = (): Promise<THREE.Object3D> => (cricketSrc ??= loader.loadAsync('/models/weapons/cricket-bat.glb').then((g) => g.scene));
+
+let baseballSrc: Promise<THREE.Object3D> | null = null;
+export const loadBaseball = (): Promise<THREE.Object3D> => (baseballSrc ??= loader.loadAsync('/models/weapons/baseball-bat.glb').then((g) => g.scene));
 
 let signSrc: Promise<THREE.Object3D> | null = null;
 export const loadSign = (): Promise<THREE.Object3D> => (signSrc ??= loader.loadAsync('/models/weapons/traffic-sign.glb').then((g) => g.scene));
@@ -33,7 +39,7 @@ function flashTexture(): THREE.Texture {
 
 /** Cópia visual de cada arma (para pré-carregar e compilar shaders). */
 export async function loadWeaponModels(): Promise<THREE.Object3D[]> {
-  const all = await Promise.all([loadRifle(), loadFlag(), loadSign()]);
+  const all = await Promise.all([loadRifle(), loadFlag(), loadSign(), loadCricket(), loadBaseball()]);
   return all.map((o) => o.clone(true));
 }
 
@@ -46,6 +52,8 @@ export class WeaponVisual {
   private readonly batAnchor = new THREE.Group();
   private readonly flagInner = new THREE.Group();
   private readonly signInner = new THREE.Group();
+  private readonly cricketInner = new THREE.Group();
+  private readonly baseballInner = new THREE.Group();
   private flashT = 0;
   private mode: ArmedMode = 'none';
   private ready = false;
@@ -62,7 +70,7 @@ export class WeaponVisual {
     const fallbackBat = buildBat();
     this.batAnchor.add(fallbackBat);
     // o "taco" é a bandeira num mastro (modelo convertido do DFF); enquanto carrega, vale o taco simples
-    this.batAnchor.add(this.flagInner, this.signInner);
+    this.batAnchor.add(this.flagInner, this.signInner, this.cricketInner, this.baseballInner);
     void loadFlag().then((src) => {
       this.batAnchor.remove(fallbackBat);
       this.flagInner.clear();
@@ -85,6 +93,28 @@ export class WeaponVisual {
       inner.scale.setScalar(0.65);
       inner.position.z = 0.2 * 0.65; // mãos a ~40 cm da base do poste
       this.signInner.add(inner);
+    });
+    // taco de críquete (Bully): 83 cm, cabo na origem da mão direita; lâmina larga na ponta
+    void loadCricket().then((src) => {
+      const bat = src.clone(true);
+      bat.traverse((o) => { o.castShadow = true; });
+      const inner = new THREE.Group();
+      inner.add(bat);
+      inner.rotation.x = Math.PI / 2; // o comprimento (Y no GLB) passa a apontar para +Z
+      inner.scale.setScalar(1.15);
+      inner.position.z = 0.1; // a mão direita segura perto do fim do cabo
+      this.cricketInner.add(inner);
+    });
+    // taco de beisebol (GTA SA): 89 cm, cabo na origem da mão direita
+    void loadBaseball().then((src) => {
+      const bat = src.clone(true);
+      bat.traverse((o) => { o.castShadow = true; });
+      const inner = new THREE.Group();
+      inner.add(bat);
+      inner.rotation.x = Math.PI / 2;
+      inner.scale.setScalar(1.1);
+      inner.position.z = 0.12;
+      this.baseballInner.add(inner);
     });
     this.batAnchor.visible = false;
     root.add(this.batAnchor);
@@ -150,9 +180,11 @@ export class WeaponVisual {
 
   private refresh(): void {
     const show = this.ready && this.mode !== 'none' && !this.hidden && !this.suppressed;
-    const bat = this.mode === 'bat' || this.mode === 'sign';
+    const bat = isBatLike(this.mode);
     this.flagInner.visible = this.mode === 'bat';
     this.signInner.visible = this.mode === 'sign';
+    this.cricketInner.visible = this.mode === 'cricket';
+    this.baseballInner.visible = this.mode === 'baseball';
     const pistol = this.mode === 'pistol' || this.mode === 'pistol_aim';
     this.anchor.visible = show && !bat;
     this.batAnchor.visible = show && bat;

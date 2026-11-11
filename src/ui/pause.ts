@@ -143,7 +143,7 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     body.append(el('p', 'ps-note', 'Só aparecem as armas que você já tem. Para conseguir mais, abra a Loja.'));
     const grid = el('div', 'ps-grid');
     const cur = d.currentWeapon();
-    for (const w of [1, 3, 0, 2, 4] as const) {
+    for (const w of [1, 3, 0, 2, 4, 5, 6] as const) {
       if (!d.inv.has(w)) continue;
       const pic = el('div', 'pic');
       const src = WEAPON_IMG[w];

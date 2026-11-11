@@ -33,3 +33,8 @@ O restante da cidade é gerado por código (`src/game/city.ts`), inspirado na ma
 - Moto BMW S1000RR (VietTuan / DiChoiKoCung), convertida e simplificada.
 - Moto Suzuki GSX-R600 (nrg500.dff do pacote), convertida e simplificada.
 - Chevrolet Spin LTZ 2025 PMESP (copcarla.dff do pacote), simplificado para ~86 mil triângulos.
+
+## Armas brancas (enviadas pelo dono do projeto)
+- `public/models/weapons/cricket-bat.glb`: taco de críquete do jogo Bully: Scholarship Edition (Rockstar Vancouver), convertido de DFF/TXD.
+- `public/models/weapons/baseball-bat.glb`: taco de beisebol para GTA San Andreas ("Деревянная бита", textura e ícone de Tttt Yyyy, libertycity.ru), convertido de DFF/TXD.
+- Animações das armas brancas (`Bat_*`): `baseball.ifp` do GTA San Andreas (Rockstar North), enviado pelo dono do projeto.
