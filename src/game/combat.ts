@@ -117,6 +117,11 @@ export class Combat {
     return w === 3 ? { mag: PISTOL_MAG, reserve: PISTOL_RESERVE } : { mag: MAG_SIZE, reserve: RESERVE_START };
   }
 
+  /** Armas que o jogador tem, na ordem do botão de troca. */
+  ownedWeapons(): WeaponId[] {
+    return ([0, 12, 13, 14, 3, 2, 4, 5, 6, 7, 8, 9, 10, 11, 1] as const).filter((w) => this.d.inv.has(w));
+  }
+
   /** Munição de uma arma (para o menu). */
   ammoOf(w: WeaponId): { mag: number; reserve: number } { return this.ammo[w]!; }
 
@@ -181,10 +186,13 @@ export class Combat {
     if (player.isDriving) { player.setArmed('none'); return; }
 
     if (this.protectT > 0) { this.weapon = 1; this.reloading = false; } // protegido: só as mãos
-    else if (input.switchWeapon) {
-      // fuzil, pistola, bandeira, placa, punho — só as que o jogador tem
-      const order = ([0, 12, 13, 14, 3, 2, 4, 5, 6, 7, 8, 9, 10, 11, 1] as const).filter((w) => this.d.inv.has(w));
-      this.weapon = order[(Math.max(0, order.indexOf(this.weapon)) + 1) % order.length]!;
+    else if (input.switchWeapon || input.weaponStep !== 0 || input.weaponPick !== null) {
+      // fuzil, pistola, bandeira, placa, punho — só as que o jogador tem; passo +1/-1 percorre a lista, ou escolhe uma pelo menu
+      const order = this.ownedWeapons();
+      const i = Math.max(0, order.indexOf(this.weapon));
+      const pick = input.weaponPick;
+      if (pick !== null && order.includes(pick as WeaponId)) this.weapon = pick as WeaponId;
+      else if (pick === null) this.weapon = order[(i + (input.weaponStep < 0 ? -1 : 1) + order.length) % order.length]!;
       this.reloading = false;
     }
     if (input.reload) this.startReload();

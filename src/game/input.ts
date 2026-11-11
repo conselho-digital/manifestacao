@@ -23,6 +23,10 @@ export interface InputState {
   aim: boolean;
   reload: boolean;
   switchWeapon: boolean;
+  /** -1 arma anterior, +1 próxima (arrastar o botão de arma); 0 nada */
+  weaponStep: number;
+  /** id da arma escolhida no menu de seleção (null = nenhuma) */
+  weaponPick: number | null;
   /** carro: acelerador, freio e freio de mão */
   gas: boolean;
   brake: boolean;
@@ -42,6 +46,8 @@ let crouchQ = false;
 let interactQ = false;
 let reloadQ = false;
 let switchQ = false;
+let stepQ = 0;
+let pickQ: number | null = null;
 let emoteQ: string | null = null;
 let lookDx = 0;
 let lookDy = 0;
@@ -74,6 +80,8 @@ export const queueClimb = (): void => { climbQ = true; };
 export const queueInteract = (): void => { interactQ = true; };
 export const queueReload = (): void => { reloadQ = true; };
 export const queueSwitch = (): void => { switchQ = true; };
+export const queueWeaponStep = (dir: number): void => { stepQ = dir < 0 ? -1 : 1; };
+export const queueWeaponPick = (id: number): void => { pickQ = id; };
 export const queueEmote = (id: string): void => { emoteQ = id; };
 export const setSprint = (v: boolean): void => { sprintHeld = v; };
 export const setFire = (v: boolean): void => { fireHeld = v; };
@@ -134,7 +142,7 @@ export function readInput(): InputState {
     jump: jumpQ, climb: climbQ, crouch: crouchQ, interact: interactQ, emote: emoteQ, walkClip,
     fire: fireHeld || mouseFire,
     aim: aimOn || mouseAim,
-    reload: reloadQ, switchWeapon: switchQ,
+    reload: reloadQ, switchWeapon: switchQ, weaponStep: stepQ, weaponPick: pickQ,
     gas: keys.has('KeyW') || keys.has('ArrowUp') || padGas,
     brake: keys.has('KeyS') || keys.has('ArrowDown') || padBrake,
     handbrake: keys.has('Space') || padHand,
@@ -146,6 +154,8 @@ export function readInput(): InputState {
   interactQ = false;
   reloadQ = false;
   switchQ = false;
+  stepQ = 0;
+  pickQ = null;
   emoteQ = null;
   return state;
 }

@@ -17,7 +17,7 @@ import { Combat } from './game/combat';
 import { WeaponVisual } from './game/weapons';
 import { warmUp } from './game/preload';
 import { setListener } from './game/audio';
-import { HUD_KEY, Inventory, type WeaponId } from './game/inventory';
+import { HUD_KEY, Inventory, WEAPON_NAMES, type WeaponId } from './game/inventory';
 import { isAdmin, lookOf, makeTeamRing, saveTeamId, teamById, validTeamId } from './game/teams';
 import { loadPrices, loadPurchases } from './game/shop';
 import type { PlayerInfo, VehInfo } from './net/sync';
@@ -369,7 +369,8 @@ function loop(): void {
         remotes: [...remotes.values()].map((r) => ({ name: r.info.name, x: r.root.position.x, z: r.root.position.z })),
         players: remotes.size + 1, maxPlayers: 30,
         health: combat.health, armor: combat.armor, money: combat.money,
-        weapon: HUD_KEY[combat.weapon], weaponName: combat.weaponName,
+        weapon: HUD_KEY[combat.weapon], weaponName: combat.weaponName, weaponId: combat.weapon,
+        weaponList: combat.ownedWeapons().map((id) => ({ id, key: HUD_KEY[id], name: WEAPON_NAMES[id] })),
         mag: combat.mag, reserve: combat.reserve, reloading: combat.reloading,
         aiming: input.aim, crouching: player.isCrouching, dead: combat.dead, respawnIn: combat.respawnIn,
         hitTick: combat.hitTick, hurtTick: combat.hurtTick, nearCar: player.nearCar, protect: combat.protectT,

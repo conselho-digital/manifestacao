@@ -1,7 +1,7 @@
 import { ICON } from './icons';
 import { CARS } from '../game/vehicle';
 import { COLLIDERS, MAP, PARKS, placeName, ROADS } from '../game/map';
-import { addLook, queueCrouch, queueInteract, queueJump, queueReload, queueSwitch, setAim, setFire, setPedals, setSprint, setTouchVector, setWheelie } from '../game/input';
+import { addLook, queueCrouch, queueInteract, queueJump, queueReload, queueSwitch, queueWeaponPick, queueWeaponStep, setAim, setFire, setPedals, setSprint, setTouchVector, setWheelie } from '../game/input';
 
 /** Dados do jogo que o HUD mostra (preenchidos pelo main a cada quadro). */
 export interface HudState {
@@ -23,6 +23,9 @@ export interface HudState {
   /** chave da arma (HUD_KEY): ak, fist, bat, pistol, sign, cricket, baseball, bottle, pipe, cleaver, sickle, axe */
   weapon: string;
   weaponName: string;
+  /** id da arma na mão e lista das que o jogador tem (para o menu de seleção do botão Arma) */
+  weaponId: number;
+  weaponList: { id: number; key: string; name: string }[];
   mag: number;
   reserve: number;
   reloading: boolean;
@@ -99,11 +102,21 @@ const CSS = `
 .m-crouch{right:calc(var(--u)*25.6);top:calc(var(--u)*22.2);width:calc(var(--u)*12);height:calc(var(--u)*12)}
 .m-crouch.on{background:rgba(70,150,90,.85)}
 .m-change{right:calc(var(--u)*1.6);top:calc(var(--u)*22.2);width:calc(var(--u)*12.5);height:calc(var(--u)*12.5)}
+.m-wback{position:fixed;inset:0;pointer-events:auto;touch-action:none;z-index:7;display:none}
+.m-wback.open,.m-wmenu.open{display:block}
+.m-wmenu{position:fixed;right:calc(var(--u)*1.6);top:calc(var(--u)*36);width:calc(var(--u)*50);max-height:calc(var(--u)*60);overflow-y:auto;z-index:8;display:none;pointer-events:auto;
+  background:rgba(14,22,16,.94);border:calc(var(--u)*.5) solid #000;border-radius:calc(var(--u)*1.4);padding:calc(var(--u)*1.2);touch-action:pan-y}
+.m-wgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:calc(var(--u)*1)}
+.m-wopt{display:flex;flex-direction:column;align-items:center;gap:calc(var(--u)*.4);padding:calc(var(--u)*.8);border-radius:calc(var(--u)*1);background:rgba(47,107,47,.85);
+  border:calc(var(--u)*.4) solid transparent;color:#fff;font:inherit;cursor:pointer;min-width:0}
+.m-wopt.sel{border-color:#4cc2ff;background:rgba(37,90,125,.95)}
+.m-wopt img,.m-wopt svg{width:100%;height:calc(var(--u)*6.5);object-fit:contain;fill:#fff}
+.m-wopt span{font-size:calc(var(--u)*1.7);line-height:1.1;text-align:center;text-transform:none;font-weight:800}
 .m-fire{right:calc(var(--u)*17.5);bottom:calc(var(--u)*24);width:calc(var(--u)*15.5);height:calc(var(--u)*15.5)}
 .m-aim{right:calc(var(--u)*2.5);bottom:calc(var(--u)*29);width:calc(var(--u)*13.5);height:calc(var(--u)*13.5)}
 .m-jump{right:calc(var(--u)*1.2);bottom:calc(var(--u)*9.5);width:calc(var(--u)*17);height:calc(var(--u)*17)}
 /* a pé: entrar no carro fica à esquerda do Sprint (não o substitui) */
-.m-door{right:calc(var(--u)*34.6);bottom:calc(var(--u)*8);width:calc(var(--u)*14);height:calc(var(--u)*14)}
+.m-door{right:calc(var(--u)*3.2);bottom:calc(var(--u)*43.5);width:calc(var(--u)*12);height:calc(var(--u)*12)}
 /* o botão de entrar no carro só aparece perto de um carro */
 .m-hud:not(.near-car):not(.driving) .m-door{display:none}
 /* dirigindo, o botão de sair fica acima do acelerar, um pouco afastado */
@@ -382,7 +395,57 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   const protectEl = make('m-protect m-out', hud);
 
   holdButton(circle(hud, 'm-reload foot', ICON.reload, 'Recarga'), queueReload);
-  holdButton(circle(hud, 'm-change foot', ICON.swap, 'Arma'), queueSwitch);
+  // Botão Arma: arrastar para cima = próxima arma, para baixo = anterior; tocar abre o menu de seleção (com mais de 3 armas) ou passa para a próxima
+  const wback = make('m-wback', hud);
+  const wmenu = make('m-wmenu', hud);
+  let weaponList: HudState['weaponList'] = [];
+  let weaponId = -1;
+  let wsig = '';
+  const closeWeaponMenu = (): void => { wback.classList.remove('open'); wmenu.classList.remove('open'); };
+  const renderWeaponMenu = (): void => {
+    wmenu.textContent = '';
+    const grid = make('m-wgrid', wmenu);
+    for (const w of weaponList) {
+      const b = make(`m-wopt${w.id === weaponId ? ' sel' : ''}`, grid, 'button');
+      if (w.key === 'fist') b.insertAdjacentHTML('beforeend', ICON.fist);
+      else b.insertAdjacentHTML('beforeend', `<img src="/hud/w-${w.key}.png" alt="" draggable="false">`);
+      make('', b, 'span').textContent = w.name;
+      b.onclick = () => { queueWeaponPick(w.id); closeWeaponMenu(); };
+    }
+    wmenu.querySelector('.sel')?.scrollIntoView({ block: 'nearest' });
+  };
+  wback.addEventListener('pointerdown', (e) => { e.preventDefault(); closeWeaponMenu(); });
+  const changeBtn = circle(hud, 'm-change foot', ICON.swap, 'Arma');
+  {
+    let y0 = 0;
+    let dragged = false;
+    changeBtn.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      changeBtn.setPointerCapture(e.pointerId);
+      changeBtn.classList.add('on');
+      y0 = e.clientY;
+      dragged = false;
+    });
+    changeBtn.addEventListener('pointermove', (e) => {
+      if (!changeBtn.hasPointerCapture(e.pointerId)) return;
+      const step = Math.max(22, changeBtn.getBoundingClientRect().height * 0.4);
+      const dy = e.clientY - y0;
+      if (Math.abs(dy) < step) return;
+      dragged = true; // arrastou: troca e recomeça a medir (arrastar mais continua passando)
+      queueWeaponStep(dy < 0 ? 1 : -1);
+      y0 = e.clientY;
+    });
+    const end = (tap: boolean): void => {
+      changeBtn.classList.remove('on');
+      if (!tap || dragged) return;
+      if (weaponList.length > 3) {
+        const open = !wmenu.classList.contains('open');
+        if (open) { renderWeaponMenu(); wback.classList.add('open'); wmenu.classList.add('open'); } else closeWeaponMenu();
+      } else queueSwitch();
+    };
+    changeBtn.addEventListener('pointerup', () => end(true));
+    changeBtn.addEventListener('pointercancel', () => end(false));
+  }
   const crouchBtn = circle(hud, 'm-crouch foot', ICON.crouch, 'Agachar');
   holdButton(crouchBtn, queueCrouch);
 
@@ -505,6 +568,10 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
       arFill.style.width = `${Math.max(0, s.armor)}%`;
       const mny = `$${s.money.toLocaleString('en-US')}`;
       if (mny !== cache.money) { cache.money = mny; money.textContent = mny; }
+      weaponList = s.weaponList;
+      weaponId = s.weaponId;
+      const sig = `${s.weaponId}|${s.weaponList.map((w) => w.id).join(',')}`;
+      if (sig !== wsig) { wsig = sig; if (wmenu.classList.contains('open')) { if (weaponList.length > 3) renderWeaponMenu(); else closeWeaponMenu(); } }
       if (s.weapon !== cache.weapon) {
         cache.weapon = s.weapon;
         weaponBox.textContent = '';
