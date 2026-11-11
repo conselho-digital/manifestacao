@@ -1,0 +1,16 @@
+{
+  "redirects": [
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "www.gameprotesto.com.br" }],
+      "destination": "https://gameprotesto.com.br/$1",
+      "permanent": true
+    },
+    {
+      "source": "/(.*)",
+      "has": [{ "type": "host", "value": "manifestacao-ten.vercel.app" }],
+      "destination": "https://gameprotesto.com.br/$1",
+      "permanent": true
+    }
+  ]
+}
