@@ -229,7 +229,7 @@ void showLobby().then(async (profile) => {
   camera.clearViewOffset();
   camera.fov = BASE_FOV;
   camera.updateProjectionMatrix();
-  hud = createHud({ onVoiceToggle: () => { void voice.toggle(); }, onPause: () => pauseMenu?.open(), onShop: () => pauseMenu?.open('shop') });
+  hud = createHud({ onVoiceToggle: () => { void voice.toggle(); }, onPause: () => pauseMenu?.open() });
   hud.addChat(`Sistema: bem-vindo, ${profile.name}!`);
   // Ponto de partida (?pos=x,z serve para inspecionar o mapa)
   const startQ = new URLSearchParams(location.search).get('pos')?.split(',').map(Number);

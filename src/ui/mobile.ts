@@ -45,7 +45,6 @@ export interface MobileHudOptions {
   /** engrenagem: pausa o jogo e abre o menu */
   onPause: () => void;
   /** loja: abre o menu de pausa na aba Loja */
-  onShop: () => void;
 }
 
 export type VoiceUi = 'off' | 'live' | 'muted' | 'denied';
@@ -135,10 +134,7 @@ const CSS = `
 .m-chatbtn{left:50%;transform:translateX(-50%);bottom:calc(var(--u)*1.5);width:calc(var(--u)*8);height:calc(var(--u)*8);font-size:calc(var(--u)*2.6)}
 .m-protect{position:fixed;left:50%;transform:translateX(-50%);top:calc(var(--u)*19);padding:calc(var(--u)*.8) calc(var(--u)*2.4);border-radius:99px;background:rgba(40,120,200,.85);border:calc(var(--u)*.3) solid #fff;font-size:calc(var(--u)*3);display:none;white-space:nowrap}
 .m-protect.on{display:block}
-.m-gear,.m-shop{top:calc(var(--u)*9);width:calc(var(--u)*8.5);height:calc(var(--u)*8.5)}
-.m-gear{left:calc(50% - var(--u)*9.5)}
-.m-shop{left:calc(50% + var(--u)*1)}
-.m-shop{background:rgba(120,90,20,.85)}
+.m-gear{top:calc(var(--u)*9);width:calc(var(--u)*8.5);height:calc(var(--u)*8.5);left:calc(50% - var(--u)*4.25)}
 .m-mic .ico{width:46%;height:46%}
 .m-mic.talk{background:rgba(220,60,50,.88);animation:micpulse 1.2s ease-in-out infinite}
 .m-mic.deaf{background:rgba(90,90,90,.85)}
@@ -446,9 +442,8 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   // Chat e placar
   const chat = make('m-chat m-out', hud);
   const score = make('m-score m-out', hud);
-  // Engrenagem (pausa) e loja
+  // Engrenagem (pausa; a loja é uma aba do menu)
   holdButton(circle(hud, 'm-gear small', ICON.gear, null), opts.onPause);
-  holdButton(circle(hud, 'm-shop small', ICON.shop, null), opts.onShop);
 
   // Voz por proximidade: o botão liga o microfone (1º toque) e depois alterna falar/mudo; T faz o mesmo no PC
   const micBtn = circle(hud, 'm-chatbtn m-mic small', ICON.mic, 'Voz');
