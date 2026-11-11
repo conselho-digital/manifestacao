@@ -16,7 +16,7 @@ type Kind3 = 'rifle' | 'pistol' | 'bat';
 const kindOf = (a: Armed): Kind3 | null => (a === 'rifle' || a === 'aim' ? 'rifle' : a === 'pistol' || a === 'pistol_aim' ? 'pistol' : a === 'bat' || a === 'sign' ? 'bat' : null);
 
 /** Clipes que tocam uma vez e param no último quadro. */
-const ONCE = new Set(['kick_1', 'kick_2', 'hitk_1', 'hitk_2', 'hit_1', 'hit_2', 'hit_3', 'block', 'punch_1', 'punch_2', 'punch_3', 'punch_4', 'bat_swing', 'bat_swing2', 'jump_launch', 'jump_land', 'climb_jump', 'climb_pull', 'climb_stand', 'roll', 'dive']);
+const ONCE = new Set(['kick_1', 'kick_2', 'hitk_1', 'hitk_2', 'hit_1', 'hit_2', 'hit_3', 'block', 'punch_1', 'punch_2', 'punch_3', 'punch_4', 'bat_swing', 'bat_swing2', 'car_getin_l', 'car_getout_l', 'jump_launch', 'jump_land', 'climb_jump', 'climb_pull', 'climb_stand', 'roll', 'dive']);
 export const isOnceClip = (name: string): boolean => ONCE.has(name);
 
 /** Clipes em que o personagem não segura o fuzil (escalar, rolar, mergulhar, emotes). */
@@ -26,7 +26,7 @@ const FREE_HANDS = (name: string): boolean => name.startsWith('climb_') || name 
 const OWN_HOLD = (name: string): boolean => name.startsWith('gun_') || name.startsWith('crouch_') || name === 'run_armed' || name === 'walk_armed';
 
 /** Velocidade de reprodução (1 = original). Os clipes de arma andam um pouco mais rápido que o jogo. */
-const TIME_SCALE: Record<string, number> = { ko: 1.8, getup: 1.8, car_getin_l: 1, car_getout_l: 1, hit_3: 2, punch_1: 1.7, punch_2: 1.6, punch_3: 1.6, punch_4: 1.6, bat_swing: 1.3, bat_swing2: 1.5, gun_fwd: 1.2, gun_bwd: 1.2, gun_left: 1.2, gun_right: 1.2, crouch_fwd: 0.8, crouch_bwd: 0.8 };
+const TIME_SCALE: Record<string, number> = { ko: 1.8, getup: 1.8, car_getin_l: 0.62, car_getout_l: 0.62, hit_3: 2, punch_1: 1.7, punch_2: 1.6, punch_3: 1.6, punch_4: 1.6, bat_swing: 1.3, bat_swing2: 1.5, gun_fwd: 1.2, gun_bwd: 1.2, gun_left: 1.2, gun_right: 1.2, crouch_fwd: 0.8, crouch_bwd: 0.8 };
 
 /** Animações disponíveis no menu. */
 export const EMOTES: { id: string; label: string }[] = [
@@ -111,7 +111,8 @@ interface Leg { thigh: THREE.Bone; calf: THREE.Bone; foot: THREE.Bone }
 interface Spine { mid: THREE.Bone; chest: THREE.Bone; neck: THREE.Bone; head: THREE.Bone }
 
 interface PoseCfg { pos: THREE.Vector3; pitch: number; yaw: number }
-interface WeaponCfg { low: PoseCfg; aim: PoseCfg; gripR: THREE.Vector3; gripL: THREE.Vector3 }
+/** crouchLow/crouchAim: deslocamento extra (espaço do peito) quando agachado, para a arma não ir parar entre os joelhos */
+interface WeaponCfg { low: PoseCfg; aim: PoseCfg; gripR: THREE.Vector3; gripL: THREE.Vector3; crouchLow: THREE.Vector3; crouchAim: THREE.Vector3 }
 const P3 = (x: number, y: number, z: number): THREE.Vector3 => new THREE.Vector3(x, y, z);
 /**
  * Poses das armas no espaço do personagem em repouso (x+ = esquerda, y+ = cima, z+ = frente).
@@ -125,12 +126,16 @@ const CFG: Record<'rifle' | 'pistol', WeaponCfg> = {
     aim: { pos: P3(-0.12, 1.42, 0.2), pitch: 0, yaw: -0.05 },
     gripR: P3(0, -0.055, 0.17), // empunhadura (coronha→cano: a arma tem 0,88 m e começa em z=-0,14)
     gripL: P3(0, -0.02, 0.5), // guarda-mão de madeira
+    crouchLow: P3(0, 0.08, -0.04),
+    crouchAim: P3(0, -0.04, 0),
   },
   pistol: {
     low: { pos: P3(-0.2, 1.02, 0.3), pitch: 0.5, yaw: 0 },
     aim: { pos: P3(-0.07, 1.57, 0.5), pitch: 0, yaw: -0.02 },
     gripR: P3(0, -0.07, -0.03),
     gripL: P3(0.025, -0.075, -0.02),
+    crouchLow: P3(0, 0.1, 0),
+    crouchAim: P3(0, -0.16, -0.08),
   },
 };
 
@@ -154,6 +159,7 @@ export class Animator {
   private footRest = 0; // altura do pé mais baixo em repouso (espaço do modelo)
   private groundDrop = 0; // quanto o corpo desce para o pé tocar o chão
   private crouchK = 0; // 0 em pé, 1 agachado (tronco desce)
+  private crouchW = 0; // 0 em pé, 1 em qualquer clipe agachado (a arma não acompanha a curvatura do tronco)
   private armed: Armed = 'none';
   private aimPitch = 0;
   private weapon: THREE.Object3D | null = null;
@@ -199,6 +205,11 @@ export class Animator {
   }
 
   get name(): string { return this.clipName; }
+  /** Quanto do clipe atual já tocou (0..1, em tempo real, contando o timeScale). */
+  get progress(): number {
+    if (!this.current) return 0;
+    return THREE.MathUtils.clamp(this.current.time / this.current.getClip().duration, 0, 1);
+  }
   /** O fuzil está nas mãos (armado e não escalando, rolando ou em emote)? */
   get holdsWeapon(): boolean { return this.armed !== 'none' && !FREE_HANDS(this.clipName); }
   /** true quando um clipe "uma vez" terminou */
@@ -432,6 +443,7 @@ export class Animator {
     // agachado parado: tronco desce; andando agachado o clipe já inclina o corpo, então só um pouco
     const crouchT = this.clipName === 'crouch_idle' ? 1 : this.clipName.startsWith('crouch_') ? 0.2 : 0;
     this.crouchK += (crouchT - this.crouchK) * Math.min(1, dt * 8);
+    this.crouchW += ((this.clipName.startsWith('crouch_') ? 1 : 0) - this.crouchW) * Math.min(1, dt * 8);
     this.legK += ((this.clipName === 'crouch_fwd' || this.clipName === 'crouch_bwd' ? 1 : 0) - this.legK) * Math.min(1, dt * 8);
     let jabW = 0;
     let jabE = 0;
@@ -684,7 +696,14 @@ export class Animator {
     const delta = chestQ.multiply(this.chestRest.q.clone().invert()); // só o movimento do peito
     const k = this.aimK;
     const cfg = CFG[kindOf(this.armed) === 'pistol' ? 'pistol' : 'rifle'];
-    const pos = cfg.low.pos.clone().lerp(cfg.aim.pos, k).sub(this.chestRest.pos).applyQuaternion(delta).add(chestPos);
+    // só o giro do peito para os lados (sem a curvatura): agachado ou mirando, a arma fica à frente do peito em vez de descer com o tronco
+    const fwd = new THREE.Vector3(0, 0, 1).applyQuaternion(delta);
+    const flat = new THREE.Quaternion().setFromAxisAngle(Y, Math.atan2(fwd.x, fwd.z));
+    const aimRot = flat.clone().multiply(new THREE.Quaternion().setFromAxisAngle(X, 0.32 * THREE.MathUtils.clamp(this.aimPitch, -1.1, 1.1)));
+    const lowRot = delta.clone().slerp(flat, this.crouchW);
+    const rot = lowRot.slerp(aimRot, k);
+    const off = cfg.crouchLow.clone().lerp(cfg.crouchAim, k).multiplyScalar(this.crouchW);
+    const pos = cfg.low.pos.clone().lerp(cfg.aim.pos, k).sub(this.chestRest.pos).add(off).applyQuaternion(rot).add(chestPos);
     const pitch = THREE.MathUtils.lerp(cfg.low.pitch + this.aimPitch * 0.5, this.aimPitch, k) - 0.05 * this.recoil;
     const yaw = THREE.MathUtils.lerp(cfg.low.yaw, cfg.aim.yaw, k);
     const q = new THREE.Quaternion().setFromAxisAngle(Y, yaw).multiply(new THREE.Quaternion().setFromAxisAngle(X, pitch));

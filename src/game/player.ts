@@ -22,7 +22,28 @@ const SPECIAL: Record<string, { dur: number; speed: number }> = {
   dive: { dur: 1.5, speed: 3 },
 };
 
-type Mode = 'ground' | 'air' | 'climb' | 'special' | 'drive' | 'dead' | 'enter' | 'exit' | 'ko';
+type Mode = 'ground' | 'air' | 'climb' | 'special' | 'drive' | 'dead' | 'approach' | 'enter' | 'exit' | 'ko';
+
+/** Entrar/sair do veículo: duração da sequência (o clipe car_getin_l é esticado para isso) e lado onde o personagem fica. */
+export const SEQ_DUR = 1.5;
+const DOOR_SIDE = { car: 1.6, bike: 0.95 }; // distância do centro do veículo (lado do motorista, +x do modelo)
+
+/**
+ * Posição do modelo durante a sequência de entrar/sair (u = 0..1 do tempo): deslocamento no espaço do veículo
+ * (x para a esquerda, y da pélvis, z para a frente) e giro do modelo (de frente para a porta -> de frente para a rua).
+ */
+export function seatBlend(car: Car, u: number, entering: boolean): { x: number; y: number; z: number; turn: number } {
+  const k = THREE.MathUtils.clamp((u - 0.2) / 0.6, 0, 1);
+  const f = entering ? k * k * (3 - 2 * k) : 1 - k * k * (3 - 2 * k); // 1 = sentado
+  const seat = car.seat ?? new THREE.Vector3(0.48, 0.7, -0.2);
+  const out = { x: car.bike ? DOOR_SIDE.bike : DOOR_SIDE.car, y: 0, z: seat.z - (car.bike ? 0 : 0.1) };
+  return {
+    x: THREE.MathUtils.lerp(out.x, seat.x, f),
+    y: THREE.MathUtils.lerp(out.y, seat.y - 0.97, f),
+    z: THREE.MathUtils.lerp(out.z, seat.z, f),
+    turn: -(Math.PI / 2) * (1 - f),
+  };
+}
 
 interface Climb {
   t: number;
@@ -48,6 +69,7 @@ export class Player {
   private crouching = false;
   private swingT = 0;
   private seqT = 0; // entrando/saindo do carro
+  private approachT = 0; // caminhando até a porta
   private koVel = new THREE.Vector2();
   private koT = 0;
   private koCool = 0;
@@ -178,6 +200,7 @@ export class Player {
     this.weaponVis?.update(dt);
 
     if (this.mode === 'dead') { this.finish(dt); return; }
+    if (this.mode === 'approach') { this.updateApproach(dt); return; }
     if (this.mode === 'enter' || this.mode === 'exit') { this.updateSeq(dt); return; }
     if (this.mode === 'ko') { this.updateKo(dt); return; }
     if (this.mode === 'drive' && this.car) { this.updateDrive(dt, input); return; }
@@ -314,29 +337,56 @@ export class Player {
     if (!best) return false;
     best.driver = 'local';
     this.car = best;
-    this.mode = 'drive';
     this.emote = null;
     this.vy = 0;
     this.object.visible = true; // o motorista aparece sentado (carro ou moto)
     this.crouching = false;
     this.weaponVis?.setHidden(true);
-    if (!best.bike) {
-      // carro: caminha até a porta do motorista, abre e entra
-      best.openDoor(1.25);
+    // caminha até a porta do motorista (ou o lado da moto); chegando lá, abre e entra
+    this.mode = 'approach';
+    this.approachT = 0;
+    return true;
+  }
+
+  /** Ponto ao lado do motorista (lado esquerdo do veículo), no chão. */
+  private doorPoint(car: Car): THREE.Vector2 {
+    const side = car.bike ? DOOR_SIDE.bike : DOOR_SIDE.car;
+    const z = (car.seat?.z ?? -0.2) - (car.bike ? 0 : 0.1);
+    // +x do modelo é a esquerda do veículo; z do assento ao longo do comprimento
+    const lx = Math.cos(car.heading);
+    const lz = -Math.sin(car.heading);
+    const fx = Math.sin(car.heading);
+    const fz = Math.cos(car.heading);
+    return new THREE.Vector2(car.x + lx * side + fx * z, car.z + lz * side + fz * z);
+  }
+
+  /** Caminha até a porta; ao chegar (ou depois de 1,6 s) começa a sequência de entrar. */
+  private updateApproach(dt: number): void {
+    const car = this.car!;
+    const pos = this.object.position;
+    const target = this.doorPoint(car);
+    const dx = target.x - pos.x;
+    const dz = target.y - pos.z;
+    const dist = Math.hypot(dx, dz);
+    this.approachT += dt;
+    if (dist < 0.12 || this.approachT > 1.6) {
+      car.openDoor(SEQ_DUR + 0.4);
       this.mode = 'enter';
       this.seqT = 0;
-      this.object.position.set(best.x, 0, best.z);
-      this.object.rotation.y = best.heading;
-    } else best.openDoor(1);
-    return true;
+      return;
+    }
+    const step = Math.min(dist, WALK_SPEED * dt);
+    this.moveHoriz((dx / dist) * step, (dz / dist) * step);
+    this.heading = Math.atan2(dx, dz);
+    this.animator?.play('walk');
+    this.finish(dt);
   }
 
   private updateDrive(dt: number, input: InputState): void {
     const car = this.car!;
     if (input.interact) {
-      if (car.bike) { this.exitCar(); return; }
       car.speed = 0;
-      car.openDoor(1.25);
+      car.openDoor(SEQ_DUR + 0.4);
       this.mode = 'exit';
       this.seqT = 0;
       return;
@@ -368,30 +418,23 @@ export class Player {
     if (model && this.modelRot0 !== null) model.rotation.y = this.modelRot0;
   }
 
-  /** Entrando/saindo do carro: o personagem anda até o banco (ou sai) com a porta aberta. */
+  /** Entrando/saindo do veículo: o personagem passa da porta (ou do lado da moto) para o banco, ou o contrário. */
   private updateSeq(dt: number): void {
     const car = this.car!;
-    const dur = 0.95;
+    const dur = SEQ_DUR;
     this.seqT = Math.min(dur, this.seqT + dt);
     const entering = this.mode === 'enter';
-    const u = this.seqT / dur;
-    const k = THREE.MathUtils.clamp((u - 0.2) / 0.6, 0, 1);
-    const f = entering ? k * k * (3 - 2 * k) : 1 - k * k * (3 - 2 * k); // 1 = sentado
-    const seat = car.seat ?? new THREE.Vector3(0.48, 0.7, -0.2);
-    const out = { x: 1.6, y: 0, z: seat.z - 0.1 };
+    const b = seatBlend(car, this.seqT / dur, entering);
     this.object.position.set(car.x, 0, car.z);
-    this.object.rotation.y = car.heading;
+    this.object.rotation.order = 'XYZ';
+    this.object.rotation.set(0, car.heading, 0);
     this.heading = car.heading;
     const model = this.object.children[0];
     if (model) {
       this.modelRot0 ??= model.rotation.y;
-      model.rotation.y = this.modelRot0 - (Math.PI / 2) * (1 - f); // de frente para a porta até de frente para a rua
+      model.rotation.y = this.modelRot0 + b.turn; // de frente para a porta até de frente para a rua
     }
-    this.animator?.setRideRaw({
-      x: THREE.MathUtils.lerp(out.x, seat.x, f),
-      y: THREE.MathUtils.lerp(out.y, seat.y - 0.97, f),
-      z: THREE.MathUtils.lerp(out.z, seat.z, f),
-    });
+    this.animator?.setRideRaw(b);
     this.animator?.setArmed('none');
     this.animator?.play(entering ? 'car_getin_l' : 'car_getout_l');
     this.animator?.update(dt);
@@ -446,9 +489,10 @@ export class Player {
     // Sai pelo lado do motorista (esquerdo)
     const rx = Math.cos(car.heading);
     const rz = -Math.sin(car.heading);
+    const side = (car.bike ? DOOR_SIDE.bike : DOOR_SIDE.car) + 0.3;
     this.object.position.set(
-      THREE.MathUtils.clamp(car.x + rx * 1.9, -(MAP.halfX - 1), MAP.halfX - 1), 0,
-      THREE.MathUtils.clamp(car.z + rz * 1.9, -(MAP.halfZ - 1), MAP.halfZ - 1),
+      THREE.MathUtils.clamp(car.x + rx * side, -(MAP.halfX - 1), MAP.halfX - 1), 0,
+      THREE.MathUtils.clamp(car.z + rz * side, -(MAP.halfZ - 1), MAP.halfZ - 1),
     );
     this.resetModelRot();
     car.driver = null;

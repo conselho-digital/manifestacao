@@ -3,6 +3,7 @@ import { createCharacter } from './characters';
 import { ARMED_FROM_CODE, Animator } from './anim';
 import { CARS, type Car } from './vehicle';
 import { WeaponVisual } from './weapons';
+import { seatBlend } from './player';
 import type { MoveMsg, PlayerInfo } from '../net/sync';
 
 function makeLabel(text: string): THREE.Sprite {
@@ -46,6 +47,7 @@ export class RemotePlayer {
   private pitch = 0;
   private lie = 0;
   private modelBaseY: number | null = null;
+  private modelRot0: number | null = null;
 
   constructor(readonly info: PlayerInfo) {
     this.root.add(makeLabel(info.name));
@@ -106,7 +108,17 @@ export class RemotePlayer {
       this.animator.update(dt);
     }
     if (this.animator && !car) {
-      this.animator.setRide(null);
+      // entrando/saindo de um veículo: o boneco vai da porta ao banco como no jogador local (o clipe dá o tempo)
+      const seq = this.anim === 'car_getin_l' || this.anim === 'car_getout_l' ? this.nearestCar(1.5) : null;
+      if (seq && this.model) {
+        this.modelRot0 ??= this.model.rotation.y;
+        const b = seatBlend(seq, this.animator.name === this.anim ? this.animator.progress : 0, this.anim === 'car_getin_l');
+        this.animator.setRideRaw(b);
+        this.model.rotation.y = this.modelRot0 + b.turn;
+      } else {
+        this.animator.setRide(null);
+        if (this.modelRot0 !== null && this.model) { this.model.rotation.y = this.modelRot0; this.modelRot0 = null; }
+      }
       this.animator.setArmed(ARMED_FROM_CODE[this.weapon] ?? 'none');
       this.animator.setAimPitch(this.pitch);
       this.animator.play(dead ? 'idle' : this.anim);
@@ -130,6 +142,16 @@ export class RemotePlayer {
     let d = this.targetRy - this.root.rotation.y;
     d = Math.atan2(Math.sin(d), Math.cos(d));
     this.root.rotation.y += d * k;
+  }
+
+  /** Veículo mais próximo (até `r` m) do ponto onde este jogador está. */
+  private nearestCar(r: number): Car | null {
+    let best: Car | null = null;
+    for (const c of CARS) {
+      const d = Math.hypot(c.x - this.root.position.x, c.z - this.root.position.z);
+      if (d < r) { best = c; r = d; }
+    }
+    return best;
   }
 
   get isDead(): boolean { return this.anim === 'dead'; }
