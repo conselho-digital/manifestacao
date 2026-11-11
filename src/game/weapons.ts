@@ -39,9 +39,39 @@ export const EXTRA_MELEE: Record<ExtraMelee, { file: string; grip: number; scale
 const extraSrc = new Map<ExtraMelee, Promise<THREE.Object3D>>();
 export const loadExtra = (k: ExtraMelee): Promise<THREE.Object3D> => {
   let p = extraSrc.get(k);
-  if (!p) { p = loader.loadAsync(`/models/weapons/${EXTRA_MELEE[k].file}`).then((g) => g.scene); extraSrc.set(k, p); }
+  if (!p) { p = loader.loadAsync(`/models/weapons/${EXTRA_MELEE[k].file}`).then((g) => { tintExtra(k, g.scene); return g.scene; }); extraSrc.set(k, p); }
   return p;
 };
+
+/** Garrafa, cano e machado vêm sem textura (brancos): pinta vidro verde, aço cinza e cabo de madeira com cabeça de aço. */
+function tintExtra(k: ExtraMelee, root: THREE.Object3D): void {
+  const mats = (m: THREE.Mesh): THREE.MeshStandardMaterial[] => (Array.isArray(m.material) ? m.material : [m.material]) as THREE.MeshStandardMaterial[];
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    if (k === 'bottle') {
+      const glass = [0x2f7d46, 0x4aa266, 0x255f36];
+      mats(m).forEach((x, i) => { x.color.setHex(glass[i % glass.length]!); x.roughness = 0.25; x.metalness = 0.1; });
+    } else if (k === 'pipe') {
+      mats(m).forEach((x) => { x.color.setHex(0x7d8389); x.metalness = 0.6; x.roughness = 0.4; });
+    } else if (k === 'axe') {
+      // vertex colors: o cabo (parte de baixo) de madeira e a cabeça (parte de cima) de aço
+      const geo = m.geometry;
+      geo.computeBoundingBox();
+      const bb = geo.boundingBox!;
+      const pos = geo.getAttribute('position');
+      const col = new Float32Array(pos.count * 3);
+      const wood = new THREE.Color(0x8b5a2b);
+      const steel = new THREE.Color(0xaab0b7);
+      for (let i = 0; i < pos.count; i++) {
+        const t = (pos.getY(i) - bb.min.y) / Math.max(1e-6, bb.max.y - bb.min.y);
+        (t > 0.72 ? steel : wood).toArray(col, i * 3);
+      }
+      geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+      mats(m).forEach((x) => { x.vertexColors = true; x.color.setHex(0xffffff); x.needsUpdate = true; });
+    }
+  });
+}
 
 let signSrc: Promise<THREE.Object3D> | null = null;
 export const loadSign = (): Promise<THREE.Object3D> => (signSrc ??= loader.loadAsync('/models/weapons/traffic-sign.glb').then((g) => g.scene));

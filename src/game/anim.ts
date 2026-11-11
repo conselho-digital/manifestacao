@@ -158,6 +158,7 @@ export class Animator {
   /** giro do antebraço e da mão em torno do próprio eixo (rad): palma para dentro ao segurar */
   armRoll = 0;
   private armW = 0; // 0 = braços do clipe, 1 = braços segurando o fuzil
+  private carryW = 0; // 1 = arma branca carregada em pé (andando/correndo): braços por IK, arma para cima
   private aimK = 0; // 0 = fuzil baixo, 1 = fuzil no ombro
   private jabT = -1; // soco em andamento (0..1), -1 = nenhum
   private recoil = 0; // coice do último tiro (1 -> 0)
@@ -514,6 +515,9 @@ export class Animator {
     const kickT = this.clipName === 'kick_1' && this.current ? this.current.time / this.current.getClip().duration : -1;
     const kickW = kickT >= 0 ? Math.max(0, Math.sin(Math.PI * THREE.MathUtils.clamp((kickT - 0.3) / 0.45, 0, 1))) : 0;
     if (kind === 'bat' && holding) this.poseBat();
+    // andando/correndo com arma branca o clipe balança os braços e a arma apontaria para o chão (muleta): carrega para cima
+    const carry = kind === 'bat' && holding && !this.clipName.startsWith('bat_') && !fist;
+    this.carryW = carry ? this.carryW + (1 - this.carryW) * Math.min(1, dt * 10) : 0;
     const flail = this.flailW;
     if (flail > 0) this.flailT += dt;
     if ((!armed && !holding && !fist && kickW === 0 && flail === 0 && this.crouchK < 0.01 && this.legK < 0.01 && jabW === 0) || !this.spine) {
@@ -533,6 +537,7 @@ export class Animator {
     this.updateRoot();
     this.groundFeet(dt);
     if (!armed && !holding) return;
+    if (kind === 'bat' && this.carryW > 0.01) this.carryBat(dt);
     this.updateRoot();
     const frame = this.weaponFrame();
     if (this.weapon) {
@@ -692,6 +697,26 @@ export class Animator {
     const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, axis));
     this.bat.quaternion.copy(q);
     if (this.clipName === 'bat_idle' && axis.length() > 0 && hl.distanceTo(hr) > 0.22) this.batLocal = handQ.clone().invert().multiply(q);
+  }
+
+  /** Arma branca carregada para cima: mão direita na frente do peito, esquerda mais acima no cabo, arma inclinada para a frente. */
+  private carryBat(dt: number): void {
+    const right = this.arms.find((a) => a.side < 0);
+    const left = this.arms.find((a) => a.side > 0);
+    if (!this.bat || !right || !left) return;
+    const w = this.carryW;
+    const dir = P3(-0.12, 0.9, 0.42).normalize();
+    const hr = P3(-0.27, 1.12, 0.3);
+    this.solveArm(right, hr, w, dt);
+    this.solveArm(left, hr.clone().addScaledVector(dir, 0.22), w, dt);
+    this.updateRoot();
+    const hand = this.posIn(right.h, new THREE.Vector3());
+    const elbow = this.posIn(right.f, new THREE.Vector3());
+    this.bat.position.copy(hand.addScaledVector(hand.clone().sub(elbow).normalize(), PALM));
+    const xAxis = new THREE.Vector3().crossVectors(Y, dir).normalize();
+    const yAxis = new THREE.Vector3().crossVectors(dir, xAxis);
+    const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, dir));
+    this.bat.quaternion.slerp(q, w);
   }
 
   /** Fecha a mão em torno do cabo (w: 0 aberta, 1 fechada). Os dedos dobram no eixo local Z do osso. */

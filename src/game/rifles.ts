@@ -22,7 +22,7 @@ interface Spec {
 // AK-47: valores já calibrados na mão (ver CFG em anim.ts); o resto foi medido nos modelos com dev/gun-grid.html
 const SPECS: Record<Exclude<RifleKind, 'ak'>, Spec> = {
   m4: { file: 'm4a1.glb', minX: -0.2889, maxX: 0.7019, minY: -0.1201, maxY: 0.207, len: 0.88, tipX: 0.7019, axisY: 0.13, gripR: [0.0746, -0.021], gripL: [0.405, 0.073] },
-  m16: { file: 'm16.glb', minX: -0.2466, maxX: 0.7434, minY: -0.089, maxY: 0.1599, len: 0.88, tipX: 0.7434, axisY: 0.116, gripR: [0.059, -0.014], gripL: [0.382, 0.058] },
+  m16: { file: 'm16-new.glb', minX: -0.2466, maxX: 0.7434, minY: -0.089, maxY: 0.1599, len: 0.88, tipX: 0.7434, axisY: 0.116, gripR: [0.059, -0.014], gripL: [0.382, 0.058] },
   hb: { file: 'honey-badger.glb', minX: -0.1858, maxX: 0.5837, minY: -0.1224, maxY: 0.226, len: 0.8, tipX: 0.5837, axisY: 0.174, gripR: [0.0625, 0.0194], gripL: [0.371, 0.121] },
 };
 

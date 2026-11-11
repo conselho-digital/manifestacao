@@ -60,8 +60,8 @@ const CSS = `
 .ps-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(168px,1fr));gap:12px}
 .ps-card{display:flex;flex-direction:column;gap:6px;padding:10px;border:2px solid #3b4358;border-radius:14px;background:#141926;text-align:left;color:#fff}
 .ps-card.sel{border-color:#4cc2ff;background:#25415a}
-.ps-card .pic{height:70px;display:flex;align-items:center;justify-content:center;background:#2f6b2f;border-radius:10px;padding:6px}
-.ps-card .pic img{max-width:100%;max-height:100%;object-fit:contain}
+.ps-card .pic{height:108px;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 40%,#3f8a3f,#2a5a2a);border-radius:10px;padding:8px}
+.ps-card .pic img{max-width:100%;max-height:100%;object-fit:contain;filter:drop-shadow(0 3px 4px rgba(0,0,0,.45))}
 .ps-card .pic svg{width:46px;height:46px;fill:#fff}
 .ps-card b{font-size:15px}
 .ps-card small{font-size:12px;opacity:.75;line-height:1.3}
