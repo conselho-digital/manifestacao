@@ -9,8 +9,8 @@ type Kind = 'gta' | 'carlos';
 export type Armed = 'none' | 'rifle' | 'aim' | 'pistol' | 'pistol_aim' | 'bat' | 'sign';
 export const ARMED_CODE: Record<Armed, number> = { none: 0, rifle: 1, aim: 2, bat: 3, pistol: 4, pistol_aim: 5, sign: 6 };
 export const ARMED_FROM_CODE: Armed[] = ['none', 'rifle', 'aim', 'bat', 'pistol', 'pistol_aim', 'sign'];
-/** O corpo olha para onde a câmera mira (fuzil, ou pistola levantada). */
-export const facesAim = (a: Armed): boolean => a === 'rifle' || a === 'aim' || a === 'pistol_aim';
+/** O corpo gira para onde a câmera mira só ao mirar ou atirar (arma levantada). Com a arma baixa a câmera olha livre e o corpo segue o movimento. */
+export const facesAim = (a: Armed): boolean => a === 'aim' || a === 'pistol_aim';
 const isAimPose = (a: Armed): boolean => a === 'aim' || a === 'pistol_aim';
 type Kind3 = 'rifle' | 'pistol' | 'bat';
 const kindOf = (a: Armed): Kind3 | null => (a === 'rifle' || a === 'aim' ? 'rifle' : a === 'pistol' || a === 'pistol_aim' ? 'pistol' : a === 'bat' || a === 'sign' ? 'bat' : null);
