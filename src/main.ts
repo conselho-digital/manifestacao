@@ -8,12 +8,14 @@ import { showLobby } from './ui/lobby';
 import { createHud } from './ui/touch';
 import type { MobileHud } from './ui/mobile';
 import { Animator } from './game/anim';
-import { cleanChat, Net } from './net/sync';
+import { Net } from './net/sync';
+import { Voice } from './net/voice';
 import { RemotePlayer } from './game/remote';
 import { CARS, createCars, updateEngines, updateTraffic } from './game/vehicle';
 import { Combat } from './game/combat';
 import { WeaponVisual } from './game/weapons';
 import { warmUp } from './game/preload';
+import { setListener } from './game/audio';
 
 const renderer = createRenderer();
 const scene = createScene();
@@ -38,6 +40,30 @@ const PITCH_MAX = 1.2; // quase vista de cima
 let pitch = PITCH_DEFAULT;
 let aimK = 0;
 
+// Menu: a cidade inteira vista de cima, girando devagar (sem neblina); ao entrar no jogo volta o normal
+const menuFog = scene.fog;
+let menuT = 0;
+if (!aerial) scene.fog = null;
+function menuCamera(dt: number): void {
+  menuT += dt;
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const aspect = w / h;
+  camera.aspect = aspect;
+  const ang = menuT * 0.05; // uma volta em ~2 min
+  const dist = aspect < 1 ? 300 : 205; // cabe a cidade (220 x 168 m) inteira
+  const elev = 1.2; // ~70° de cima: dá para ver as ruas e a avenida
+  camera.position.set(Math.sin(ang) * dist * 0.4, dist * Math.sin(elev), Math.cos(ang) * dist * 0.4);
+  camera.lookAt(0, 0, 0);
+  // em tela larga o cartão do menu fica à esquerda: a cidade desloca para a direita
+  if (aspect > 1.3) camera.setViewOffset(w, h, -w * 0.18, 0, w, h);
+  else camera.clearViewOffset();
+  camera.updateProjectionMatrix();
+  const sun = scene.userData.sun as THREE.DirectionalLight;
+  sun.position.set(40, 80, 30);
+  sun.target.position.set(0, 0, 0);
+}
+
 // No menu: pré-carrega e aquece o mapa, os veículos e as armas para o jogo não engasgar
 void warmUp(renderer, scene, camera);
 
@@ -48,16 +74,23 @@ let combat: Combat | null = null;
 const BASE_FOV = camera.fov;
 const net = new Net();
 const remotes = new Map<string, RemotePlayer>();
+if (import.meta.env.DEV) (window as unknown as { __net: Net }).__net = net;
 let profileName = 'Jogador';
+// Voz por proximidade (WebRTC): sinalização pelo canal do Supabase; só liga depois do primeiro toque no botão do microfone
+const voice = new Voice(net.id, (to, k, d) => net.sendRtc(to, k, d), (state, peers) => {
+  hud?.setVoice(state, peers);
+  if (state === 'denied') hud?.addChat('Sistema: microfone bloqueado. Libere nas permissões do navegador; você ainda ouve quem está perto.');
+});
 let lastInput: InputState | null = null;
+if (import.meta.env.DEV) (window as unknown as { __voice: () => Voice }).__voice = () => voice;
 
 void showLobby().then(async (profile) => {
   profileName = profile.name;
-  hud = createHud((text) => {
-    net.sendChat(text);
-    const t = cleanChat(text);
-    if (t) hud?.addChat(`${profileName}: ${t}`);
-  });
+  scene.fog = menuFog;
+  camera.clearViewOffset();
+  camera.fov = BASE_FOV;
+  camera.updateProjectionMatrix();
+  hud = createHud(() => { void voice.toggle(); });
   hud.addChat(`Sistema: bem-vindo, ${profile.name}!`);
   const obj = await createCharacter(profile.character);
   // Ponto de partida (?pos=x,z serve para inspecionar o mapa)
@@ -81,6 +114,7 @@ void showLobby().then(async (profile) => {
         if (who) hud?.addChat(`${who}: saiu da arena`);
         remotes.get(id)?.dispose();
         remotes.delete(id);
+        voice.leave(id);
       },
       onMove: (m) => remotes.get(m.id)?.setTarget(m),
       onShot: (m) => combat?.onShot(m),
@@ -89,6 +123,7 @@ void showLobby().then(async (profile) => {
         const who = remotes.get(m.id)?.info.name;
         if (who) hud?.addChat(`${who}: ${m.t}`);
       },
+      onRtc: (m) => void voice.onSignal(m),
     });
   } catch (e) {
     console.warn('Multiplayer indisponível, jogando offline:', e);
@@ -97,6 +132,7 @@ void showLobby().then(async (profile) => {
 
 function loop(): void {
   const dt = Math.min(clock.getDelta(), 0.05);
+  if (!player) menuCamera(dt);
   if (player && combat) {
     const look = takeLook();
     yaw -= look.dx * 0.006;
@@ -113,6 +149,7 @@ function loop(): void {
     player.update(dt, input, yaw);
     aimK += ((input.aim && combat.isGun && !player.isDriving ? 1 : 0) - aimK) * Math.min(1, dt * 9);
     player.followCamera(camera, dt, yaw + camOffset, pitch, aimK);
+    setListener(player.object.position.x, player.object.position.z, yaw + camOffset); // ouve do personagem, vira com a câmera
     player.setAimPitch(pitch);
     if (aerial) {
       camera.position.set(0, 150, -200);
@@ -160,8 +197,13 @@ function loop(): void {
   if (player) blockers.push([player.object.position.x, player.object.position.z]);
   remotes.forEach((r) => blockers.push([r.root.position.x, r.root.position.z]));
   updateTraffic(dt, blockers);
-  if (player) updateEngines(dt, player.object.position.x, player.object.position.z);
+  if (player) updateEngines(dt);
   remotes.forEach((r) => r.update(dt));
+  if (player) {
+    const others = new Map<string, { x: number; z: number }>();
+    remotes.forEach((r, id) => others.set(id, { x: r.root.position.x, z: r.root.position.z }));
+    voice.update(dt, { x: player.object.position.x, z: player.object.position.z }, others);
+  }
   renderer.render(scene, camera);
   requestAnimationFrame(loop);
 }

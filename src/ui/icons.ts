@@ -27,5 +27,7 @@ export const ICON = {
   brake: svg('<path fill-rule="evenodd" d="M5 5h14a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2zm2 3v1.5h10V8H7zm0 3.2v1.5h10v-1.5H7zm0 3.2v1.3h10v-1.3H7z"/><path d="M8 20h8v2H8z"/>'),
   /** freio de mão: o símbolo (P) do painel */
   handbrake: svg('<circle cx="12" cy="12" r="5.2" fill="none" stroke="#fff" stroke-width="2"/><path d="M5.2 7a7.6 7.6 0 0 0 0 10M18.8 7a7.6 7.6 0 0 1 0 10" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round"/><text x="12" y="15.4" text-anchor="middle" font-family="Arial" font-weight="800" font-size="9" fill="#fff">P</text>'),
+  mic: svg('<path d="M12 14a3.5 3.5 0 0 0 3.5-3.5v-6a3.5 3.5 0 0 0-7 0v6A3.5 3.5 0 0 0 12 14z"/><path d="M18 10.5a6 6 0 0 1-12 0H4.5a7.5 7.5 0 0 0 6.75 7.46V21h1.5v-3.04A7.5 7.5 0 0 0 19.5 10.5z"/>'),
+  micOff: svg('<path d="M12 14a3.5 3.5 0 0 0 3.5-3.5v-6a3.5 3.5 0 0 0-7 0v6A3.5 3.5 0 0 0 12 14z"/><path d="M18 10.5a6 6 0 0 1-12 0H4.5a7.5 7.5 0 0 0 6.75 7.46V21h1.5v-3.04A7.5 7.5 0 0 0 19.5 10.5z"/><path d="M3 3.5L20.5 21" stroke="#ff6b5b" stroke-width="2.4" stroke-linecap="round" fill="none"/>'),
   anim: svg('<path d="M12 2a2.2 2.2 0 1 1 0 4.4A2.2 2.2 0 0 1 12 2zM9 8h6l1 5-2 .5V22h-2v-6h-2v6H8v-8.5L6 13z"/>'),
 };

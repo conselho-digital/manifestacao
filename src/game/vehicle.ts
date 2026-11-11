@@ -24,7 +24,8 @@ export const loadModel = (name: string): Promise<THREE.Object3D> => {
 
 const MAX_SPEED = 28; // 100 km/h (dobro do anterior)
 const MAX_REVERSE = 10; // dobro da ré anterior (5)
-const ACCEL = 18;
+const ACCEL = 9; // carros demoram mais para pegar velocidade (era 18)
+const BIKE_ACCEL = 8;
 const BRAKE = 30;
 const DRAG = 3;
 const HAND_BRAKE = 24;
@@ -97,6 +98,7 @@ export class Car {
   private slip = 0;
   private rearLocked = false;
   private rearSpin = 0;
+  private skidSmooth = 0;
   /** velocidade (m/s) no instante da última batida deste quadro (0 = não bateu) */
   impact = 0;
   /** moto caída de lado (depois de uma batida forte); levanta quando alguém sobe */
@@ -111,7 +113,7 @@ export class Car {
     this.color = color;
     this.bike = isBikeModel(model);
     this.model = model;
-    this.engine = new EngineSound(this.bike ? 'bike' : 'car');
+    this.engine = new EngineSound(model);
     this.root = new THREE.Group(); // o modelo GLB entra quando carregar
     this.wheels = {};
     this.x = x;
@@ -170,14 +172,14 @@ export class Car {
     const f = this.speed;
     const bike = this.bike;
     this.throttle = gas ? 1 : 0;
-    const accel = bike ? 15 : ACCEL;
+    const accel = bike ? BIKE_ACCEL : ACCEL;
     const maxSpeed = bike ? 20 : MAX_SPEED;
     const turn = bike ? 2.5 : TURN_RATE;
     const radius = bike ? 0.7 : RADIUS;
     // empinar: só com velocidade; a roda da frente sobe até ~40° e volta ao soltar
-    const wantTilt = bike && wheelie && gas && this.speed > 6 ? 0.72 : 0; // só empina acelerando e com velocidade; senão a roda desce
+    const wantTilt = bike && wheelie && this.speed > 3 ? 0.72 : 0; // como antes: basta segurar empinar com a moto andando (sem precisar acelerar)
     this.tilt += (wantTilt - this.tilt) * Math.min(1, dt * (wantTilt > this.tilt ? 3 : (gas ? 7 : 12)));
-    if (gas) this.speed += (f < -0.5 ? BRAKE : accel * (this.tilt > 0.3 ? 1.2 : 1)) * dt;
+    if (gas) this.speed += (f < -0.5 ? BRAKE : accel * (this.tilt > 0.3 ? 1.5 : 1)) * dt; // empinada dá um arranque extra
     else if (brake) this.speed -= (f > 0.5 ? BRAKE : ACCEL * 0.6) * dt; // freia e depois dá ré
     else this.speed -= Math.sign(f) * Math.min(Math.abs(f), DRAG * dt);
     // freio de mão: em velocidade trava as traseiras e derrapa (perde menos velocidade); parado/devagar segura firme
@@ -281,8 +283,8 @@ export class Car {
     return this.bike ? { pitch: -this.tilt, roll: this.lean, axle: this.axle } : null;
   }
 
-  /** Motor: toca quando há motorista; mais alto perto de quem ouve (lx, lz). Chame todo quadro. */
-  updateEngine(dt: number, lx: number, lz: number): void {
+  /** Motor: toca quando há motorista; volume e lado seguem a distância ao ouvinte (ver setListener). Chame todo quadro. */
+  updateEngine(dt: number): void {
     if (Math.abs(this.pushX) + Math.abs(this.pushZ) > 0.01 && this.driver === null) {
       this.x += this.pushX * dt;
       this.z += this.pushZ * dt;
@@ -307,13 +309,26 @@ export class Car {
     const dr = this.wheels['door_R'];
     if (dl) dl.rotation.y = -this.doorOpen * 1.0;
     if (dr) dr.rotation.y = this.doorOpen * 0.35;
+    const lastPx = this.lastX;
+    const lastPz = this.lastZ;
     const moved = Math.hypot(this.x - this.lastX, this.z - this.lastZ) / Math.max(dt, 1e-3);
     this.lastX = this.x;
     this.lastZ = this.z;
     const sp = this.driver === null ? 0 : Math.abs(this.speed) > 0.01 ? this.speed : moved;
     this.seenSpeed += (sp - this.seenSpeed) * Math.min(1, dt * 5);
-    const d = Math.hypot(this.x - lx, this.z - lz);
-    this.engine.update(this.driver !== null, this.seenSpeed, Math.max(0, 1 - d / 45), this.driver === null ? 0 : this.throttle);
+    // derrapagem: ângulo entre para onde o veículo anda e para onde aponta (vale para o meu e para o dos outros jogadores)
+    let skid = 0;
+    if (this.driver !== null && moved > 3.5) {
+      const dx = this.x - lastPx;
+      const dz = this.z - lastPz;
+      const fwd = Math.abs(dx * Math.sin(this.heading) + dz * Math.cos(this.heading));
+      const lat = Math.abs(dx * Math.cos(this.heading) - dz * Math.sin(this.heading));
+      const ang = Math.atan2(lat, fwd);
+      skid = Math.min(1, Math.max(0, (ang - 0.14) * 3.2));
+      if (this.rearLocked) skid = Math.max(skid, 0.55); // freio de mão travando as traseiras sempre chia
+    }
+    this.skidSmooth += (skid - this.skidSmooth) * Math.min(1, dt * 10);
+    this.engine.update(this.driver !== null, this.seenSpeed, this.x, this.z, this.driver === null ? 0 : this.throttle, this.skidSmooth);
   }
 
   setPose(x: number, z: number, heading: number): void {
@@ -397,8 +412,8 @@ export function updateTraffic(dt: number, blockers: [number, number][]): void {
 }
 
 /** Atualiza o som de motor de todos os carros (o ouvinte é o jogador). */
-export function updateEngines(dt: number, lx: number, lz: number): void {
-  for (const c of CARS) c.updateEngine(dt, lx, lz);
+export function updateEngines(dt: number): void {
+  for (const c of CARS) c.updateEngine(dt);
 }
 
 /** Cria os carros parados do mapa. */

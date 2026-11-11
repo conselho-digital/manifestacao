@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { COLLIDERS, rayBox } from './map';
-import { playShot } from './audio';
+import { playClick, playShotAt } from './audio';
 import { Tracers } from './weapons';
 import { hittables } from './vehicle';
 import type { Player } from './player';
@@ -147,7 +147,7 @@ export class Combat {
           a.mag--;
           this.cd = this.weapon === 0 ? AK_GAP : PISTOL_GAP;
           this.fireGun(player, aiming, this.weapon === 0 ? 'r' : 'p');
-        } else { this.cd = 0.3; playShot(0.6, true); this.startReload(); }
+        } else { this.cd = 0.3; playClick(); this.startReload(); }
       } else if (this.weapon === 2 || this.weapon === 4) { this.cd = BAT_GAP; player.swing(); this.melee(player, BAT_RANGE, 'b'); }
       else { this.cd = FIST_GAP; const kind = player.punch(); this.melee(player, kind === 'k' ? FIST_RANGE + 0.3 : FIST_RANGE, kind); }
     }
@@ -189,7 +189,7 @@ export class Combat {
 
     this.tracers.add(muzzle, end);
     player.weaponVis?.flash();
-    playShot(kind === 'p' ? 0.7 : 1);
+    playShotAt(muzzle.x, muzzle.z, kind === 'p' ? 'pistol' : 'rifle');
     if (hit.id) this.hitTick++;
     net.sendShot({ x1: muzzle.x, y1: muzzle.y, z1: muzzle.z, x2: end.x, y2: end.y, z2: end.z, h: hit.id ?? '', k: kind, hs: hit.head });
   }
@@ -254,9 +254,7 @@ export class Combat {
       const to = new THREE.Vector3(m.x2, m.y2, m.z2);
       this.tracers.add(from, to);
       shooter?.flash();
-      const me = this.player?.object.position;
-      const dist = me ? from.distanceTo(me) : 20;
-      playShot(1 / (1 + dist * 0.12));
+      playShotAt(from.x, from.z, m.k === 'p' ? 'pistol' : 'rifle'); // volume e lado pela distância ao ouvinte
     }
     if (m.h === this.d.net.id && !this.dead && this.invuln <= 0) {
       const base = m.k === 'k' ? KICK_DAMAGE : m.k === 'f' ? FIST_DAMAGE : m.k === 'b' ? BAT_DAMAGE : m.k === 'p' ? PISTOL_DAMAGE : AK_DAMAGE;

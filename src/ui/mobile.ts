@@ -37,13 +37,17 @@ export interface HudState {
 
 export interface MobileHudOptions {
   onAnimations: () => void;
-  /** texto digitado no chat (o main envia pela rede e mostra) */
-  onChatSend: (text: string) => void;
+  /** botão do microfone (voz por proximidade) */
+  onVoiceToggle: () => void;
 }
+
+export type VoiceUi = 'off' | 'live' | 'muted' | 'denied';
 
 export interface MobileHud {
   update(s: HudState, dt: number): void;
   addChat(text: string): void;
+  /** estado do microfone: aceso quando está falando; número de pessoas ao alcance da voz */
+  setVoice(state: VoiceUi, peers: number): void;
 }
 
 const CSS = `
@@ -122,10 +126,10 @@ const CSS = `
 .m-chat p{margin:0}
 .m-chat em,.m-score em{font-style:normal;color:#f1c40f}
 .m-chatbtn{left:50%;transform:translateX(-50%);bottom:calc(var(--u)*1.5);width:calc(var(--u)*8);height:calc(var(--u)*8);font-size:calc(var(--u)*2.6)}
-.m-chatbox{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(var(--u)*1);width:calc(var(--u)*70);display:none;pointer-events:auto;gap:calc(var(--u)*1);z-index:8}
-.m-chatbox.open{display:flex}
-.m-chatbox input{flex:1;min-width:0;font-size:calc(var(--u)*4);padding:calc(var(--u)*1.4);border-radius:calc(var(--u)*1);border:2px solid #fff;background:rgba(0,0,0,.75);color:#fff;text-transform:none}
-.m-chatbox button{font-size:calc(var(--u)*3.4);padding:0 calc(var(--u)*2.5);border-radius:calc(var(--u)*1);border:0;background:#2f6b2f;color:#fff;font-weight:800}
+.m-mic .ico{width:46%;height:46%}
+.m-mic.talk{background:rgba(220,60,50,.88);animation:micpulse 1.2s ease-in-out infinite}
+.m-mic.deaf{background:rgba(90,90,90,.85)}
+@keyframes micpulse{50%{box-shadow:0 0 0 calc(var(--u)*1.2) rgba(255,90,80,.35)}}
 .m-score{position:fixed;right:calc(var(--u)*1);bottom:calc(var(--u)*.8);text-align:right;font-size:calc(var(--u)*3.3);line-height:1.2}
 .m-cross{position:fixed;left:50%;top:50%;width:calc(var(--u)*3);height:calc(var(--u)*3);margin:calc(var(--u)*-1.5) 0 0 calc(var(--u)*-1.5);border:2px solid rgba(255,255,255,.9);border-radius:50%;
   box-shadow:0 0 0 1px rgba(0,0,0,.6);transition:transform .12s;display:none}
@@ -428,36 +432,21 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   // Chat e placar
   const chat = make('m-chat m-out', hud);
   const score = make('m-score m-out', hud);
-  const chatBtn = circle(hud, 'm-chatbtn small', null, 'Chat');
-  const box = make('m-chatbox', hud);
-  const input = make('', box, 'input') as HTMLInputElement;
-  input.maxLength = 80;
-  input.placeholder = 'Mensagem...';
-  input.autocomplete = 'off';
-  const sendBtn = make('', box, 'button');
-  sendBtn.textContent = 'Enviar';
-  const closeChat = (): void => { box.classList.remove('open'); input.blur(); };
-  const openChat = (): void => {
-    if (document.pointerLockElement) document.exitPointerLock();
-    box.classList.add('open');
-    input.focus();
-  };
-  const submit = (): void => {
-    const t = input.value.trim();
-    input.value = '';
-    closeChat();
-    if (t) opts.onChatSend(t);
-  };
-  chatBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); if (box.classList.contains('open')) closeChat(); else openChat(); });
-  sendBtn.addEventListener('click', submit);
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') { e.preventDefault(); submit(); }
-    if (e.key === 'Escape') closeChat();
-  });
+  // Voz por proximidade: o botão liga o microfone (1º toque) e depois alterna falar/mudo; T faz o mesmo no PC
+  const micBtn = circle(hud, 'm-chatbtn m-mic small', ICON.mic, 'Voz');
+  const micLbl = micBtn.querySelector('.lbl') as HTMLElement | null;
+  micBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); opts.onVoiceToggle(); });
   window.addEventListener('keydown', (e) => {
     if (e.target instanceof HTMLInputElement) return;
-    if (e.code === 'Enter' || e.code === 'KeyT') { e.preventDefault(); openChat(); }
+    if (e.code === 'KeyT' && !e.repeat) { e.preventDefault(); opts.onVoiceToggle(); }
   });
+  const setVoice = (state: VoiceUi, peers: number): void => {
+    micBtn.classList.toggle('talk', state === 'live');
+    micBtn.classList.toggle('deaf', state === 'denied');
+    const ico = micBtn.querySelector('.ico');
+    if (ico) { ico.textContent = ''; ico.insertAdjacentHTML('beforeend', state === 'live' || state === 'off' ? ICON.mic : ICON.micOff); }
+    if (micLbl) micLbl.textContent = state === 'off' ? 'Voz' : state === 'live' ? (peers > 0 ? `Voz ${peers}` : 'Falando') : state === 'muted' ? 'Mudo' : 'Sem mic';
+  };
 
   const addChat = (text: string): void => {
     const p = document.createElement('p');
@@ -481,6 +470,7 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
 
   return {
     addChat,
+    setVoice,
     update(s, dt): void {
       hud.classList.toggle('driving', s.driving);
       hud.classList.toggle('bike', s.driving && s.bike);

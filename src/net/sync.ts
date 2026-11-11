@@ -2,6 +2,7 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { CHARACTERS, type CharacterName } from '../game/characters';
 import { MAP } from '../game/map';
+import { cleanRtc, type RtcKind } from './voice';
 
 export interface PlayerInfo {
   id: string;
@@ -47,9 +48,12 @@ export interface NetHandlers {
   onShot(m: ShotMsg): void;
   onKill(m: KillMsg): void;
   onChat(m: ChatMsg): void;
+  /** sinalização da voz (WebRTC): oferta, resposta e candidatos ICE de quem fala comigo */
+  onRtc(m: { from: string; k: RtcKind; d: unknown }): void;
 }
 
-const CHANNEL = 'arena:main';
+/** Sala: arena:main; ?room=nome troca (para testes, sem misturar com os jogadores de verdade). */
+const CHANNEL = `arena:${(new URLSearchParams(location.search).get('room') ?? 'main').replace(/[^a-z0-9_-]/gi, '').slice(0, 24) || 'main'}`;
 export const MAX_NAME = 16;
 export const MAX_CHAT = 80;
 const MAX_REMOTE = 30; // limite de jogadores remotos renderizados
@@ -170,6 +174,12 @@ export class Net {
       h.onChat({ id: p.id, t });
     });
 
+    channel.on('broadcast', { event: 'rtc' }, ({ payload }) => {
+      const m = cleanRtc(payload);
+      if (!m || m.to !== this.id || m.from === this.id || !this.known.has(m.from)) return;
+      h.onRtc({ from: m.from, k: m.k, d: m.d });
+    });
+
     await new Promise<void>((resolve, reject) => {
       channel.subscribe((status) => {
         if (status === 'SUBSCRIBED') resolve();
@@ -205,6 +215,11 @@ export class Net {
 
   sendKill(victim: string, killer: string, weapon: string): void {
     this.send('kill', { k: killer, v: victim, w: weapon });
+  }
+
+  /** Sinalização da voz para um jogador. */
+  sendRtc(to: string, k: RtcKind, d: unknown): void {
+    this.send('rtc', { from: this.id, to, k, d });
   }
 
   sendChat(text: string): void {

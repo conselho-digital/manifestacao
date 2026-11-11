@@ -23,7 +23,7 @@ const CSS = `
 `;
 
 /** Cria o HUD (celular e PC) e o menu de animações. */
-export function createHud(onChatSend: (text: string) => void): MobileHud {
+export function createHud(onVoiceToggle: () => void): MobileHud {
   setViewportUnit();
   const style = document.createElement('style');
   style.textContent = CSS;
@@ -83,5 +83,5 @@ export function createHud(onChatSend: (text: string) => void): MobileHud {
   window.addEventListener('keydown', (e) => { if (e.code === 'KeyG') toggle(); });
 
   window.addEventListener('resize', setViewportUnit);
-  return createMobileHud({ onAnimations: toggle, onChatSend });
+  return createMobileHud({ onAnimations: toggle, onVoiceToggle });
 }

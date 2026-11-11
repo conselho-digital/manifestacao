@@ -9,6 +9,21 @@ export const CHARACTERS = [
 ] as const;
 export type CharacterName = (typeof CHARACTERS)[number];
 
+/** Categorias da tela de seleção (um carrossel por categoria). Todo personagem aparece em exatamente uma. */
+export const CATEGORIES: { title: string; names: CharacterName[] }[] = [
+  { title: 'Rua', names: ['Carlos', 'Cesar', 'Gordao', 'Garota1', 'Amanda'] },
+  { title: 'Civis', names: ['Akiyama', 'Helena', 'Stewart', 'Bennyse'] },
+  { title: 'Polícia', names: ['Law1', 'Law2', 'Law3', 'Law4', 'Law6', 'Law7'] },
+  { title: 'Forças especiais', names: ['Law5', 'Law8', 'Law9'] },
+];
+
+/** Nome mostrado na seleção (os modelos Law não têm nome próprio). */
+export const LABELS: Partial<Record<CharacterName, string>> = {
+  Garota1: 'Garota', Law1: 'Policial', Law2: 'Delegado', Law3: 'Patrulheiro', Law4: 'Oficial',
+  Law5: 'Agente', Law6: 'Xerife', Law7: 'Xerife 2', Law8: 'Tático', Law9: 'Soldado',
+};
+export const labelOf = (n: CharacterName): string => LABELS[n] ?? n;
+
 export const CHARACTER_HEIGHT = 1.8;
 
 const loader = new GLTFLoader();
@@ -45,6 +60,7 @@ export async function createCharacter(name: CharacterName): Promise<THREE.Group>
 
   // Modelos GTA SA (Law) olham para +X; gira para olhar para +Z
   if (name.startsWith('Law')) model.rotation.y = -Math.PI / 2;
+  if (name === 'Akiyama') model.rotation.y = Math.PI; // o modelo olha para -Z
   const box = measure(model);
   const size = box.getSize(new THREE.Vector3());
   const scale = CHARACTER_HEIGHT / size.y;
