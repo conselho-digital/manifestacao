@@ -4,26 +4,40 @@ import { ARMED_FROM_CODE, Animator } from './anim';
 import { CARS, type Car } from './vehicle';
 import { WeaponVisual } from './weapons';
 import { seatBlend } from './player';
+import { makeTeamRing, type TeamLook } from './teams';
 import type { MoveMsg, PlayerInfo } from '../net/sync';
 
-function makeLabel(text: string): THREE.Sprite {
+function drawLabel(text: string, team: TeamLook | null): THREE.CanvasTexture {
   const c = document.createElement('canvas');
   c.width = 256;
-  c.height = 64;
+  c.height = 80;
   const g = c.getContext('2d')!;
   g.font = 'bold 32px system-ui, sans-serif';
   g.textAlign = 'center';
   g.textBaseline = 'middle';
   g.lineWidth = 6;
   g.strokeStyle = 'rgba(0,0,0,0.7)';
-  g.strokeText(text, 128, 32);
+  g.strokeText(text, 128, 28);
   g.fillStyle = '#fff';
-  g.fillText(text, 128, 32);
-  const sprite = new THREE.Sprite(
-    new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(c), depthTest: false, transparent: true }),
-  );
-  sprite.scale.set(2, 0.5, 1);
-  sprite.position.y = 2.2;
+  g.fillText(text, 128, 28);
+  if (team) {
+    // faixa de duas cores sob o nome (cada metade com a cor de uma das cores da equipe)
+    const w = Math.min(220, Math.max(90, g.measureText(text).width + 24));
+    const x0 = 128 - w / 2;
+    g.fillStyle = 'rgba(0,0,0,0.75)';
+    g.fillRect(x0 - 2, 52 - 2, w + 4, 14 + 4);
+    g.fillStyle = team.c1;
+    g.fillRect(x0, 52, w / 2, 14);
+    g.fillStyle = team.c2;
+    g.fillRect(x0 + w / 2, 52, w / 2, 14);
+  }
+  return new THREE.CanvasTexture(c);
+}
+
+function makeLabel(text: string, team: TeamLook | null): THREE.Sprite {
+  const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: drawLabel(text, team), depthTest: false, transparent: true }));
+  sprite.scale.set(2, 0.625, 1);
+  sprite.position.y = 2.25;
   sprite.renderOrder = 10;
   return sprite;
 }
@@ -49,8 +63,13 @@ export class RemotePlayer {
   private modelBaseY: number | null = null;
   private modelRot0: number | null = null;
 
+  private label: THREE.Sprite;
+  private ring: THREE.Group;
+
   constructor(readonly info: PlayerInfo) {
-    this.root.add(makeLabel(info.name));
+    this.label = makeLabel(info.name, info.team);
+    this.ring = makeTeamRing(info.team);
+    this.root.add(this.label, this.ring);
     void createCharacter(info.character).then((m) => {
       this.root.add(this.pivot);
       this.pivot.add(m);
@@ -152,6 +171,29 @@ export class RemotePlayer {
       if (d < r) { best = c; r = d; }
     }
     return best;
+  }
+
+  /** Assume o estado de outro boneco do mesmo jogador (troca de personagem): posição, animação e veículo. */
+  adopt(o: RemotePlayer): void {
+    this.target.copy(o.target);
+    this.targetRy = o.targetRy;
+    this.root.position.copy(o.root.position);
+    this.root.rotation.y = o.root.rotation.y;
+    this.anim = o.anim;
+    this.carId = o.carId;
+    this.weapon = o.weapon;
+    this.pitch = o.pitch;
+  }
+
+  /** Trocou de equipe: refaz o nome e o anel. */
+  setTeam(team: TeamLook | null): void {
+    this.info.team = team;
+    this.label.material.map?.dispose();
+    this.label.material.map = drawLabel(this.info.name, team);
+    this.label.material.needsUpdate = true;
+    this.ring.removeFromParent();
+    this.ring = makeTeamRing(team);
+    this.root.add(this.ring);
   }
 
   get isDead(): boolean { return this.anim === 'dead'; }

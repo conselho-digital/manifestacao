@@ -23,7 +23,7 @@ const CSS = `
 `;
 
 /** Cria o HUD (celular e PC) e o menu de animações. */
-export function createHud(onVoiceToggle: () => void): MobileHud {
+export function createHud(opts: { onVoiceToggle: () => void; onPause: () => void; onShop: () => void }): MobileHud {
   setViewportUnit();
   const style = document.createElement('style');
   style.textContent = CSS;
@@ -78,10 +78,10 @@ export function createHud(onVoiceToggle: () => void): MobileHud {
   help.className = 'hud-help';
   help.textContent = touch
     ? 'Joystick: pouco = anda, muito = corre. Arraste a tela para girar a câmera. Porta = entrar/sair do carro.'
-    : 'WASD move · Shift anda · Q sprint · Espaço pula · E escala · F entra/sai do carro · arraste o mouse para girar · G abre este menu.';
+    : 'WASD move · Shift anda · Q sprint · Espaço pula · E escala · F entra/sai do carro · arraste o mouse para girar · G abre este menu · P pausa (equipe, personagem, armas, loja).';
   panel.appendChild(help);
   window.addEventListener('keydown', (e) => { if (e.code === 'KeyG') toggle(); });
 
   window.addEventListener('resize', setViewportUnit);
-  return createMobileHud({ onAnimations: toggle, onVoiceToggle });
+  return createMobileHud({ onAnimations: toggle, ...opts });
 }

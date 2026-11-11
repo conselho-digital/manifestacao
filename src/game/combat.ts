@@ -7,6 +7,7 @@ import type { Player } from './player';
 import type { RemotePlayer } from './remote';
 import type { InputState } from './input';
 import type { Net, ShotMsg, KillMsg } from '../net/sync';
+import type { Inventory, ShopItem, WeaponId } from './inventory';
 
 export const MAG_SIZE = 30;
 const RESERVE_START = 120;
@@ -46,17 +47,22 @@ interface Deps {
   remotes: Map<string, RemotePlayer>;
   /** texto para o chat/feed */
   log: (text: string) => void;
+  /** armas e dinheiro do jogador */
+  inv: Inventory;
 }
 
 /** Combate casual: o atirador calcula o acerto; quem foi acertado aplica o dano em si mesmo. */
 export class Combat {
   health = 100;
   armor = 50;
-  money = 0;
+  get money(): number { return this.d.inv.money; }
+  /** pausado: não leva dano nem atira */
+  paused = false;
   /** 0 = AK-47, 1 = punho, 2 = taco (bandeira), 3 = pistola, 4 = placa de trânsito */
   /** começa de mãos livres (punho); o botão Arma troca */
   weapon: 0 | 1 | 2 | 3 | 4 = 1;
-  private ammo = [{ mag: MAG_SIZE, reserve: RESERVE_START }, { mag: 0, reserve: 0 }, { mag: 0, reserve: 0 }, { mag: PISTOL_MAG, reserve: PISTOL_RESERVE }, { mag: 0, reserve: 0 }];
+  /** munição de cada arma (só quem tem a arma recebe) */
+  private ammo = [{ mag: 0, reserve: 0 }, { mag: 0, reserve: 0 }, { mag: 0, reserve: 0 }, { mag: 0, reserve: 0 }, { mag: 0, reserve: 0 }];
   get mag(): number { return this.ammo[this.weapon]!.mag; }
   get reserve(): number { return this.ammo[this.weapon]!.reserve; }
   /** tem mira (fuzil ou pistola) */
@@ -82,6 +88,41 @@ export class Combat {
   constructor(private d: Deps) {
     this.tracers = new Tracers(d.scene);
     this.ensure(d.net.id, d.name);
+    this.refillGuns();
+  }
+
+  /** Enche a munição das armas de fogo que o jogador tem. */
+  private refillGuns(): void {
+    if (this.d.inv.has(0)) this.ammo[0] = { mag: MAG_SIZE, reserve: RESERVE_START };
+    if (this.d.inv.has(3)) this.ammo[3] = { mag: PISTOL_MAG, reserve: PISTOL_RESERVE };
+  }
+
+  /** Munição de uma arma (para o menu). */
+  ammoOf(w: WeaponId): { mag: number; reserve: number } { return this.ammo[w]!; }
+
+  /** Equipa uma arma que o jogador tem. */
+  equip(w: WeaponId): void {
+    if (!this.d.inv.has(w)) return;
+    this.weapon = w;
+    this.reloading = false;
+  }
+
+  /** Compra um item da loja. Retorna a mensagem (para mostrar) e se deu certo. */
+  buy(item: ShopItem): { ok: boolean; msg: string } {
+    const inv = this.d.inv;
+    if (item.kind === 'weapon' && item.weapon !== undefined && inv.has(item.weapon)) return { ok: false, msg: 'Você já tem esta arma.' };
+    if (item.kind === 'ammo' && item.weapon !== undefined && !inv.has(item.weapon)) return { ok: false, msg: 'Compre a arma primeiro.' };
+    if (item.kind === 'health' && this.health >= 100) return { ok: false, msg: 'Sua vida já está cheia.' };
+    if (item.kind === 'armor' && this.armor >= 100) return { ok: false, msg: 'Seu colete já está cheio.' };
+    if (!inv.spend(item.price)) return { ok: false, msg: 'Dinheiro insuficiente.' };
+    if (item.kind === 'weapon' && item.weapon !== undefined) {
+      inv.grant(item.weapon);
+      if (item.weapon === 0) this.ammo[0] = { mag: MAG_SIZE, reserve: RESERVE_START };
+      if (item.weapon === 3) this.ammo[3] = { mag: PISTOL_MAG, reserve: PISTOL_RESERVE };
+    } else if (item.kind === 'ammo' && item.weapon !== undefined) this.ammo[item.weapon]!.reserve += item.amount ?? 0;
+    else if (item.kind === 'health') this.health = 100;
+    else if (item.kind === 'armor') this.armor = 100;
+    return { ok: true, msg: `${item.name} comprado.` };
   }
 
   private get magSize(): number { return this.weapon === 3 ? PISTOL_MAG : MAG_SIZE; }
@@ -120,8 +161,9 @@ export class Combat {
     if (player.isDriving) { player.setArmed('none'); return; }
 
     if (input.switchWeapon) {
-      const order = [0, 3, 2, 4, 1] as const; // fuzil, pistola, bandeira, placa, punho
-      this.weapon = order[(order.indexOf(this.weapon) + 1) % order.length]!;
+      // fuzil, pistola, bandeira, placa, punho — só as que o jogador tem
+      const order = ([0, 3, 2, 4, 1] as const).filter((w) => this.d.inv.has(w));
+      this.weapon = order[(Math.max(0, order.indexOf(this.weapon)) + 1) % order.length]!;
       this.reloading = false;
     }
     if (input.reload) this.startReload();
@@ -257,7 +299,7 @@ export class Combat {
       shooter?.flash();
       playShotAt(from.x, from.z, m.k === 'p' ? 'pistol' : 'rifle'); // volume e lado pela distância ao ouvinte
     }
-    if (m.h === this.d.net.id && !this.dead && this.invuln <= 0) {
+    if (m.h === this.d.net.id && !this.dead && this.invuln <= 0 && !this.paused) {
       const base = m.k === 'k' ? KICK_DAMAGE : m.k === 'f' ? FIST_DAMAGE : m.k === 'b' ? BAT_DAMAGE : m.k === 'p' ? PISTOL_DAMAGE : AK_DAMAGE;
       const dmg = m.hs && (m.k === 'r' || m.k === 'p') ? base * 2 : base;
       if (m.k === 'f' || m.k === 'b' || m.k === 'k') this.player?.flinch(m.k);
@@ -286,7 +328,7 @@ export class Combat {
     const victim = this.ensure(m.v, this.nameOf(m.v));
     victim.d++;
     if (m.k !== m.v) killer.k++;
-    if (m.k === this.d.net.id && m.v !== this.d.net.id) this.money += KILL_MONEY;
+    if (m.k === this.d.net.id && m.v !== this.d.net.id) this.d.inv.earn(KILL_MONEY);
     this.d.log(`${this.nameOf(m.k)}: matou ${this.nameOf(m.v)} (${m.w || 'AK-47'})`);
   }
 
@@ -295,8 +337,7 @@ export class Combat {
     this.player?.respawn(x, z);
     this.health = 100;
     this.armor = 50;
-    this.ammo[0] = { mag: MAG_SIZE, reserve: RESERVE_START };
-    this.ammo[3] = { mag: PISTOL_MAG, reserve: PISTOL_RESERVE };
+    this.refillGuns();
     this.reloading = false;
     this.weapon = 1; // renasce de mãos livres
     this.dead = false;

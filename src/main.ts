@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { createCamera, createRenderer, createScene, handleResize } from './game/scene';
 import { createCity } from './game/city';
 import { museumSpawn } from './game/map';
-import { createCharacter } from './game/characters';
+import { createCharacter, type CharacterName } from './game/characters';
 import { initMouse, readInput, takeLook, type InputState } from './game/input';
 import { Player } from './game/player';
 import { showLobby } from './ui/lobby';
@@ -17,6 +17,9 @@ import { Combat } from './game/combat';
 import { WeaponVisual } from './game/weapons';
 import { warmUp } from './game/preload';
 import { setListener } from './game/audio';
+import { Inventory, type WeaponId } from './game/inventory';
+import { lookOf, makeTeamRing, saveTeamId, teamById } from './game/teams';
+import { createPauseMenu, type PauseMenu } from './ui/pause';
 
 // Endereço oficial: https://gameprotesto.com.br (sem www). Os outros endereços de produção redirecionam para ele
 // (o login do Google só vale nele). localhost e prévias da Vercel não são afetados.
@@ -94,32 +97,131 @@ const voice = new Voice(net.id, (to, k, d) => net.sendRtc(to, k, d), (state, pee
 let lastInput: InputState | null = null;
 if (import.meta.env.DEV) (window as unknown as { __voice: () => Voice }).__voice = () => voice;
 
+// ---------- equipe, personagem, pausa e loja ----------
+const inv = new Inventory();
+let character: CharacterName = 'Carlos';
+let teamId = '';
+let myRing: THREE.Group = makeTeamRing(null);
+let pauseMenu: PauseMenu | null = null;
+let paused = false;
+const myLook = (): ReturnType<typeof lookOf> => lookOf(teamById(teamId));
+
+/** Monta o personagem local (modelo, animador, arma e anel da equipe). `from` = o jogador anterior (troca de personagem). */
+async function makePlayer(name: CharacterName, from?: Player): Promise<Player> {
+  const obj = await createCharacter(name);
+  if (from) {
+    obj.position.copy(from.object.position);
+    obj.rotation.copy(from.object.rotation);
+  }
+  scene.add(obj);
+  const p = new Player(obj, await Animator.create(obj));
+  p.attachWeapon(new WeaponVisual(obj));
+  if (from) p.setHeading(from.object.rotation.y);
+  myRing.removeFromParent();
+  myRing = makeTeamRing(myLook());
+  obj.add(myRing);
+  return p;
+}
+
+const saveCharacter = (): void => {
+  try {
+    const raw = JSON.parse(localStorage.getItem('arena-profile') ?? '{}') as Record<string, unknown>;
+    localStorage.setItem('arena-profile', JSON.stringify({ ...raw, character }));
+  } catch { /* sem armazenamento */ }
+};
+
+/** Avisa os outros e refaz o anel quando a equipe ou o personagem mudam. */
+function announceMe(): void {
+  net.updateMe({ name: profileName, character, team: myLook() });
+}
+
+function setMyTeam(id: string): void {
+  teamId = id;
+  saveTeamId(id);
+  myRing.removeFromParent();
+  myRing = makeTeamRing(myLook());
+  player?.object.add(myRing);
+  announceMe();
+  hud?.addChat(`Sistema: ${teamById(id) ? `equipe ${teamById(id)!.name}` : 'sem equipe'}.`);
+}
+
+async function setMyCharacter(name: CharacterName): Promise<void> {
+  if (!player || name === character) return;
+  if (player.isDriving) { hud?.addChat('Sistema: saia do veículo para trocar de personagem.'); return; }
+  const old = player;
+  const next = await makePlayer(name, old);
+  old.object.removeFromParent();
+  player = next;
+  character = name;
+  saveCharacter();
+  announceMe();
+}
+
 void showLobby().then(async (profile) => {
   profileName = profile.name;
+  character = profile.character;
+  teamId = profile.team;
+  inv.load(profile.userId);
   inMenu = false;
   scene.fog = menuFog;
   camera.clearViewOffset();
   camera.fov = BASE_FOV;
   camera.updateProjectionMatrix();
-  hud = createHud(() => { void voice.toggle(); });
+  hud = createHud({ onVoiceToggle: () => { void voice.toggle(); }, onPause: () => pauseMenu?.open(), onShop: () => pauseMenu?.open('shop') });
   hud.addChat(`Sistema: bem-vindo, ${profile.name}!`);
-  const obj = await createCharacter(profile.character);
   // Ponto de partida (?pos=x,z serve para inspecionar o mapa)
   const startQ = new URLSearchParams(location.search).get('pos')?.split(',').map(Number);
   const spawn = museumSpawn(); // em frente ao museu, num ponto aleatório
-  obj.position.set(startQ?.[0] ?? spawn[0], 0, startQ?.[1] ?? spawn[1]);
-  scene.add(obj);
-  player = new Player(obj, await Animator.create(obj));
-  player.attachWeapon(new WeaponVisual(obj));
-  combat = new Combat({ scene, camera, net, name: profile.name, remotes, log: (t) => hud?.addChat(t) });
+  const first = await createCharacter(profile.character);
+  first.position.set(startQ?.[0] ?? spawn[0], 0, startQ?.[1] ?? spawn[1]);
+  scene.add(first);
+  player = new Player(first, await Animator.create(first));
+  player.attachWeapon(new WeaponVisual(first));
+  myRing = makeTeamRing(myLook());
+  first.add(myRing);
+  combat = new Combat({ scene, camera, net, name: profile.name, remotes, log: (t) => hud?.addChat(t), inv });
+
+  pauseMenu = createPauseMenu({
+    inv,
+    getTeamId: () => teamId,
+    setTeam: setMyTeam,
+    getCharacter: () => character,
+    setCharacter: (n) => { void setMyCharacter(n); },
+    currentWeapon: () => (combat?.weapon ?? 1) as WeaponId,
+    equip: (w) => combat?.equip(w),
+    ammoOf: (w) => combat?.ammoOf(w) ?? { mag: 0, reserve: 0 },
+    buy: (item) => combat?.buy(item) ?? { ok: false, msg: 'Indisponível.' },
+    onToggle: (open) => {
+      paused = open;
+      if (combat) combat.paused = open;
+      if (!open) readInput(); // descarta toques/teclas de enquanto estava pausado
+    },
+    onTeamsChanged: () => {
+      if (teamId && !teamById(teamId)) { teamId = ''; saveTeamId(''); }
+      setMyTeam(teamId);
+    },
+  });
+  if (import.meta.env.DEV) (window as unknown as { __pause: PauseMenu }).__pause = pauseMenu;
 
   try {
-    await net.join({ name: profile.name, character: profile.character }, {
+    await net.join({ name: profile.name, character: profile.character, team: myLook() }, {
       onJoin: (p) => {
         hud?.addChat(`${p.name}: entrou na arena`);
         const r = new RemotePlayer(p);
         remotes.set(p.id, r);
         scene.add(r.root);
+      },
+      onUpdate: (p) => {
+        const r = remotes.get(p.id);
+        if (!r) return;
+        if (r.info.character !== p.character) {
+          // trocou de personagem: refaz o boneco no mesmo lugar
+          const nr = new RemotePlayer(p);
+          nr.adopt(r);
+          r.dispose();
+          remotes.set(p.id, nr);
+          scene.add(nr.root);
+        } else r.setTeam(p.team);
       },
       onLeave: (id) => {
         const who = remotes.get(id)?.info.name;
@@ -147,22 +249,25 @@ function loop(): void {
   if (inMenu) menuCamera(dt);
   if (player && combat) {
     const look = takeLook();
-    yaw -= look.dx * 0.006;
-    pitch = THREE.MathUtils.clamp(pitch + look.dy * 0.005, PITCH_MIN, PITCH_MAX);
-    const dh = player.driveHeading;
-    if (dh !== null && Math.abs(player.carSpeed) > 0.8) {
-      // Em movimento a câmera fica atrás do carro; parado, dá para olhar para todos os lados
-      const d = Math.atan2(Math.sin(dh - yaw), Math.cos(dh - yaw));
-      yaw += d * Math.min(1, dt * 2.5);
-    }
     const input = readInput();
     lastInput = input;
-    combat.update(dt, input, player);
-    player.update(dt, input, yaw);
-    aimK += ((input.aim && combat.isGun && !player.isDriving ? 1 : 0) - aimK) * Math.min(1, dt * 9);
-    player.followCamera(camera, dt, yaw + camOffset, pitch, aimK);
-    setListener(player.object.position.x, player.object.position.z, yaw + camOffset); // ouve do personagem, vira com a câmera
-    player.setAimPitch(pitch);
+    if (!paused) {
+      yaw -= look.dx * 0.006;
+      pitch = THREE.MathUtils.clamp(pitch + look.dy * 0.005, PITCH_MIN, PITCH_MAX);
+      const dh = player.driveHeading;
+      if (dh !== null && Math.abs(player.carSpeed) > 0.8) {
+        // Em movimento a câmera fica atrás do carro; parado, dá para olhar para todos os lados
+        const d = Math.atan2(Math.sin(dh - yaw), Math.cos(dh - yaw));
+        yaw += d * Math.min(1, dt * 2.5);
+      }
+      combat.update(dt, input, player);
+      player.update(dt, input, yaw);
+      aimK += ((input.aim && combat.isGun && !player.isDriving ? 1 : 0) - aimK) * Math.min(1, dt * 9);
+      player.followCamera(camera, dt, yaw + camOffset, pitch, aimK);
+      setListener(player.object.position.x, player.object.position.z, yaw + camOffset); // ouve do personagem, vira com a câmera
+      player.setAimPitch(pitch);
+    }
+    myRing.visible = !!myLook() && !player.isDriving;
     if (aerial) {
       camera.position.set(0, 150, -200);
       camera.lookAt(0, 0, 8);
@@ -208,8 +313,8 @@ function loop(): void {
   const blockers: [number, number][] = CARS.filter((c) => c.driver !== null).map((c) => [c.x, c.z]);
   if (player) blockers.push([player.object.position.x, player.object.position.z]);
   remotes.forEach((r) => blockers.push([r.root.position.x, r.root.position.z]));
-  updateTraffic(dt, blockers);
-  if (player) updateEngines(dt);
+  updateTraffic(paused ? 0 : dt, blockers);
+  if (player) updateEngines(paused ? 0 : dt);
   remotes.forEach((r) => r.update(dt));
   if (player) {
     const others = new Map<string, { x: number; z: number }>();

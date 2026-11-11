@@ -3,11 +3,14 @@ import { supabase } from './supabase';
 import { CHARACTERS, type CharacterName } from '../game/characters';
 import { MAP } from '../game/map';
 import { cleanRtc, type RtcKind } from './voice';
+import { cleanLook, type TeamLook } from '../game/teams';
 
 export interface PlayerInfo {
   id: string;
   name: string;
   character: CharacterName;
+  /** equipe (nome e duas cores), ou null */
+  team: TeamLook | null;
 }
 
 export interface MoveMsg {
@@ -43,6 +46,8 @@ export interface ChatMsg { id: string; t: string }
 
 export interface NetHandlers {
   onJoin(p: PlayerInfo): void;
+  /** alguém trocou de personagem ou de equipe */
+  onUpdate(p: PlayerInfo): void;
   onLeave(id: string): void;
   onMove(m: MoveMsg): void;
   onShot(m: ShotMsg): void;
@@ -118,6 +123,7 @@ export class Net {
   private lastSent = 0;
   private ready = false;
   private known = new Set<string>();
+  private sigs = new Map<string, string>();
   private lastShotAt = new Map<string, number>();
   private lastChatAt = new Map<string, number>();
 
@@ -131,16 +137,25 @@ export class Net {
       const state = channel.presenceState<Omit<PlayerInfo, 'id'>>();
       const now = new Set(Object.keys(state));
       for (const [id, metas] of Object.entries(state)) {
-        if (id === this.id || this.known.has(id)) continue;
-        const meta = metas[0];
+        if (id === this.id) continue;
+        const meta = metas[metas.length - 1]; // o último track é o mais novo
         const character = cleanCharacter(meta?.character);
-        if (!meta || !character || this.known.size >= MAX_REMOTE) continue;
+        if (!meta || !character) continue;
+        const info: PlayerInfo = { id, name: cleanName(meta.name), character, team: cleanLook(meta.team) };
+        const sig = `${info.character}|${info.name}|${info.team?.c1 ?? ''}${info.team?.c2 ?? ''}${info.team?.name ?? ''}`;
+        if (this.known.has(id)) {
+          if (this.sigs.get(id) !== sig) { this.sigs.set(id, sig); h.onUpdate(info); }
+          continue;
+        }
+        if (this.known.size >= MAX_REMOTE) continue;
         this.known.add(id);
-        h.onJoin({ id, name: cleanName(meta.name), character });
+        this.sigs.set(id, sig);
+        h.onJoin(info);
       }
       for (const id of [...this.known]) {
         if (!now.has(id)) {
           this.known.delete(id);
+          this.sigs.delete(id);
           this.lastShotAt.delete(id);
           this.lastChatAt.delete(id);
           h.onLeave(id);
@@ -189,6 +204,11 @@ export class Net {
     await channel.track(me);
     this.ready = true;
     return true;
+  }
+
+  /** Troca de personagem/equipe: avisa os outros pela presence. */
+  updateMe(me: Omit<PlayerInfo, 'id'>): void {
+    if (this.channel && this.ready) void this.channel.track(me);
   }
 
   private send(event: string, payload: object): void {

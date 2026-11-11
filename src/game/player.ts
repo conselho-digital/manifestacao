@@ -110,6 +110,9 @@ export class Player {
     this.object = object;
   }
 
+  /** Vira o corpo para este ângulo (troca de personagem: o novo modelo continua olhando para o mesmo lado). */
+  setHeading(rad: number): void { this.heading = rad; }
+
   get isDead(): boolean { return this.mode === 'dead'; }
   /** Há um carro livre a até 3,5 m (a pé)? Só então o botão de entrar aparece. */
   get nearCar(): boolean {
