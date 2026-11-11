@@ -75,6 +75,7 @@ const CSS = `
 .m-speed span{display:block;height:100%;background:#c0392b;width:0}
 .m-weapon{position:fixed;right:calc(var(--u)*1.6);top:calc(var(--u)*2.2);width:calc(var(--u)*13);height:calc(var(--u)*13);background:rgba(47,107,47,.9);
   border:calc(var(--u)*.5) solid #000;border-radius:calc(var(--u)*1.2);display:flex;align-items:center;justify-content:center;padding:calc(var(--u)*1.4)}
+.m-weapon img{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 0 calc(var(--u)*.4) rgba(0,0,0,.7))}
 .m-ammo{position:fixed;right:calc(var(--u)*1.6);top:calc(var(--u)*16);width:calc(var(--u)*13);text-align:center;font-size:calc(var(--u)*3.6)}
 .m-btn{position:fixed;pointer-events:auto;touch-action:none;border-radius:50%;background:rgba(31,84,34,.82);border:calc(var(--u)*.6) solid #0a140a;
   box-shadow:0 0 0 calc(var(--u)*.25) rgba(255,255,255,.55) inset;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;color:#fff;cursor:pointer}
@@ -95,7 +96,8 @@ const CSS = `
 /* o botão de entrar no carro só aparece perto de um carro (e ocupa o lugar do Sprint) */
 .m-hud:not(.near-car):not(.driving) .m-door{display:none}
 .m-hud.near-car .m-sprint{display:none}
-.m-hud.driving .m-door{bottom:auto;top:calc(var(--u)*33);right:calc(var(--u)*2.5);width:calc(var(--u)*13);height:calc(var(--u)*13)}
+/* dirigindo, o botão de sair fica junto dos pedais (à esquerda do freio de mão) */
+.m-hud.driving .m-door{right:calc(var(--u)*48.5);bottom:calc(var(--u)*7);width:calc(var(--u)*12);height:calc(var(--u)*12)}
 /* Sprint à direita (o Escalar saiu: escala sozinho ao pular perto de um obstáculo) */
 .m-sprint{right:calc(var(--u)*19.4);bottom:calc(var(--u)*8);width:calc(var(--u)*14);height:calc(var(--u)*14);font-size:calc(var(--u)*3.2)}
 .m-anim{left:50%;top:calc(var(--u)*1.5);transform:translateX(-50%);width:auto;height:calc(var(--u)*8);border-radius:calc(var(--u)*4);padding:0 calc(var(--u)*3);
@@ -500,7 +502,9 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
       if (s.weapon !== cache.weapon) {
         cache.weapon = s.weapon;
         weaponBox.textContent = '';
-        weaponBox.insertAdjacentHTML('beforeend', s.weapon === 'ak' ? ICON.rifle : s.weapon === 'pistol' ? ICON.pistol : s.weapon === 'bat' ? ICON.bat : s.weapon === 'sign' ? ICON.sign : ICON.fist);
+        // imagens das armas renderizadas dos próprios modelos (public/hud, geradas por dev/weapon-icons.html); o punho continua um ícone
+        if (s.weapon === 'fist') weaponBox.insertAdjacentHTML('beforeend', ICON.fist);
+        else weaponBox.insertAdjacentHTML('beforeend', `<img src="/hud/w-${s.weapon}.png" alt="${s.weaponName}" draggable="false">`);
       }
       const am = s.weapon === 'fist' || s.weapon === 'bat' || s.weapon === 'sign' ? '--' : s.reloading ? '...' : `${s.mag}/${s.reserve}`;
       if (am !== cache.ammo) { cache.ammo = am; ammo.textContent = am; }

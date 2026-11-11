@@ -225,7 +225,7 @@ export class Tracers {
 const DARK = new THREE.MeshLambertMaterial({ color: 0x2a2d31 });
 
 /** Pistola simples: ferrolho, cano e cabo (cano para +Z, origem perto do cabo). */
-function buildPistol(): THREE.Group {
+export function buildPistol(): THREE.Group {
   const g = new THREE.Group();
   const slide = new THREE.Mesh(new THREE.BoxGeometry(0.036, 0.045, 0.22), DARK);
   slide.position.set(0, 0, 0.06);

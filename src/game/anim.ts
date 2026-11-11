@@ -16,7 +16,7 @@ type Kind3 = 'rifle' | 'pistol' | 'bat';
 const kindOf = (a: Armed): Kind3 | null => (a === 'rifle' || a === 'aim' ? 'rifle' : a === 'pistol' || a === 'pistol_aim' ? 'pistol' : a === 'bat' || a === 'sign' ? 'bat' : null);
 
 /** Clipes que tocam uma vez e param no último quadro. */
-const ONCE = new Set(['kick_1', 'kick_2', 'hitk_1', 'hitk_2', 'hit_1', 'hit_2', 'hit_3', 'block', 'punch_1', 'punch_2', 'punch_3', 'punch_4', 'bat_swing', 'bat_swing2', 'car_getin_l', 'car_getout_l', 'jump_launch', 'jump_land', 'climb_jump', 'climb_pull', 'climb_stand', 'roll', 'dive']);
+const ONCE = new Set(['kick_1', 'kick_2', 'hitk_1', 'hitk_2', 'hit_1', 'hit_2', 'hit_3', 'block', 'punch_1', 'punch_2', 'punch_3', 'punch_4', 'bat_swing', 'bat_swing2', 'bat_swing3', 'car_getin_l', 'car_getout_l', 'bike_fall', 'ko_front', 'getup_front', 'jump_launch', 'jump_land', 'climb_jump', 'climb_pull', 'climb_stand', 'roll', 'dive']);
 export const isOnceClip = (name: string): boolean => ONCE.has(name);
 
 /** Clipes em que o personagem não segura o fuzil (escalar, rolar, mergulhar, emotes). */
@@ -26,7 +26,7 @@ const FREE_HANDS = (name: string): boolean => name.startsWith('climb_') || name 
 const OWN_HOLD = (name: string): boolean => name.startsWith('gun_') || name.startsWith('crouch_') || name === 'run_armed' || name === 'walk_armed';
 
 /** Velocidade de reprodução (1 = original). Os clipes de arma andam um pouco mais rápido que o jogo. */
-const TIME_SCALE: Record<string, number> = { ko: 1.8, getup: 1.8, car_getin_l: 0.62, car_getout_l: 0.62, hit_3: 2, punch_1: 1.7, punch_2: 1.6, punch_3: 1.6, punch_4: 1.6, bat_swing: 1.3, bat_swing2: 1.5, gun_fwd: 1.2, gun_bwd: 1.2, gun_left: 1.2, gun_right: 1.2, crouch_fwd: 0.8, crouch_bwd: 0.8 };
+const TIME_SCALE: Record<string, number> = { ko: 1.8, getup: 1.8, ko_front: 1.5, getup_front: 1.8, bike_fall: 1.2, car_getin_l: 0.62, car_getout_l: 0.62, hit_3: 2, punch_1: 2.2, punch_2: 2.2, punch_3: 2.0, punch_4: 1.6, bat_swing: 1.3, bat_swing2: 1.5, bat_swing3: 1.5, gun_fwd: 1.2, gun_bwd: 1.2, gun_left: 1.2, gun_right: 1.2, crouch_fwd: 0.8, crouch_bwd: 0.8 };
 
 /** Animações disponíveis no menu. */
 export const EMOTES: { id: string; label: string }[] = [
@@ -122,8 +122,8 @@ const CFG: Record<'rifle' | 'pistol', WeaponCfg> = {
   rifle: {
     // referência (foto): o fuzil atravessa o corpo na altura da barriga, cano para a esquerda e levemente para cima
     low: { pos: P3(-0.02, 1.15, 0.28), pitch: -0.06, yaw: 1.1 },
-    // yaw negativo: o cano converge para o ponto da mira (a câmera fica ~0,85 m à direita do personagem)
-    aim: { pos: P3(-0.12, 1.42, 0.2), pitch: 0, yaw: -0.05 },
+    // coronha no ombro direito, bochecha na coronha; yaw negativo: o cano converge para o ponto da mira (a câmera fica à direita)
+    aim: { pos: P3(-0.17, 1.47, 0.24), pitch: 0, yaw: -0.05 },
     gripR: P3(0, -0.055, 0.17), // empunhadura (coronha→cano: a arma tem 0,88 m e começa em z=-0,14)
     gripL: P3(0, -0.02, 0.5), // guarda-mão de madeira
     crouchLow: P3(0, 0.08, -0.04),
@@ -155,6 +155,10 @@ export class Animator {
   private aimK = 0; // 0 = fuzil baixo, 1 = fuzil no ombro
   private jabT = -1; // soco em andamento (0..1), -1 = nenhum
   private recoil = 0; // coice do último tiro (1 -> 0)
+  private flailW = 0; // "ragdoll" falso: braços e pernas balançam soltos (0..1)
+  private flailT = 0;
+  /** orientação do taco no espaço da mão direita, calibrada no bat_idle (mãos afastadas) */
+  private batLocal: THREE.Quaternion | null = null;
   private legK = 0; // andando agachado: dobra mais os joelhos
   private footRest = 0; // altura do pé mais baixo em repouso (espaço do modelo)
   private groundDrop = 0; // quanto o corpo desce para o pé tocar o chão
@@ -370,6 +374,11 @@ export class Animator {
     this.recoil = 1;
   }
 
+  /** Corpo solto (jogado da moto): braços e pernas balançam por cima do clipe. w = 0 desliga. */
+  setFlail(w: number): void {
+    this.flailW = THREE.MathUtils.clamp(w, 0, 1);
+  }
+
   /** O objeto da arma passa a ser posicionado por este animador (seguindo o peito). */
   attachWeapon(anchor: THREE.Object3D): void {
     this.weapon = anchor;
@@ -481,7 +490,9 @@ export class Animator {
     const kickT = this.clipName === 'kick_1' && this.current ? this.current.time / this.current.getClip().duration : -1;
     const kickW = kickT >= 0 ? Math.max(0, Math.sin(Math.PI * THREE.MathUtils.clamp((kickT - 0.3) / 0.45, 0, 1))) : 0;
     if (kind === 'bat' && holding) this.poseBat();
-    if ((!armed && !holding && !fist && kickW === 0 && this.crouchK < 0.01 && this.legK < 0.01 && jabW === 0) || !this.spine) {
+    const flail = this.flailW;
+    if (flail > 0) this.flailT += dt;
+    if ((!armed && !holding && !fist && kickW === 0 && flail === 0 && this.crouchK < 0.01 && this.legK < 0.01 && jabW === 0) || !this.spine) {
       this.groundFeet(dt);
       for (const b of this.touched) this.clean.set(b, b.quaternion.clone()); // tudo vem do clipe
       return;
@@ -492,6 +503,7 @@ export class Animator {
     this.bendTorso();
     if (this.legK >= 0.01) { this.flexLegs(); this.uprightTorso(); }
     if (kickW > 0) this.applyKick(kickW);
+    if (flail > 0) this.applyFlail(flail);
     if (fist) { this.curlHand(1, 1.4); this.curlHand(-1, 1.4); }
     if (jabW > 0) this.applyJab(jabW, jabE, dt);
     this.updateRoot();
@@ -580,6 +592,32 @@ export class Animator {
     this.updateRoot();
   }
 
+  /** Ragdoll falso: cada membro balança com uma onda própria (frequências diferentes para não parecer dança). */
+  private applyFlail(w: number): void {
+    const t = this.flailT;
+    const s = (f: number, ph: number): number => Math.sin(t * f + ph);
+    const arms = this.arms;
+    arms.forEach((arm, i) => {
+      const ph = i * 2.1;
+      // braço: abre para o lado e para cima; antebraço dobra
+      this.rotateBone(arm.u, new THREE.Quaternion().setFromAxisAngle(Z, arm.side * (0.9 + 0.5 * s(9, ph)) * w)
+        .multiply(new THREE.Quaternion().setFromAxisAngle(X, (0.5 * s(7, ph + 1)) * w)));
+      this.updateRoot();
+      this.rotateBone(arm.f, new THREE.Quaternion().setFromAxisAngle(X, (-0.6 - 0.5 * s(11, ph + 2)) * w));
+    });
+    this.legs.forEach((leg, i) => {
+      const ph = i * 1.7 + 0.8;
+      this.rotateBone(leg.thigh, new THREE.Quaternion().setFromAxisAngle(X, (-0.5 + 0.5 * s(8, ph)) * w)
+        .multiply(new THREE.Quaternion().setFromAxisAngle(Z, (i === 0 ? 1 : -1) * 0.25 * w)));
+      this.updateRoot();
+      this.rotateBone(leg.calf, new THREE.Quaternion().setFromAxisAngle(X, (0.6 + 0.4 * s(10, ph + 1)) * w));
+    });
+    if (this.spine) {
+      this.rotateBone(this.spine.head, new THREE.Quaternion().setFromAxisAngle(X, 0.35 * s(6, 0.3) * w).multiply(new THREE.Quaternion().setFromAxisAngle(Z, 0.3 * s(5, 2) * w)));
+    }
+    this.updateRoot();
+  }
+
   private applyJab(w: number, e: number, dt: number): void {
     const sp = this.spine!;
     const turn = new THREE.Quaternion().setFromAxisAngle(Y, -0.32 * e * w);
@@ -608,11 +646,18 @@ export class Animator {
     const hr = palm(right);
     const hl = palm(left);
     const axis = hl.clone().sub(hr);
+    const handQ = this.quatIn(right.h, new THREE.Quaternion());
+    this.bat.position.copy(hr);
+    // o mastro fica preso à mão direita (como no GTA): a orientação no espaço da mão é calibrada uma vez
+    // no bat_idle, quando as duas mãos estão afastadas e a reta entre elas dá a direção do mastro
+    if (this.batLocal) {
+      this.bat.quaternion.copy(handQ).multiply(this.batLocal);
+      return;
+    }
     if (axis.length() < 0.08) {
       // mãos coladas: só a mão direita segura; taco para a frente e para cima
-      const delta = this.quatIn(right.h, new THREE.Quaternion()).multiply(right.q0[2].clone().invert());
+      const delta = handQ.clone().multiply(right.q0[2].clone().invert());
       const rest = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0.55, 0.83).normalize());
-      this.bat.position.copy(hr);
       this.bat.quaternion.copy(delta.multiply(rest));
       return;
     }
@@ -620,8 +665,9 @@ export class Animator {
     const up = Math.abs(axis.y) > 0.95 ? new THREE.Vector3(0, 0, 1) : Y;
     const xAxis = new THREE.Vector3().crossVectors(up, axis).normalize();
     const yAxis = new THREE.Vector3().crossVectors(axis, xAxis);
-    this.bat.position.copy(hr);
-    this.bat.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, axis));
+    const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, axis));
+    this.bat.quaternion.copy(q);
+    if (this.clipName === 'bat_idle' && axis.length() > 0 && hl.distanceTo(hr) > 0.22) this.batLocal = handQ.clone().invert().multiply(q);
   }
 
   /** Fecha a mão em torno do cabo (w: 0 aberta, 1 fechada). Os dedos dobram no eixo local Z do osso. */

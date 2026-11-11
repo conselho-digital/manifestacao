@@ -91,6 +91,14 @@ export class Car {
   private throttle = 0;
   private tilt = 0;
   private lean = 0;
+  /** derrapagem: a velocidade segue heading + slip (freio de mão trava as rodas traseiras e a traseira sai) */
+  private slip = 0;
+  private rearLocked = false;
+  private rearSpin = 0;
+  /** velocidade (m/s) no instante da última batida deste quadro (0 = não bateu) */
+  impact = 0;
+  /** moto caída de lado (depois de uma batida forte); levanta quando alguém sobe */
+  fallen = false;
   private axle = new THREE.Vector3(0, 0.35, -0.9);
   private lastX = 0;
   private lastZ = 0;
@@ -168,18 +176,27 @@ export class Car {
     if (gas) this.speed += (f < -0.5 ? BRAKE : accel * (this.tilt > 0.3 ? 1.2 : 1)) * dt;
     else if (brake) this.speed -= (f > 0.5 ? BRAKE : ACCEL * 0.6) * dt; // freia e depois dá ré
     else this.speed -= Math.sign(f) * Math.min(Math.abs(f), DRAG * dt);
-    if (hand) this.speed -= Math.sign(this.speed) * Math.min(Math.abs(this.speed), HAND_BRAKE * dt);
+    // freio de mão: em velocidade trava as traseiras e derrapa (perde menos velocidade); parado/devagar segura firme
+    if (hand) this.speed -= Math.sign(this.speed) * Math.min(Math.abs(this.speed), (Math.abs(this.speed) > 3 ? HAND_BRAKE * 0.45 : HAND_BRAKE) * dt);
     this.speed = THREE.MathUtils.clamp(this.speed, bike ? -4 : -MAX_REVERSE, maxSpeed);
 
-    // Só esterça andando; com o freio de mão o carro "derrapa" (gira mais)
-    const grip = THREE.MathUtils.clamp(this.speed / 4, -1, 1) * (hand ? 1.7 : 1);
+    // Só esterça andando; com o freio de mão as rodas traseiras travam e a traseira desliza (o carro gira mais que a velocidade)
+    const sliding = hand && Math.abs(this.speed) > 3;
+    const grip = THREE.MathUtils.clamp(this.speed / 4, -1, 1) * (sliding ? 1.9 : 1);
+    const before = this.heading;
     this.heading -= steer * turn * grip * (1 - this.tilt * 0.8) * Math.max(0.4, 1 - Math.abs(this.speed) / 45) * dt; // a alta velocidade a direção fica mais firme
+    if (sliding) this.slip -= (this.heading - before) * 0.85; // a velocidade mantém a direção antiga: a traseira sai
+    this.slip *= Math.exp(-dt * (sliding ? 0.9 : 5));
+    if (Math.abs(this.slip) < 1e-3) this.slip = 0;
+    this.rearLocked = sliding;
     this.lean += (steer * Math.min(1, Math.abs(this.speed) / 10) * 0.45 - this.lean) * Math.min(1, dt * 6);
-    this.x += Math.sin(this.heading) * this.speed * dt;
-    this.z += Math.cos(this.heading) * this.speed * dt;
+    const dir = this.heading + this.slip;
+    this.x += Math.sin(dir) * this.speed * dt;
+    this.z += Math.cos(dir) * this.speed * dt;
 
     // Limites da arena e caixas: para e quica um pouco
     let hit = false;
+    const speedBefore = Math.abs(this.speed);
     const cx = THREE.MathUtils.clamp(this.x, -(MAP.halfX - 1.8), MAP.halfX - 1.8);
     const cz = THREE.MathUtils.clamp(this.z, -(MAP.halfZ - 1.8), MAP.halfZ - 1.8);
     if (cx !== this.x || cz !== this.z) { this.x = cx; this.z = cz; hit = true; }
@@ -227,7 +244,8 @@ export class Car {
         hit = true;
       }
     }
-    if (hit) this.speed *= -0.25;
+    this.impact = hit ? speedBefore : 0;
+    if (hit) { this.speed *= -0.25; this.slip = 0; }
     this.apply(steer, dt);
   }
 
@@ -273,6 +291,11 @@ export class Car {
       this.wobble = Math.max(0, this.wobble - dt * 2.5);
       this.root.rotation.z = Math.sin(performance.now() * 0.05) * this.wobble * 0.04;
     }
+    // moto caída: deita de lado; quando alguém sobe, levanta
+    if (this.bike && this.driver === null && this.fallen) {
+      this.lean += (1.25 - this.lean) * Math.min(1, dt * 5);
+      this.apply(0);
+    } else if (this.bike && this.fallen && this.driver !== null) this.fallen = false;
     // portas: abrem enquanto doorT > 0,25 e fecham no final
     this.doorOpen += ((this.doorT > 0.25 ? 1 : 0) - this.doorOpen) * Math.min(1, dt * 10);
     if (this.doorT > 0) this.doorT -= dt;
@@ -300,6 +323,7 @@ export class Car {
     this.root.position.set(this.x, 0, this.z);
     this.root.rotation.y = this.heading;
     this.spin += (this.speed * dt) / (this.bike ? 0.33 : 0.36);
+    if (!this.rearLocked) this.rearSpin = this.spin; // freio de mão: as rodas traseiras ficam travadas
     if (this.bike && this.body) {
       // empina em torno do eixo traseiro e inclina nas curvas
       this.body.rotation.set(-this.tilt, 0, this.lean);
@@ -310,7 +334,7 @@ export class Car {
       if (name.startsWith('door')) continue;
       const front = name.startsWith('wheel_F');
       pivot.rotation.y = front && !this.bike ? -steer * 0.45 : 0;
-      (pivot.children[0] as THREE.Object3D).rotation.x = this.spin;
+      (pivot.children[0] as THREE.Object3D).rotation.x = front ? this.spin : this.rearSpin;
     }
   }
 }

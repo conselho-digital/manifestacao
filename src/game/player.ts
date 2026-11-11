@@ -13,7 +13,10 @@ const GRAVITY = -20;
 const JUMP_V = 6.8;
 const RADIUS = 0.4;
 const STEP = 0.45; // desnível que se sobe andando
-const CAM_DISTANCE = 3.8;
+const CAM_DISTANCE = 3.3;
+const CAM_AIM_DISTANCE = 2.7;
+/** moto: batida acima desta velocidade (m/s) joga o piloto para a frente */
+const CRASH_SPEED = 9;
 
 // Escalada: pular(0.63s) -> puxar(1.43s) -> levantar(0.4s)
 const CLIMB_T = { grab: 0.633, pull: 2.066, end: 2.466 };
@@ -73,6 +76,8 @@ export class Player {
   private koVel = new THREE.Vector2();
   private koT = 0;
   private koCool = 0;
+  private koFront = false; // jogado da moto: voa para a frente (dive), cai de cara e levanta (getup_front)
+  private koVy = 0;
   private modelRot0: number | null = null;
   private swingAlt = false;
   private punchN = 0;
@@ -141,7 +146,7 @@ export class Player {
       this.animator?.restart(this.kickAlt ? 'kick_2' : 'kick_1');
       return 'k';
     }
-    this.swingT = 0.55;
+    this.swingT = this.punchN === 3 ? 0.8 : 0.7; // FightA_1/2/3 (jab, direto, gancho) acelerados 2x
     this.animator?.restart(`punch_${this.punchN}`);
     return 'f';
   }
@@ -151,7 +156,8 @@ export class Player {
     if (this.mode !== 'ground') return;
     this.swingT = 0.75;
     this.swingAlt = !this.swingAlt;
-    this.animator?.restart(this.swingAlt ? 'bat_swing2' : 'bat_swing');
+    // Bat_2 e Bat_3 (golpes horizontais); o Bat_1 é um corte de cima para baixo e ficou de fora
+    this.animator?.restart(this.swingAlt ? 'bat_swing3' : 'bat_swing2');
   }
 
   /** Muda o que o personagem segura (braços e arma na mão). */
@@ -393,6 +399,7 @@ export class Player {
     }
     // No carro: acelerador, freio e freio de mão; o joystick (A/D) só esterça
     car.drive(dt, input.gas, input.brake, input.handbrake, input.x, input.wheelie);
+    if (car.bike && car.impact > CRASH_SPEED) { this.crashBike(car, car.impact); return; }
     this.object.position.set(car.x, 0, car.z);
     this.heading = car.heading;
     this.object.rotation.y = car.heading;
@@ -469,19 +476,64 @@ export class Player {
     return false;
   }
 
+  /** Batida forte de moto: o piloto voa para a frente, cai, desliza e levanta; a moto fica caída. */
+  private crashBike(car: Car, speed: number): void {
+    const h = car.heading;
+    car.driver = null;
+    car.speed = 0;
+    car.fallen = true;
+    this.car = null;
+    this.object.rotation.order = 'XYZ';
+    this.object.rotation.set(0, h, 0);
+    this.object.position.set(car.x + Math.sin(h) * 0.9, 0.9, car.z + Math.cos(h) * 0.9);
+    this.resetModelRot();
+    this.heading = h;
+    this.mode = 'ko';
+    this.koFront = true;
+    this.koT = 0;
+    this.koVy = 3.2;
+    this.koVel.set(Math.sin(h), Math.cos(h)).multiplyScalar(Math.min(13, speed * 0.85));
+    this.weaponVis?.setHidden(true);
+    this.animator?.setRide(null);
+    this.animator?.setArmed('none');
+    this.animator?.setFlail(1);
+    this.animator?.restart('dive');
+  }
+
   private updateKo(dt: number): void {
     this.koT += dt;
+    const pos = this.object.position;
+    const bx = pos.x;
+    const bz = pos.z;
     this.moveHoriz(this.koVel.x * dt, this.koVel.y * dt);
-    this.koVel.multiplyScalar(Math.exp(-dt * 2.4));
-    this.object.position.y = Math.max(0, this.object.position.y - 20 * dt);
-    if (this.koT > 1.6) this.animator?.play('getup');
-    if (this.koT > 3.2) {
-      this.mode = 'ground';
-      this.koCool = 3;
-      this.weaponVis?.setHidden(false);
-      this.animator?.play('idle');
+    // bateu em parede/carro durante o voo: para
+    const moved = Math.hypot(pos.x - bx, pos.z - bz);
+    if (moved < this.koVel.length() * dt * 0.5) this.koVel.multiplyScalar(0.1);
+    if (this.koFront) {
+      // voo em arco; no chão desliza e o corpo vai ficando mole
+      this.koVy += GRAVITY * dt;
+      pos.y = Math.max(0, pos.y + this.koVy * dt);
+      const ground = pos.y <= 0;
+      if (ground) { this.koVy = 0; this.koVel.multiplyScalar(Math.exp(-dt * 3.5)); }
+      this.animator?.setFlail(ground ? Math.max(0, 1 - (this.koT - 0.6) * 1.2) : 1);
+      if (this.koT > 2.2 && this.animator?.name !== 'getup_front') { this.animator?.setFlail(0); this.animator?.play('getup_front'); }
+      if (this.koT > 3.5) this.endKo();
+    } else {
+      this.koVel.multiplyScalar(Math.exp(-dt * 2.4));
+      pos.y = Math.max(0, pos.y - 20 * dt);
+      if (this.koT > 1.6) this.animator?.play('getup');
+      if (this.koT > 3.2) this.endKo();
     }
     this.animator?.update(dt);
+  }
+
+  private endKo(): void {
+    this.mode = 'ground';
+    this.koCool = 3;
+    this.koFront = false;
+    this.weaponVis?.setHidden(false);
+    this.animator?.setFlail(0);
+    this.animator?.play('idle');
   }
 
   private exitCar(): void {
@@ -625,7 +677,7 @@ export class Player {
   followCamera(camera: THREE.PerspectiveCamera, dt: number, yaw: number, pitch: number, aimK: number): void {
     const p = this.object.position;
     const driving = this.mode === 'drive';
-    const dist = driving ? 9 : THREE.MathUtils.lerp(CAM_DISTANCE, 3.2, aimK);
+    const dist = driving ? 9 : THREE.MathUtils.lerp(CAM_DISTANCE, CAM_AIM_DISTANCE, aimK);
     const shoulder = driving ? 0 : 0.85 - 0.05 * aimK;
     this.crouchK += ((this.crouching && !driving ? 1 : 0) - this.crouchK) * Math.min(1, dt * 8);
     const target = new THREE.Vector3(p.x, p.y + (driving ? 1.6 : 1.25 - 0.45 * this.crouchK), p.z);
