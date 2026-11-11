@@ -12,6 +12,8 @@ const PILLAR = 1.0; // lado do pilar
 const BASE_Y = 2.3; // onde começa a primeira letra (o S)
 const GAP = 0.12;
 
+/** escala da escultura no mapa (0,5 = metade do tamanho original, ~3,5 m de altura) */
+const SCALE = 0.5;
 const GOLD = 0xd2a64a;
 
 function letterTextures(ch: string): { front: THREE.CanvasTexture; side: THREE.CanvasTexture; w: number; h: number; capCenter: number } {
@@ -103,9 +105,10 @@ export function createSafraSign(): THREE.Group {
 /** Põe a escultura no mapa em (x, z) olhando para `heading` (rad, 0 = +Z) e cria a colisão do pilar. */
 export function placeSafraSign(parent: THREE.Object3D, x: number, z: number, heading: number): void {
   const s = createSafraSign();
+  s.scale.setScalar(SCALE);
   s.position.set(x, 0, z);
   s.rotation.y = heading;
   parent.add(s);
-  const half = (s.userData.size as number) / 2;
-  addBox(x - half, x + half, z - half, z + half, s.userData.height as number, '#b98f3c');
+  const half = ((s.userData.size as number) * SCALE) / 2;
+  addBox(x - half, x + half, z - half, z + half, (s.userData.height as number) * SCALE, '#b98f3c');
 }
