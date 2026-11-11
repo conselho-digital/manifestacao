@@ -153,11 +153,16 @@ const CFG: Record<'rifle' | 'pistol', WeaponCfg> = {
   },
 };
 
+/** Lata de spray: giro só da mão (graus) para a palma ficar para a frente, e quanto os dedos fecham (mão meio aberta). */
+const SPRAY_HAND_ROLL = -Math.PI / 2; // palma para baixo...
+const SPRAY_HAND_BEND = (70 * Math.PI) / 180; // ...e o pulso dobra para trás: palma para a frente, dedos para cima
+const SPRAY_CURL = 0.45;
+
 /** Lata de spray (uma mão só, a direita): abaixada junto ao quadril; ao pintar o braço sobe e estica para a parede (o bico para a frente). */
 const CFG_SPRAY: WeaponCfg = {
   low: { pos: P3(-0.2, 1.1, 0.22), pitch: 0, yaw: 0 },
   aim: { pos: P3(-0.1, 1.42, 0.5), pitch: 0, yaw: 0 },
-  gripR: P3(0, 0, -0.012),
+  gripR: P3(0, -0.03, 0.02), // a palma (mão aberta, virada para a frente) fica atrás da lata
   gripL: P3(0, 0, 0),
   crouchLow: P3(0, 0.1, 0),
   crouchAim: P3(0, -0.08, 0),
@@ -175,6 +180,10 @@ export class Animator {
   isCarlos = false;
   /** giro do antebraço e da mão em torno do próprio eixo (rad): palma para dentro ao segurar */
   armRoll = 0;
+  /** giro extra só da mão (rad), em volta do antebraço: lata de spray com a palma para a frente */
+  private handRoll = 0;
+  /** dobra só do pulso (rad): a mão sobe e a palma vira para a frente */
+  private handBend = 0;
   private armW = 0; // 0 = braços do clipe, 1 = braços segurando o fuzil
   private carryW = 0; // 1 = arma branca carregada em pé (andando/correndo): braços por IK, arma para cima
   private aimK = 0; // 0 = fuzil baixo, 1 = fuzil no ombro
@@ -532,6 +541,10 @@ export class Animator {
     const dbgRoll = (window as unknown as { __ROLL?: number }).__ROLL;
     // segurando arma: palmas viradas uma para a outra (para dentro); no guidão/volante a palma fica para baixo
     this.armRoll = dbgRoll !== undefined ? dbgRoll * (Math.PI / 180) : this.holdsWeapon && kind && !this.ride?.grips ? Math.PI / 2 : 0;
+    const hr = (window as unknown as { __HROLL?: number }).__HROLL;
+    this.handRoll = hr !== undefined ? hr * (Math.PI / 180) : isSpray(this.armed) ? SPRAY_HAND_ROLL : 0;
+    const hb = (window as unknown as { __HBEND?: number }).__HBEND;
+    this.handBend = hb !== undefined ? hb * (Math.PI / 180) : isSpray(this.armed) ? SPRAY_HAND_BEND : 0;
     const ikTarget = !this.holdsWeapon || kind === 'bat' || !kind ? 0 : 1; // braços sempre por IK nas empunhaduras (pose da foto de referência)
     this.armW += (ikTarget - this.armW) * Math.min(1, dt * 10);
     this.aimK += ((isAimPose(this.armed) ? 1 : 0) - this.aimK) * Math.min(1, dt * 9);
@@ -609,7 +622,7 @@ export class Animator {
     if (armed) for (const arm of this.arms) this.poseArm(arm, frame, dt);
     if (holding) {
       // mãos fechadas no cabo: fuzil, taco e pistola (duas mãos, também abaixada)
-      this.curlHand(-1, 1);
+      this.curlHand(-1, isSpray(this.armed) ? SPRAY_CURL : 1);
       this.curlHand(1, isSpray(this.armed) ? 0 : 1);
     }
   }
@@ -946,6 +959,12 @@ export class Animator {
       this.quatIn(bone.parent!, parentQ);
       let world = deltas[i]!.clone().multiply(arm.q0[i]!);
       if (i > 0 && this.armRoll !== 0) world = new THREE.Quaternion().setFromAxisAngle(arm.curF, this.armRoll * arm.side).multiply(world);
+      if (i === 2 && this.handRoll !== 0) world = new THREE.Quaternion().setFromAxisAngle(arm.curF, this.handRoll * arm.side).multiply(world);
+      if (i === 2 && this.handBend !== 0) {
+        // pulso para trás: a mão gira em volta do eixo esquerda-direita (perpendicular ao antebraço e à vertical), sem mexer no braço
+        const axis = new THREE.Vector3().crossVectors(arm.curF, Y).normalize();
+        if (axis.lengthSq() > 0.01) world = new THREE.Quaternion().setFromAxisAngle(axis, this.handBend).multiply(world);
+      }
       const target = parentQ.invert().multiply(world);
       bone.quaternion.slerp(target, w);
       bone.updateMatrixWorld(true);
