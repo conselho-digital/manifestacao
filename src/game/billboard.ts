@@ -1,4 +1,4 @@
-// Outdoor da calçada ao lado do museu: um telão com um vídeo (ou live) do YouTube que o admin controla e todos veem/ouvem de perto.
+// Outdoor da calçada em frente ao parque: um telão com um vídeo (ou live) do YouTube que o admin controla e todos veem/ouvem de perto.
 // Estado compartilhado na tabela `billboard` do Supabase (uma linha; todos leem, só o admin altera; Realtime avisa na hora).
 // O vídeo toca num quadro flutuante (YouTube IFrame API) quando o jogador está a menos de RANGE_ON m do telão; o volume cai com a distância.
 // O telão no mapa mostra a miniatura do vídeo, e todos tocam na mesma posição (a posição esperada é calculada pela hora do servidor).
@@ -6,11 +6,11 @@ import * as THREE from 'three';
 import { supabase } from '../net/supabase';
 import { addBox } from './map';
 
-const POS = new THREE.Vector3(53.5, 0, 23); // calçada na lateral esquerda do museu (lado leste, olhando para o MASP de frente da rua)
-const FACE = new THREE.Vector3(-0.3, 0, -0.954).normalize(); // a frente do telão é virada para a rua (avenida)
-const W = 6.4;
-const H = 3.6; // 16:9
-const SCREEN_Y = 5.2; // centro do telão
+const POS = new THREE.Vector3(15, 0, -22.5); // calçada de pedras do outro lado da avenida, em frente ao Parque Trianon
+const FACE = new THREE.Vector3(0, 0, 1); // a frente do telão é virada para a rua (avenida) e para o museu
+const W = 8;
+const H = 4.5; // 16:9
+const SCREEN_Y = 5.6; // centro do telão
 const POST_X = W / 2 - 0.3;
 const RANGE_ON = 58; // a partir daqui o quadro do vídeo aparece (e o som começa, bem baixo)
 const RANGE_FULL = 12; // até aqui, volume cheio

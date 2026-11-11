@@ -345,7 +345,7 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     const ctl = el('div', 'ps-row', back, playPause, stopB, fwd);
     const line = el('div', 'ps-row', bar, time, badge);
     body.append(
-      el('p', 'ps-note', 'Administrador: o vídeo do outdoor da calçada na lateral esquerda do museu (de frente para a avenida) toca igual para todos. Quem chega perto vê o quadro do vídeo e ouve; o volume cai com a distância. Aceita vídeos e lives do YouTube (o dono precisa permitir incorporar).'),
+      el('p', 'ps-note', 'Administrador: o vídeo do outdoor da calçada em frente ao parque (de frente para a avenida) toca igual para todos. Quem chega perto vê o quadro do vídeo e ouve; o volume cai com a distância. Aceita vídeos e lives do YouTube (o dono precisa permitir incorporar).'),
       out, el('div', 'ps-row', url, check, set, clear), preview, ctl, line);
 
     const run = (p: Promise<string | null>, ok = ''): void => {
