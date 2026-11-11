@@ -35,6 +35,17 @@ export function addBox(minX: number, maxX: number, minZ: number, maxZ: number, t
   COLLIDERS.push({ minX, maxX, minZ, maxZ, top, color, bottom });
 }
 
+/** Ponto aleatório na frente do MASP (entre a avenida e o prédio), longe de qualquer obstáculo. O personagem nasce de frente para o museu. */
+export function museumSpawn(): [number, number] {
+  for (let i = 0; i < 60; i++) {
+    const x = Math.random() * 46; // o MASP vai de x = -4 a 50
+    const z = 16.5 + Math.random() * 6.5; // calçada e calçadão, antes do prédio (z ≈ 24,6)
+    const blocked = COLLIDERS.some((b) => b.top > 0.3 && (b.bottom ?? 0) < 1.8 && x > b.minX - 0.9 && x < b.maxX + 0.9 && z > b.minZ - 0.9 && z < b.maxZ + 0.9);
+    if (!blocked) return [x, z];
+  }
+  return [23, 18];
+}
+
 /** Raio contra caixa alinhada aos eixos; devolve a distância ou null. */
 export function rayBox(
   ox: number, oy: number, oz: number, dx: number, dy: number, dz: number,

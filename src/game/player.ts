@@ -16,7 +16,7 @@ const STEP = 0.45; // desnível que se sobe andando
 const CAM_DISTANCE = 3.3;
 const CAM_AIM_DISTANCE = 2.7;
 /** moto: batida acima desta velocidade (m/s) joga o piloto para a frente */
-const CRASH_SPEED = 9;
+const CRASH_SPEED = 11; // ~40 km/h (era 9): só um pouco menos sensível
 
 // Escalada: pular(0.63s) -> puxar(1.43s) -> levantar(0.4s)
 const CLIMB_T = { grab: 0.633, pull: 2.066, end: 2.466 };

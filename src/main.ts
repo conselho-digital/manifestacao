@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createCamera, createRenderer, createScene, handleResize } from './game/scene';
 import { createCity } from './game/city';
+import { museumSpawn } from './game/map';
 import { createCharacter } from './game/characters';
 import { initMouse, readInput, takeLook, type InputState } from './game/input';
 import { Player } from './game/player';
@@ -96,7 +97,8 @@ void showLobby().then(async (profile) => {
   const obj = await createCharacter(profile.character);
   // Ponto de partida (?pos=x,z serve para inspecionar o mapa)
   const startQ = new URLSearchParams(location.search).get('pos')?.split(',').map(Number);
-  obj.position.set(startQ?.[0] ?? 25, 0, startQ?.[1] ?? 16);
+  const spawn = museumSpawn(); // em frente ao museu, num ponto aleatório
+  obj.position.set(startQ?.[0] ?? spawn[0], 0, startQ?.[1] ?? spawn[1]);
   scene.add(obj);
   player = new Player(obj, await Animator.create(obj));
   player.attachWeapon(new WeaponVisual(obj));
