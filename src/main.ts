@@ -13,7 +13,7 @@ import { Net } from './net/sync';
 import { Voice } from './net/voice';
 import { RemotePlayer } from './game/remote';
 import { CARS, createCars, despawnPersonal, TRAFFIC, findVehicleSpot, PERSONAL, spawnPersonal, updateEngines, updateTraffic } from './game/vehicle';
-import { Combat } from './game/combat';
+import { Combat, MAX_HEALTH } from './game/combat';
 import { Graffiti } from './game/graffiti';
 import { Billboard } from './game/billboard';
 import { WeaponVisual } from './game/weapons';
@@ -409,7 +409,7 @@ function loop(): void {
         kmh: Math.abs(player.carSpeed) * 3.6,
         remotes: [...remotes.values()].map((r) => ({ name: r.info.name, x: r.root.position.x, z: r.root.position.z })),
         players: remotes.size + 1, maxPlayers: 30,
-        health: combat.health, armor: combat.armor, money: combat.money,
+        health: (combat.health / MAX_HEALTH) * 100, armor: combat.armor, money: combat.money,
         weapon: HUD_KEY[combat.weapon], weaponName: combat.weaponName, weaponId: combat.weapon,
         weaponList: combat.ownedWeapons().map((id) => ({ id, key: HUD_KEY[id], name: WEAPON_NAMES[id] })),
         mag: combat.mag, reserve: combat.reserve, reloading: combat.reloading,
@@ -427,7 +427,7 @@ function loop(): void {
     net.sendMove(
       p.position.x, p.position.y, p.position.z, p.rotation.y,
       combat.dead ? 'dead' : player.animName, player.isDriving ? player.carId : -1, player.isDriving ? player.carOwner : '',
-      combat.dead ? 0 : player.weaponCode, pitch, combat.health, combat.protectT > 0, performance.now(),
+      combat.dead ? 0 : player.weaponCode, pitch, (combat.health / MAX_HEALTH) * 100, combat.protectT > 0, performance.now(),
     );
   }
   // quem barra o trânsito: veículos em uso (as duas pontas), jogadores; os parados na pista são contornados

@@ -12,6 +12,8 @@ import type { RifleKind } from './rifles';
 import type { Armed } from './anim';
 import { findWall, SPRAY_DURATION, SPRAY_SIZE, type Graffiti } from './graffiti';
 
+/** vida cheia: 400 (4 vezes a antiga de 100). O dano das armas não mudou, então o jogador aguenta 4 vezes mais. */
+export const MAX_HEALTH = 400;
 export const MAG_SIZE = 30;
 const RESERVE_START = 120;
 const PISTOL_MAG = 12;
@@ -73,7 +75,7 @@ interface Deps {
 
 /** Combate casual: o atirador calcula o acerto; quem foi acertado aplica o dano em si mesmo. */
 export class Combat {
-  health = 100;
+  health = MAX_HEALTH;
   armor = 50;
   get money(): number { return this.d.inv.money; }
   /** pausado: não leva dano nem atira */
@@ -148,13 +150,13 @@ export class Combat {
     if (item.kind === 'weapon' || item.kind === 'vehicle') return { ok: false, msg: 'Este item é pago em reais.' };
     if (item.kind === 'ammo' && item.weapon !== undefined && !inv.has(item.weapon)) return { ok: false, msg: 'Compre a arma primeiro.' };
     if (item.kind === 'ammo' && item.weapons && !item.weapons.some((w) => inv.has(w))) return { ok: false, msg: 'Você não tem nenhum fuzil 5,56.' };
-    if (item.kind === 'health' && this.health >= 100) return { ok: false, msg: 'Sua vida já está cheia.' };
+    if (item.kind === 'health' && this.health >= MAX_HEALTH) return { ok: false, msg: 'Sua vida já está cheia.' };
     if (item.kind === 'armor' && this.armor >= 100) return { ok: false, msg: 'Seu colete já está cheio.' };
     if (!inv.spend(item.price)) return { ok: false, msg: 'Dinheiro insuficiente.' };
     if (item.kind === 'ammo' && item.weapons) {
       for (const w of item.weapons) if (inv.has(w)) this.ammo[w]!.reserve += item.amount ?? 0;
     } else if (item.kind === 'ammo' && item.weapon !== undefined) this.ammo[item.weapon]!.reserve += item.amount ?? 0;
-    else if (item.kind === 'health') this.health = 100;
+    else if (item.kind === 'health') this.health = MAX_HEALTH;
     else if (item.kind === 'armor') this.armor = 100;
     return { ok: true, msg: `${item.name} comprado.` };
   }
@@ -405,7 +407,7 @@ export class Combat {
   private respawn(): void {
     const [x, z] = SPAWNS[Math.floor(Math.random() * SPAWNS.length)]!;
     this.player?.respawn(x, z);
-    this.health = 100;
+    this.health = MAX_HEALTH;
     this.armor = 50;
     this.refillGuns();
     this.reloading = false;
