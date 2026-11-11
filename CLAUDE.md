@@ -110,6 +110,11 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 - Sombras por distância (`setShadow` em culling.ts): árvores além de 55 m e carros além de 40 m não projetam sombra; arbustos (material `bush`) nunca. Mais 206 → ~153 chamadas por quadro.
 - Celular/tablet (`IS_TOUCH` em scene.ts, `pointer: coarse`): resolução de desenho até 1,5x (PC até 2x; `?pr=N` força), sem antialias (o leve desfoque da imagem já suaviza) e sombra 1024 (PC 2048).
 
+## Pintura dos carros e altura dos prédios
+- Carros comuns (garagem/pessoais): pintura padrão cinza claro (`DEFAULT_PAINT` em vehicle.ts), sem faixas coloridas; a equipe aparece em adesivos redondos (`addTeamStickers`: círculo branco-borda dividido na diagonal em cor 1 e cor 2) na porta do motorista, na porta do acompanhante (filhos do pivô da porta, giram com ela) e no capô (achado por raio de cima para baixo, acompanha a inclinação). Motos continuam com a pintura da equipe. Carros do cenário (parados e trânsito) usam cores comuns e sóbrias (`colors` em city.ts).
+- Viatura (`POLICE_LOOK`): o letreiro "POLÍCIA MILITAR" é posto por raio horizontal na lataria (a caixa do carro inclui os retrovisores, o que fazia o letreiro flutuar).
+- Prédios: metade da altura original (`BUILDING_SCALE` 0,5 em city.ts; mínimo 10 m, 18 m com térreo; casas não mudam) e a torre cinza também (`TOWER.h` 42). Letreiros de prédios: o usuário vai mandar fotos para colocar nas fachadas.
+
 ## Mapa (cidade)
 - Gerado por código em `src/game/city.ts` (prédios com janelas em geometria fundida, árvores instanciadas). MASP é o modelo `public/models/map/masp.glb` (CC-BY, ver CREDITS.md).
 - Colisão (`COLLIDERS`, vale para jogador, veículos e balas): prédios, torre, MASP, jardineiras, bancos, troncos de árvore (arbustos NÃO colidem), postes de luz (z = ±13,4, deslocados para fora das ruas laterais por `poleX`), abrigos de ônibus, carros parados nas ruas e no estacionamento; carros do trânsito e dirigíveis são círculos (`hittables`). Em desenvolvimento `validate()` avisa se poste/abrigo cair em avenida ou rua lateral. Boca da arma: AK (-0,017; 0,019; 0,75) e pistola (0; 0; 0,185) no espaço da arma (medida nos modelos; `dev/anim-viewer.ts` `V.muzzle` mostra).

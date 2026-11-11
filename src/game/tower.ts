@@ -7,7 +7,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
  * casa de máquinas, venezianas, ventiladores redondos, ar-condicionado e duas antenas treliçadas.
  * Frente = +Z. A direita de quem olha a fachada = +X.
  */
-export const TOWER = { w: 31.1, d: 24.4, h: 84 };
+export const TOWER = { w: 31.1, d: 24.4, h: 42 }; // metade da altura original (84 m)
 
 const FLOOR = 3.2;
 const MODULE = 1.04; // largura de uma janela

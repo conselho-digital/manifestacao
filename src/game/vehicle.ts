@@ -36,6 +36,8 @@ const RADIUS = 1.3;
 /** Duas cores da equipe (#rrggbb) para pintar o veículo. */
 export interface PaintLook { c1: string; c2: string; /** pintura de viatura: teto na cor 1, letreiro "POLÍCIA MILITAR" nas laterais e luzes no teto */ police?: boolean }
 /** Viatura da PM: o Buffalo pintado de branco com a faixa de baixo preta (letreiro e luzes no teto vêm de `police`). */
+/** pintura padrão dos carros comuns (cinza claro); a equipe aparece nos adesivos redondos (portas e capô) */
+export const DEFAULT_PAINT = '#b9bec5';
 export const POLICE_LOOK: PaintLook = { c1: '#f1f2f4', c2: '#16181b', police: true };
 
 const BLACK = 0x161616;
@@ -76,7 +78,7 @@ function applyTeamPaint(model: THREE.Object3D, look: PaintLook, bike: boolean): 
   const painted = body.filter(([mat]) => mat.name === 'paint').map(([mat]) => mat);
   const paint1 = painted.length ? painted : body[0] ? [body[0][0]] : [];
   const second = bike ? body.find(([mat, n]) => !paint1.includes(mat) && n >= (body[0]?.[1] ?? 0) * 0.2 && lumOf((mat as THREE.MeshStandardMaterial).color ?? new THREE.Color(0.5, 0.5, 0.5)) > 0.2)?.[0] : undefined;
-  const c1 = new THREE.Color(look.c1);
+  const c1 = new THREE.Color(!bike && !look.police ? DEFAULT_PAINT : look.c1); // carro comum: pintura padrão (a equipe vai em adesivos)
   const c2 = new THREE.Color(look.c2);
   const clones = new Map<THREE.Material, THREE.Material>();
   const clonesW = new Map<THREE.Material, THREE.Material>(); // versões para as peças das rodas
@@ -89,7 +91,7 @@ function applyTeamPaint(model: THREE.Object3D, look: PaintLook, bike: boolean): 
     std.userData.teamPaint = false;
     const l = lumOf(mat instanceof THREE.MeshStandardMaterial ? mat.color : new THREE.Color(0.5, 0.5, 0.5));
     if (onWheel) { std.color.set(BLACK); addTire(std, wheelR.get(mat) ?? 0.33); } // roda: pneu preto por fora, aro cinza no miolo
-    else if (paint1.includes(mat)) { std.color.copy(c1); std.userData.teamPaint = !bike; std.roughness = 0.45; std.metalness = 0.25; }
+    else if (paint1.includes(mat)) { std.color.copy(c1); std.userData.teamPaint = !bike && !!look.police; std.roughness = 0.45; std.metalness = 0.25; }
     else if (mat === second) { std.color.copy(c2); std.roughness = 0.45; std.metalness = 0.25; }
     else std.color.set(basicColor(mat instanceof THREE.MeshStandardMaterial && mat.map ? 0.45 : l));
     std.userData.c2 = c2;
@@ -199,7 +201,63 @@ export function buildCarVisual(src: THREE.Object3D, colorHex: number, look?: Pai
     });
   }
   if (look?.police) addPoliceDetails(group);
+  else if (look && !bike) addTeamStickers(group, wheels, look);
   return { group, wheels };
+}
+
+const stickerTex = new Map<string, THREE.CanvasTexture>();
+/** Adesivo redondo da equipe: borda branca e o círculo dividido na diagonal nas duas cores. */
+function stickerTexture(c1: string, c2: string): THREE.CanvasTexture {
+  const key = c1 + c2;
+  let t = stickerTex.get(key);
+  if (t) return t;
+  const c = document.createElement('canvas');
+  c.width = c.height = 128;
+  const g = c.getContext('2d')!;
+  g.beginPath(); g.arc(64, 64, 62, 0, Math.PI * 2); g.fillStyle = '#ffffff'; g.fill();
+  g.save();
+  g.beginPath(); g.arc(64, 64, 52, 0, Math.PI * 2); g.clip();
+  g.fillStyle = c1; g.fillRect(0, 0, 128, 128);
+  g.fillStyle = c2; g.beginPath(); g.moveTo(128, 0); g.lineTo(128, 128); g.lineTo(0, 128); g.closePath(); g.fill();
+  g.restore();
+  g.beginPath(); g.arc(64, 64, 52, 0, Math.PI * 2); g.lineWidth = 3; g.strokeStyle = 'rgba(0,0,0,.55)'; g.stroke();
+  t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  stickerTex.set(key, t);
+  return t;
+}
+
+/** Adesivos da equipe: um em cada porta (o da porta gira junto com ela) e um no capô. */
+function addTeamStickers(group: THREE.Group, wheels: Record<string, THREE.Object3D>, look: PaintLook): void {
+  group.updateMatrixWorld(true);
+  const mat = new THREE.MeshBasicMaterial({ map: stickerTexture(look.c1, look.c2), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  const disc = (d: number): THREE.Mesh => new THREE.Mesh(new THREE.PlaneGeometry(d, d), mat);
+  for (const [name, side] of [['door_L', 1], ['door_R', -1]] as const) {
+    const pivot = wheels[name];
+    if (!pivot) continue;
+    const box = new THREE.Box3().setFromObject(pivot);
+    const h = box.max.y - box.min.y;
+    const world = new THREE.Vector3(side > 0 ? box.max.x : box.min.x, box.min.y + h * 0.32, (box.min.z + box.max.z) / 2);
+    const m = disc(Math.min(0.42, h * 0.55));
+    m.position.copy(pivot.worldToLocal(world.addScaledVector(new THREE.Vector3(side, 0, 0), 0.014)));
+    m.rotation.y = side * (Math.PI / 2);
+    pivot.add(m);
+  }
+  // capô: raio de cima para baixo na frente do carro, para achar a altura e a inclinação
+  const box = new THREE.Box3().setFromObject(group);
+  const size = box.getSize(new THREE.Vector3());
+  const ray = new THREE.Raycaster(new THREE.Vector3(0, box.max.y + 1, box.max.z - size.z * 0.24), new THREE.Vector3(0, -1, 0), 0, size.y + 2);
+  const hit = ray.intersectObject(group, true).find((h) => h.object instanceof THREE.Mesh && !(h.object.material as THREE.Material).transparent);
+  if (hit && hit.face) {
+    const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
+    if (n.y > 0.5) {
+      const m = disc(0.55);
+      m.position.copy(group.worldToLocal(hit.point.clone().addScaledVector(n, 0.012)));
+      m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
+      group.add(m);
+    }
+  }
 }
 
 let policeTex: THREE.CanvasTexture | null = null;
@@ -231,9 +289,16 @@ function addPoliceDetails(group: THREE.Group): void {
   const lift = group.position.y; // o grupo já subiu até as rodas tocarem o chão
   const w = size.x;
   const mat = new THREE.MeshBasicMaterial({ map: policeDecal(), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
+  group.updateMatrixWorld(true);
+  const y = box.min.y + size.y * 0.4;
   for (const side of [1, -1]) {
-    const m = new THREE.Mesh(new THREE.PlaneGeometry(size.z * 0.4, size.z * 0.1), mat);
-    m.position.set(side * (w / 2 + 0.012), box.min.y - lift + size.y * 0.42, c.z + size.z * 0.04);
+    // raio horizontal de fora para dentro: o letreiro encosta na lataria de verdade (a caixa do carro inclui os retrovisores)
+    const from = group.localToWorld(new THREE.Vector3(side * (w / 2 + 1), y - lift, c.z - size.z * 0.02));
+    const ray = new THREE.Raycaster(from, new THREE.Vector3(-side, 0, 0), 0, w + 2);
+    const hit = ray.intersectObject(group, true).find((h) => h.object instanceof THREE.Mesh && !(h.object.material as THREE.Material).transparent);
+    const x = hit ? group.worldToLocal(hit.point.clone()).x : side * (w / 2 - 0.1);
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(size.z * 0.34, size.z * 0.085), mat);
+    m.position.set(x + side * 0.015, y - lift, c.z - size.z * 0.02);
     m.rotation.y = side * (Math.PI / 2);
     group.add(m);
   }

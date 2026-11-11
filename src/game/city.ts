@@ -266,6 +266,8 @@ const propSpots: [string, number, number][] = [];
 
 /** Detalhes de telhado (casa de máquinas, caixa d'água, ventiladores, chaminé, helipontos): quase nunca aparecem vistos da rua, então não são gerados (cidade mais leve). As antenas ficam: aparecem de longe. */
 const ROOF_DETAILS = false;
+/** Fração da altura original dos prédios (0,5 = metade dos andares). */
+const BUILDING_SCALE = 0.5;
 
 function addBuilding(b: Batch, s: Spec, helipads: THREE.Mesh[], hpTex: THREE.Texture, name: string): void {
   const r = R(s.sx0, s.sx1, s.sz0, s.sz1);
@@ -476,8 +478,9 @@ export function createCity(): THREE.Group {
   const b = new Batch();
   const helipads: THREE.Mesh[] = [];
   const hpTex = helipadTex();
+  /** Altura dos prédios = metade da original (metade dos andares); casas não mudam; com térreo (plinth) fica pelo menos 18 m, os outros 10 m */
   const S = (n: string, sx0: number, sx1: number, sz0: number, sz1: number, h: number, kind: Kind, o: Partial<Spec> = {}): void =>
-    addBuilding(b, { sx0, sx1, sz0, sz1, h, kind, ...o }, helipads, hpTex, n);
+    addBuilding(b, { sx0, sx1, sz0, sz1, h: kind === 'house' ? h : Math.max(o.plinth ? 18 : 10, h * BUILDING_SCALE), kind, ...o }, helipads, hpTex, n);
 
   // Norte, fileira da frente
   S('N2', -104, -86, 19, 40, 46, 'cream');
@@ -569,7 +572,7 @@ export function createCity(): THREE.Group {
   for (const hp of helipads) city.add(hp);
 
   // Carros parados no estacionamento
-  const colors = [0xc0392b, 0x2e86c1, 0xecf0f1, 0x27ae60, 0xf1c40f, 0x34495e];
+  const colors = [0xb9bec5, 0xecf0f1, 0x4a4f57, 0x8b9099, 0x2b2e33, 0x7a2f2a]; // cores comuns de carro (nada de cores berrantes)
   const pk = new THREE.Group();
   for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) {
     if (rand() < 0.25) continue;
