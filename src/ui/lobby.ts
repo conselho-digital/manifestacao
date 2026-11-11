@@ -1,6 +1,6 @@
 import { enterLandscape } from './orientation';
 import { CATEGORIES, CHARACTERS, labelOf, type CharacterName } from '../game/characters';
-import { authAvailable, currentUser, signInWithGoogle, signOut, type AuthUser } from '../net/auth';
+import { authAvailable, currentUser, renderGoogleButton, signInWithGoogle, signOut, type AuthUser } from '../net/auth';
 
 export interface Profile {
   name: string;
@@ -55,6 +55,9 @@ const CSS = `
 .lb-btn{width:100%;padding:13px;font-size:17px;font-weight:700;border:0;border-radius:11px;background:#4cc2ff;color:#10202e}
 .lb-btn:disabled{opacity:.4;cursor:default}
 .lb-google{display:flex;align-items:center;justify-content:center;gap:10px;background:#fff;color:#2b2f36}
+.lb-login{display:flex;flex-direction:column;align-items:center;gap:6px;width:100%}
+.lb-gslot{min-height:44px;display:flex;justify-content:center;width:100%;color-scheme:light}
+.lb-alt{background:none;border:0;color:#9fb3c8;font-size:11px;text-decoration:underline;padding:2px}
 .lb-google svg{width:20px;height:20px}
 .lb-who{font-size:12px;opacity:.8;text-align:center;line-height:1.4}
 .lb-who button{background:none;border:0;color:#7fd0ff;text-decoration:underline;font-size:12px;padding:0 2px}
@@ -121,11 +124,19 @@ export function showLobby(): Promise<Profile> {
   nameLabel.htmlFor = 'lobby-name';
   const who = el('div', 'lb-who');
   const err = el('div', 'lb-err');
+  // botão oficial do Google (o popup mostra o endereço deste site); a reserva usa o redirecionamento do Supabase
+  const googleSlot = el('div', 'lb-gslot');
   const googleBtn = el('button', 'lb-btn lb-google');
   googleBtn.type = 'button';
+  googleBtn.style.display = 'none';
+  googleBtn.insertAdjacentHTML('beforeend', GOOGLE_G);
+  googleBtn.append('Entrar com Google');
+  const altLink = el('button', 'lb-alt', 'Problemas para entrar? Usar o método alternativo');
+  altLink.type = 'button';
+  const login = el('div', 'lb-login', googleSlot, googleBtn, altLink);
   const goBtn = el('button', 'lb-btn lobby-go', 'Entrar no jogo');
   goBtn.type = 'button';
-  const form = el('div', 'lb-form', nameLabel, nameInput, who, googleBtn, goBtn, err);
+  const form = el('div', 'lb-form', nameLabel, nameInput, who, login, goBtn, err);
   form.style.cssText = 'width:100%;display:flex;flex-direction:column;gap:10px';
   const card = el('div', 'lb-card', el('div', 'lb-facecol', faceBtn, el('p', 'lb-hint', 'Toque na foto para escolher o personagem')), form);
   const home = el('div', 'lb-home', el('h1', 'lb-title', 'Arena Online 3D'), card,
@@ -174,17 +185,13 @@ export function showLobby(): Promise<Profile> {
     miniName.textContent = labelOf(selected);
     items.forEach((b, n) => b.classList.toggle('sel', n === selected));
     const hasName = nameInput.value.trim().length > 0;
-    googleBtn.style.display = user ? 'none' : '';
+    login.style.display = user ? 'none' : '';
     goBtn.style.display = user ? '' : 'none';
     goBtn.disabled = !hasName;
-    googleBtn.disabled = !authAvailable();
     saveProfile({ name: nameInput.value.trim().slice(0, MAX_NAME), character: selected });
   }
 
   function renderUser(): void {
-    googleBtn.textContent = '';
-    googleBtn.insertAdjacentHTML('beforeend', GOOGLE_G);
-    googleBtn.append('Entrar com Google para continuar');
     who.textContent = '';
     if (user) {
       const out = el('button', '', 'trocar conta');
@@ -208,6 +215,21 @@ export function showLobby(): Promise<Profile> {
     renderUser();
     refresh();
   });
+
+  // botão do Google: aparece assim que o script carrega; se não carregar, entra o botão de reserva
+  const onGoogle = (u: AuthUser | null, msg?: string): void => {
+    if (msg) { err.textContent = msg; return; }
+    user = u;
+    err.textContent = '';
+    if (u && !nameInput.value.trim() && u.name) nameInput.value = u.name.split(' ')[0]!.slice(0, MAX_NAME);
+    renderUser();
+    refresh();
+  };
+  const showFallback = (): void => { googleSlot.style.display = 'none'; googleBtn.style.display = ''; altLink.style.display = 'none'; };
+  if (authAvailable()) {
+    void renderGoogleButton(googleSlot, form.clientWidth || 300, onGoogle).then((ok) => { if (!ok) showFallback(); });
+  }
+  altLink.onclick = showFallback;
 
   googleBtn.onclick = () => {
     err.textContent = '';
