@@ -5,6 +5,7 @@ import { addBox, COLLIDERS, MAP, PARKS, PLACES, ROADS, TREES, type Rect } from '
 import { buildGrayTower, TOWER } from './tower';
 import { registerCullChildren, FAR_TREES } from './culling';
 import { placeSafraSign } from './safra';
+import { placeTotem } from './totem';
 import { HEIGHT, makeTrees, type Species, type TreeSpec } from './trees';
 import { CAR_MODELS, loadCarVisual, TRAFFIC } from './vehicle';
 
@@ -717,6 +718,10 @@ export function createCity(): THREE.Group {
   }
 
   city.add(makeTrees(planterBushes));
+
+  // Totens semafóricos "Av. Paulista": um em cada ponta da faixa de pedestre que atravessa a avenida perto do prédio de cobre, de frente para a travessia
+  placeTotem(city, -42.2, 12.9, Math.PI);
+  placeTotem(city, -42.2, -12.9, 0);
 
   // Escultura "Safra" na calçada em frente ao prédio de cobre (NT), de frente para a avenida
   placeSafraSign(city, -23, 15.6, Math.PI);
