@@ -136,8 +136,10 @@ const CFG: Record<'rifle' | 'pistol', WeaponCfg> = {
     crouchAim: P3(0, -0.04, 0),
   },
   pistol: {
-    low: { pos: P3(-0.2, 1.02, 0.3), pitch: 0.5, yaw: 0 },
-    aim: { pos: P3(-0.07, 1.57, 0.5), pitch: 0, yaw: -0.02 },
+    // fotos: antes de atirar as duas mãos seguram a arma colada ao corpo (cintura/peito), cano para baixo e à frente
+    low: { pos: P3(-0.1, 1.1, 0.3), pitch: 0.75, yaw: 0 },
+    // ao atirar: braços estendidos à frente, as duas mãos juntas na altura do queixo
+    aim: { pos: P3(-0.07, 1.45, 0.6), pitch: 0, yaw: -0.02 },
     gripR: P3(0, -0.07, -0.03),
     gripL: P3(0.025, -0.075, -0.02),
     crouchLow: P3(0, 0.1, 0),
@@ -546,9 +548,9 @@ export class Animator {
     }
     if (armed) for (const arm of this.arms) this.poseArm(arm, frame, dt);
     if (holding) {
-      // mãos fechadas no cabo: fuzil e taco nas duas; pistola na direita (e na esquerda ao mirar)
+      // mãos fechadas no cabo: fuzil, taco e pistola (duas mãos, também abaixada)
       this.curlHand(-1, 1);
-      this.curlHand(1, kind === 'pistol' && this.armed !== 'pistol_aim' ? 0 : 1);
+      this.curlHand(1, 1);
     }
   }
 
@@ -836,10 +838,8 @@ export class Animator {
   }
 
   private poseArm(arm: Arm, frame: { pos: THREE.Vector3; q: THREE.Quaternion }, dt: number): void {
-    const kind = kindOf(this.armed) === 'pistol' ? 'pistol' : 'rifle';
     const cfgHold = this.cfgNow();
-    // pistola abaixada: só a mão direita segura; a esquerda fica com o clipe
-    const w = kind === 'pistol' && this.armed === 'pistol' && arm.side > 0 ? 0 : this.armW;
+    const w = this.armW;
     if (w < 0.01) return;
     const wrist = (arm.side < 0 ? cfgHold.gripR : cfgHold.gripL).clone().applyQuaternion(frame.q).add(frame.pos);
     this.solveArm(arm, wrist, w, dt);
