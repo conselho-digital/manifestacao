@@ -129,7 +129,7 @@ const CFG: Record<'rifle' | 'pistol', WeaponCfg> = {
     // coronha no ombro direito, bochecha na coronha; yaw negativo: o cano converge para o ponto da mira (a câmera fica à direita)
     aim: { pos: P3(-0.17, 1.47, 0.24), pitch: 0, yaw: -0.05 },
     gripR: P3(0, -0.055, 0.17), // empunhadura (coronha→cano: a arma tem 0,88 m e começa em z=-0,14)
-    gripL: P3(0, -0.02, 0.5), // guarda-mão de madeira
+    gripL: P3(0, -0.02, 0.58), // guarda-mão de madeira (nas fotos a mão de apoio segura na ponta dele, braço quase esticado)
     crouchLow: P3(0, 0.08, -0.04),
     crouchAim: P3(0, -0.04, 0),
   },

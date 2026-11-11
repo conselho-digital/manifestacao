@@ -96,12 +96,12 @@ const CSS = `
 .m-fire{right:calc(var(--u)*17.5);bottom:calc(var(--u)*24);width:calc(var(--u)*15.5);height:calc(var(--u)*15.5)}
 .m-aim{right:calc(var(--u)*2.5);bottom:calc(var(--u)*29);width:calc(var(--u)*13.5);height:calc(var(--u)*13.5)}
 .m-jump{right:calc(var(--u)*1.2);bottom:calc(var(--u)*9.5);width:calc(var(--u)*17);height:calc(var(--u)*17)}
-.m-door{right:calc(var(--u)*19.4);bottom:calc(var(--u)*8);width:calc(var(--u)*14);height:calc(var(--u)*14)}
-/* o botão de entrar no carro só aparece perto de um carro (e ocupa o lugar do Sprint) */
+/* a pé: entrar no carro fica à esquerda do Sprint (não o substitui) */
+.m-door{right:calc(var(--u)*34.6);bottom:calc(var(--u)*8);width:calc(var(--u)*14);height:calc(var(--u)*14)}
+/* o botão de entrar no carro só aparece perto de um carro */
 .m-hud:not(.near-car):not(.driving) .m-door{display:none}
-.m-hud.near-car .m-sprint{display:none}
-/* dirigindo, o botão de sair fica junto dos pedais (à esquerda do freio de mão) */
-.m-hud.driving .m-door{right:calc(var(--u)*48.5);bottom:calc(var(--u)*7);width:calc(var(--u)*12);height:calc(var(--u)*12)}
+/* dirigindo, o botão de sair fica acima do acelerar, um pouco afastado */
+.m-hud.driving .m-door{right:calc(var(--u)*3.2);bottom:calc(var(--u)*33);width:calc(var(--u)*13);height:calc(var(--u)*13)}
 /* Sprint à direita (o Escalar saiu: escala sozinho ao pular perto de um obstáculo) */
 .m-sprint{right:calc(var(--u)*19.4);bottom:calc(var(--u)*8);width:calc(var(--u)*14);height:calc(var(--u)*14);font-size:calc(var(--u)*3.2)}
 .m-anim{left:50%;top:calc(var(--u)*1.5);transform:translateX(-50%);width:auto;height:calc(var(--u)*8);border-radius:calc(var(--u)*4);padding:0 calc(var(--u)*3);

@@ -13,8 +13,13 @@ const GRAVITY = -20;
 const JUMP_V = 6.8;
 const RADIUS = 0.4;
 const STEP = 0.45; // desnível que se sobe andando
+/** Terceira pessoa (como na referência do GTA SA): câmera centralizada atrás, corpo inteiro, personagem na metade de baixo da tela. */
 const CAM_DISTANCE = 3.3;
-const CAM_AIM_DISTANCE = 2.7;
+/** Mirando (referência): colada atrás do ombro direito, cabeça no canto esquerdo e mira no centro. */
+const CAM_AIM_DISTANCE = 1.35;
+const CAM_AIM_SHOULDER = 0.55;
+const CAM_LOOK_HEIGHT = 1.55; // a câmera olha para a altura da cabeça: o personagem aparece mais embaixo na tela
+const CAM_AIM_HEIGHT = 1.5;
 /** moto: batida acima desta velocidade (m/s) joga o piloto para a frente */
 const CRASH_SPEED = 11; // ~40 km/h (era 9): só um pouco menos sensível
 
@@ -677,10 +682,10 @@ export class Player {
   followCamera(camera: THREE.PerspectiveCamera, dt: number, yaw: number, pitch: number, aimK: number): void {
     const p = this.object.position;
     const driving = this.mode === 'drive';
-    const dist = driving ? 9 : THREE.MathUtils.lerp(CAM_DISTANCE, CAM_AIM_DISTANCE, aimK);
-    const shoulder = driving ? 0 : 0.85 - 0.05 * aimK;
+    const dist = driving ? (this.car?.bike ? 6.2 : 8) : THREE.MathUtils.lerp(CAM_DISTANCE, CAM_AIM_DISTANCE, aimK);
+    const shoulder = driving ? 0 : CAM_AIM_SHOULDER * aimK; // a pé centralizada; só mirando passa para o ombro direito
     this.crouchK += ((this.crouching && !driving ? 1 : 0) - this.crouchK) * Math.min(1, dt * 8);
-    const target = new THREE.Vector3(p.x, p.y + (driving ? 1.6 : 1.25 - 0.45 * this.crouchK), p.z);
+    const target = new THREE.Vector3(p.x, p.y + (driving ? 1.35 : THREE.MathUtils.lerp(CAM_LOOK_HEIGHT, CAM_AIM_HEIGHT, aimK) - 0.5 * this.crouchK), p.z);
     const cp = Math.cos(pitch);
     // direção para onde a câmera olha
     const dir = new THREE.Vector3(Math.sin(yaw) * cp, -Math.sin(pitch), Math.cos(yaw) * cp);

@@ -54,7 +54,8 @@ export class Combat {
   armor = 50;
   money = 0;
   /** 0 = AK-47, 1 = punho, 2 = taco (bandeira), 3 = pistola, 4 = placa de trânsito */
-  weapon: 0 | 1 | 2 | 3 | 4 = 0;
+  /** começa de mãos livres (punho); o botão Arma troca */
+  weapon: 0 | 1 | 2 | 3 | 4 = 1;
   private ammo = [{ mag: MAG_SIZE, reserve: RESERVE_START }, { mag: 0, reserve: 0 }, { mag: 0, reserve: 0 }, { mag: PISTOL_MAG, reserve: PISTOL_RESERVE }, { mag: 0, reserve: 0 }];
   get mag(): number { return this.ammo[this.weapon]!.mag; }
   get reserve(): number { return this.ammo[this.weapon]!.reserve; }
@@ -297,7 +298,7 @@ export class Combat {
     this.ammo[0] = { mag: MAG_SIZE, reserve: RESERVE_START };
     this.ammo[3] = { mag: PISTOL_MAG, reserve: PISTOL_RESERVE };
     this.reloading = false;
-    this.weapon = 0;
+    this.weapon = 1; // renasce de mãos livres
     this.dead = false;
     this.invuln = INVULNERABLE;
   }

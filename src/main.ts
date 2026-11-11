@@ -35,7 +35,7 @@ if (aerial) scene.fog = null;
 // Câmera fixa de inspeção: ?cam=x,y,z,alvoX,alvoY,alvoZ
 const fixedCam = new URLSearchParams(location.search).get('cam')?.split(',').map(Number);
 let yaw = 0; // câmera olha para +Z
-const PITCH_DEFAULT = 0.2; // um pouco de cima
+const PITCH_DEFAULT = 0.28; // um pouco de cima (como a referência do GTA SA)
 const PITCH_MIN = -0.6; // olhando para cima
 const PITCH_MAX = 1.2; // quase vista de cima
 let pitch = PITCH_DEFAULT;
@@ -44,6 +44,7 @@ let aimK = 0;
 // Menu: a cidade inteira vista de cima, girando devagar (sem neblina); ao entrar no jogo volta o normal
 const menuFog = scene.fog;
 let menuT = 0;
+let inMenu = true; // a câmera do menu só vale enquanto o menu está aberto (o deslocamento lateral dela quebrava a câmera do jogo)
 if (!aerial) scene.fog = null;
 function menuCamera(dt: number): void {
   menuT += dt;
@@ -76,7 +77,7 @@ const BASE_FOV = camera.fov;
 const net = new Net();
 const remotes = new Map<string, RemotePlayer>();
 if (import.meta.env.DEV) (window as unknown as { __net: Net; __game: { ready: () => boolean } }).__net = net;
-if (import.meta.env.DEV) (window as unknown as { __game: { ready: () => boolean } }).__game = { ready: () => !!player };
+if (import.meta.env.DEV) (window as unknown as { __game: { ready: () => boolean; camera: THREE.PerspectiveCamera } }).__game = { ready: () => !!player, camera };
 let profileName = 'Jogador';
 // Voz por proximidade (WebRTC): sinalização pelo canal do Supabase; só liga depois do primeiro toque no botão do microfone
 const voice = new Voice(net.id, (to, k, d) => net.sendRtc(to, k, d), (state, peers) => {
@@ -88,6 +89,7 @@ if (import.meta.env.DEV) (window as unknown as { __voice: () => Voice }).__voice
 
 void showLobby().then(async (profile) => {
   profileName = profile.name;
+  inMenu = false;
   scene.fog = menuFog;
   camera.clearViewOffset();
   camera.fov = BASE_FOV;
@@ -135,7 +137,7 @@ void showLobby().then(async (profile) => {
 
 function loop(): void {
   const dt = Math.min(clock.getDelta(), 0.05);
-  if (!player) menuCamera(dt);
+  if (inMenu) menuCamera(dt);
   if (player && combat) {
     const look = takeLook();
     yaw -= look.dx * 0.006;
