@@ -87,7 +87,7 @@ const BASE_FOV = camera.fov;
 const net = new Net();
 const remotes = new Map<string, RemotePlayer>();
 if (import.meta.env.DEV) (window as unknown as { __net: Net; __game: { ready: () => boolean } }).__net = net;
-if (import.meta.env.DEV) (window as unknown as { __game: { ready: () => boolean; camera: THREE.PerspectiveCamera; scene: THREE.Scene } }).__game = { ready: () => !!player, camera, scene };
+if (import.meta.env.DEV) (window as unknown as { __game: { ready: () => boolean; camera: THREE.PerspectiveCamera; scene: THREE.Scene; combat: () => Combat | null; player: () => Player | null } }).__game = { ready: () => !!player, camera, scene, combat: () => combat, player: () => player };
 let profileName = 'Jogador';
 // Voz por proximidade (WebRTC): sinalização pelo canal do Supabase; só liga depois do primeiro toque no botão do microfone
 const voice = new Voice(net.id, (to, k, d) => net.sendRtc(to, k, d), (state, peers) => {
@@ -150,6 +150,7 @@ async function setMyCharacter(name: CharacterName): Promise<void> {
   if (player.isDriving) { hud?.addChat('Sistema: saia do veículo para trocar de personagem.'); return; }
   const old = player;
   const next = await makePlayer(name, old);
+  next.onRunOver = old.onRunOver;
   old.object.removeFromParent();
   player = next;
   character = name;
@@ -180,6 +181,7 @@ void showLobby().then(async (profile) => {
   myRing = makeTeamRing(myLook());
   first.add(myRing);
   combat = new Combat({ scene, camera, net, name: profile.name, remotes, log: (t) => hud?.addChat(t), inv });
+  player.onRunOver = (sp) => combat?.vehicleHit(sp) ?? true;
 
   pauseMenu = createPauseMenu({
     inv,
@@ -188,6 +190,7 @@ void showLobby().then(async (profile) => {
     getCharacter: () => character,
     setCharacter: (n) => { void setMyCharacter(n); },
     currentWeapon: () => (combat?.weapon ?? 1) as WeaponId,
+    protectLeft: () => combat?.protectT ?? 0,
     equip: (w) => combat?.equip(w),
     ammoOf: (w) => combat?.ammoOf(w) ?? { mag: 0, reserve: 0 },
     buy: (item) => combat?.buy(item) ?? { ok: false, msg: 'Indisponível.' },
@@ -294,7 +297,7 @@ function loop(): void {
         weapon: (['ak', 'fist', 'bat', 'pistol', 'sign', 'cricket', 'baseball'] as const)[combat.weapon], weaponName: combat.weaponName,
         mag: combat.mag, reserve: combat.reserve, reloading: combat.reloading,
         aiming: input.aim, crouching: player.isCrouching, dead: combat.dead, respawnIn: combat.respawnIn,
-        hitTick: combat.hitTick, hurtTick: combat.hurtTick, nearCar: player.nearCar,
+        hitTick: combat.hitTick, hurtTick: combat.hurtTick, nearCar: player.nearCar, protect: combat.protectT,
         scores: combat.statRows().map((r) => ({ name: r.name, k: r.k, d: r.d, me: r.id === my.id })),
       }, dt);
     }
@@ -307,7 +310,7 @@ function loop(): void {
     net.sendMove(
       p.position.x, p.position.y, p.position.z, p.rotation.y,
       combat.dead ? 'dead' : player.animName, player.isDriving ? player.carId : -1,
-      combat.dead ? 0 : player.weaponCode, pitch, performance.now(),
+      combat.dead ? 0 : player.weaponCode, pitch, combat.health, combat.protectT > 0, performance.now(),
     );
   }
   const blockers: [number, number][] = CARS.filter((c) => c.driver !== null).map((c) => [c.x, c.z]);

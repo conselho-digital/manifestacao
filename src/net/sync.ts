@@ -27,6 +27,10 @@ export interface MoveMsg {
   w: number;
   /** inclinação da mira (rad) */
   pt: number;
+  /** vida (0–100) */
+  hp: number;
+  /** protegido (60 s depois de renascer) */
+  pr: boolean;
 }
 
 /** Tiro: de (x1,y1,z1) até (x2,y2,z2). h = id de quem foi acertado ('' = ninguém). */
@@ -99,7 +103,8 @@ function cleanMove(raw: unknown): MoveMsg | null {
   const v = typeof m.v === 'number' && Number.isInteger(m.v) && m.v >= -1 && m.v < 8 ? m.v : -1;
   const w = typeof m.w === 'number' && Number.isInteger(m.w) && m.w >= 1 && m.w <= 8 ? m.w : 0;
   const pt = finite(m.pt ?? 0, 1.6) ?? 0;
-  return { id: m.id, x, y, z, ry, a, v, w, pt };
+  const hp = typeof m.hp === 'number' && Number.isFinite(m.hp) ? Math.max(0, Math.min(100, Math.round(m.hp))) : 100;
+  return { id: m.id, x, y, z, ry, a, v, w, pt, hp, pr: m.pr === true };
 }
 
 function cleanShot(raw: unknown): ShotMsg | null {
@@ -216,7 +221,7 @@ export class Net {
   }
 
   /** Envia posição no máximo ~12x por segundo. */
-  sendMove(x: number, y: number, z: number, ry: number, a: string, v: number, w: number, pt: number, now: number): void {
+  sendMove(x: number, y: number, z: number, ry: number, a: string, v: number, w: number, pt: number, hp: number, pr: boolean, now: number): void {
     if (now - this.lastSent < SEND_INTERVAL_MS) return;
     this.lastSent = now;
     this.send('move', {
@@ -225,7 +230,7 @@ export class Net {
       y: Math.round(y * 100) / 100,
       z: Math.round(z * 100) / 100,
       ry: Math.round(ry * 100) / 100,
-      a, v, w, pt: Math.round(pt * 20) / 20,
+      a, v, w, pt: Math.round(pt * 20) / 20, hp: Math.round(hp), pr,
     });
   }
 

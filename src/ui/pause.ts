@@ -14,6 +14,8 @@ export interface PauseDeps {
   getCharacter(): CharacterName;
   setCharacter(n: CharacterName): void;
   currentWeapon(): WeaponId;
+  /** segundos de proteção restantes (sem armas enquanto > 0) */
+  protectLeft(): number;
   equip(w: WeaponId): void;
   ammoOf(w: WeaponId): { mag: number; reserve: number };
   buy(item: ShopItem): { ok: boolean; msg: string };
@@ -140,7 +142,8 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
   }
 
   function renderWeapons(): void {
-    body.append(el('p', 'ps-note', 'Só aparecem as armas que você já tem. Para conseguir mais, abra a Loja.'));
+    const left = Math.ceil(d.protectLeft());
+    body.append(el('p', 'ps-note', left > 0 ? `Você está protegido por mais ${left} s (sem dano), mas sem armas: elas voltam quando a proteção acabar.` : 'Só aparecem as armas que você já tem. Para conseguir mais, abra a Loja.'));
     const grid = el('div', 'ps-grid');
     const cur = d.currentWeapon();
     for (const w of [1, 3, 0, 2, 4, 5, 6] as const) {

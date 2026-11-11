@@ -30,6 +30,8 @@ const RANGE = 90;
 const HIT_RADIUS = 0.55; // um pouco generoso para facilitar no celular
 const RESPAWN_TIME = 3.5;
 const INVULNERABLE = 2;
+/** depois de morrer: 60 s andando sem arma e sem levar dano de jogadores ou carros */
+export const PROTECT_TIME = 60;
 const KILL_MONEY = 100;
 const SPAWNS: [number, number][] = [[25, 16], [-10, -16], [64, 16], [-45, 16], [30, -16], [-60, -16], [-14, 16], [80, -16]];
 
@@ -78,6 +80,9 @@ export class Combat {
   private cd = 0;
   private fireHold = 0;
   private invuln = 0;
+  /** segundos restantes de proteção depois de renascer (sem arma, sem dano) */
+  protectT = 0;
+  private lastFlinchAt = -1e9;
   private lastCarHit: CarHit | null = null;
   private readonly tracers: Tracers;
   private readonly stats = new Map<string, StatRow>();
@@ -102,7 +107,7 @@ export class Combat {
 
   /** Equipa uma arma que o jogador tem. */
   equip(w: WeaponId): void {
-    if (!this.d.inv.has(w)) return;
+    if (!this.d.inv.has(w) || this.protectT > 0) return;
     this.weapon = w;
     this.reloading = false;
   }
@@ -152,6 +157,7 @@ export class Combat {
     this.player = player;
     this.tracers.update(dt);
     if (this.invuln > 0) this.invuln -= dt;
+    if (this.protectT > 0) this.protectT = Math.max(0, this.protectT - dt);
 
     if (this.dead) {
       this.respawnIn -= dt;
@@ -160,7 +166,8 @@ export class Combat {
     }
     if (player.isDriving) { player.setArmed('none'); return; }
 
-    if (input.switchWeapon) {
+    if (this.protectT > 0) { this.weapon = 1; this.reloading = false; } // protegido: só as mãos
+    else if (input.switchWeapon) {
       // fuzil, pistola, bandeira, placa, punho — só as que o jogador tem
       const order = ([0, 3, 2, 4, 5, 6, 1] as const).filter((w) => this.d.inv.has(w));
       this.weapon = order[(Math.max(0, order.indexOf(this.weapon)) + 1) % order.length]!;
@@ -183,7 +190,7 @@ export class Combat {
     const aiming = input.aim || this.fireHold > 0;
     player.setArmed(this.weapon === 0 ? (aiming ? 'aim' : 'rifle') : this.weapon === 3 ? (aiming ? 'pistol_aim' : 'pistol') : this.weapon === 2 ? 'bat' : this.weapon === 4 ? 'sign' : this.weapon === 5 ? 'cricket' : this.weapon === 6 ? 'baseball' : 'none');
 
-    if (input.fire && this.cd <= 0 && !this.reloading) {
+    if (input.fire && this.cd <= 0 && !this.reloading && this.protectT <= 0) {
       const a = this.ammo[this.weapon]!;
       if (this.weapon === 0 || this.weapon === 3) {
         if (a.mag > 0) {
@@ -299,15 +306,17 @@ export class Combat {
       shooter?.flash();
       playShotAt(from.x, from.z, m.k === 'p' ? 'pistol' : 'rifle'); // volume e lado pela distância ao ouvinte
     }
-    if (m.h === this.d.net.id && !this.dead && this.invuln <= 0 && !this.paused) {
+    if (m.h === this.d.net.id && !this.dead && this.invuln <= 0 && this.protectT <= 0 && !this.paused) {
       const base = m.k === 'k' ? KICK_DAMAGE : m.k === 'f' ? FIST_DAMAGE : m.k === 'b' ? BAT_DAMAGE : m.k === 'p' ? PISTOL_DAMAGE : AK_DAMAGE;
       const dmg = m.hs && (m.k === 'r' || m.k === 'p') ? base * 2 : base;
       if (m.k === 'f' || m.k === 'b' || m.k === 'k') this.player?.flinch(m.k);
+      else if (performance.now() - this.lastFlinchAt > 700) { this.lastFlinchAt = performance.now(); this.player?.flinch('f'); } // levou tiro: reage (no máximo a cada 0,7 s)
       this.damage(dmg, m.id, { f: 'PUNHO', k: 'CHUTE', b: 'TACO', p: 'PISTOLA', r: 'AK-47' }[m.k]);
     }
   }
 
   private damage(amount: number, attacker: string, weapon: string): void {
+    if (this.protectT > 0 || this.invuln > 0 || this.dead) return;
     const soak = Math.min(this.armor, amount * 0.6);
     this.armor -= soak;
     this.health -= amount - soak;
@@ -322,6 +331,13 @@ export class Combat {
     }
   }
 
+  /** Fui atropelado a `speed` m/s: aplica o dano (false = estou protegido/pausado e nada acontece). */
+  vehicleHit(speed: number): boolean {
+    if (this.dead || this.paused || this.protectT > 0 || this.invuln > 0) return false;
+    this.damage(Math.min(90, 10 + (speed - 4.5) * 3.6), this.d.net.id, 'ATROPELAMENTO');
+    return true;
+  }
+
   /** Alguém morreu (inclusive eu): atualiza placar, dinheiro e o feed. */
   onKill(m: KillMsg): void {
     const killer = this.ensure(m.k, this.nameOf(m.k));
@@ -329,7 +345,8 @@ export class Combat {
     victim.d++;
     if (m.k !== m.v) killer.k++;
     if (m.k === this.d.net.id && m.v !== this.d.net.id) this.d.inv.earn(KILL_MONEY);
-    this.d.log(`${this.nameOf(m.k)}: matou ${this.nameOf(m.v)} (${m.w || 'AK-47'})`);
+    if (m.k === m.v) this.d.log(`${this.nameOf(m.v)}: morreu (${m.w || 'acidente'})`);
+    else this.d.log(`${this.nameOf(m.k)}: matou ${this.nameOf(m.v)} (${m.w || 'AK-47'})`);
   }
 
   private respawn(): void {
@@ -342,6 +359,7 @@ export class Combat {
     this.weapon = 1; // renasce de mãos livres
     this.dead = false;
     this.invuln = INVULNERABLE;
+    this.protectT = PROTECT_TIME;
   }
 }
 

@@ -7,7 +7,7 @@ import { seatBlend } from './player';
 import { makeTeamRing, type TeamLook } from './teams';
 import type { MoveMsg, PlayerInfo } from '../net/sync';
 
-function drawLabel(text: string, team: TeamLook | null): THREE.CanvasTexture {
+function drawLabel(text: string, team: TeamLook | null, hp = 100, shield = false): THREE.CanvasTexture {
   const c = document.createElement('canvas');
   c.width = 256;
   c.height = 80;
@@ -17,9 +17,10 @@ function drawLabel(text: string, team: TeamLook | null): THREE.CanvasTexture {
   g.textBaseline = 'middle';
   g.lineWidth = 6;
   g.strokeStyle = 'rgba(0,0,0,0.7)';
-  g.strokeText(text, 128, 28);
+  const shown = shield ? `🛡 ${text}` : text;
+  g.strokeText(shown, 128, 28);
   g.fillStyle = '#fff';
-  g.fillText(text, 128, 28);
+  g.fillText(shown, 128, 28);
   if (team) {
     // faixa de duas cores sob o nome (cada metade com a cor de uma das cores da equipe)
     const w = Math.min(220, Math.max(90, g.measureText(text).width + 24));
@@ -30,6 +31,13 @@ function drawLabel(text: string, team: TeamLook | null): THREE.CanvasTexture {
     g.fillRect(x0, 52, w / 2, 14);
     g.fillStyle = team.c2;
     g.fillRect(x0 + w / 2, 52, w / 2, 14);
+  }
+  if (hp < 100) {
+    // barra de vida (vermelha quando baixa): aparece só depois de levar dano
+    g.fillStyle = 'rgba(0,0,0,0.75)';
+    g.fillRect(48, 68, 160, 10);
+    g.fillStyle = hp > 50 ? '#69b25a' : hp > 25 ? '#e0b23d' : '#d04a3a';
+    g.fillRect(50, 70, 156 * Math.max(0, hp) / 100, 6);
   }
   return new THREE.CanvasTexture(c);
 }
@@ -64,6 +72,9 @@ export class RemotePlayer {
   private modelRot0: number | null = null;
 
   private label: THREE.Sprite;
+  private hp = 100;
+  private shield = false;
+  private labelKey = '';
   private ring: THREE.Group;
 
   constructor(readonly info: PlayerInfo) {
@@ -86,6 +97,8 @@ export class RemotePlayer {
     this.target.set(m.x, m.y ?? 0, m.z);
     this.targetRy = m.ry;
     this.anim = m.a || 'idle';
+    this.hp = m.hp;
+    this.shield = m.pr;
     this.carId = m.v;
     this.weapon = m.w;
     this.pitch = m.pt;
@@ -96,6 +109,8 @@ export class RemotePlayer {
   }
 
   update(dt: number): void {
+    const key = `${Math.round(this.hp / 5)}|${this.shield}`;
+    if (key !== this.labelKey) { this.labelKey = key; this.redrawLabel(); }
     const k = 1 - Math.exp(-dt * 12);
     this.root.position.lerp(this.target, k);
     const car = this.carId >= 0 ? CARS[this.carId] : undefined;
@@ -183,14 +198,20 @@ export class RemotePlayer {
     this.carId = o.carId;
     this.weapon = o.weapon;
     this.pitch = o.pitch;
+    this.hp = o.hp;
+    this.shield = o.shield;
+  }
+
+  private redrawLabel(): void {
+    this.label.material.map?.dispose();
+    this.label.material.map = drawLabel(this.info.name, this.info.team, this.hp, this.shield);
+    this.label.material.needsUpdate = true;
   }
 
   /** Trocou de equipe: refaz o nome e o anel. */
   setTeam(team: TeamLook | null): void {
     this.info.team = team;
-    this.label.material.map?.dispose();
-    this.label.material.map = drawLabel(this.info.name, team);
-    this.label.material.needsUpdate = true;
+    this.redrawLabel();
     this.ring.removeFromParent();
     this.ring = makeTeamRing(team);
     this.root.add(this.ring);

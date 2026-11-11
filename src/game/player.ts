@@ -101,6 +101,8 @@ export class Player {
   private modelBaseY: number | null = null;
   /** arma visual (fuzil na mão), definida pelo main */
   weaponVis: WeaponVisual | null = null;
+  /** chamado ao ser atropelado (m/s); devolve false se está protegido (então não há tombo nem dano) */
+  onRunOver: ((speed: number) => boolean) | null = null;
 
   /** Liga a arma visual: o animador passa a posicioná-la (peito e mãos). */
   attachWeapon(w: WeaponVisual): void {
@@ -474,6 +476,7 @@ export class Player {
         const dx = p.x - cx;
         const dz = p.z - cz;
         if (Math.hypot(dx, dz) > RADIUS + r + 0.15) continue;
+        if (this.onRunOver && !this.onRunOver(sp)) continue; // protegido: o carro não derruba
         const dir = new THREE.Vector2(h.vx / sp, h.vz / sp);
         this.koVel.copy(dir).multiplyScalar(Math.min(9, sp * 0.9)).add(new THREE.Vector2(dx, dz).normalize().multiplyScalar(2));
         this.mode = 'ko';

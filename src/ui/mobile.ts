@@ -18,6 +18,8 @@ export interface HudState {
   health: number;
   armor: number;
   money: number;
+  /** segundos de proteção restantes (0 = sem) */
+  protect: number;
   weapon: 'ak' | 'fist' | 'bat' | 'pistol' | 'sign' | 'cricket' | 'baseball';
   weaponName: string;
   mag: number;
@@ -78,13 +80,13 @@ const CSS = `
 .m-bar b span{position:absolute;left:0;top:0;bottom:0;width:100%;transition:width .15s}
 .m-hp span{background:#69b25a}.m-ar span{background:#3d7be0}
 .m-place{position:fixed;left:50%;transform:translateX(-50%);top:calc(var(--u)*2.8);font-size:calc(var(--u)*3.8);letter-spacing:.03em;white-space:nowrap}
-.m-money{position:fixed;right:calc(var(--u)*15.8);top:calc(var(--u)*2.2);font-size:calc(var(--u)*5);color:#d9d9d9}
-.m-speed{position:fixed;right:calc(var(--u)*15.8);top:calc(var(--u)*9.5);width:calc(var(--u)*11);height:calc(var(--u)*2);border:calc(var(--u)*.3) solid #000;background:rgba(0,0,0,.5)}
+.m-money{position:fixed;right:calc(var(--u)*24.5);top:calc(var(--u)*2.2);font-size:calc(var(--u)*5);color:#d9d9d9}
+.m-speed{position:fixed;right:calc(var(--u)*24.5);top:calc(var(--u)*9.5);width:calc(var(--u)*11);height:calc(var(--u)*2);border:calc(var(--u)*.3) solid #000;background:rgba(0,0,0,.5)}
 .m-speed span{display:block;height:100%;background:#c0392b;width:0}
-.m-weapon{position:fixed;right:calc(var(--u)*1.6);top:calc(var(--u)*2.2);width:calc(var(--u)*13);height:calc(var(--u)*13);background:rgba(47,107,47,.9);
-  border:calc(var(--u)*.5) solid #000;border-radius:calc(var(--u)*1.2);display:flex;align-items:center;justify-content:center;padding:calc(var(--u)*1.4)}
+.m-weapon{position:fixed;right:calc(var(--u)*1.6);top:calc(var(--u)*2.2);width:calc(var(--u)*22);height:calc(var(--u)*13.5);background:rgba(47,107,47,.9);
+  border:calc(var(--u)*.5) solid #000;border-radius:calc(var(--u)*1.2);display:flex;align-items:center;justify-content:center;padding:calc(var(--u)*.5)}
 .m-weapon img{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 0 calc(var(--u)*.4) rgba(0,0,0,.7))}
-.m-ammo{position:fixed;right:calc(var(--u)*1.6);top:calc(var(--u)*16);width:calc(var(--u)*13);text-align:center;font-size:calc(var(--u)*3.6)}
+.m-ammo{position:fixed;right:calc(var(--u)*1.6);top:calc(var(--u)*16.2);width:calc(var(--u)*22);text-align:center;font-size:calc(var(--u)*3.6)}
 .m-btn{position:fixed;pointer-events:auto;touch-action:none;border-radius:50%;background:rgba(31,84,34,.82);border:calc(var(--u)*.6) solid #0a140a;
   box-shadow:0 0 0 calc(var(--u)*.25) rgba(255,255,255,.55) inset;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:0;color:#fff;cursor:pointer}
 .m-btn .ico{width:56%;height:56%;display:block}
@@ -93,10 +95,10 @@ const CSS = `
 .m-btn:active,.m-btn.on{background:rgba(76,160,255,.85)}
 .m-btn.spin .ico{animation:mspin .6s linear}
 @keyframes mspin{to{transform:rotate(-360deg)}}
-.m-reload{right:calc(var(--u)*13.5);top:calc(var(--u)*33);width:calc(var(--u)*12);height:calc(var(--u)*12)}
-.m-crouch{right:calc(var(--u)*26.8);top:calc(var(--u)*33);width:calc(var(--u)*12);height:calc(var(--u)*12)}
+.m-reload{right:calc(var(--u)*13.6);top:calc(var(--u)*22.2);width:calc(var(--u)*12);height:calc(var(--u)*12)}
+.m-crouch{right:calc(var(--u)*25.6);top:calc(var(--u)*22.2);width:calc(var(--u)*12);height:calc(var(--u)*12)}
 .m-crouch.on{background:rgba(70,150,90,.85)}
-.m-change{right:calc(var(--u)*.8);top:calc(var(--u)*33);width:calc(var(--u)*12.5);height:calc(var(--u)*12.5)}
+.m-change{right:calc(var(--u)*1.6);top:calc(var(--u)*22.2);width:calc(var(--u)*12.5);height:calc(var(--u)*12.5)}
 .m-fire{right:calc(var(--u)*17.5);bottom:calc(var(--u)*24);width:calc(var(--u)*15.5);height:calc(var(--u)*15.5)}
 .m-aim{right:calc(var(--u)*2.5);bottom:calc(var(--u)*29);width:calc(var(--u)*13.5);height:calc(var(--u)*13.5)}
 .m-jump{right:calc(var(--u)*1.2);bottom:calc(var(--u)*9.5);width:calc(var(--u)*17);height:calc(var(--u)*17)}
@@ -130,6 +132,8 @@ const CSS = `
 .m-chat p{margin:0}
 .m-chat em,.m-score em{font-style:normal;color:#f1c40f}
 .m-chatbtn{left:50%;transform:translateX(-50%);bottom:calc(var(--u)*1.5);width:calc(var(--u)*8);height:calc(var(--u)*8);font-size:calc(var(--u)*2.6)}
+.m-protect{position:fixed;left:50%;transform:translateX(-50%);top:calc(var(--u)*19);padding:calc(var(--u)*.8) calc(var(--u)*2.4);border-radius:99px;background:rgba(40,120,200,.85);border:calc(var(--u)*.3) solid #fff;font-size:calc(var(--u)*3);display:none;white-space:nowrap}
+.m-protect.on{display:block}
 .m-gear,.m-shop{top:calc(var(--u)*9);width:calc(var(--u)*8.5);height:calc(var(--u)*8.5)}
 .m-gear{left:calc(50% - var(--u)*9.5)}
 .m-shop{left:calc(50% + var(--u)*1)}
@@ -378,6 +382,7 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   const weaponBox = make('m-weapon foot', hud);
   const ammo = make('m-ammo m-out foot', hud);
   const kmh = make('m-kmh m-out car', hud);
+  const protectEl = make('m-protect m-out', hud);
 
   holdButton(circle(hud, 'm-reload foot', ICON.reload, 'Recarga'), queueReload);
   holdButton(circle(hud, 'm-change foot', ICON.swap, 'Arma'), queueSwitch);
@@ -497,6 +502,9 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
       kmh.textContent = '';
       kmh.append(document.createTextNode(String(Math.round(s.kmh))), Object.assign(document.createElement('small'), { textContent: 'km/h' }));
 
+      const prot = Math.ceil(s.protect);
+      protectEl.classList.toggle('on', prot > 0 && !s.dead);
+      if (prot > 0) protectEl.textContent = `Protegido: ${prot} s — sem armas e sem dano`;
       hpFill.style.width = `${Math.max(0, s.health)}%`;
       arFill.style.width = `${Math.max(0, s.armor)}%`;
       const mny = `$${s.money.toLocaleString('en-US')}`;
