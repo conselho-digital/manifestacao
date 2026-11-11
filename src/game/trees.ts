@@ -284,6 +284,9 @@ function buildTemplate(sp: Exclude<Species, 'bush'>): Template {
 
 const TINT: Record<Species, string> = { oak: '#ffffff', pine: '#ffffff', maple: '#ffffff', birch: '#ffffff', bush: '#ffffff' };
 
+/** Lado (m) dos blocos de árvores: cada bloco é um objeto que a câmera pode descartar. */
+const CELL = 40;
+
 /** Cria todas as árvores (instanciadas por espécie), com troncos sólidos e copas para a câmera. */
 export function makeTrees(list: TreeSpec[]): THREE.Group {
   const group = new THREE.Group();
@@ -295,14 +298,24 @@ export function makeTrees(list: TreeSpec[]): THREE.Group {
   const col = new THREE.Color();
 
   for (const sp of ['oak', 'pine', 'maple', 'birch', 'bush'] as const) {
-    const trees = list.filter((t) => t.species === sp);
-    if (!trees.length) continue;
+    const all = list.filter((t) => t.species === sp);
+    if (!all.length) continue;
     const tpl = sp === 'bush' ? bushTemplate : buildTemplate(sp);
 
     // folhagem
     const ftex = foliageTex(sp);
     ftex.repeat.set(sp === 'pine' ? 2 : 3, sp === 'pine' ? 2 : 3);
     const mat = new THREE.MeshLambertMaterial({ map: ftex, alphaTest: 0.45, side: THREE.DoubleSide });
+    const bark = new THREE.MeshLambertMaterial({ map: barkTex(sp) });
+    (bark.map as THREE.Texture).repeat.set(2, sp === 'pine' ? 6 : 3);
+    // as árvores ficam em blocos de CELL m: cada bloco é um objeto próprio, então o que está fora da câmera (ou longe) não é desenhado
+    const cells = new Map<string, TreeSpec[]>();
+    for (const t of all) {
+      const k = `${Math.floor(t.x / CELL)},${Math.floor(t.z / CELL)}`;
+      const c = cells.get(k);
+      if (c) c.push(t); else cells.set(k, [t]);
+    }
+    for (const trees of cells.values()) {
     const blobs = new THREE.InstancedMesh(sphere, mat, trees.length * tpl.blobs.length);
     let bi = 0;
     for (const t of trees) {
@@ -336,8 +349,6 @@ export function makeTrees(list: TreeSpec[]): THREE.Group {
 
     // troncos e galhos
     {
-      const bark = new THREE.MeshLambertMaterial({ map: barkTex(sp) });
-      (bark.map as THREE.Texture).repeat.set(2, sp === 'pine' ? 6 : 3);
       const trunks = new THREE.InstancedMesh(tpl.trunk, bark, trees.length);
       trees.forEach((t, i) => {
         q.setFromAxisAngle(Y, rng() * 6.3);
@@ -346,6 +357,7 @@ export function makeTrees(list: TreeSpec[]): THREE.Group {
       });
       trunks.castShadow = true;
       group.add(trunks);
+    }
     }
   }
   return group;

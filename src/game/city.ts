@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { addBox, COLLIDERS, MAP, PARKS, PLACES, ROADS, TREES, type Rect } from './map';
 import { buildGrayTower, TOWER } from './tower';
+import { registerCullChildren, FAR_TREES } from './culling';
 import { HEIGHT, makeTrees, type Species, type TreeSpec } from './trees';
 import { CAR_MODELS, loadCarVisual, TRAFFIC } from './vehicle';
 
@@ -663,7 +664,9 @@ export function createCity(): THREE.Group {
   // copa não pode entrar no prédio: tira árvores cuja copa atravessaria uma fachada
   const crown: Record<string, number> = { oak: 0.4, pine: 0.2, maple: 0.3, birch: 0.2, bush: 0 };
   const placed = trees.filter((t) => t.species === 'bush' || !nearBuilding(t.x, t.z, crown[t.species]! * t.h + 0.4));
-  city.add(makeTrees(placed));
+  const treeGroup = makeTrees(placed);
+  city.add(treeGroup);
+  registerCullChildren(treeGroup, FAR_TREES);
 
   // Bancos e jardineiras (dá para escalar)
   const benchMat = new THREE.MeshLambertMaterial({ color: 0x8c8f93 });

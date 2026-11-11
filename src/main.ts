@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createCamera, createRenderer, createScene, handleResize } from './game/scene';
+import { createCamera, createRenderer, createScene, handleResize, pixelRatio } from './game/scene';
 import { createCity } from './game/city';
 import { museumSpawn } from './game/map';
 import { createCharacter, type CharacterName } from './game/characters';
@@ -16,6 +16,7 @@ import { CARS, createCars, despawnPersonal, TRAFFIC, findVehicleSpot, PERSONAL, 
 import { Combat, MAX_HEALTH } from './game/combat';
 import { Graffiti } from './game/graffiti';
 import { Billboard } from './game/billboard';
+import { updateCulling } from './game/culling';
 import { WeaponVisual } from './game/weapons';
 import { warmUp } from './game/preload';
 import { setListener } from './game/audio';
@@ -85,7 +86,7 @@ function menuCamera(dt: number): void {
 
 // No menu: pré-carrega e aquece o mapa, os veículos e as armas para o jogo não engasgar
 // No menu a cidade é desenhada sem recalcular sombras e com resolução 1x (mais leve); o jogo volta ao normal ao entrar
-const GAME_PIXEL_RATIO = Math.min(window.devicePixelRatio, 2);
+const GAME_PIXEL_RATIO = pixelRatio();
 void warmUp(renderer, scene, camera).then(() => {
   if (!inMenu) return;
   renderer.shadowMap.autoUpdate = false;
@@ -99,11 +100,12 @@ let combat: Combat | null = null;
 const BASE_FOV = camera.fov;
 const net = new Net();
 const remotes = new Map<string, RemotePlayer>();
+let cullT = 0;
 const graffiti = new Graffiti(scene);
 const billboard = new Billboard(scene);
 void billboard.start();
 if (import.meta.env.DEV) (window as unknown as { __net: Net; __game: { ready: () => boolean } }).__net = net;
-if (import.meta.env.DEV) (window as unknown as { __game: { ready: () => boolean; camera: THREE.PerspectiveCamera; scene: THREE.Scene; combat: () => Combat | null; player: () => Player | null; sim: { TRAFFIC: typeof TRAFFIC; CARS: typeof CARS; updateTraffic: typeof updateTraffic; spawnPersonal: typeof spawnPersonal } } }).__game = { ready: () => !!player, camera, scene, combat: () => combat, player: () => player, sim: { TRAFFIC, CARS, updateTraffic, spawnPersonal } };
+if (import.meta.env.DEV) (window as unknown as { __game: { ready: () => boolean; camera: THREE.PerspectiveCamera; scene: THREE.Scene; renderer: THREE.WebGLRenderer; combat: () => Combat | null; player: () => Player | null; sim: { TRAFFIC: typeof TRAFFIC; CARS: typeof CARS; updateTraffic: typeof updateTraffic; spawnPersonal: typeof spawnPersonal } } }).__game = { ready: () => !!player, camera, scene, renderer, combat: () => combat, player: () => player, sim: { TRAFFIC, CARS, updateTraffic, spawnPersonal } };
 let profileName = 'Jogador';
 // Voz por proximidade (WebRTC): sinalização pelo canal do Supabase; só liga depois do primeiro toque no botão do microfone
 const voice = new Voice(net.id, (to, k, d) => net.sendRtc(to, k, d), (state, peers) => {
@@ -440,6 +442,7 @@ function loop(): void {
   if (player) updateEngines(paused ? 0 : dt);
   remotes.forEach((r) => r.update(dt));
   graffiti.update(dt);
+  if (player) { cullT -= dt; if (cullT <= 0) { cullT = 0.25; updateCulling(player.object.position.x, player.object.position.z); } }
   if (player) billboard.update(dt, player.object.position.x, player.object.position.z);
   if (player) {
     const others = new Map<string, { x: number; z: number }>();
