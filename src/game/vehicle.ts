@@ -135,6 +135,15 @@ function addTwoTone(mat: THREE.MeshStandardMaterial, c2: THREE.Color, height: nu
   mat.customProgramCacheKey = () => 'teamtwotone';
 }
 
+/** a malha pertence ao nó `body` (e não às rodas e portas)? */
+function isBodyPart(m: THREE.Object3D): boolean {
+  for (let p: THREE.Object3D | null = m; p; p = p.parent) {
+    if (p.name === 'body') return true;
+    if (/^(wheel_|door_)/.test(p.name)) return false;
+  }
+  return true;
+}
+
 /** Monta o visual de um carro a partir do GLB (nós `body` e `wheel_FL/FR/BL/BR`); sem `look`, a pintura (`paint`) recebe `colorHex`; com `look`, vale a pintura da equipe. */
 export function buildCarVisual(src: THREE.Object3D, colorHex: number, look?: PaintLook, bike = false): { group: THREE.Group; wheels: Record<string, THREE.Object3D> } {
   const model = src.clone(true);
@@ -144,7 +153,8 @@ export function buildCarVisual(src: THREE.Object3D, colorHex: number, look?: Pai
   model.traverse((o) => {
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;
-    m.castShadow = true;
+    // só a carroceria joga sombra: rodas, portas e vidros são pequenos e custariam uma chamada de desenho cada na passada das sombras
+    m.castShadow = isBodyPart(m) && !(!Array.isArray(m.material) && m.material.name === 'glass');
     if (look) return;
     const mats = Array.isArray(m.material) ? m.material : [m.material];
     const out = mats.map((mat) => {
