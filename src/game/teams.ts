@@ -21,7 +21,9 @@ let teams: Team[] = DEFAULT_TEAMS;
 
 export const getTeams = (): Team[] => teams;
 export const teamById = (id: string | null | undefined): Team | null => (id ? teams.find((t) => t.id === id) ?? null : null);
-export const lookOf = (t: Team | null): TeamLook | null => (t ? { name: t.name, c1: t.c1, c2: t.c2 } : null);
+/** Equipe válida: a pedida, ou a primeira (não existe "sem equipe"). */
+export const validTeamId = (id: string | null | undefined): string => (teamById(id) ? id! : teams[0]?.id ?? '');
+export const lookOf =(t: Team | null): TeamLook | null => (t ? { name: t.name, c1: t.c1, c2: t.c2 } : null);
 
 /** Valida o que veio da rede: nome curto e duas cores #rrggbb. */
 export function cleanLook(v: unknown): TeamLook | null {

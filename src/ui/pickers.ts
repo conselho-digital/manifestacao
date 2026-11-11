@@ -76,17 +76,14 @@ export function createCharacterPicker(initial: CharacterName, onPick: (n: Charac
 
 export interface TeamPicker { root: HTMLElement; setTeams(teams: Team[]): void; set(id: string): void }
 
-/** Escolha de equipe: "Sem equipe" e uma bolinha de duas cores por equipe. */
+/** Escolha de equipe: uma bolinha de duas cores por equipe (sempre há uma marcada). */
 export function createTeamPicker(teams: Team[], initialId: string, onPick: (id: string) => void): TeamPicker {
   const root = el('div', 'pk-teams');
   let list = teams;
   let current = initialId;
   const render = (): void => {
     root.textContent = '';
-    const none = el('button', `pk-team${current === '' ? ' sel' : ''}`, el('span', 'pk-sw none', '∅'), 'Sem equipe');
-    none.type = 'button';
-    none.onclick = () => { current = ''; render(); onPick(''); };
-    root.appendChild(none);
+    if (!list.some((x) => x.id === current)) current = list[0]?.id ?? '';
     for (const t of list) {
       const sw = el('span', 'pk-sw');
       sw.style.cssText = swatchStyle(t.c1, t.c2);
@@ -99,7 +96,7 @@ export function createTeamPicker(teams: Team[], initialId: string, onPick: (id: 
   render();
   return {
     root,
-    setTeams(t): void { list = t; if (current && !t.some((x) => x.id === current)) current = ''; render(); },
+    setTeams(t): void { list = t; render(); },
     set(id): void { current = id; render(); },
   };
 }

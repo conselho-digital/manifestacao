@@ -2,12 +2,12 @@ import { enterLandscape } from './orientation';
 import { CHARACTERS, labelOf, type CharacterName } from '../game/characters';
 import { authAvailable, currentUser, renderGoogleButton, signOut, type AuthUser } from '../net/auth';
 import { createCharacterPicker, createTeamPicker, el, faceUrl, PICKER_CSS } from './pickers';
-import { getTeams, loadTeams, savedTeamId, saveTeamId } from '../game/teams';
+import { getTeams, loadTeams, savedTeamId, saveTeamId, validTeamId } from '../game/teams';
 
 export interface Profile {
   name: string;
   character: CharacterName;
-  /** id da equipe escolhida ('' = sem equipe) */
+  /** id da equipe escolhida (sempre uma equipe; '' só se não houver nenhuma) */
   team: string;
   /** id da conta Google que entrou */
   userId: string;
@@ -74,7 +74,7 @@ const CSS = `
 export function showLobby(): Promise<Profile> {
   const saved = loadSaved();
   let selected: CharacterName = saved.character;
-  let teamId = savedTeamId();
+  let teamId = validTeamId(savedTeamId());
   let user: AuthUser | null = null;
 
   const style = el('style');
@@ -157,7 +157,7 @@ export function showLobby(): Promise<Profile> {
   // equipes do servidor (as 4 padrão aparecem até chegar)
   void loadTeams().then((t) => {
     teamPicker.setTeams(t);
-    if (!t.some((x) => x.id === teamId)) teamId = '';
+    teamId = validTeamId(teamId);
     teamPicker.set(teamId);
   });
 

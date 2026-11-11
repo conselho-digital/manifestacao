@@ -18,7 +18,7 @@ import { WeaponVisual } from './game/weapons';
 import { warmUp } from './game/preload';
 import { setListener } from './game/audio';
 import { HUD_KEY, Inventory, type WeaponId } from './game/inventory';
-import { isAdmin, lookOf, makeTeamRing, saveTeamId, teamById } from './game/teams';
+import { isAdmin, lookOf, makeTeamRing, saveTeamId, teamById, validTeamId } from './game/teams';
 import { loadPrices, loadPurchases } from './game/shop';
 import type { PlayerInfo, VehInfo } from './net/sync';
 import { createPauseMenu, type PauseMenu } from './ui/pause';
@@ -222,7 +222,7 @@ async function setMyCharacter(name: CharacterName): Promise<void> {
 void showLobby().then(async (profile) => {
   profileName = profile.name;
   character = profile.character;
-  teamId = profile.team;
+  teamId = validTeamId(profile.team);
   inv.load(profile.userId);
   inMenu = false;
   scene.fog = menuFog;
@@ -264,8 +264,7 @@ void showLobby().then(async (profile) => {
       if (!open) readInput(); // descarta toques/teclas de enquanto estava pausado
     },
     onTeamsChanged: () => {
-      if (teamId && !teamById(teamId)) { teamId = ''; saveTeamId(''); }
-      setMyTeam(teamId);
+      setMyTeam(validTeamId(teamId));
     },
   });
   if (import.meta.env.DEV) (window as unknown as { __pause: PauseMenu }).__pause = pauseMenu;
