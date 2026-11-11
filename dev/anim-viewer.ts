@@ -109,6 +109,30 @@ const V = {
     animator.setRifleKind(k);
     weapon.setRifleKind(k);
   },
+  /** Para onde aponta a lâmina/cabeça de uma arma branca em relação ao cabo (espaço do personagem: x esquerda, z frente). */
+  headDir(w: string): number[] {
+    const holder = (weapon as unknown as { extraInner: Map<string, THREE.Object3D> }).extraInner.get(w)!;
+    const anchor = (weapon as unknown as { batAnchor: THREE.Object3D }).batAnchor;
+    obj.updateMatrixWorld(true);
+    const shaft = new THREE.Vector3(0, 0, 1).transformDirection(anchor.matrixWorld);
+    const grip = new THREE.Vector3().setFromMatrixPosition(anchor.matrixWorld);
+    const pts: THREE.Vector3[] = [];
+    holder.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (!m.isMesh) return;
+      const a = m.geometry.getAttribute('position');
+      for (let i = 0; i < a.count; i++) pts.push(new THREE.Vector3().fromBufferAttribute(a, i).applyMatrix4(m.matrixWorld));
+    });
+    // pontos mais longe do eixo do cabo = a lâmina/cabeça
+    let best = new THREE.Vector3(); let bd = 0;
+    for (const q of pts) {
+      const r = q.clone().sub(grip); r.addScaledVector(shaft, -r.dot(shaft));
+      if (r.length() > bd) { bd = r.length(); best = r; }
+    }
+    const inv = new THREE.Matrix4().copy(obj.matrixWorld).invert();
+    best.transformDirection(inv).multiplyScalar(bd);
+    return [best.x, best.y, best.z].map((v) => Math.round(v * 100) / 100);
+  },
   clips: (): string[] => [...(animator as unknown as { actions: Map<string, unknown> }).actions.keys()],
   /** n poses de um clipe em 2 vistas (lado em cima, frente embaixo). */
   sheet(clip: string, n: number, armed: Armed = 'none', pitch = 0, views: ('side' | 'front' | 'top' | 'cam' | 'closeR' | 'closeB' | 'closeL' | 'closeF' | 'hand' | 'handL')[] = ['side', 'front']): number {

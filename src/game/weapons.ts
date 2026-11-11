@@ -35,12 +35,12 @@ let baseballSrc: Promise<THREE.Object3D> | null = null;
 export const loadBaseball = (): Promise<THREE.Object3D> => (baseballSrc ??= loader.loadAsync('/models/weapons/baseball-bat.glb').then((g) => g.scene));
 
 /** Armas brancas do pacote: arquivo, ponto do cabo onde a mão direita segura (eixo Y do modelo, m) e escala. */
-export const EXTRA_MELEE: Record<ExtraMelee, { file: string; grip: number; scale: number }> = {
+export const EXTRA_MELEE: Record<ExtraMelee, { file: string; grip: number; scale: number; /** giro em volta do cabo (rad) para a lâmina apontar para a frente */ roll?: number }> = {
   bottle: { file: 'broken-bottle.glb', grip: -0.04, scale: 1 },
   pipe: { file: 'pipe.glb', grip: -0.1, scale: 1 },
-  cleaver: { file: 'cleaver.glb', grip: -0.08, scale: 1 },
-  sickle: { file: 'sickle.glb', grip: 0, scale: 1 },
-  axe: { file: 'axe.glb', grip: -0.2, scale: 1 },
+  cleaver: { file: 'cleaver.glb', grip: -0.08, scale: 1, roll: 1.9 },
+  sickle: { file: 'sickle.glb', grip: 0, scale: 1, roll: 1.9 },
+  axe: { file: 'axe.glb', grip: -0.2, scale: 1, roll: 1.9 },
 };
 const extraSrc = new Map<ExtraMelee, Promise<THREE.Object3D>>();
 export const loadExtra = (k: ExtraMelee): Promise<THREE.Object3D> => {
@@ -201,6 +201,7 @@ export class WeaponVisual {
         const m = src.clone(true);
         m.traverse((o) => { o.castShadow = true; });
         const inner = new THREE.Group();
+        m.rotation.y = EXTRA_MELEE[k].roll ?? 0; // giro em volta do cabo: a lâmina aponta para a frente
         inner.add(m);
         inner.rotation.x = Math.PI / 2; // o comprimento (Y no GLB) passa a apontar para +Z
         inner.scale.setScalar(EXTRA_MELEE[k].scale);
