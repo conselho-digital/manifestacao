@@ -1,7 +1,7 @@
 // Ferramenta de desenvolvimento: desenha cada arma de lado, com fundo transparente, para virar ícone do HUD.
 // Uso: abrir /dev/weapon-icons.html e ler window.ICONS (dataURL por arma) — o script scratchpad/icons.js salva em public/hud/.
 import * as THREE from 'three';
-import { loadBaseball, loadCricket, loadExtra, loadFlag, loadRifle, loadSign } from '../src/game/weapons';
+import { loadPistol, loadBaseball, loadCricket, loadExtra, loadFlag, loadRifle, loadSign } from '../src/game/weapons';
 import { EXTRA_MELEE_KEYS } from '../src/game/anim';
 import { loadRifleKind } from '../src/game/weapons';
 
@@ -51,7 +51,7 @@ function crop(src: HTMLCanvasElement): string {
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (data[(y * W + x) * 4 + 3]! > 24) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
   const w = x1 - x0 + 1;
   const h = y1 - y0 + 1;
-  const k = Math.min((OUT_W * 0.92) / w, (OUT_H * 0.92) / h);
+  const k = Math.min((OUT_W * 0.86) / w, (OUT_H * 0.86) / h);
   const out = document.createElement('canvas');
   out.width = OUT_W; out.height = OUT_H;
   const o = out.getContext('2d')!;
@@ -64,24 +64,10 @@ const out: Record<string, string> = {};
 const rifle = (await loadRifle()).clone(true);
 rifle.traverse((o) => { if (o.name.toLowerCase().includes('gunflash')) o.visible = false; });
 out.ak = fit(rifle, new THREE.Euler(0, 0, 0)); // o AK já vem deitado no eixo X
-// pistola do ícone: silhueta de lado extrudada (armação preta + ferrolho cinza), mais bonita que a da mão
-{
-  const mk = (pts: [number, number][], depth: number, color: number, metal = 0.3): THREE.Mesh => {
-    const sh = new THREE.Shape();
-    pts.forEach(([x, y], i) => (i ? sh.lineTo(x, y) : sh.moveTo(x, y)));
-    const geo = new THREE.ExtrudeGeometry(sh, { depth, bevelEnabled: true, bevelSize: 0.002, bevelThickness: 0.002, bevelSegments: 2 });
-    geo.translate(0, 0, -depth / 2);
-    return new THREE.Mesh(geo, new THREE.MeshStandardMaterial({ color, roughness: 0.5, metalness: metal }));
-  };
-  const pg = new THREE.Group();
-  pg.add(mk([[-0.08, 0], [0.1, 0], [0.1, -0.014], [0.035, -0.014], [0.03, -0.032], [-0.018, -0.034], [-0.066, -0.115], [-0.12, -0.115]], 0.026, 0x2a2c30)); // armação + empunhadura inclinada
-  pg.add(mk([[-0.09, 0], [0.115, 0], [0.115, 0.034], [0.04, 0.034], [0.03, 0.04], [0.02, 0.034], [-0.09, 0.034]], 0.03, 0x8a9199, 0.7)); // ferrolho
-  pg.add(mk([[0.115, 0.01], [0.128, 0.01], [0.128, 0.026], [0.115, 0.026]], 0.012, 0x15161a, 0.5)); // boca do cano
-  pg.add(mk([[-0.124, -0.115], [-0.066, -0.115], [-0.066, -0.126], [-0.126, -0.126]], 0.03, 0x15161a)); // base do carregador
-  pg.add(mk([[-0.09, 0.034], [-0.082, 0.034], [-0.082, 0.042], [-0.09, 0.042]], 0.008, 0x15161a)); // mira traseira
-  pg.rotation.set(0.12, -0.32, 0);
-  out.pistol = fit(pg, new THREE.Euler(0, 0, 0));
-}
+// pistola: o revólver Python .357 (cano em +X, de lado); gira um pouco para mostrar volume
+const pistol = (await loadPistol()).clone(true);
+pistol.rotation.y = -0.35;
+out.pistol = fit(pistol, new THREE.Euler(0.08, 0, 0));
 const flag = (await loadFlag()).clone(true);
 out.bat = fit(flag, new THREE.Euler(0, 0, -Math.PI / 2 + 0.55)); // mastro (Y) deitado, bandeira para cima
 const sign = (await loadSign()).clone(true);

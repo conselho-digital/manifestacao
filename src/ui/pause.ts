@@ -62,7 +62,7 @@ const CSS = `
 .ps-card.sel{border-color:#4cc2ff;background:#25415a}
 .ps-card .pic{height:108px;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 40%,#3f8a3f,#2a5a2a);border-radius:10px;padding:8px}
 .ps-card .pic img{max-width:100%;max-height:100%;object-fit:contain;filter:drop-shadow(0 3px 4px rgba(0,0,0,.45))}
-.ps-card .pic svg{width:46px;height:46px;fill:#fff}
+.ps-card .pic svg{width:76px;height:76px}
 .ps-card b{font-size:15px}
 .ps-card small{font-size:12px;opacity:.75;line-height:1.3}
 .ps-price{font-weight:800;color:#8fe38a}

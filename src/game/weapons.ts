@@ -19,6 +19,12 @@ export const loadRifleKind = (k: RifleKind): Promise<THREE.Object3D> => {
   return p;
 };
 
+let pistolSrc: Promise<THREE.Object3D> | null = null;
+/** Revólver Python .357 (enviado pelo dono do projeto, convertido de DFF/TXD): 36 cm, cano para +X, origem na traseira. */
+export const loadPistol = (): Promise<THREE.Object3D> => (pistolSrc ??= loader.loadAsync('/models/weapons/python357.glb').then((g) => g.scene));
+/** Boca do cano da pistola no espaço da arma (medida no modelo já posicionado na mão). */
+export const PISTOL_FLASH = new THREE.Vector3(0, 0.091, 0.19);
+
 let flagSrc: Promise<THREE.Object3D> | null = null;
 export const loadFlag = (): Promise<THREE.Object3D> => (flagSrc ??= loader.loadAsync('/models/weapons/flag-turkey.glb').then((g) => g.scene));
 
@@ -94,7 +100,7 @@ function flashTexture(): THREE.Texture {
 
 /** Cópia visual de cada arma (para pré-carregar e compilar shaders). */
 export async function loadWeaponModels(): Promise<THREE.Object3D[]> {
-  const all = await Promise.all([loadRifle(), loadFlag(), loadSign(), loadCricket(), loadBaseball(), ...EXTRA_MELEE_KEYS.map(loadExtra), ...RIFLE_KINDS.map(loadRifleKind)]);
+  const all = await Promise.all([loadPistol(), loadRifle(), loadFlag(), loadSign(), loadCricket(), loadBaseball(), ...EXTRA_MELEE_KEYS.map(loadExtra), ...RIFLE_KINDS.map(loadRifleKind)]);
   return all.map((o) => o.clone(true));
 }
 
@@ -126,6 +132,17 @@ export class WeaponVisual {
     root.add(this.anchor);
     this.anchor.add(this.pistolInner);
     this.pistolInner.visible = false;
+    // o revólver Python .357 troca a pistola simples (que fica só até o arquivo carregar)
+    void loadPistol().then((src) => {
+      const gun = src.clone(true);
+      gun.traverse((o) => { o.castShadow = true; });
+      const inner = new THREE.Group();
+      inner.add(gun);
+      inner.rotation.y = -Math.PI / 2; // cano (+X no arquivo) para +Z
+      inner.position.set(-0.016, 0.01, -0.18); // a palma fica no cabo, no mesmo ponto da pistola antiga
+      this.pistolInner.clear();
+      this.pistolInner.add(inner);
+    });
     const fallbackBat = buildBat();
     this.batAnchor.add(fallbackBat);
     // o "taco" é a bandeira num mastro (modelo convertido do DFF); enquanto carrega, vale o taco simples
@@ -298,7 +315,7 @@ export class WeaponVisual {
     this.rifleInners.forEach((g, k) => { g.visible = !pistol && this.rifleKind === k; });
     // boca do cano medida nos modelos: AK-47 (-0,017; 0,019; 0,738) e pistola (0; 0; 0,17), 1–2 cm à frente da ponta
     const fl = rifleGeo(this.rifleKind).flash;
-    this.flashSprite.position.set(pistol ? 0 : fl.x, pistol ? 0 : fl.y, pistol ? 0.185 : fl.z);
+    this.flashSprite.position.set(pistol ? PISTOL_FLASH.x : fl.x, pistol ? PISTOL_FLASH.y : fl.y, pistol ? PISTOL_FLASH.z : fl.z);
     this.flashSprite.scale.setScalar(pistol ? 0.3 : 0.5);
   }
 

@@ -127,7 +127,7 @@ const P3 = (x: number, y: number, z: number): THREE.Vector3 => new THREE.Vector3
 const CFG: Record<'rifle' | 'pistol', WeaponCfg> = {
   rifle: {
     // referência (foto): o fuzil atravessa o corpo na altura da barriga, cano para a esquerda e levemente para cima
-    low: { pos: P3(-0.02, 1.15, 0.28), pitch: -0.06, yaw: 1.1 },
+    low: { pos: P3(-0.02, 1.3, 0.2), pitch: -0.06, yaw: 1.1 },
     // coronha no ombro direito, bochecha na coronha; yaw negativo: o cano converge para o ponto da mira (a câmera fica à direita)
     aim: { pos: P3(-0.17, 1.47, 0.24), pitch: 0, yaw: -0.05 },
     gripR: P3(0, -0.055, 0.17), // empunhadura (coronha→cano: a arma tem 0,88 m e começa em z=-0,14)
@@ -679,9 +679,13 @@ export class Animator {
     this.bat.position.copy(hr);
     // o mastro fica preso à mão direita (como no GTA): a orientação no espaço da mão é calibrada uma vez
     // no bat_idle, quando as duas mãos estão afastadas e a reta entre elas dá a direção do mastro
-    if (this.batLocal) {
+    // (recalibra sempre que o bat_idle está completo e com as mãos afastadas: uma calibração feita no meio da transição de outro clipe deixava a arma para baixo)
+    const settled = this.clipName === 'bat_idle' && (this.current?.getEffectiveWeight() ?? 0) > 0.98;
+    if (this.batLocal && !(settled && hl.distanceTo(hr) > 0.22)) {
       this.bat.quaternion.copy(handQ).multiply(this.batLocal);
-      return;
+      // parado em guarda a arma tem que apontar para cima: se não aponta, a calibração está errada (descarta e usa o eixo das mãos até recalibrar)
+      if (this.clipName === 'bat_idle' && new THREE.Vector3(0, 0, 1).applyQuaternion(this.bat.quaternion).y < 0.1) this.batLocal = null;
+      else return;
     }
     if (axis.length() < 0.08) {
       // mãos coladas: só a mão direita segura; taco para a frente e para cima
@@ -696,7 +700,7 @@ export class Animator {
     const yAxis = new THREE.Vector3().crossVectors(axis, xAxis);
     const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, axis));
     this.bat.quaternion.copy(q);
-    if (this.clipName === 'bat_idle' && axis.length() > 0 && hl.distanceTo(hr) > 0.22) this.batLocal = handQ.clone().invert().multiply(q);
+    if (settled && hl.distanceTo(hr) > 0.22) this.batLocal = handQ.clone().invert().multiply(q);
   }
 
   /** Arma branca carregada para cima: mão direita na frente do peito, esquerda mais acima no cabo, arma inclinada para a frente. */
