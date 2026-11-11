@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import { supabase } from '../net/supabase';
 import { addBox } from './map';
 
-const POS = new THREE.Vector3(15, 0, -22.5); // calçada de pedras do outro lado da avenida, em frente ao Parque Trianon
+const POS = new THREE.Vector3(20.5, 0, -14.5); // calçada de pedras do outro lado da avenida, em frente ao Parque Trianon
 const FACE = new THREE.Vector3(0, 0, 1); // a frente do telão é virada para a rua (avenida) e para o museu
 const W = 8;
 const H = 4.5; // 16:9
