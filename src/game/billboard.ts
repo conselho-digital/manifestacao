@@ -8,9 +8,9 @@ import { addBox } from './map';
 
 const POS = new THREE.Vector3(20.5, 0, -14.5); // calçada de pedras do outro lado da avenida, em frente ao Parque Trianon
 const FACE = new THREE.Vector3(0, 0, 1); // a frente do telão é virada para a rua (avenida) e para o museu
-const W = 8;
-const H = 4.5; // 16:9
-const SCREEN_Y = 5.6; // centro do telão
+const W = 12;
+const H = 6.75; // 16:9
+const SCREEN_Y = 6.7; // centro do telão
 const POST_X = W / 2 - 0.3;
 const RANGE_ON = 58; // a partir daqui o quadro do vídeo aparece (e o som começa, bem baixo)
 const RANGE_FULL = 12; // até aqui, volume cheio
