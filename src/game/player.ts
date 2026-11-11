@@ -91,8 +91,6 @@ export class Player {
   private kickAlt = false;
   private hitN = 0;
   private hitAlt = false;
-  private batN = 0;
-  private lastSwingAt = -1e9;
   private combatT = 0; // tempo restante em modo de combate (guarda) depois de socar
   private lastHitAt = -1e9;
   private crouchK = 0; // 0 em pé, 1 agachado (suaviza a câmera)
@@ -186,14 +184,11 @@ export class Player {
     return 'f';
   }
 
-  /** Golpe de arma branca (taco, bandeira, placa): os clipes Bat_1, Bat_2 e Bat_3 do baseball.ifp em sequência (volta ao 1 se ficar 2,5 s sem bater). */
+  /** Golpe de arma branca (taco, bandeira, placa, facas...): sempre o clipe Bat_1 do baseball.ifp (a tacada), nunca os outros (Bat_2 e Bat_3 pareciam soco). */
   swing(): void {
     if (this.mode !== 'ground') return;
-    const now = performance.now();
-    this.batN = now - this.lastSwingAt > 2500 ? 1 : this.batN % 3 + 1;
-    this.lastSwingAt = now;
-    this.swingT = [0.7, 0.76, 0.82][this.batN - 1]!;
-    this.animator?.restart(['bat_swing', 'bat_swing2', 'bat_swing3'][this.batN - 1]!);
+    this.swingT = 0.7;
+    this.animator?.restart('bat_swing');
   }
 
   /** Muda o que o personagem segura (braços e arma na mão). */
@@ -723,7 +718,7 @@ export class Player {
    * `aimK` (0 a 1) aproxima a câmera e a passa para o ombro direito ao mirar.
    * A câmera não atravessa prédios nem o chão.
    */
-  followCamera(camera: THREE.PerspectiveCamera, dt: number, yaw: number, pitch: number, aimK: number): void {
+  followCamera(camera: THREE.PerspectiveCamera, dt: number, yaw: number, pitch: number, aimK: number, snap = false): void {
     const p = this.object.position;
     const driving = this.mode === 'drive';
     const dist = driving ? (this.car?.bike ? 6.2 : 8) : THREE.MathUtils.lerp(CAM_DISTANCE, CAM_AIM_DISTANCE, aimK);
@@ -760,7 +755,8 @@ export class Player {
     const desired = from.clone().addScaledVector(back, d);
     desired.y = Math.max(desired.y, 0.35);
     // segue rápido (a câmera acompanha o dedo sem "atraso" perceptível)
-    camera.position.lerp(desired, 1 - Math.exp(-dt * 22));
+    if (snap) camera.position.copy(desired); // voo de entrada: o main mistura com a câmera do menu
+    else camera.position.lerp(desired, 1 - Math.exp(-dt * 22));
     camera.lookAt(camera.position.x + dir.x, camera.position.y + dir.y, camera.position.z + dir.z);
   }
 

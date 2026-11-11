@@ -56,6 +56,9 @@ let aimK = 0;
 // Menu: a cidade inteira vista de cima, girando devagar (sem neblina); ao entrar no jogo volta o normal
 const menuFog = scene.fog;
 let menuT = 0;
+// Voo de entrada: ao entrar na partida a câmera desce da vista aérea do menu até atrás do personagem (?intro=0 desliga)
+const INTRO_TIME = 3.4;
+let intro: { t: number; started: boolean; pos: THREE.Vector3; quat: THREE.Quaternion; off: number } | null = null;
 let inMenu = true; // a câmera do menu só vale enquanto o menu está aberto (o deslocamento lateral dela quebrava a câmera do jogo)
 if (!aerial) scene.fog = null;
 function menuCamera(dt: number): void {
@@ -231,13 +234,11 @@ void showLobby().then(async (profile) => {
   teamId = validTeamId(profile.team);
   inv.load(profile.userId);
   inMenu = false;
+  if (!aerial && !fixedCam && new URLSearchParams(location.search).get('intro') !== '0') intro = { t: 0, started: false, pos: new THREE.Vector3(), quat: new THREE.Quaternion(), off: 0 };
   renderer.shadowMap.autoUpdate = true;
   renderer.shadowMap.needsUpdate = true;
   renderer.setPixelRatio(GAME_PIXEL_RATIO);
-  scene.fog = menuFog;
-  camera.clearViewOffset();
-  camera.fov = BASE_FOV;
-  camera.updateProjectionMatrix();
+  if (intro) { scene.fog = null; } else { scene.fog = menuFog; camera.clearViewOffset(); camera.fov = BASE_FOV; camera.updateProjectionMatrix(); }
   hud = createHud({ onVoiceToggle: () => { void voice.toggle(); }, onPause: () => pauseMenu?.open() });
   hud.addChat(`Sistema: bem-vindo, ${profile.name}!`);
   // Ponto de partida (?pos=x,z serve para inspecionar o mapa)
@@ -322,12 +323,44 @@ void showLobby().then(async (profile) => {
   }
 });
 
+/** Mistura a câmera do jogo (já no ponto final) com a do menu: primeiro desliza por cima da praça, depois desce e vira para o museu. */
+function flyIntro(dt: number): void {
+  const it = intro!;
+  it.t += dt;
+  const u = Math.min(1, it.t / INTRO_TIME);
+  const eXZ = 1 - Math.pow(1 - u, 3);
+  const eY = u * u * (3 - 2 * u);
+  const end = camera.position.clone();
+  const endQ = camera.quaternion.clone();
+  camera.position.set(THREE.MathUtils.lerp(it.pos.x, end.x, eXZ), THREE.MathUtils.lerp(it.pos.y, end.y, eY), THREE.MathUtils.lerp(it.pos.z, end.z, eXZ));
+  camera.quaternion.copy(it.quat).slerp(endQ, eY);
+  if (it.off > 0 && u < 1) camera.setViewOffset(window.innerWidth, window.innerHeight, -window.innerWidth * it.off * (1 - eY), 0, window.innerWidth, window.innerHeight);
+  if (u >= 1) {
+    intro = null;
+    camera.clearViewOffset();
+    camera.updateProjectionMatrix();
+    scene.fog = menuFog;
+  }
+}
+
 function loop(): void {
   const dt = Math.min(clock.getDelta(), 0.05);
-  if (inMenu) menuCamera(dt);
+  if (inMenu || (intro && !intro.started)) menuCamera(dt); // enquanto o personagem carrega, a cidade segue girando
   if (player && combat) {
+    if (intro && !intro.started) {
+      intro.started = true; // o voo começa de onde a câmera do menu parou
+      intro.pos.copy(camera.position);
+      intro.quat.copy(camera.quaternion);
+      intro.off = camera.aspect > 1.3 ? 0.18 : 0;
+      camera.fov = BASE_FOV;
+      camera.updateProjectionMatrix();
+    }
     const look = takeLook();
     const input = readInput();
+    if (intro) { // durante o voo o jogador espera (sem comandos)
+      look.dx = 0; look.dy = 0;
+      Object.assign(input, { x: 0, y: 0, mag: 0, fire: false, aim: false, jump: false, climb: false, crouch: false, interact: false, emote: null, reload: false, switchWeapon: false, weaponStep: 0, weaponPick: null, sprint: false, gas: false, brake: false, handbrake: false, wheelie: false });
+    }
     lastInput = input;
     if (!paused) {
       yaw -= look.dx * 0.006;
@@ -341,7 +374,8 @@ function loop(): void {
       combat.update(dt, input, player);
       player.update(dt, input, yaw);
       aimK += ((input.aim && combat.isGun && !player.isDriving ? 1 : 0) - aimK) * Math.min(1, dt * 9);
-      player.followCamera(camera, dt, yaw + camOffset, pitch, aimK);
+      player.followCamera(camera, dt, yaw + camOffset, pitch, aimK, intro !== null);
+      if (intro) flyIntro(dt);
       setListener(player.object.position.x, player.object.position.z, yaw + camOffset); // ouve do personagem, vira com a câmera
       player.setAimPitch(pitch);
     }
