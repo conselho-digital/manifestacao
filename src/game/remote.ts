@@ -102,7 +102,7 @@ export class RemotePlayer {
     }
     const dead = this.anim === 'dead';
     if (this.animator && car?.seat) {
-      this.animator.setRide(car.seat, car.grips);
+      this.animator.setRide(car.seat, car.grips, car.riderLean);
       this.animator.setArmed('none');
       this.animator.play(car.bike ? 'bike_ride' : 'car_sit');
       this.animator.update(dt);

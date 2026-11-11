@@ -82,6 +82,10 @@ function gtaKey(name: string): string {
 const FADE = 0.2;
 const CURL_AXIS = new THREE.Vector3(0, 0, 1);
 const JAB_TIME = 0.42;
+/** duração do golpe de beisebol (s) */
+const SWING_TIME = 0.8;
+/** nome "virtual" enviado pela rede: dispara o golpe de beisebol por código (o clipe de fundo continua) */
+export const BAT_SWING_NAME = 'bat_base';
 /** Distância do osso do pulso até o meio da palma (m): é a palma, não o pulso, que segura o cabo. */
 const PALM = 0.1;
 const X = new THREE.Vector3(1, 0, 0);
@@ -181,7 +185,10 @@ export class Animator {
   private modelZ0 = 0;
   private modelX0 = 0;
   /** piloto sentado: deslocamento do modelo (y já descontando a altura da pélvis) e z */
-  private ride: { x: number; y: number; z: number; grips: [THREE.Vector3, THREE.Vector3] | null } | null = null;
+  private ride: { x: number; y: number; z: number; grips: [THREE.Vector3, THREE.Vector3] | null; lean: number } | null = null;
+  /** golpe de beisebol em andamento (0..1), -1 = nenhum; cooldown evita o remoto repetir */
+  private swingU = -1;
+  private swingCool = 0;
   private addClips: (file: Clips<never>) => void = () => undefined;
 
   private constructor(
@@ -321,6 +328,7 @@ export class Animator {
 
   /** Toca um clipe (loop, ou uma vez para clipes de ação). */
   play(name: string): void {
+    if (name === BAT_SWING_NAME) { this.baseball(); name = 'bat_idle'; }
     if (name === this.clipName) return;
     const next = this.actions.get(name);
     if (!next) return;
@@ -408,14 +416,23 @@ export class Animator {
     this.dirty = false;
   }
 
-  /** Sentado na moto: a pélvis vai para o assento (seat, no espaço do personagem). null = em pé. */
-  setRide(seat: THREE.Vector3 | null, grips: [THREE.Vector3, THREE.Vector3] | null = null): void {
-    this.ride = seat ? { x: seat.x, y: seat.y - 0.97, z: seat.z, grips } : null;
+  /**
+   * Sentado na moto: a pélvis vai para o assento (seat, no espaço do personagem). null = em pé.
+   * `lean` = quanto o tronco deita para alcançar o guidão (0 ereto, 1.5 peito no tanque): custom/cruiser pouco, esportiva muito.
+   */
+  setRide(seat: THREE.Vector3 | null, grips: [THREE.Vector3, THREE.Vector3] | null = null, lean = 1.5): void {
+    this.ride = seat ? { x: seat.x, y: seat.y - 0.97, z: seat.z, grips, lean } : null;
   }
 
   /** Desloca o modelo (entrando/saindo do carro): x para a esquerda, y para cima (pélvis), z para a frente. */
   setRideRaw(o: { x: number; y: number; z: number } | null): void {
-    this.ride = o ? { x: o.x, y: o.y, z: o.z, grips: null } : null;
+    this.ride = o ? { x: o.x, y: o.y, z: o.z, grips: null, lean: 0 } : null;
+  }
+
+  /** Golpe de beisebol com a bandeira/placa (por código): gira o taco na horizontal na altura do peito. */
+  baseball(): void {
+    if (this.swingU >= 0 || this.swingCool > 0) return;
+    this.swingU = 0;
   }
 
   /** Mergulho: o corpo desce até o chão (o IFP tem a altura da raiz, que não usamos como osso). */
@@ -471,7 +488,7 @@ export class Animator {
       this.updateRoot();
       // deita o tronco para a frente para as mãos alcançarem o guidão (mais nas motos esportivas, onde o guidão é baixo)
       if (this.spine) {
-        const lean = this.clipName === 'bike_ride' ? 1.5 : 0; // peito quase no tanque
+        const lean = this.clipName === 'bike_ride' ? this.ride.lean : 0; // esportiva: peito quase no tanque; custom: quase ereto
         this.rotateBone(this.spine.mid, new THREE.Quaternion().setFromAxisAngle(X, lean * 0.45));
         this.rotateBone(this.spine.chest, new THREE.Quaternion().setFromAxisAngle(X, lean * 0.4));
         this.rotateBone(this.spine.neck, new THREE.Quaternion().setFromAxisAngle(X, -lean * 0.3));
@@ -489,7 +506,13 @@ export class Animator {
     const fist = this.clipName.startsWith('punch_') || this.clipName.startsWith('kick_') || this.clipName === 'combat_idle' || this.clipName.startsWith('hit');
     const kickT = this.clipName === 'kick_1' && this.current ? this.current.time / this.current.getClip().duration : -1;
     const kickW = kickT >= 0 ? Math.max(0, Math.sin(Math.PI * THREE.MathUtils.clamp((kickT - 0.3) / 0.45, 0, 1))) : 0;
-    if (kind === 'bat' && holding) this.poseBat();
+    if (this.swingCool > 0) this.swingCool = Math.max(0, this.swingCool - dt);
+    if (this.swingU >= 0) {
+      this.swingU += dt / SWING_TIME;
+      if (this.swingU >= 1) { this.swingU = -1; this.swingCool = 0.35; }
+    }
+    const swinging = kind === 'bat' && holding && this.swingU >= 0;
+    if (kind === 'bat' && holding && !swinging) this.poseBat();
     const flail = this.flailW;
     if (flail > 0) this.flailT += dt;
     if ((!armed && !holding && !fist && kickW === 0 && flail === 0 && this.crouchK < 0.01 && this.legK < 0.01 && jabW === 0) || !this.spine) {
@@ -506,6 +529,7 @@ export class Animator {
     if (flail > 0) this.applyFlail(flail);
     if (fist) { this.curlHand(1, 1.4); this.curlHand(-1, 1.4); }
     if (jabW > 0) this.applyJab(jabW, jabE, dt);
+    if (swinging) this.applyBaseball(this.swingU, dt);
     this.updateRoot();
     this.groundFeet(dt);
     if (!armed && !holding) return;
@@ -616,6 +640,46 @@ export class Animator {
       this.rotateBone(this.spine.head, new THREE.Quaternion().setFromAxisAngle(X, 0.35 * s(6, 0.3) * w).multiply(new THREE.Quaternion().setFromAxisAngle(Z, 0.3 * s(5, 2) * w)));
     }
     this.updateRoot();
+  }
+
+  /**
+   * Golpe de beisebol: o taco sai de cima do ombro direito, varre a frente na horizontal (altura do peito)
+   * e termina sobre o ombro esquerdo. O tronco gira junto; as duas mãos vão por IK ao cabo.
+   * u = 0..1: 0–0,25 arma o golpe (para trás e para cima), 0,25–0,55 varre rápido, 0,55–1 acompanha e volta.
+   */
+  private applyBaseball(u: number, dt: number): void {
+    const sp = this.spine!;
+    const right = this.arms.find((a) => a.side < 0);
+    const left = this.arms.find((a) => a.side > 0);
+    if (!right || !left) return;
+    const smooth = (x: number): number => x * x * (3 - 2 * x);
+    let yaw: number; // ângulo do taco em torno do eixo vertical: 0 = frente, negativo = lado direito/trás
+    let pitch: number; // taco para cima (+)
+    if (u < 0.25) { const k = smooth(u / 0.25); yaw = THREE.MathUtils.lerp(-2.0, -2.5, k); pitch = THREE.MathUtils.lerp(0.9, 0.75, k); }
+    else if (u < 0.55) { const k = smooth((u - 0.25) / 0.3); yaw = THREE.MathUtils.lerp(-2.5, 1.9, k); pitch = THREE.MathUtils.lerp(0.75, 0.05, Math.sin(k * Math.PI * 0.5)); }
+    else { const k = smooth((u - 0.55) / 0.45); yaw = THREE.MathUtils.lerp(1.9, 2.3, Math.sin(k * Math.PI * 0.5)); pitch = THREE.MathUtils.lerp(0.05, 0.8, k); }
+    // o tronco gira para o lado do taco (limitado) e inclina um pouco na varredura
+    const turn = THREE.MathUtils.clamp(yaw * 0.32, -0.75, 0.75);
+    this.rotateBone(sp.mid, new THREE.Quaternion().setFromAxisAngle(Y, turn * 0.45));
+    this.rotateBone(sp.chest, new THREE.Quaternion().setFromAxisAngle(Y, turn * 0.55));
+    this.rotateBone(sp.head, new THREE.Quaternion().setFromAxisAngle(Y, -turn * 0.6));
+    this.updateRoot();
+    const dir = new THREE.Vector3(Math.sin(yaw) * Math.cos(pitch), Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
+    // mãos: em volta do corpo, um pouco à frente do taco (raio 0,3 m na altura do peito)
+    const lead = yaw + 0.55;
+    const hands = new THREE.Vector3(Math.sin(lead) * 0.3, 1.2 + 0.3 * Math.sin(pitch), Math.cos(lead) * 0.3 + 0.08);
+    this.solveArm(right, hands, 1, dt);
+    this.solveArm(left, hands.clone().addScaledVector(dir, 0.11), 1, dt);
+    this.updateRoot();
+    if (this.bat) {
+      const hand = this.posIn(right.h, new THREE.Vector3());
+      const elbow = this.posIn(right.f, new THREE.Vector3());
+      this.bat.position.copy(hand.addScaledVector(hand.clone().sub(elbow).normalize(), PALM));
+      const up = Math.abs(dir.y) > 0.95 ? new THREE.Vector3(0, 0, 1) : Y;
+      const xAxis = new THREE.Vector3().crossVectors(up, dir).normalize();
+      const yAxis = new THREE.Vector3().crossVectors(dir, xAxis);
+      this.bat.quaternion.setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, dir));
+    }
   }
 
   private applyJab(w: number, e: number, dt: number): void {

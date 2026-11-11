@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { COLLIDERS, MAP, rayBox, TREES, type Box } from './map';
 import type { InputState } from './input';
 import { CARS, hittables, type Car } from './vehicle';
-import { ARMED_CODE, facesAim, type Animator, type Armed } from './anim';
+import { ARMED_CODE, BAT_SWING_NAME, facesAim, type Animator, type Armed } from './anim';
 import type { WeaponVisual } from './weapons';
 
 const WALK_SPEED = 2.1;
@@ -79,7 +79,6 @@ export class Player {
   private koFront = false; // jogado da moto: voa para a frente (dive), cai de cara e levanta (getup_front)
   private koVy = 0;
   private modelRot0: number | null = null;
-  private swingAlt = false;
   private punchN = 0;
   private kickAlt = false;
   private hitN = 0;
@@ -154,10 +153,9 @@ export class Player {
   /** Golpe de taco (animação e trava a troca de clipe até acabar). */
   swing(): void {
     if (this.mode !== 'ground') return;
-    this.swingT = 0.75;
-    this.swingAlt = !this.swingAlt;
-    // Bat_2 e Bat_3 (golpes horizontais); o Bat_1 é um corte de cima para baixo e ficou de fora
-    this.animator?.restart(this.swingAlt ? 'bat_swing3' : 'bat_swing2');
+    // golpe de beisebol por código (os clipes Bat_* do GTA não são uma rebatida de verdade)
+    this.swingT = 0.8;
+    this.animator?.baseball();
   }
 
   /** Muda o que o personagem segura (braços e arma na mão). */
@@ -188,7 +186,9 @@ export class Player {
 
   /** Nome do clipe de animação atual (enviado aos outros jogadores). */
   get animName(): string {
-    return this.mode === 'drive' ? 'drive' : this.animator?.name || 'idle';
+    if (this.mode === 'drive') return 'drive';
+    if (this.swingT > 0 && (this.armed === 'bat' || this.armed === 'sign')) return BAT_SWING_NAME; // os outros repetem a rebatida
+    return this.animator?.name || 'idle';
   }
 
   /** Id do carro que está dirigindo (-1 = nenhum). */
@@ -413,7 +413,7 @@ export class Player {
       this.object.position.add(d);
     }
     if (car.seat) {
-      this.animator?.setRide(car.seat, car.grips);
+      this.animator?.setRide(car.seat, car.grips, car.riderLean);
       this.animator?.setArmed('none');
       this.animator?.play(car.bike ? 'bike_ride' : 'car_sit');
       this.animator?.update(dt);
