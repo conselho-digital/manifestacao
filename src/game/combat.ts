@@ -8,6 +8,7 @@ import type { RemotePlayer } from './remote';
 import type { InputState } from './input';
 import type { Net, ShotMsg, KillMsg } from '../net/sync';
 import type { Inventory, ShopItem, WeaponId } from './inventory';
+import type { Armed } from './anim';
 
 export const MAG_SIZE = 30;
 const RESERVE_START = 120;
@@ -32,6 +33,8 @@ const RESPAWN_TIME = 3.5;
 const INVULNERABLE = 2;
 /** depois de morrer: 60 s andando sem arma e sem levar dano de jogadores ou carros */
 export const PROTECT_TIME = 60;
+/** armas brancas de duas mãos (golpes do baseball.ifp) e o que o jogador segura com cada uma */
+const MELEE_ARMED: Partial<Record<number, Armed>> = { 2: 'bat', 4: 'sign', 5: 'cricket', 6: 'baseball', 7: 'bottle', 8: 'pipe', 9: 'cleaver', 10: 'sickle', 11: 'axe' };
 const KILL_MONEY = 100;
 const SPAWNS: [number, number][] = [[25, 16], [-10, -16], [64, 16], [-45, 16], [30, -16], [-60, -16], [-14, 16], [80, -16]];
 
@@ -64,7 +67,7 @@ export class Combat {
   /** começa de mãos livres (punho); o botão Arma troca */
   weapon: WeaponId = 1;
   /** munição de cada arma (só quem tem a arma recebe) */
-  private ammo = [0, 1, 2, 3, 4, 5, 6].map(() => ({ mag: 0, reserve: 0 }));
+  private ammo = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map(() => ({ mag: 0, reserve: 0 }));
   get mag(): number { return this.ammo[this.weapon]!.mag; }
   get reserve(): number { return this.ammo[this.weapon]!.reserve; }
   /** tem mira (fuzil ou pistola) */
@@ -132,7 +135,7 @@ export class Combat {
 
   private get magSize(): number { return this.weapon === 3 ? PISTOL_MAG : MAG_SIZE; }
 
-  get weaponName(): string { return ['AK-47', 'PUNHO', 'BANDEIRA', 'PISTOLA', 'PLACA', 'TACO', 'TACO'][this.weapon]!; }
+  get weaponName(): string { return ['AK-47', 'PUNHO', 'BANDEIRA', 'PISTOLA', 'PLACA', 'TACO', 'TACO', 'GARRAFA', 'CANO', 'CUTELO', 'FOICE', 'MACHADO'][this.weapon]!; }
 
   /** Placar: eu e os outros jogadores, do que mais matou para o que menos. */
   statRows(): StatRow[] {
@@ -169,7 +172,7 @@ export class Combat {
     if (this.protectT > 0) { this.weapon = 1; this.reloading = false; } // protegido: só as mãos
     else if (input.switchWeapon) {
       // fuzil, pistola, bandeira, placa, punho — só as que o jogador tem
-      const order = ([0, 3, 2, 4, 5, 6, 1] as const).filter((w) => this.d.inv.has(w));
+      const order = ([0, 3, 2, 4, 5, 6, 7, 8, 9, 10, 11, 1] as const).filter((w) => this.d.inv.has(w));
       this.weapon = order[(Math.max(0, order.indexOf(this.weapon)) + 1) % order.length]!;
       this.reloading = false;
     }
@@ -188,7 +191,7 @@ export class Combat {
     // atirando: o fuzil sobe para a posição de tiro (cano para a frente) e fica assim um instante depois do último tiro
     this.fireHold = input.fire ? AIM_HOLD : Math.max(0, this.fireHold - dt);
     const aiming = input.aim || this.fireHold > 0;
-    player.setArmed(this.weapon === 0 ? (aiming ? 'aim' : 'rifle') : this.weapon === 3 ? (aiming ? 'pistol_aim' : 'pistol') : this.weapon === 2 ? 'bat' : this.weapon === 4 ? 'sign' : this.weapon === 5 ? 'cricket' : this.weapon === 6 ? 'baseball' : 'none');
+    player.setArmed(this.weapon === 0 ? (aiming ? 'aim' : 'rifle') : this.weapon === 3 ? (aiming ? 'pistol_aim' : 'pistol') : (MELEE_ARMED[this.weapon] ?? 'none'));
 
     if (input.fire && this.cd <= 0 && !this.reloading && this.protectT <= 0) {
       const a = this.ammo[this.weapon]!;
@@ -198,7 +201,7 @@ export class Combat {
           this.cd = this.weapon === 0 ? AK_GAP : PISTOL_GAP;
           this.fireGun(player, aiming, this.weapon === 0 ? 'r' : 'p');
         } else { this.cd = 0.3; playClick(); this.startReload(); }
-      } else if (this.weapon === 2 || this.weapon === 4 || this.weapon === 5 || this.weapon === 6) { this.cd = BAT_GAP; player.swing(); this.melee(player, BAT_RANGE, 'b'); }
+      } else if (MELEE_ARMED[this.weapon]) { this.cd = BAT_GAP; player.swing(); this.melee(player, BAT_RANGE, 'b'); }
       else { this.cd = FIST_GAP; const kind = player.punch(); this.melee(player, kind === 'k' ? FIST_RANGE + 0.3 : FIST_RANGE, kind); }
     }
   }

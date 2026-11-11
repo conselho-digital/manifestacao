@@ -1,6 +1,6 @@
 // Menu de pausa (engrenagem): equipe, personagem, armas que o jogador já tem, loja e (só para o admin) gerenciar equipes.
 import type { CharacterName } from '../game/characters';
-import { SHOP, WEAPON_IMG, WEAPON_NAMES, type Inventory, type ShopItem, type WeaponId } from '../game/inventory';
+import { ALL_WEAPONS, SHOP, WEAPON_IMG, WEAPON_NAMES, type Inventory, type ShopItem, type WeaponId } from '../game/inventory';
 import { deleteTeam, getTeams, HEX, isAdmin, loadTeams, MAX_TEAM_NAME, saveTeam, type Team } from '../game/teams';
 import { ICON } from './icons';
 import { createCharacterPicker, createTeamPicker, el, PICKER_CSS, swatchStyle } from './pickers';
@@ -146,7 +146,7 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     body.append(el('p', 'ps-note', left > 0 ? `Você está protegido por mais ${left} s (sem dano), mas sem armas: elas voltam quando a proteção acabar.` : 'Só aparecem as armas que você já tem. Para conseguir mais, abra a Loja.'));
     const grid = el('div', 'ps-grid');
     const cur = d.currentWeapon();
-    for (const w of [1, 3, 0, 2, 4, 5, 6] as const) {
+    for (const w of ALL_WEAPONS) {
       if (!d.inv.has(w)) continue;
       const pic = el('div', 'pic');
       const src = WEAPON_IMG[w];

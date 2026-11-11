@@ -6,11 +6,14 @@ interface ClipData<T> { duration: number; tracks: T[]; /** descida do corpo (m) 
 type Clips<T> = Record<string, ClipData<T>>;
 type Kind = 'gta' | 'carlos';
 
-export type Armed = 'none' | 'rifle' | 'aim' | 'pistol' | 'pistol_aim' | 'bat' | 'sign' | 'cricket' | 'baseball';
-export const ARMED_CODE: Record<Armed, number> = { none: 0, rifle: 1, aim: 2, bat: 3, pistol: 4, pistol_aim: 5, sign: 6, cricket: 7, baseball: 8 };
-export const ARMED_FROM_CODE: Armed[] = ['none', 'rifle', 'aim', 'bat', 'pistol', 'pistol_aim', 'sign', 'cricket', 'baseball'];
+export type Armed = 'none' | 'rifle' | 'aim' | 'pistol' | 'pistol_aim' | 'bat' | 'sign' | 'cricket' | 'baseball' | ExtraMelee;
+/** Armas brancas extras (pacote de armas): garrafa quebrada, cano, cutelo, foice e machado. */
+export const EXTRA_MELEE_KEYS = ['bottle', 'pipe', 'cleaver', 'sickle', 'axe'] as const;
+export type ExtraMelee = (typeof EXTRA_MELEE_KEYS)[number];
+export const ARMED_CODE: Record<Armed, number> = { none: 0, rifle: 1, aim: 2, bat: 3, pistol: 4, pistol_aim: 5, sign: 6, cricket: 7, baseball: 8, bottle: 9, pipe: 10, cleaver: 11, sickle: 12, axe: 13 };
+export const ARMED_FROM_CODE: Armed[] = ['none', 'rifle', 'aim', 'bat', 'pistol', 'pistol_aim', 'sign', 'cricket', 'baseball', 'bottle', 'pipe', 'cleaver', 'sickle', 'axe'];
 /** Armas brancas de duas mãos (bandeira, placa, tacos de críquete e de beisebol): usam os clipes do baseball.ifp. */
-export const isBatLike = (a: Armed): boolean => a === 'bat' || a === 'sign' || a === 'cricket' || a === 'baseball';
+export const isBatLike = (a: Armed): boolean => a === 'bat' || a === 'sign' || a === 'cricket' || a === 'baseball' || (EXTRA_MELEE_KEYS as readonly string[]).includes(a);
 /** O corpo gira para onde a câmera mira só ao mirar ou atirar (arma levantada). Com a arma baixa a câmera olha livre e o corpo segue o movimento. */
 export const facesAim = (a: Armed): boolean => a === 'aim' || a === 'pistol_aim';
 const isAimPose = (a: Armed): boolean => a === 'aim' || a === 'pistol_aim';

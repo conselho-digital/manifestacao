@@ -3,7 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 export type ArmedMode = Armed;
 
-import { isBatLike, type Animator, type Armed } from './anim';
+import { EXTRA_MELEE_KEYS, isBatLike, type Animator, type Armed, type ExtraMelee } from './anim';
 
 const loader = new GLTFLoader();
 let rifleSrc: Promise<THREE.Object3D> | null = null;
@@ -17,6 +17,21 @@ export const loadCricket = (): Promise<THREE.Object3D> => (cricketSrc ??= loader
 
 let baseballSrc: Promise<THREE.Object3D> | null = null;
 export const loadBaseball = (): Promise<THREE.Object3D> => (baseballSrc ??= loader.loadAsync('/models/weapons/baseball-bat.glb').then((g) => g.scene));
+
+/** Armas brancas do pacote: arquivo, ponto do cabo onde a mão direita segura (eixo Y do modelo, m) e escala. */
+export const EXTRA_MELEE: Record<ExtraMelee, { file: string; grip: number; scale: number }> = {
+  bottle: { file: 'broken-bottle.glb', grip: -0.04, scale: 1 },
+  pipe: { file: 'pipe.glb', grip: -0.1, scale: 1 },
+  cleaver: { file: 'cleaver.glb', grip: -0.08, scale: 1 },
+  sickle: { file: 'sickle.glb', grip: 0, scale: 1 },
+  axe: { file: 'axe.glb', grip: -0.2, scale: 1 },
+};
+const extraSrc = new Map<ExtraMelee, Promise<THREE.Object3D>>();
+export const loadExtra = (k: ExtraMelee): Promise<THREE.Object3D> => {
+  let p = extraSrc.get(k);
+  if (!p) { p = loader.loadAsync(`/models/weapons/${EXTRA_MELEE[k].file}`).then((g) => g.scene); extraSrc.set(k, p); }
+  return p;
+};
 
 let signSrc: Promise<THREE.Object3D> | null = null;
 export const loadSign = (): Promise<THREE.Object3D> => (signSrc ??= loader.loadAsync('/models/weapons/traffic-sign.glb').then((g) => g.scene));
@@ -39,7 +54,7 @@ function flashTexture(): THREE.Texture {
 
 /** Cópia visual de cada arma (para pré-carregar e compilar shaders). */
 export async function loadWeaponModels(): Promise<THREE.Object3D[]> {
-  const all = await Promise.all([loadRifle(), loadFlag(), loadSign(), loadCricket(), loadBaseball()]);
+  const all = await Promise.all([loadRifle(), loadFlag(), loadSign(), loadCricket(), loadBaseball(), ...EXTRA_MELEE_KEYS.map(loadExtra)]);
   return all.map((o) => o.clone(true));
 }
 
@@ -54,6 +69,7 @@ export class WeaponVisual {
   private readonly signInner = new THREE.Group();
   private readonly cricketInner = new THREE.Group();
   private readonly baseballInner = new THREE.Group();
+  private readonly extraInner = new Map<ExtraMelee, THREE.Group>();
   private flashT = 0;
   private mode: ArmedMode = 'none';
   private ready = false;
@@ -116,6 +132,22 @@ export class WeaponVisual {
       inner.position.z = 0.12;
       this.baseballInner.add(inner);
     });
+    // armas brancas do pacote (garrafa, cano, cutelo, foice, machado)
+    for (const k of EXTRA_MELEE_KEYS) {
+      const holder = new THREE.Group();
+      this.extraInner.set(k, holder);
+      this.batAnchor.add(holder);
+      void loadExtra(k).then((src) => {
+        const m = src.clone(true);
+        m.traverse((o) => { o.castShadow = true; });
+        const inner = new THREE.Group();
+        inner.add(m);
+        inner.rotation.x = Math.PI / 2; // o comprimento (Y no GLB) passa a apontar para +Z
+        inner.scale.setScalar(EXTRA_MELEE[k].scale);
+        inner.position.z = -EXTRA_MELEE[k].grip * EXTRA_MELEE[k].scale; // o ponto do cabo fica na palma da mão direita
+        holder.add(inner);
+      });
+    }
     this.batAnchor.visible = false;
     root.add(this.batAnchor);
     this.flashSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: flashTexture(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
@@ -185,6 +217,7 @@ export class WeaponVisual {
     this.signInner.visible = this.mode === 'sign';
     this.cricketInner.visible = this.mode === 'cricket';
     this.baseballInner.visible = this.mode === 'baseball';
+    this.extraInner.forEach((g, k) => { g.visible = this.mode === k; });
     const pistol = this.mode === 'pistol' || this.mode === 'pistol_aim';
     this.anchor.visible = show && !bat;
     this.batAnchor.visible = show && bat;

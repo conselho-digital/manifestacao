@@ -38,3 +38,4 @@ O restante da cidade é gerado por código (`src/game/city.ts`), inspirado na ma
 - `public/models/weapons/cricket-bat.glb`: taco de críquete do jogo Bully: Scholarship Edition (Rockstar Vancouver), convertido de DFF/TXD.
 - `public/models/weapons/baseball-bat.glb`: taco de beisebol para GTA San Andreas ("Деревянная бита", textura e ícone de Tttt Yyyy, libertycity.ru), convertido de DFF/TXD.
 - Animações das armas brancas (`Bat_*`): `baseball.ifp` do GTA San Andreas (Rockstar North), enviado pelo dono do projeto.
+- Pacote de armas brancas (garrafa quebrada, cano, cutelo, foice, machado): modelos GTA SA enviados pelo dono do projeto (autor não informado no pacote), convertidos de DFF/TXD em `public/models/weapons/`.

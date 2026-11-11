@@ -20,7 +20,8 @@ export interface HudState {
   money: number;
   /** segundos de proteção restantes (0 = sem) */
   protect: number;
-  weapon: 'ak' | 'fist' | 'bat' | 'pistol' | 'sign' | 'cricket' | 'baseball';
+  /** chave da arma (HUD_KEY): ak, fist, bat, pistol, sign, cricket, baseball, bottle, pipe, cleaver, sickle, axe */
+  weapon: string;
   weaponName: string;
   mag: number;
   reserve: number;
@@ -516,7 +517,7 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
         if (s.weapon === 'fist') weaponBox.insertAdjacentHTML('beforeend', ICON.fist);
         else weaponBox.insertAdjacentHTML('beforeend', `<img src="/hud/w-${s.weapon}.png" alt="${s.weaponName}" draggable="false">`);
       }
-      const am = s.weapon === 'fist' || s.weapon === 'bat' || s.weapon === 'sign' || s.weapon === 'cricket' || s.weapon === 'baseball' ? '--' : s.reloading ? '...' : `${s.mag}/${s.reserve}`;
+      const am = s.weapon !== 'ak' && s.weapon !== 'pistol' ? '--' : s.reloading ? '...' : `${s.mag}/${s.reserve}`;
       if (am !== cache.ammo) { cache.ammo = am; ammo.textContent = am; }
 
       cross.classList.toggle('show', (s.weapon === 'ak' || s.weapon === 'pistol') && !s.driving && !s.dead);
