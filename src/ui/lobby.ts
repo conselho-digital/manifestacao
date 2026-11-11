@@ -1,6 +1,6 @@
 import { enterLandscape } from './orientation';
 import { CATEGORIES, CHARACTERS, labelOf, type CharacterName } from '../game/characters';
-import { authAvailable, currentUser, renderGoogleButton, signInWithGoogle, signOut, type AuthUser } from '../net/auth';
+import { authAvailable, currentUser, renderGoogleButton, signOut, type AuthUser } from '../net/auth';
 
 export interface Profile {
   name: string;
@@ -54,11 +54,8 @@ const CSS = `
 .lb-card input{width:100%;padding:12px;font-size:16px;border-radius:10px;border:2px solid #3b4358;background:#141926;color:#fff}
 .lb-btn{width:100%;padding:13px;font-size:17px;font-weight:700;border:0;border-radius:11px;background:#4cc2ff;color:#10202e}
 .lb-btn:disabled{opacity:.4;cursor:default}
-.lb-google{display:flex;align-items:center;justify-content:center;gap:10px;background:#fff;color:#2b2f36}
 .lb-login{display:flex;flex-direction:column;align-items:center;gap:6px;width:100%}
 .lb-gslot{min-height:44px;display:flex;justify-content:center;width:100%;color-scheme:light}
-.lb-alt{background:none;border:0;color:#9fb3c8;font-size:11px;text-decoration:underline;padding:2px}
-.lb-google svg{width:20px;height:20px}
 .lb-who{font-size:12px;opacity:.8;text-align:center;line-height:1.4}
 .lb-who button{background:none;border:0;color:#7fd0ff;text-decoration:underline;font-size:12px;padding:0 2px}
 .lb-err{font-size:12px;color:#ff9b8f;text-align:center;min-height:0}
@@ -82,8 +79,6 @@ const CSS = `
 @media (hover:none){.lb-arrow{display:none}}
 @media (max-height:520px){.lb-title{font-size:20px;margin:0 0 6px}.lb-card{flex-direction:row;align-items:center;width:min(600px,100%);padding:12px;gap:14px}.lb-facecol{width:auto;flex:0 0 auto}.lb-face{width:min(38vh,150px)}.lb-credits{display:none}.lb-card input,.lb-btn{padding:9px;font-size:15px}.lb-form{flex:1;width:auto!important;gap:8px!important}}
 `;
-
-const GOOGLE_G = '<svg viewBox="0 0 48 48"><path fill="#EA4335" d="M24 9.5c3.5 0 6.6 1.2 9.1 3.6l6.8-6.8C35.8 2.4 30.3 0 24 0 14.6 0 6.5 5.4 2.6 13.2l7.9 6.1C12.4 13.6 17.7 9.5 24 9.5z"/><path fill="#4285F4" d="M46.5 24.5c0-1.6-.1-3.1-.4-4.5H24v9h12.7c-.6 3-2.3 5.5-4.8 7.2l7.5 5.8c4.4-4.1 7.1-10.1 7.1-17.5z"/><path fill="#FBBC05" d="M10.5 28.7A14.5 14.5 0 0 1 9.5 24c0-1.6.3-3.2.8-4.7l-7.9-6.1A24 24 0 0 0 0 24c0 3.9.9 7.5 2.6 10.8l7.9-6.1z"/><path fill="#34A853" d="M24 48c6.5 0 11.9-2.1 15.9-5.8l-7.5-5.8c-2.1 1.4-4.9 2.3-8.4 2.3-6.3 0-11.6-4.1-13.5-9.8l-7.9 6.1C6.5 42.6 14.6 48 24 48z"/></svg>';
 
 type Kids = (Node | string)[];
 function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', ...kids: Kids): HTMLElementTagNameMap[K] {
@@ -124,16 +119,9 @@ export function showLobby(): Promise<Profile> {
   nameLabel.htmlFor = 'lobby-name';
   const who = el('div', 'lb-who');
   const err = el('div', 'lb-err');
-  // botão oficial do Google (o popup mostra o endereço deste site); a reserva usa o redirecionamento do Supabase
+  // botão oficial do Google (o popup mostra o endereço do site); não há outro método de login
   const googleSlot = el('div', 'lb-gslot');
-  const googleBtn = el('button', 'lb-btn lb-google');
-  googleBtn.type = 'button';
-  googleBtn.style.display = 'none';
-  googleBtn.insertAdjacentHTML('beforeend', GOOGLE_G);
-  googleBtn.append('Entrar com Google');
-  const altLink = el('button', 'lb-alt', 'Problemas para entrar? Usar o método alternativo');
-  altLink.type = 'button';
-  const login = el('div', 'lb-login', googleSlot, googleBtn, altLink);
+  const login = el('div', 'lb-login', googleSlot);
   const goBtn = el('button', 'lb-btn lobby-go', 'Entrar no jogo');
   goBtn.type = 'button';
   const form = el('div', 'lb-form', nameLabel, nameInput, who, login, goBtn, err);
@@ -216,7 +204,7 @@ export function showLobby(): Promise<Profile> {
     refresh();
   });
 
-  // botão do Google: aparece assim que o script carrega; se não carregar, entra o botão de reserva
+  // botão do Google: aparece assim que o script carrega
   const onGoogle = (u: AuthUser | null, msg?: string): void => {
     if (msg) { err.textContent = msg; return; }
     user = u;
@@ -225,20 +213,11 @@ export function showLobby(): Promise<Profile> {
     renderUser();
     refresh();
   };
-  const showFallback = (): void => { googleSlot.style.display = 'none'; googleBtn.style.display = ''; altLink.style.display = 'none'; };
   if (authAvailable()) {
-    void renderGoogleButton(googleSlot, form.clientWidth || 300, onGoogle).then((ok) => { if (!ok) showFallback(); });
-  }
-  altLink.onclick = showFallback;
-
-  googleBtn.onclick = () => {
-    err.textContent = '';
-    googleBtn.disabled = true;
-    saveProfile({ name: nameInput.value.trim().slice(0, MAX_NAME), character: selected }); // o nome e o personagem voltam depois do Google
-    void signInWithGoogle().then((msg) => {
-      if (msg) { err.textContent = msg; googleBtn.disabled = false; }
+    void renderGoogleButton(googleSlot, form.clientWidth || 300, onGoogle).then((ok) => {
+      if (!ok) err.textContent = 'Não foi possível carregar o login do Google. Desative bloqueadores de anúncios e recarregue a página.';
     });
-  };
+  }
 
   return new Promise((resolve) => {
     const submit = (): void => {

@@ -18,6 +18,13 @@ import { WeaponVisual } from './game/weapons';
 import { warmUp } from './game/preload';
 import { setListener } from './game/audio';
 
+// Endereço oficial: https://gameprotesto.com.br (sem www). Os outros endereços de produção redirecionam para ele
+// (o login do Google só vale nele). localhost e prévias da Vercel não são afetados.
+const SITE = 'gameprotesto.com.br';
+if (['www.' + SITE, 'manifestacao-ten.vercel.app'].includes(location.hostname)) {
+  location.replace(`https://${SITE}${location.pathname}${location.search}${location.hash}`);
+}
+
 const renderer = createRenderer();
 const scene = createScene();
 const camera = createCamera();

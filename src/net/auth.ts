@@ -31,8 +31,8 @@ export async function currentUser(): Promise<AuthUser | null> {
 
 // ---------- botão oficial do Google (Google Identity Services) ----------
 // O popup do Google mostra o nome/endereço DESTE site (e não o endereço do Supabase, que aparece no login por redirecionamento).
-// O Google devolve um token (JWT) e o Supabase só confere (signInWithIdToken). Precisa de `https://manifestacao-ten.vercel.app`
-// em "Origens JavaScript autorizadas" do cliente OAuth no Google Cloud (o Client ID é público, não é segredo).
+// O Google devolve um token (JWT) e o Supabase só confere (signInWithIdToken). Precisa de `https://gameprotesto.com.br`
+// em "Origens JavaScript autorizadas" do cliente OAuth no Google Cloud (o Client ID é público, não é segredo). O endereço oficial é https://gameprotesto.com.br (sem www).
 const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | undefined)
   ?? '992845805301-bs1e4r9m6nr9nmudj1vqu99365dje7ea.apps.googleusercontent.com';
 
@@ -92,16 +92,6 @@ export async function renderGoogleButton(parent: HTMLElement, width: number, don
   });
   gsi.renderButton(parent, { type: 'standard', theme: 'filled_blue', size: 'large', text: 'continue_with', shape: 'rectangular', logo_alignment: 'left', width: Math.max(200, Math.min(400, Math.round(width))), locale: 'pt-BR' });
   return true;
-}
-
-/** Login pelo redirecionamento do Supabase (reserva: mostra o endereço do Supabase no Google). */
-export async function signInWithGoogle(): Promise<string | null> {
-  if (!supabase) return 'Login indisponível: o Supabase não está configurado.';
-  const { error } = await supabase.auth.signInWithOAuth({
-    provider: 'google',
-    options: { redirectTo: `${location.origin}${location.pathname}`, queryParams: { prompt: 'select_account' } },
-  });
-  return error ? error.message : null;
 }
 
 export async function signOut(): Promise<void> {
