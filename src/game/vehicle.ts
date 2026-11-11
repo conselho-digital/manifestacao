@@ -55,13 +55,21 @@ export function buildCarVisual(src: THREE.Object3D, colorHex: number): { group: 
   const group = new THREE.Group();
   const body = model.getObjectByName('body');
   if (body) group.add(body);
+  model.updateMatrixWorld(true);
+  const toModel = new THREE.Matrix4().copy(model.matrixWorld).invert();
   for (const name of ['wheel_FL', 'wheel_FR', 'wheel_BL', 'wheel_BR', 'wheel_F', 'wheel_R', 'door_L', 'door_R']) {
     const node = model.getObjectByName(name);
     if (!node) continue;
-    const pivot = new THREE.Group(); // pivô: esterça sem atrapalhar o giro
+    const origin = node.position.clone();
+    const hinge = origin.clone();
+    if (name.startsWith('door')) {
+      // a porta gira na dobradiça: na ponta da frente da porta (junto ao para-brisa), não no meio dela
+      hinge.z = new THREE.Box3().setFromObject(node).applyMatrix4(toModel).max.z;
+    }
+    const pivot = new THREE.Group(); // pivô: esterça/abre sem atrapalhar o giro
     pivot.name = name;
-    pivot.position.copy(node.position);
-    node.position.set(0, 0, 0);
+    pivot.position.copy(hinge);
+    node.position.copy(origin).sub(hinge);
     pivot.add(node);
     group.add(pivot);
     wheels[name] = pivot;
@@ -306,9 +314,7 @@ export class Car {
     this.doorOpen += ((this.doorT > 0.25 ? 1 : 0) - this.doorOpen) * Math.min(1, dt * 10);
     if (this.doorT > 0) this.doorT -= dt;
     const dl = this.wheels['door_L'];
-    const dr = this.wheels['door_R'];
     if (dl) dl.rotation.y = -this.doorOpen * 1.0;
-    if (dr) dr.rotation.y = this.doorOpen * 0.35;
     const lastPx = this.lastX;
     const lastPz = this.lastZ;
     const moved = Math.hypot(this.x - this.lastX, this.z - this.lastZ) / Math.max(dt, 1e-3);
