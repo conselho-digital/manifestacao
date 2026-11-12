@@ -35,6 +35,8 @@ export interface InputState {
   handbrake: boolean;
   /** buzina (tecla H ou botão) */
   horn: boolean;
+  /** liga/desliga as luzes da viatura (tecla L ou botão): vale uma vez por toque */
+  lights: boolean;
   /** moto: empinar */
   wheelie: boolean;
 }
@@ -65,6 +67,7 @@ let padGas = false;
 let padBrake = false;
 let padHand = false;
 let padHorn = false;
+let lightsQ = false;
 let padWheelie = false;
 
 window.addEventListener('keydown', (e) => {
@@ -73,6 +76,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') { jumpQ = true; e.preventDefault(); }
   if (e.code === 'KeyE' || e.code === 'KeyC') climbQ = true;
   if (e.code === 'KeyF') interactQ = true;
+  if (e.code === 'KeyL' && !e.repeat) lightsQ = true;
   if (e.code === 'KeyZ' || e.code === 'ControlLeft') { crouchQ = true; if (e.code === 'ControlLeft') e.preventDefault(); }
   if (e.code === 'KeyR') reloadQ = true;
   if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'KeyX') switchQ = true;
@@ -94,6 +98,7 @@ export const setSprint = (v: boolean): void => { sprintHeld = v; };
 export const setFire = (v: boolean): void => { fireHeld = v; };
 export const setAim = (v: boolean): void => { aimOn = v; };
 export const setWheelie = (v: boolean): void => { padWheelie = v; };
+export const queueLights = (): void => { lightsQ = true; };
 export const setHorn = (on: boolean): void => { padHorn = on; };
 export const setPedals = (gas: boolean, brake: boolean, hand: boolean): void => { padGas = gas; padBrake = brake; padHand = hand; };
 export const setWalkClip = (id: string): void => { walkClip = id; };
@@ -155,12 +160,14 @@ export function readInput(): InputState {
     brake: keys.has('KeyS') || keys.has('ArrowDown') || padBrake,
     handbrake: keys.has('Space') || padHand,
     horn: keys.has('KeyH') || padHorn,
+    lights: lightsQ,
     wheelie: keys.has('KeyV') || padWheelie,
   };
   jumpQ = false;
   climbQ = false;
   crouchQ = false;
   interactQ = false;
+  lightsQ = false;
   reloadQ = false;
   switchQ = false;
   stepQ = 0;

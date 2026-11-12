@@ -1,7 +1,7 @@
 import { ICON } from './icons';
 import { CARS } from '../game/vehicle';
 import { COLLIDERS, MAP, PARKS, placeName, ROADS } from '../game/map';
-import { addLook, queueCrouch, queueInteract, queueJump, queueReload, queueSwitch, queueWeaponPick, queueWeaponStep, setAim, setCrouchHeld, setFire, setHorn, setPedals, setSprint, setTouchVector, setWheelie } from '../game/input';
+import { addLook, queueCrouch, queueLights, queueInteract, queueJump, queueReload, queueSwitch, queueWeaponPick, queueWeaponStep, setAim, setCrouchHeld, setFire, setHorn, setPedals, setSprint, setTouchVector, setWheelie } from '../game/input';
 
 /** Dados do jogo que o HUD mostra (preenchidos pelo main a cada quadro). */
 export interface HudState {
@@ -11,6 +11,10 @@ export interface HudState {
   yaw: number;
   driving: boolean;
   bike: boolean;
+  /** dirigindo uma viatura (mostra o botão das luzes) */
+  police: boolean;
+  /** luzes/sirene ligadas (botão aceso) */
+  lightsOn: boolean;
   kmh: number;
   remotes: { name: string; x: number; z: number }[];
   players: number;
@@ -134,6 +138,9 @@ const CSS = `
 .m-gas{right:calc(var(--u)*1.2);bottom:calc(var(--u)*9.5);width:calc(var(--u)*17);height:calc(var(--u)*17)}
 .m-brake{right:calc(var(--u)*19.4);bottom:calc(var(--u)*8);width:calc(var(--u)*14);height:calc(var(--u)*14)}
 .m-hand{right:calc(var(--u)*34.6);bottom:calc(var(--u)*7);width:calc(var(--u)*12);height:calc(var(--u)*12)}
+.m-lights{right:calc(var(--u)*34.6);bottom:calc(var(--u)*32);width:calc(var(--u)*11);height:calc(var(--u)*11)}
+.m-hud:not(.police) .m-lights{display:none!important}
+.m-lights.lit{background:rgba(40,90,220,.9);animation:micpulse 1s ease-in-out infinite}
 .m-horn{right:calc(var(--u)*34.6);bottom:calc(var(--u)*20);width:calc(var(--u)*11);height:calc(var(--u)*11)}
 .m-kmh{position:fixed;right:calc(var(--u)*17);top:calc(var(--u)*2.2);font-size:calc(var(--u)*6.5);color:#fff;text-align:right}
 .m-kmh small{display:block;font-size:calc(var(--u)*2.6);color:#ccc}
@@ -480,6 +487,8 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   holdButton(circle(hud, 'm-brake car', ICON.brake, null), () => { brake = true; pedals(); }, () => { brake = false; pedals(); });
   holdButton(circle(hud, 'm-hand car', ICON.handbrake, null), () => { hand = true; pedals(); }, () => { hand = false; pedals(); });
   holdButton(circle(hud, 'm-horn car', ICON.horn, null), () => setHorn(true), () => setHorn(false)); // buzina
+  const lightsBtn = circle(hud, 'm-lights car', ICON.siren, null); // luzes da viatura (liga/desliga)
+  holdButton(lightsBtn, queueLights);
 
   // No carro: dois botões para virar para os lados (no lugar do joystick)
   holdButton(circle(hud, 'm-wheelie car', ICON.up, null), () => setWheelie(true), () => setWheelie(false));
@@ -583,6 +592,8 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
       }
       hud.classList.toggle('driving', s.driving);
       hud.classList.toggle('bike', s.driving && s.bike);
+      hud.classList.toggle('police', s.driving && s.police);
+      lightsBtn.classList.toggle('lit', s.lightsOn);
       if (!s.driving && steer !== 0) { steer = 0; applySteer(); } // saiu do carro com o dedo no botão
       hud.classList.toggle('near-car', s.nearCar);
       if (prev && dt > 0) {

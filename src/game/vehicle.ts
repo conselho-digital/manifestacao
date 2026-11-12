@@ -1,8 +1,11 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { COLLIDERS, MAP } from './map';
-import { EngineSound, SirenSound } from './audio';
+import { EngineSound, ScrapeSound, SirenSound, playCrashAt } from './audio';
+import { emitSparks } from './sparks';
 
+/** Ganchos do jogo para eventos dos carros (o main avisa os outros jogadores de uma batida). */
+export const carEvents: { onCrash?: (x: number, z: number, k: number) => void } = {};
 export const CAR_MODELS = ['blistac', 'buffalo', 'clover'] as const;
 /** modelo das viaturas da PM (só as viaturas; fora do sorteio do trânsito e da garagem) */
 export const POLICE_MODEL = 'duster';
@@ -147,13 +150,13 @@ const BIKE_DARK: Record<string, string[]> = { harley: ['m1', 'm12'] };
 /** Roda: pneu preto (raio externo) e aro cinza (miolo), pela distância ao eixo no espaço da roda. */
 function addTire(mat: THREE.MeshStandardMaterial, radius: number, spokes = false): void {
   mat.onBeforeCompile = (sh) => {
-    sh.uniforms.uRim = { value: radius * 0.68 };
+    sh.uniforms.uRim = { value: radius * (spokes ? 0.62 : 0.68) };
     sh.uniforms.uHub = { value: radius * 0.2 };
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nvarying vec2 vYZ;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvYZ = position.yz;');
     // raio e ângulo por pixel (interpolar o ângulo por vértice entortava os raios): aro cinza com 5 raios escuros (ou liso, sem `spokes`); pneu preto por fora
-    const rim = spokes ? 'mix(vec3(0.62, 0.63, 0.66), vec3(0.2), step(0.3, abs(sin(2.5 * atan(vYZ.y, vYZ.x)))) * step(uHub, length(vYZ)))' : 'vec3(0.55, 0.56, 0.58)';
+    const rim = spokes ? 'mix(vec3(0.34, 0.35, 0.38), vec3(0.1), step(0.3, abs(sin(2.5 * atan(vYZ.y, vYZ.x)))) * step(uHub, length(vYZ)))' : 'vec3(0.55, 0.56, 0.58)';
     sh.fragmentShader = sh.fragmentShader
       .replace('#include <common>', '#include <common>\nvarying vec2 vYZ;\nuniform float uRim;\nuniform float uHub;')
       .replace('#include <color_fragment>', `#include <color_fragment>\ndiffuseColor.rgb = mix(${rim}, vec3(0.07), step(uRim, length(vYZ)));`);
@@ -230,7 +233,8 @@ function isBodyPart(m: THREE.Object3D): boolean {
 }
 
 /** Monta o visual de um carro a partir do GLB (nós `body` e `wheel_FL/FR/BL/BR`); sem `look`, a pintura (`paint`) recebe `colorHex`; com `look`, vale a pintura da equipe. */
-export function buildCarVisual(src: THREE.Object3D, colorHex: number, look?: PaintLook, bike = false, modelName = ''): { group: THREE.Group; wheels: Record<string, THREE.Object3D> } {
+export interface LightBar { red: THREE.Mesh; blue: THREE.Mesh; glowR: THREE.Sprite; glowB: THREE.Sprite }
+export function buildCarVisual(src: THREE.Object3D, colorHex: number, look?: PaintLook, bike = false, modelName = ''): { group: THREE.Group; wheels: Record<string, THREE.Object3D>; lights?: LightBar } {
   const model = src.clone(true);
   const paint = new THREE.Color(colorHex);
   const done = new Map<THREE.Material, THREE.Material>();
@@ -289,7 +293,45 @@ export function buildCarVisual(src: THREE.Object3D, colorHex: number, look?: Pai
   }
   if (look?.police) addPoliceDetails(group);
   else if (look && !bike) addTeamStickers(group, wheels, look);
-  return { group, wheels };
+  const lights = modelName === POLICE_MODEL ? addLightBar(group) : undefined;
+  return { group, wheels, lights };
+}
+
+
+let glowTex: THREE.CanvasTexture | null = null;
+/** Luz difusa (brilho) das luzes da viatura. */
+function glowTexture(): THREE.CanvasTexture {
+  if (glowTex) return glowTex;
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d')!;
+  const gr = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  gr.addColorStop(0, 'rgba(255,255,255,1)');
+  gr.addColorStop(0.35, 'rgba(255,255,255,.45)');
+  gr.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = gr;
+  g.fillRect(0, 0, 64, 64);
+  glowTex = new THREE.CanvasTexture(c);
+  glowTex.colorSpace = THREE.SRGBColorSpace;
+  return glowTex;
+}
+
+/** Luzes vermelha (lado esquerdo) e azul (direito) em cima da barra do teto da viatura; começam apagadas (`visible = false`). */
+function addLightBar(group: THREE.Group): LightBar {
+  const mk = (color: number, x: number): { box: THREE.Mesh; glow: THREE.Sprite } => {
+    const box = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.07, 0.2), new THREE.MeshBasicMaterial({ color, toneMapped: false }));
+    box.position.set(x, 1.0, -0.29);
+    const glow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTexture(), color, blending: THREE.AdditiveBlending, depthWrite: false, transparent: true, opacity: 0.9 }));
+    glow.scale.set(1.5, 1.5, 1);
+    glow.position.set(x, 1.12, -0.29);
+    box.visible = false;
+    glow.visible = false;
+    group.add(box, glow);
+    return { box, glow };
+  };
+  const r = mk(0xff1f1f, 0.3);
+  const b = mk(0x2a5cff, -0.3);
+  return { red: r.box, blue: b.box, glowR: r.glow, glowB: b.glow };
 }
 
 const stickerTex = new Map<string, THREE.CanvasTexture>();
@@ -466,6 +508,14 @@ export class Car {
   /** sirene da viatura ligada (segurar a buzina por 0,5 s); some ao sair do carro. Nos outros jogadores vale enquanto chegam avisos (`sirenBeat`). */
   siren = false;
   sirenBeat = 0;
+  /** luzes vermelha/azul do teto da viatura (botão); a sirene liga junto; some ao sair do carro */
+  lights = false;
+  lightsBeat = 0;
+  private bar: LightBar | null = null;
+  /** raspando em parede: 0..1 (usado pelo som) */
+  private scrapeK = 0;
+  private scrapeSnd = new ScrapeSound();
+  private crashCool = 0;
   private sirenSnd = new SirenSound();
   get police(): boolean { return this.model === POLICE_MODEL; }
   /** onde fica a pélvis do piloto (espaço do carro); null em carros */
@@ -479,6 +529,7 @@ export class Car {
 
   private useModel(src: THREE.Object3D): void {
     const v = buildCarVisual(src, this.color, this.look ?? undefined, this.bike, this.model);
+    this.bar = v.lights ?? null;
     this.root.clear();
     if (this.bike) {
       // a moto inteira (corpo e rodas) vai dentro de um grupo que empina/inclina
@@ -508,6 +559,18 @@ export class Car {
   }
 
   /** Dirige: acelerador, freio e freio de mão; steer -1..1 (direita +). */
+  /** Pisca as luzes da barra (vermelha 2x, azul 2x) enquanto as luzes ou a sirene estão ligadas. */
+  private updateLightBar(): void {
+    const b = this.bar;
+    if (!b) return;
+    const on = this.lights || this.siren;
+    const idx = Math.floor(performance.now() / 100) % 8;
+    const r = on && (idx === 0 || idx === 2);
+    const bl = on && (idx === 4 || idx === 6);
+    b.red.visible = b.glowR.visible = r;
+    b.blue.visible = b.glowB.visible = bl;
+  }
+
   drive(dt: number, gas: boolean, brake: boolean, hand: boolean, steer: number, wheelie = false): void {
     const f = this.speed;
     const bike = this.bike;
@@ -545,7 +608,13 @@ export class Car {
     const speedBefore = Math.abs(this.speed);
     const cx = THREE.MathUtils.clamp(this.x, -(MAP.halfX - 1.8), MAP.halfX - 1.8);
     const cz = THREE.MathUtils.clamp(this.z, -(MAP.halfZ - 1.8), MAP.halfZ - 1.8);
-    if (cx !== this.x || cz !== this.z) { this.x = cx; this.z = cz; hit = true; }
+    let wallNx = 0;
+    let wallNz = 0;
+    if (cx !== this.x || cz !== this.z) {
+      if (cx !== this.x) wallNx += this.x > cx ? -1 : 1;
+      if (cz !== this.z) wallNz += this.z > cz ? -1 : 1;
+      this.x = cx; this.z = cz; hit = true;
+    }
     for (const b of COLLIDERS) {
       if (b.top < 0.6 || (b.bottom ?? 0) > 2.2) continue; // degraus baixos e coisas suspensas não bloqueiam
       const px = THREE.MathUtils.clamp(this.x, b.minX, b.maxX);
@@ -554,10 +623,11 @@ export class Car {
       const dz = this.z - pz;
       const d = Math.hypot(dx, dz);
       if (d < radius) {
-        if (d > 1e-6) { this.x = px + (dx / d) * radius; this.z = pz + (dz / d) * radius; }
+        if (d > 1e-6) { this.x = px + (dx / d) * radius; this.z = pz + (dz / d) * radius; wallNx += dx / d; wallNz += dz / d; }
         hit = true;
       }
     }
+    let hitVeh = false;
     // colisão com outros veículos: cada carro é 2 círculos, a moto 1
     for (const o of CARS) {
       if (o === this) continue;
@@ -574,6 +644,7 @@ export class Car {
         this.z += dz * push * (1 - share);
         if (share > 0) o.setPose(o.x - dx * push * share, o.z - dz * push * share, o.heading);
         hit = true;
+        hitVeh = true;
       }
     }
     // trânsito da avenida: o carro é barrado e o trânsito para e balança
@@ -589,11 +660,56 @@ export class Car {
         this.z += dz * push;
         if (Math.abs(this.speed) > 3) { t.stopT = Math.max(t.stopT, 1.2); t.wobble = 1; }
         hit = true;
+        hitVeh = true;
       }
     }
     this.impact = hit ? speedBefore : 0;
-    if (hit) { this.speed *= -0.25; this.slip = 0; }
+    if (hitVeh) { this.speed *= -0.25; this.slip = 0; }
+    else if (hit) this.slideAlong(wallNx, wallNz, dt, radius); // parede, poste, prédio: desliza (raspa e solta faísca) em vez de travar e quicar
     this.apply(steer, dt);
+  }
+
+  /**
+   * Bateu numa superfície (normal n, de dentro dela para o carro): tira só a parte da velocidade que entra na parede, o resto continua
+   * (o carro desliza e vai se alinhando com a parede, perdendo velocidade por atrito); raspa com som de lata e faíscas, e bate com
+   * som de metal amassando se foi de frente.
+   */
+  private slideAlong(nx0: number, nz0: number, dt: number, radius: number): void {
+    const len = Math.hypot(nx0, nz0);
+    if (len < 1e-3) { this.speed *= 0.5; return; }
+    const nx = nx0 / len;
+    const nz = nz0 / len;
+    const dir = this.heading + this.slip;
+    const fx = Math.sin(dir);
+    const fz = Math.cos(dir);
+    const vx = fx * this.speed;
+    const vz = fz * this.speed;
+    const vn = vx * nx + vz * nz;
+    if (vn >= 0) return; // já está saindo
+    const tx = vx - vn * nx;
+    const tz = vz - vn * nz;
+    const tang = Math.hypot(tx, tz);
+    this.scrapeK = Math.min(1, tang / 10 + 0.15);
+    if (-vn > 2.5 && this.crashCool <= 0) {
+      this.crashCool = 0.35;
+      carEvents.onCrash?.(this.x, this.z, Math.min(1, -vn / 14));
+      playCrashAt(this.x, this.z, Math.min(1, -vn / 14));
+    }
+    if (tang > 1.5) {
+      const n = Math.min(6, Math.ceil(tang * dt * 10));
+      emitSparks(this.x - nx * radius, 0.4, this.z - nz * radius, -(tx / tang) * 2.5 * Math.sign(this.speed || 1) + nx * 1.2, 1.2, -(tz / tang) * 2.5 * Math.sign(this.speed || 1) + nz * 1.2, n);
+    }
+    const sgn = Math.sign(this.speed) || 1;
+    this.speed = tang * sgn * Math.exp(-dt * 1.0);
+    if (tang > 0.5) {
+      // alinha o carro com a parede (o sentido do movimento depois de tirar a parte que bate)
+      const target = Math.atan2(tx * sgn, tz * sgn);
+      let delta = target - this.heading;
+      while (delta > Math.PI) delta -= Math.PI * 2;
+      while (delta < -Math.PI) delta += Math.PI * 2;
+      this.heading += delta * Math.min(1, dt * 5);
+    }
+    this.slip = 0;
   }
 
   private pushX = 0;
@@ -695,8 +811,13 @@ export class Car {
     }
     this.skidSmooth += (skid - this.skidSmooth) * Math.min(1, dt * 10);
     if (this.siren && this.driver !== 'local' && performance.now() - this.sirenBeat > 2500) this.siren = false;
-    if (this.driver === null) this.siren = false;
+    if (this.lights && this.driver !== 'local' && performance.now() - this.lightsBeat > 2500) this.lights = false;
+    if (this.driver === null) { this.siren = false; this.lights = false; }
     this.sirenSnd.update(this.siren, this.x, this.z);
+    this.updateLightBar();
+    this.scrapeSnd.update(this.scrapeK, this.x, this.z);
+    this.scrapeK *= 0.7;
+    this.crashCool = Math.max(0, this.crashCool - dt);
     this.engine.update(this.driver !== null, this.seenSpeed, this.x, this.z, this.driver === null ? 0 : this.throttle, this.skidSmooth);
   }
 

@@ -12,14 +12,15 @@ import { Animator } from './game/anim';
 import { FULL, MAX_PLAYERS, Net } from './net/sync';
 import { Voice } from './net/voice';
 import { RemotePlayer } from './game/remote';
-import { CARS, createCars, despawnPersonal, TRAFFIC, findVehicleSpot, PERSONAL, spawnPersonal, updateEngines, updateTraffic } from './game/vehicle';
+import { sparksObject, updateSparks } from './game/sparks';
+import { CARS, carEvents, createCars, despawnPersonal, TRAFFIC, findVehicleSpot, PERSONAL, spawnPersonal, updateEngines, updateTraffic } from './game/vehicle';
 import { Combat, MAX_HEALTH } from './game/combat';
 import { Graffiti } from './game/graffiti';
 import { Billboard } from './game/billboard';
 import { updateCulling } from './game/culling';
 import { WeaponVisual } from './game/weapons';
 import { warmUp } from './game/preload';
-import { playHornAt, setListener } from './game/audio';
+import { playCrashAt, playHornAt, setListener } from './game/audio';
 import { HUD_KEY, Inventory, WEAPON_NAMES, type WeaponId } from './game/inventory';
 import { isAdmin, lookOf, makeTeamRing, saveTeamId, teamById, validTeamId } from './game/teams';
 import { loadPrices, loadPurchases } from './game/shop';
@@ -40,6 +41,7 @@ handleResize(renderer, camera);
 const city = createCity();
 scene.add(city);
 scene.add(createCars());
+scene.add(sparksObject);
 initMouse(renderer.domElement);
 
 // Ângulo extra da câmera (para inspecionar de lado): ?camoffset=1.57
@@ -107,6 +109,7 @@ void billboard.start();
 if (import.meta.env.DEV) (window as unknown as { __net: Net; __game: { ready: () => boolean } }).__net = net;
 if (import.meta.env.DEV) (window as unknown as { __game: { ready: () => boolean; camera: THREE.PerspectiveCamera; scene: THREE.Scene; renderer: THREE.WebGLRenderer; combat: () => Combat | null; player: () => Player | null; sim: { TRAFFIC: typeof TRAFFIC; CARS: typeof CARS; updateTraffic: typeof updateTraffic; spawnPersonal: typeof spawnPersonal } } }).__game = { ready: () => !!player, camera, scene, renderer, combat: () => combat, player: () => player, sim: { TRAFFIC, CARS, updateTraffic, spawnPersonal } };
 let profileName = 'Jogador';
+carEvents.onCrash = (x, z) => net.sendHorn(x, z, 5); // batida do meu carro: os outros ouvem
 let lastHornAt = 0; // última buzina minha (ms)
 let hornDownAt = 0; // quando apertei a buzina (0 = solta)
 let hornLong = false; // este aperto já virou sirene
@@ -330,10 +333,14 @@ void showLobby().then(async (profile) => {
       },
       onSpray: (m) => graffiti.add(m, remotes.get(m.id)?.info.name ?? ''),
       onHorn: (m) => {
-        if (!m.siren) { playHornAt(m.x, m.z, m.bike); return; }
-        // aviso de sirene: a viatura mais perto desse ponto fica com a sirene ligada por mais 2,5 s
-        const car = CARS.find((c) => c.police && c.driver !== null && Math.hypot(c.x - m.x, c.z - m.z) < 8);
-        if (car) { car.siren = true; car.sirenBeat = performance.now(); }
+        if (m.kind === 2 || m.kind === 3) {
+          // aviso de sirene (2) ou só luzes (3): a viatura mais perto desse ponto fica assim por mais 2,5 s
+          const car = CARS.find((c) => c.police && c.driver !== null && Math.hypot(c.x - m.x, c.z - m.z) < 8);
+          if (car) {
+            if (m.kind === 2) { car.siren = true; car.sirenBeat = performance.now(); } else { car.lights = true; car.lightsBeat = performance.now(); }
+          }
+        } else if (m.kind === 5) playCrashAt(m.x, m.z, 0.6);
+        else playHornAt(m.x, m.z, m.kind === 1, m.kind === 4);
       },
       onRtc: (m) => void voice.onSignal(m),
     });
@@ -407,9 +414,13 @@ function loop(): void {
       combat.update(dt, input, player);
       player.setReloading(combat.reloading);
       player.update(dt, input, yaw);
-      // buzina: segurando H/botão repete a cada 0,4 s; na viatura, segurar 0,5 s liga/desliga a sirene (até sair do carro); os outros ouvem pelo canal
+      // buzina: segurando H/botão repete a cada 0,4 s (com a sirene ligada é a buzina de caminhão de bombeiros); na viatura, segurar 0,5 s liga/desliga a sirene (até sair do carro); L/botão liga e desliga as luzes; os outros ouvem e veem pelo canal
       const dc = player.drivenCar;
       const nowH = performance.now();
+      if (input.lights && player.isDriving && dc?.police) {
+        if (dc.siren) { dc.siren = false; dc.lights = false; } else dc.lights = !dc.lights; // com a sirene ligada, o botão desliga tudo
+        lastSirenBeat = 0;
+      }
       if (input.horn && player.isDriving && dc) {
         if (hornDownAt === 0) { hornDownAt = nowH; hornLong = false; }
         if (!hornLong && dc.police && nowH - hornDownAt >= 500) {
@@ -418,13 +429,13 @@ function loop(): void {
           lastSirenBeat = 0;
           if (navigator.vibrate) navigator.vibrate(40);
         }
-        if (!hornLong && nowH - lastHornAt > 400) {
+        if (!hornLong && nowH - lastHornAt > (dc.siren ? 1000 : 400)) {
           lastHornAt = nowH;
-          playHornAt(dc.x, dc.z, dc.bike);
-          net.sendHorn(dc.x, dc.z, dc.bike ? 1 : 0);
+          playHornAt(dc.x, dc.z, dc.bike, dc.siren);
+          net.sendHorn(dc.x, dc.z, dc.siren ? 4 : dc.bike ? 1 : 0);
         }
       } else hornDownAt = 0;
-      if (dc?.siren && player.isDriving && nowH - lastSirenBeat > 1000) { lastSirenBeat = nowH; net.sendHorn(dc.x, dc.z, 2); }
+      if (dc && player.isDriving && (dc.siren || dc.lights) && nowH - lastSirenBeat > 1000) { lastSirenBeat = nowH; net.sendHorn(dc.x, dc.z, dc.siren ? 2 : 3); }
       aimK += ((input.aim && combat.isGun && !player.isDriving ? 1 : 0) - aimK) * Math.min(1, dt * 9);
       player.followCamera(camera, dt, yaw + camOffset, pitch, aimK, intro !== null);
       if (intro) flyIntro(dt);
@@ -451,6 +462,8 @@ function loop(): void {
         x: p.position.x, z: p.position.z, yaw,
         driving: player.isDriving,
         bike: player.isBike,
+        police: !!player.drivenCar?.police,
+        lightsOn: !!(player.drivenCar?.lights || player.drivenCar?.siren),
         kmh: Math.abs(player.carSpeed) * 3.6,
         remotes: [...remotes.values()].map((r) => ({ name: r.info.name, x: r.root.position.x, z: r.root.position.z })),
         players: remotes.size + 1, maxPlayers: MAX_PLAYERS,
@@ -483,6 +496,7 @@ function loop(): void {
   remotes.forEach((r) => blockers.push([r.root.position.x, r.root.position.z]));
   updateTraffic(paused ? 0 : dt, blockers, parkedCars);
   if (player) updateEngines(paused ? 0 : dt);
+  updateSparks(paused ? 0 : dt);
   remotes.forEach((r) => r.update(dt));
   graffiti.update(dt);
   if (player) { cullT -= dt; if (cullT <= 0) { cullT = 0.25; updateCulling(player.object.position.x, player.object.position.z); } }

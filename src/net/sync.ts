@@ -82,8 +82,8 @@ export interface NetHandlers {
   onChat(m: ChatMsg): void;
   /** alguém pintou uma parede com a lata de spray */
   onSpray(m: SprayMsg): void;
-  /** alguém buzinou (x, z do veículo; bike = moto) */
-  onHorn(m: { id: string; x: number; z: number; bike: boolean; siren: boolean }): void;
+  /** alguém buzinou, ligou sirene/luzes ou bateu (x, z do veículo; kind: ver `sendHorn`) */
+  onHorn(m: { id: string; x: number; z: number; kind: number }): void;
   /** sinalização da voz (WebRTC): oferta, resposta e candidatos ICE de quem fala comigo */
   onRtc(m: { from: string; k: RtcKind; d: unknown }): void;
 }
@@ -264,7 +264,7 @@ export class Net {
       const now = performance.now();
       if (now - (this.lastHornAt.get(m.id) ?? 0) < MIN_HORN_GAP_MS) return;
       this.lastHornAt.set(m.id, now);
-      h.onHorn({ id: m.id, x, z, bike: m.b === 1, siren: m.b === 2 });
+      h.onHorn({ id: m.id, x, z, kind: typeof m.b === 'number' && Number.isInteger(m.b) && m.b >= 0 && m.b <= 5 ? m.b : 0 });
     });
 
     channel.on('broadcast', { event: 'rtc' }, ({ payload }) => {
@@ -328,8 +328,8 @@ export class Net {
     this.send('rtc', { from: this.id, to, k, d });
   }
 
-  /** kind: 0 buzina de carro, 1 buzina de moto, 2 aviso de que a sirene da viatura continua ligada (a cada 1 s) */
-  sendHorn(x: number, z: number, kind: 0 | 1 | 2): void {
+  /** kind: 0 buzina de carro, 1 moto, 2 aviso de que a sirene da viatura continua ligada (a cada 1 s), 3 aviso de luzes ligadas, 4 buzina de caminhão (viatura com sirene), 5 batida de lataria */
+  sendHorn(x: number, z: number, kind: 0 | 1 | 2 | 3 | 4 | 5): void {
     this.send('horn', { id: this.id, x: Math.round(x * 10) / 10, z: Math.round(z * 10) / 10, b: kind });
   }
 

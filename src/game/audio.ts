@@ -255,36 +255,149 @@ export function playSprayAt(x: number, z: number): void {
   } catch { /* sem áudio */ }
 }
 
-/** Buzina do veículo em (x, z): carro = duas notas graves; moto = uma nota mais aguda e fina. Ouve-se até ~80 m. */
-export function playHornAt(x: number, z: number, bike: boolean): void {
-  const prox = proximity(x, z, 80, 6);
+/**
+ * Buzina do veículo em (x, z): carro = duas notas graves; moto = uma nota mais aguda e fina;
+ * `truck` (viatura com a sirene ligada) = buzina de caminhão de bombeiros: grave, longa e rascante.
+ * Ouve-se até ~80 m (a de caminhão, 120 m).
+ */
+export function playHornAt(x: number, z: number, bike: boolean, truck = false): void {
+  const prox = proximity(x, z, truck ? 120 : 80, 6);
   if (prox.gain < 0.02) return;
   const c = audioCtx();
   const out = audioOut();
   if (!c || !out) return;
   try {
     const t0 = c.currentTime;
-    const dur = 0.42;
+    const dur = truck ? 1.0 : 0.42;
+    const peak = (truck ? 0.3 : 0.2) * prox.gain;
     const g = c.createGain();
     g.gain.setValueAtTime(0.0001, t0);
-    g.gain.exponentialRampToValueAtTime(0.2 * prox.gain, t0 + 0.02);
-    g.gain.setValueAtTime(0.2 * prox.gain, t0 + dur - 0.06);
+    g.gain.exponentialRampToValueAtTime(peak, t0 + (truck ? 0.05 : 0.02));
+    g.gain.setValueAtTime(peak, t0 + dur - 0.1);
     g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
     const lp = c.createBiquadFilter();
     lp.type = 'lowpass';
-    lp.frequency.value = bike ? 2600 : 1800;
+    lp.frequency.value = truck ? 1300 : bike ? 2600 : 1800;
     const pan = c.createStereoPanner();
     pan.pan.value = prox.pan;
     g.connect(lp).connect(pan).connect(out);
-    for (const f of bike ? [660, 840] : [410, 515]) {
+    const notes: [number, OscillatorType][] = truck
+      ? [[138, 'sawtooth'], [174, 'sawtooth'], [277, 'square'], [349, 'sawtooth']] // acorde grave de trompa de ar, como um caminhão de bombeiros
+      : bike ? [[660, 'sawtooth'], [840, 'sawtooth']] : [[410, 'sawtooth'], [515, 'sawtooth']];
+    for (const [f, type] of notes) {
       const o = c.createOscillator();
-      o.type = 'sawtooth';
+      o.type = type;
       o.frequency.value = f;
+      if (truck) { // um leve vibrato de ar dá o "tuuuu" rascante
+        const lfo = c.createOscillator();
+        const lg = c.createGain();
+        lfo.frequency.value = 7 + Math.random() * 2;
+        lg.gain.value = f * 0.008;
+        lfo.connect(lg).connect(o.frequency);
+        lfo.start(t0);
+        lfo.stop(t0 + dur + 0.02);
+      }
       o.connect(g);
       o.start(t0);
       o.stop(t0 + dur + 0.02);
     }
   } catch { /* sem áudio */ }
+}
+
+/** Batida de lataria (metal amassando): estalo de ruído + "clanks" metálicos; `k` 0..1 = força. */
+export function playCrashAt(x: number, z: number, k: number): void {
+  const prox = proximity(x, z, 90, 5);
+  const v = prox.gain * Math.min(1, 0.35 + k);
+  if (v < 0.02) return;
+  const c = audioCtx();
+  const out = audioOut();
+  if (!c || !out) return;
+  try {
+    const t0 = c.currentTime;
+    const dur = 0.5 + k * 0.3;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.4 * v, t0);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    const pan = c.createStereoPanner();
+    pan.pan.value = prox.pan;
+    g.connect(pan).connect(out);
+    const len = Math.floor(c.sampleRate * dur);
+    const buf = c.createBuffer(1, len, c.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (c.sampleRate * 0.12));
+    const src = c.createBufferSource();
+    src.buffer = buf;
+    const bp = c.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.value = 1500 + k * 1200;
+    bp.Q.value = 0.8;
+    src.connect(bp).connect(g);
+    src.start(t0);
+    for (const f of [430, 790, 1310, 2150]) { // partes da lataria soltas batendo
+      const o = c.createOscillator();
+      o.type = 'square';
+      o.frequency.value = f * (0.95 + Math.random() * 0.1);
+      const og = c.createGain();
+      og.gain.setValueAtTime(0.08 * v, t0);
+      og.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.25 + Math.random() * 0.25);
+      o.connect(og).connect(pan);
+      o.start(t0);
+      o.stop(t0 + 0.55);
+    }
+  } catch { /* sem áudio */ }
+}
+
+/** Metal raspando na parede (lata riscando): ruído rascante contínuo; `update(k, x, z)` com k 0..1 a cada quadro (0 = parado). */
+export class ScrapeSound {
+  private src: AudioBufferSourceNode | null = null;
+  private gain: GainNode | null = null;
+  private pan: StereoPannerNode | null = null;
+  private filt: BiquadFilterNode | null = null;
+  private failed = false;
+
+  private start(): boolean {
+    if (this.src) return true;
+    if (this.failed) return false;
+    const c = audioCtx();
+    const out = audioOut();
+    if (!c || !out) { this.failed = true; return false; }
+    try {
+      const len = c.sampleRate * 2;
+      const buf = c.createBuffer(1, len, c.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) d[i] = (Math.random() * 2 - 1) * (0.55 + 0.45 * Math.sin(i / c.sampleRate * 2 * Math.PI * 38)); // raspar: ruído com trepidação de ~38 Hz
+      this.src = c.createBufferSource();
+      this.src.buffer = buf;
+      this.src.loop = true;
+      this.filt = c.createBiquadFilter();
+      this.filt.type = 'bandpass';
+      this.filt.frequency.value = 2600;
+      this.filt.Q.value = 3.5;
+      this.gain = c.createGain();
+      this.gain.gain.value = 0;
+      this.pan = c.createStereoPanner();
+      this.src.connect(this.filt).connect(this.gain).connect(this.pan).connect(out);
+      this.src.start();
+      return true;
+    } catch {
+      this.failed = true;
+      return false;
+    }
+  }
+
+  update(k: number, x: number, z: number): void {
+    if (k < 0.02) {
+      if (this.gain && audioCtx()) this.gain.gain.setTargetAtTime(0, audioCtx()!.currentTime, 0.06);
+      return;
+    }
+    const c = audioCtx();
+    if (!c || !this.start() || !this.gain || !this.pan || !this.filt) return;
+    const prox = proximity(x, z, 70, 5);
+    const t = c.currentTime;
+    this.gain.gain.setTargetAtTime(0.22 * k * prox.gain, t, 0.04);
+    this.filt.frequency.setTargetAtTime(1800 + k * 2600, t, 0.05);
+    this.pan.pan.setTargetAtTime(prox.pan, t, 0.05);
+  }
 }
 
 /** Sirene da viatura (lamento que sobe e desce): um par por carro; volume e lado seguem a posição do veículo (ouve-se até ~160 m). */
