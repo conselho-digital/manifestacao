@@ -37,6 +37,8 @@ const RADIUS = 1.3;
 export interface PaintLook { c1: string; c2: string; /** pintura de viatura: teto na cor 1, letreiro "POLÍCIA MILITAR" nas laterais e luzes no teto */ police?: boolean }
 /** Viatura da PM: o Buffalo pintado de branco com a faixa de baixo preta (letreiro e luzes no teto vêm de `police`). */
 /** pintura padrão dos carros comuns (cinza claro); a equipe aparece nos adesivos redondos (portas e capô) */
+/** cores comuns de carro (as mesmas do trânsito), sorteadas por dono nos carros pessoais */
+export const COMMON_COLORS = [0xb9bec5, 0xecf0f1, 0x4a4f57, 0x8b9099, 0x2b2e33, 0x7a2f2a];
 export const DEFAULT_PAINT = '#b9bec5';
 export const POLICE_LOOK: PaintLook = { c1: '#f1f2f4', c2: '#16181b', police: true };
 
@@ -157,7 +159,7 @@ export function buildCarVisual(src: THREE.Object3D, colorHex: number, look?: Pai
     if (!m.isMesh) return;
     // só a carroceria joga sombra: rodas, portas e vidros são pequenos e custariam uma chamada de desenho cada na passada das sombras
     m.castShadow = isBodyPart(m) && !(!Array.isArray(m.material) && m.material.name === 'glass');
-    if (look) return;
+    if (look?.police || (look && bike)) return; // viatura já pintada; moto pessoal mantém as cores do arquivo
     const mats = Array.isArray(m.material) ? m.material : [m.material];
     const out = mats.map((mat) => {
       if (mat.name !== 'paint') return mat;
@@ -718,7 +720,9 @@ export function spawnPersonal(ownerId: string, model: string, look: PaintLook | 
   let car = PERSONAL.get(ownerId);
   if (car && car.model !== model) { despawnPersonal(ownerId); car = undefined; }
   if (!car) {
-    car = new Car(nextPersonalId++, x, z, heading, 0xffffff, model, look);
+    let h = 0;
+    for (const ch of ownerId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+    car = new Car(nextPersonalId++, x, z, heading, COMMON_COLORS[h % COMMON_COLORS.length]!, model, look);
     car.ownerId = ownerId;
     CARS.push(car);
     carsGroup.add(car.root);

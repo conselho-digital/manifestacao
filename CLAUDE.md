@@ -186,7 +186,7 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 - Piloto na moto: visto de lado, frente e trás (harley, triumph, suzuki) está reto. O `ped.ifp` não tem clipe "ride" (o `bike_ride` vem do `bikes.ifp`); `BIKE_elbowL/R`, `BIKE_fall_off`, `BIKE_fallR` existem no arquivo mas não são usados.
 
 ## Veículos pessoais: cores do arquivo e adesivo
-- Veículos pessoais (garagem) mantêm as cores do próprio GLB (moto com motor preto, carros com a pintura normal do arquivo): `applyTeamPaint` só vale para a viatura (`POLICE_LOOK`). A equipe aparece SÓ como um adesivo redondo em cada porta da frente dos carros (`addTeamStickers`; o do capô foi removido); moto sem nada da equipe.
+- Veículos pessoais (garagem): moto mantém as cores do próprio GLB (motor preto); carro leva uma cor comum sorteada por dono (`COMMON_COLORS` em vehicle.ts, as mesmas do trânsito; o `paint` do GLB não tem cor e saía branco): `applyTeamPaint` só vale para a viatura (`POLICE_LOOK`). A equipe aparece SÓ como um adesivo redondo em cada porta da frente dos carros (`addTeamStickers`; o do capô foi removido); moto sem nada da equipe.
 
 ## Página load-animation (mudanças)
 - O topo mostra o NOME do arquivo enviado (não a quantidade de animações). O rótulo "Nova: <nome>" sobre o personagem é um botão: clicar copia o nome da animação (`navigator.clipboard`, com `execCommand` de reserva) e mostra "copiado!".
