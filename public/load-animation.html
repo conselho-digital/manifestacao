@@ -493,8 +493,17 @@ const CarlosRetarget = (function () {
     const dur = anim.duration;
     const n = dur > 1e-4 ? Math.min(900, Math.max(2, Math.round(dur * (dur <= 3 ? 30 : 15)) + 1)) : 1;
     const times = Array.from({ length: n }, (_, i) => (n === 1 ? 0 : dur * i / (n - 1)));
-    const useRoot = rootMode === 'always' || (rootMode !== 'never' && ROOT_AUTO.test(cname));
     const rootNode = byId.get(0);
+    // deitar o corpo (queda, nocaute, rolamento): se o Root do IFP inclina o corpo mais de ~35°, a rotação do Root vale
+    let tilt = 0;
+    if (rootNode) {
+      for (const k of rootNode.keys) {
+        const d = mul(q2m(new Q(k.q[0], k.q[1], k.q[2], k.q[3])), tr(ROOT_REF));
+        const up = new V3(0, 1, 0).applyMatrix4(mul(mul(F, mul(mul(CFIX, d), tr(CFIX))), Ft));
+        tilt = Math.max(tilt, Math.acos(Math.max(-1, Math.min(1, up.y))));
+      }
+    }
+    const useRoot = rootMode === 'always' || (rootMode !== 'never' && (ROOT_AUTO.test(cname) || tilt > deg(35)));
 
     // média da fase da perna (corrida): o braço oscila em torno dela
     const phiMean = { l: 0, r: 0 };
