@@ -195,3 +195,6 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 
 ## Pistola agachada
 - Ao começar a mirar AGACHADO a pistola sobe com a subida do `colt45_crouchfire` (overlay `pistol_cdraw`, só os primeiros 0,26 s do clipe, referência = pose segurando em 0,4 s); em pé continua o ARRESTgun (`pistol_draw`). Visto no jogo só como pose final (a subida dura 0,3 s e não deu para capturar quadro a quadro).
+
+## Aparência comum dos veículos
+- Só a viatura (`POLICE_LOOK`) tem pintura de polícia. Todo outro veículo (pessoal, trânsito, parado) passa por `applyCommonLook` (vehicle.ts): pneus pretos com aro cinza (`addTire`) e, nas motos, as peças de motor/quadro de `BIKE_DARK` (por nome de material do GLB; hoje só a Harley: `m1`, `m12`) em preto. Triumph, BMW e Suzuki têm o motor em materiais com textura/pintura misturada e ainda não ficam pretos (a BMW já é escura); para incluir, descubra o nome do material (lista de materiais por modelo via `car.root.traverse`) e ponha em `BIKE_DARK`. Carro pessoal: cor comum por dono; adesivo da equipe nas portas da frente.

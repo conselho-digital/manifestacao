@@ -107,6 +107,38 @@ function applyTeamPaint(model: THREE.Object3D, look: PaintLook, bike: boolean): 
   }
 }
 
+/** Veículo comum (não viatura): pneus pretos com aro cinza e, nas motos, as peças de motor/quadro listadas em preto. */
+function applyCommonLook(model: THREE.Object3D, bike: boolean, dark: string[]): void {
+  const wheelRoots = ['wheel_FL', 'wheel_FR', 'wheel_BL', 'wheel_BR', 'wheel_F', 'wheel_R'].map((n) => model.getObjectByName(n)).filter((o): o is THREE.Object3D => !!o);
+  const inWheel = (o: THREE.Object3D): boolean => wheelRoots.some((r) => { for (let p: THREE.Object3D | null = o; p; p = p.parent) if (p === r) return true; return false; });
+  const tires = new Map<THREE.Material, THREE.Material>();
+  const darks = new Map<THREE.Material, THREE.Material>();
+  const radiusOf = (m: THREE.Mesh): number => { m.geometry.computeBoundingBox(); const bb = m.geometry.boundingBox!; return Math.max(bb.max.y, -bb.min.y, bb.max.z, -bb.min.z); };
+  model.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const w = inWheel(m);
+    const r = w ? radiusOf(m) : 0;
+    const fix = (mat: THREE.Material): THREE.Material => {
+      if (mat.name === 'glass' || mat.name === 'light') return mat;
+      if (w) {
+        let c = tires.get(mat);
+        if (!c) { const std = mat.clone() as THREE.MeshStandardMaterial; std.map = null; std.color.set(BLACK); addTire(std, r); c = std; tires.set(mat, c); }
+        return c;
+      }
+      if (bike && dark.includes(mat.name)) {
+        let c = darks.get(mat);
+        if (!c) { const std = mat.clone() as THREE.MeshStandardMaterial; std.map = null; std.color.set(0x16171a); std.roughness = 0.5; std.metalness = 0.35; c = std; darks.set(mat, c); }
+        return c;
+      }
+      return mat;
+    };
+    m.material = Array.isArray(m.material) ? m.material.map(fix) : fix(m.material);
+  });
+}
+/** peças das motos que ficam pretas (motor e quadro), pelo nome do material no GLB */
+const BIKE_DARK: Record<string, string[]> = { harley: ['m1', 'm12'] };
+
 /** Roda: pneu preto (raio externo) e aro cinza (miolo), pela distância ao eixo no espaço da roda. */
 function addTire(mat: THREE.MeshStandardMaterial, radius: number): void {
   mat.onBeforeCompile = (sh) => {
@@ -149,10 +181,11 @@ function isBodyPart(m: THREE.Object3D): boolean {
 }
 
 /** Monta o visual de um carro a partir do GLB (nós `body` e `wheel_FL/FR/BL/BR`); sem `look`, a pintura (`paint`) recebe `colorHex`; com `look`, vale a pintura da equipe. */
-export function buildCarVisual(src: THREE.Object3D, colorHex: number, look?: PaintLook, bike = false): { group: THREE.Group; wheels: Record<string, THREE.Object3D> } {
+export function buildCarVisual(src: THREE.Object3D, colorHex: number, look?: PaintLook, bike = false, modelName = ''): { group: THREE.Group; wheels: Record<string, THREE.Object3D> } {
   const model = src.clone(true);
   const paint = new THREE.Color(colorHex);
   const done = new Map<THREE.Material, THREE.Material>();
+  if (!look?.police) applyCommonLook(model, bike, BIKE_DARK[modelName] ?? []); // todo veículo comum: pneu preto (e motor preto nas motos)
   if (look?.police) applyTeamPaint(model, look, bike); // só a viatura é repintada; os pessoais mantêm as cores do arquivo (a equipe vai em adesivos nas portas dos carros; moto sem nada)
   model.traverse((o) => {
     const m = o as THREE.Mesh;
@@ -388,7 +421,7 @@ export class Car {
   private bodyBase = new THREE.Vector3();
 
   private useModel(src: THREE.Object3D): void {
-    const v = buildCarVisual(src, this.color, this.look ?? undefined, this.bike);
+    const v = buildCarVisual(src, this.color, this.look ?? undefined, this.bike, this.model);
     this.root.clear();
     if (this.bike) {
       // a moto inteira (corpo e rodas) vai dentro de um grupo que empina/inclina
