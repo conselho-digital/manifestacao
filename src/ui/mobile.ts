@@ -1,7 +1,7 @@
 import { ICON } from './icons';
 import { CARS } from '../game/vehicle';
 import { COLLIDERS, MAP, PARKS, placeName, ROADS } from '../game/map';
-import { addLook, queueCrouch, queueInteract, queueJump, queueReload, queueSwitch, queueWeaponPick, queueWeaponStep, setAim, setFire, setPedals, setSprint, setTouchVector, setWheelie } from '../game/input';
+import { addLook, queueCrouch, queueInteract, queueJump, queueReload, queueSwitch, queueWeaponPick, queueWeaponStep, setAim, setCrouchHeld, setFire, setPedals, setSprint, setTouchVector, setWheelie } from '../game/input';
 
 /** Dados do jogo que o HUD mostra (preenchidos pelo main a cada quadro). */
 export interface HudState {
@@ -457,7 +457,7 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   // O botão que era de trocar de arma agora chama os veículos da conta (abre a garagem)
   holdButton(circle(hud, 'm-change foot', ICON.car, 'Veículo'), opts.onGarage);
   const crouchBtn = circle(hud, 'm-crouch foot', ICON.crouch, 'Agachar');
-  holdButton(crouchBtn, queueCrouch);
+  holdButton(crouchBtn, () => { queueCrouch(); setCrouchHeld(true); }, () => setCrouchHeld(false));
 
   // Ações da direita (a pé)
   holdButton(circle(hud, 'm-fire foot', ICON.bullet, null), () => setFire(true), () => setFire(false), true);

@@ -93,6 +93,10 @@ export class Player {
   private landT = 0;
   private emote: string | null = null;
   private special: { id: string; t: number } | null = null;
+  /** deslocamento do corpo do clipe que está tocando (passos do golpe, empurrão, rolagem): já andado até agora */
+  private mot: { name: string; f: number; l: number } | null = null;
+  /** o botão de agachar está segurado (ao fim da rolagem, segurar = ficar agachado) */
+  private holdCrouch = false;
   private climb: Climb | null = null;
   private car: Car | null = null;
   private armed: Armed = 'none';
@@ -179,13 +183,17 @@ export class Player {
     this.lastHitAt = now;
     if (kind === 'k') {
       this.hitAlt = !this.hitAlt;
-      this.swingT = 0.6;
-      this.animator?.restart(this.hitAlt ? 'hitk_2' : 'hitk_1');
+      const id = this.hitAlt ? 'hitk_2' : 'hitk_1';
+      this.swingT = this.clipLen(id, 0.6);
+      this.animator?.restart(id);
+      this.startMotion(id);
       return;
     }
-    this.swingT = this.hitN === 3 ? 0.8 : 0.4;
-    // levou golpe de arma branca: reações Bat_Hit_1-3 (baseball.ifp); de soco: knife_hit_1-3
-    this.animator?.restart(`${kind === 'b' ? 'bat_hit' : 'hit'}_${this.hitN}`);
+    // levou golpe de arma branca: reações Bat_Hit_1-3 (baseball.ifp); de soco: knife_hit_1-3 (knife.ifp)
+    const id = `${kind === 'b' ? 'bat_hit' : 'hit'}_${this.hitN}`;
+    this.swingT = this.clipLen(id, this.hitN === 3 ? 0.8 : 0.4);
+    this.animator?.restart(id);
+    this.startMotion(id);
   }
 
   /** Combo corpo a corpo: soco, soco, soco e chute (alternando os 2 chutes). Retorna 'k' se foi chute. */
@@ -195,8 +203,10 @@ export class Player {
     this.combatT = 3; // fica em guarda por 3 s
     if (this.punchN === 4) {
       this.kickAlt = !this.kickAlt;
-      this.swingT = 0.6;
-      this.animator?.restart(this.kickAlt ? 'kick_2' : 'kick_1');
+      const id = this.kickAlt ? 'kick_2' : 'kick_1';
+      this.swingT = this.clipLen(id, 0.6);
+      this.animator?.restart(id);
+      this.startMotion(id);
       return 'k';
     }
     this.swingT = this.punchN === 3 ? 0.8 : 0.7; // FightA_1/2/3 (jab, direto, gancho) acelerados 2x
@@ -207,8 +217,38 @@ export class Player {
   /** Golpe de arma branca (taco, bandeira, placa, facas...): sempre o clipe Bat_1 do baseball.ifp (a tacada), nunca os outros (Bat_2 e Bat_3 pareciam soco). */
   swing(): void {
     if (this.mode !== 'ground') return;
-    this.swingT = 0.7;
+    this.swingT = this.clipLen('bat_swing', 0.7);
     this.animator?.restart('bat_swing');
+    this.startMotion('bat_swing');
+  }
+
+  /** Quanto o clipe dura de verdade (s, já com a velocidade); `fallback` se o clipe ainda não carregou. */
+  private clipLen(name: string, fallback: number): number {
+    return this.animator?.has(name) ? this.animator.length(name) * 0.92 : fallback;
+  }
+
+  /** Passa a andar com o corpo do clipe (osso Root do IFP: passo, empurrão, rolagem). */
+  private startMotion(name: string): void {
+    this.mot = this.animator?.hasMotion(name) ? { name, f: 0, l: 0 } : null;
+  }
+
+  /** Anda o que o clipe andou desde o último quadro (para a frente e para a esquerda do corpo), respeitando as colisões. */
+  private applyMotion(): void {
+    const m = this.mot;
+    const a = this.animator;
+    if (!m || !a) return;
+    if (a.name !== m.name) { this.mot = null; return; }
+    const cur = a.motionAt(m.name, a.time);
+    if (!cur) { this.mot = null; return; }
+    const df = cur.f - m.f;
+    const dl = cur.l - m.l;
+    m.f = cur.f;
+    m.l = cur.l;
+    if (Math.abs(df) + Math.abs(dl) < 1e-5) return;
+    // quem apanha só escorrega um pouco (o IFP empurra 1 a 2 m por golpe)
+    const k = /^(hit_|bat_hit_|hitk_)/.test(m.name) ? 0.4 : 1;
+    const h = this.heading;
+    this.moveHoriz((Math.sin(h) * df + Math.cos(h) * dl) * k, (Math.cos(h) * df - Math.sin(h) * dl) * k);
   }
 
   /** Muda o que o personagem segura (braços e arma na mão). */
@@ -264,6 +304,7 @@ export class Player {
   update(dt: number, input: InputState, yaw: number): void {
     const pos = this.object.position;
     this.weaponVis?.update(dt);
+    this.holdCrouch = input.crouchHeld;
 
     if (this.mode === 'dead') { this.finish(dt); return; }
     if (this.mode === 'approach') { this.updateApproach(dt); return; }
@@ -283,7 +324,11 @@ export class Player {
     if (input.interact && this.mode === 'ground' && this.tryEnterCar()) return;
     if (input.climb && this.tryClimb()) { this.finish(dt); return; }
 
-    if (input.crouch && this.mode === 'ground') this.crouching = !this.crouching;
+    if (input.crouch && this.mode === 'ground') {
+      // andando e apertando agachar: rola para o lado em que anda; parado, só agacha/levanta
+      if (!this.crouching && moving && this.tryRoll(input, yaw)) { this.finish(dt); return; }
+      this.crouching = !this.crouching;
+    }
     if (input.jump) this.crouching = false;
 
     // Pular perto de um obstáculo alto escala sozinho
@@ -333,8 +378,34 @@ export class Player {
       }
     }
 
+    this.applyMotion();
     this.selectAnimation(dt, input, moving);
     this.finish(dt);
+  }
+
+  /** Rolagem (VRolling_*): escolhe o clipe pela direção em que anda em relação ao corpo. */
+  private tryRoll(input: InputState, yaw: number): boolean {
+    const a = this.animator;
+    if (!a || !a.has('roll_f')) return false;
+    const fwd = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
+    const right = new THREE.Vector3(-fwd.z, 0, fwd.x);
+    const dir = fwd.multiplyScalar(input.y).add(right.multiplyScalar(input.x));
+    if (dir.lengthSq() < 1e-6) return false;
+    dir.normalize();
+    if (!facesAim(this.armed)) this.heading = Math.atan2(dir.x, dir.z); // sem mirar o corpo já olha para onde anda: rola para a frente
+    const fx = Math.sin(this.heading);
+    const fz = Math.cos(this.heading);
+    const ang = Math.atan2(dir.x * fz - dir.z * fx, dir.x * fx + dir.z * fz) * 180 / Math.PI; // + = esquerda do corpo
+    const ad = Math.abs(ang);
+    const s = ang > 0 ? 'l' : 'r';
+    const id = ad < 22.5 ? 'roll_f' : ad < 67.5 ? `roll_f${s}` : ad < 112.5 ? `roll_${s}` : ad < 157.5 ? `roll_b${s}` : 'roll_b';
+    if (!a.has(id)) return false;
+    this.mode = 'special';
+    this.special = { id, t: 0 };
+    this.emote = null;
+    a.restart(id);
+    this.startMotion(id);
+    return true;
   }
 
   private selectAnimation(dt: number, input: InputState, moving: boolean): void {
@@ -381,8 +452,20 @@ export class Player {
 
   private updateSpecial(dt: number): void {
     const sp = this.special!;
-    const cfg = SPECIAL[sp.id]!;
+    const cfg = SPECIAL[sp.id];
     sp.t += dt;
+    if (!cfg) {
+      // rolagem com o clipe do IFP: o corpo anda pelo deslocamento do clipe; segurando o botão de agachar até o fim, fica agachado
+      this.applyMotion();
+      if (sp.t >= (this.animator?.length(sp.id) ?? 1)) {
+        this.special = null;
+        this.mode = 'ground';
+        this.mot = null;
+        this.crouching = this.holdCrouch;
+        this.animator?.play(this.crouching ? 'crouch_idle' : 'idle');
+      }
+      return;
+    }
     this.moveHoriz(Math.sin(this.heading) * cfg.speed * dt, Math.cos(this.heading) * cfg.speed * dt);
     if (sp.t >= cfg.dur) {
       this.special = null;

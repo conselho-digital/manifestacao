@@ -3,7 +3,9 @@ import { rifleGeo, type RifleKind } from './rifles';
 
 interface GtaTrack { id: number; t: number[]; q: number[] }
 interface BoneTrack { bone: string; t: number[]; q: number[] }
-interface ClipData<T> { duration: number; tracks: T[]; /** descida do corpo (m) ao longo do clipe (mergulho) */ drop?: { t: number[]; y: number[] } }
+/** Deslocamento do corpo (osso Root do IFP) ao longo do clipe, em metros: f para a frente, l para a esquerda, u para cima. */
+export interface MoveData { t: number[]; f: number[]; l: number[]; u: number[] }
+interface ClipData<T> { duration: number; tracks: T[]; /** descida do corpo (m) ao longo do clipe (mergulho) */ drop?: { t: number[]; y: number[] }; move?: MoveData }
 type Clips<T> = Record<string, ClipData<T>>;
 type Kind = 'gta' | 'carlos';
 
@@ -24,19 +26,20 @@ type Kind3 = 'rifle' | 'pistol' | 'bat';
 const kindOf = (a: Armed): Kind3 | null => (a === 'rifle' || a === 'aim' ? 'rifle' : a === 'pistol' || a === 'pistol_aim' || isSpray(a) ? 'pistol' : isBatLike(a) ? 'bat' : null);
 
 /** Clipes que tocam uma vez e param no último quadro. */
-const ONCE = new Set(['kick_1', 'kick_2', 'hitk_1', 'hitk_2', 'hit_1', 'hit_2', 'hit_3', 'block', 'punch_1', 'punch_2', 'punch_3', 'punch_4', 'bat_swing', 'bat_swing2', 'bat_swing3', 'bat_hit_1', 'bat_hit_2', 'bat_hit_3', 'car_getin_l', 'car_getout_l', 'bike_fall', 'ko_front', 'getup_front', 'jump_launch', 'jump_land', 'climb_jump', 'climb_pull', 'climb_stand', 'roll', 'dive']);
+const ONCE = new Set(['roll_f', 'roll_fl', 'roll_fr', 'roll_l', 'roll_r', 'roll_b', 'roll_bl', 'roll_br', 'bat_swing4', 'knife_1', 'knife_2', 'knife_3', 'knife_4', 'knife_g', 'kill_player', 'kill_ped_damage', 'kill_ped_die', 'kick_1', 'kick_2', 'hitk_1', 'hitk_2', 'hit_1', 'hit_2', 'hit_3', 'block', 'punch_1', 'punch_2', 'punch_3', 'punch_4', 'bat_swing', 'bat_swing2', 'bat_swing3', 'bat_hit_1', 'bat_hit_2', 'bat_hit_3', 'car_getin_l', 'car_getout_l', 'bike_fall', 'ko_front', 'getup_front', 'jump_launch', 'jump_land', 'climb_jump', 'climb_pull', 'climb_stand', 'roll', 'dive']);
 export const isOnceClip = (name: string): boolean => ONCE.has(name);
 
 /** Clipes em que o personagem não segura o fuzil (escalar, rolar, mergulhar, emotes). */
-const FREE_HANDS = (name: string): boolean => name.startsWith('climb_') || name === 'roll' || name === 'dive' || name.startsWith('e_');
+const FREE_HANDS = (name: string): boolean => name.startsWith('climb_') || name === 'roll' || name.startsWith('roll_') || name === 'dive' || name.startsWith('e_');
 
 /** Clipes feitos para segurar o fuzil (Gun_stand, GunMove_*, WEAPON_crouch...): os braços vêm do clipe e a arma segue a mão. */
 const OWN_HOLD = (name: string): boolean => name.startsWith('gun_') || name.startsWith('crouch_') || name === 'run_armed' || name === 'walk_armed';
 
 /** Velocidade de reprodução (1 = original). Os clipes de arma andam um pouco mais rápido que o jogo. */
 /** Clipes em que as pernas ficam paradas na pose do 1º quadro (golpes, reações a golpes e as posições de luta): o IFP não guarda o deslocamento do corpo, então os passos do soco/tacada faziam as pernas patinarem com o corpo parado. */
-const PLANTED = new Set(['punch_1', 'punch_2', 'punch_3', 'bat_swing', 'combat_idle', 'bat_idle', 'block', 'bat_block', 'hit_1', 'hit_2', 'hit_3', 'bat_hit_1', 'bat_hit_2', 'bat_hit_3', 'hitk_1', 'hitk_2']);
-const TIME_SCALE: Record<string, number> = { ko: 1.8, getup: 1.8, ko_front: 1.5, getup_front: 1.8, bike_fall: 1.2, car_getin_l: 0.62, car_getout_l: 0.62, hit_3: 2, punch_1: 2.2, punch_2: 2.2, punch_3: 2.0, punch_4: 1.6, bat_swing: 1.3, bat_swing2: 1.5, bat_swing3: 1.5, bat_hit_1: 1.5, bat_hit_2: 1.6, bat_hit_3: 1.8, gun_fwd: 1.2, gun_bwd: 1.0, gun_left: 1.5, gun_right: 1.4, crouch_fwd: 0.6, crouch_bwd: 0.6,
+// Os clipes do baseball/fight_e/knife novos (bat_*, kick_*, hit_*, hitk_*) têm passos e deslocamento do corpo e não ficam parados.
+const PLANTED = new Set(['punch_1', 'punch_2', 'punch_3', 'combat_idle', 'block']);
+const TIME_SCALE: Record<string, number> = { ko: 1.8, getup: 1.8, ko_front: 1.5, getup_front: 1.8, bike_fall: 1.2, car_getin_l: 0.62, car_getout_l: 0.62, hit_1: 1.8, hit_2: 1.4, hit_3: 2.2, punch_1: 2.2, punch_2: 2.2, punch_3: 2.0, punch_4: 1.6, bat_swing: 1.4, bat_swing2: 1.5, bat_swing3: 1.6, bat_hit_1: 1.3, bat_hit_2: 1.3, bat_hit_3: 1.8, kick_1: 1.3, kick_2: 1.8, hitk_1: 1.4, hitk_2: 2, gun_fwd: 1.2, gun_bwd: 1.0, gun_left: 1.5, gun_right: 1.4, crouch_fwd: 0.6, crouch_bwd: 0.6,
   // andar/correr: o passo do clipe (medido pelo pé de apoio, ver dev/anim-viewer) é bem menor que a velocidade do jogo (andar 2,1 m/s, correr 6,2 m/s) e os pés patinavam; acelera o clipe até ficar perto, sem passar da cadência natural
   walk: 1.6, walk_armed: 1.3, sprint: 1.3, w_gang: 1.6, w_drunk: 1.5, w_old: 1.6, w_fat: 1.6, w_sneak: 1.6 };
 
@@ -178,6 +181,7 @@ export function preloadAnimations(): Promise<unknown> {
 export class Animator {
   private current: THREE.AnimationAction | null = null;
   private clipName = '';
+  private readonly moves = new Map<string, MoveData>();
   private done = false;
   isCarlos = false;
   /** giro do antebraço e da mão em torno do próprio eixo (rad): palma para dentro ao segurar */
@@ -386,6 +390,7 @@ export class Animator {
         keepFeet(tracks, name);
         const action = mixer.clipAction(new THREE.AnimationClip(name, clip.duration, tracks));
         if (clip.drop) a.drops.set(name, clip.drop);
+        if (clip.move) a.moves.set(name, clip.move);
         action.timeScale = TIME_SCALE[name] ?? 1;
         if (ONCE.has(name)) {
           action.setLoop(THREE.LoopOnce, 1);
@@ -413,6 +418,30 @@ export class Animator {
     this.current = next;
     this.clipName = name;
     this.done = false;
+  }
+
+  /** Tempo atual do clipe que está tocando (s do clipe, já com a velocidade). */
+  get time(): number { return this.current?.time ?? 0; }
+
+  /** Quanto o clipe dura de verdade (s), com a velocidade dele. */
+  length(name: string): number {
+    const a = this.actions.get(name);
+    return a ? a.getClip().duration / Math.max(0.1, Math.abs(a.timeScale || 1)) : 1;
+  }
+
+  hasMotion(name: string): boolean { return this.moves.has(name); }
+
+  /** Deslocamento acumulado do corpo (frente e esquerda, em metros) no tempo `t` do clipe, ou null se o clipe não desloca. */
+  motionAt(name: string, t: number): { f: number; l: number } | null {
+    const m = this.moves.get(name);
+    if (!m) return null;
+    const n = m.t.length;
+    if (t <= m.t[0]!) return { f: m.f[0]!, l: m.l[0]! };
+    if (t >= m.t[n - 1]!) return { f: m.f[n - 1]!, l: m.l[n - 1]! };
+    let i = 1;
+    while (i < n - 1 && m.t[i]! < t) i++;
+    const k = (t - m.t[i - 1]!) / Math.max(1e-6, m.t[i]! - m.t[i - 1]!);
+    return { f: m.f[i - 1]! + (m.f[i]! - m.f[i - 1]!) * k, l: m.l[i - 1]! + (m.l[i]! - m.l[i - 1]!) * k };
   }
 
   /** Duração de um clipe (s). Só para ferramentas de revisão. */

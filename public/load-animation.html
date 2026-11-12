@@ -346,7 +346,7 @@ const CarlosRetarget = (function () {
   for (const k in IDS) lw0[k] = rotpart(W0[IDS[k]]);
   const CFIX = rotpart(W0[N[LAW.root][1]]);
   const pelvisFix = base[N[IDS.pelvis][1]].q.clone().conjugate(); // no IFP a pélvis vem no espaço do pai da Root
-  const ROT_IDS = Object.keys(IDS).filter((k) => !/clavicle/.test(k) && k !== 'root');
+  const ROT_IDS = Object.keys(IDS).filter((k) => k !== 'root');
 
   /* ----- esqueleto do Carlos ----- */
   const MAP = {
@@ -419,6 +419,12 @@ const CarlosRetarget = (function () {
       const get = (k) => byName['arm ' + w + ' finger ' + k] || byName[Object.keys(byName).find((n) => n.startsWith('arm ' + w + ' finger ' + k))];
       fingers[sd] = { four: ['2a', '2b', '2c'].map(get).filter(Boolean), thumb: ['1a', '1b', '1c'].map(get).filter(Boolean) };
     }
+    // clavícula: sem ela os ombros do Carlos não acompanham quando o GTA os projeta para a frente (mirar, recarregar)
+    const clav = {};
+    for (const [sd, w] of [['l', 'left'], ['r', 'right']]) {
+      const c = byName[Object.keys(byName).find((n) => n.startsWith('arm ' + w + ' shoulder 1'))];
+      if (c) { clav[sd] = c; drive.set(c, { sd, clav: true }); }
+    }
     // a 1ª junta de cada grupo de dedos copia a rotação do osso 'Finger'/'Finger01' do GTA, como o resto do corpo; as outras juntas fecham a mais
     for (const sd of ['l', 'r']) {
       if (fingers[sd].four[0]) drive.set(fingers[sd].four[0], { sd, fing: 'finger' });
@@ -439,8 +445,10 @@ const CarlosRetarget = (function () {
         hand: fromto(handDirC, dl('hand', 'finger'))
       };
       swing[sd].finger = swing[sd].hand; swing[sd].finger01 = swing[sd].hand;
+      if (clav[sd]) swing[sd].clavicle = fromto(pos.get(u).clone().sub(pos.get(clav[sd])), dl('clavicle', 'upperarm'));
     }
-    C = { order, drive, cw0, parentRot, restQ, arms, motion, pos0: pos, armBones, fingers, swing, boneNames: new Set(order.map((b) => b.name)) };
+    const neckBone = byName['head neck lower_014'];
+    C = { order, drive, cw0, parentRot, restQ, arms, motion, pos0: pos, armBones, fingers, swing, neckBone, boneNames: new Set(order.map((b) => b.name)) };
   }
 
   /** Ossos do IFP por ID do GTA; se os IDs não são os do GTA (arquivo convertido), usa o nome do osso. */
@@ -496,14 +504,14 @@ const CarlosRetarget = (function () {
       const par = b.parent;
       const Rp = Rw.get(par) || C.parentRot.get(b);
       const d = C.drive.get(b);
-      let tgt = d && d.k ? mul(G, mul(D[d.k], C.cw0.get(b))) : null;
+      let tgt = d && d.k ? mul(G, mul(D[d.k], C.cw0.get(b))) : (d && d.clav ? mul(G, mul(D[d.sd + ' clavicle'], mul(C.swing[d.sd].clavicle, C.cw0.get(b)))) : null);
       Rw.set(b, tgt || mul(Rp, q2m(C.restQ.get(b))));
       if (Pw.has(par)) {
         const delta = mul(Rw.get(par), tr(C.cw0.get(par)));
         Pw.set(b, Pw.get(par).clone().add(C.pos0.get(b).clone().sub(C.pos0.get(par)).applyMatrix4(delta)));
       } else Pw.set(b, C.pos0.get(b).clone());
     }
-    return { l: Pw.get(C.armBones.l[0]), r: Pw.get(C.armBones.r[0]) };
+    return { l: Pw.get(C.armBones.l[0]), r: Pw.get(C.armBones.r[0]), neck: Pw.get(C.neckBone) };
   }
 
   /**
@@ -536,6 +544,38 @@ const CarlosRetarget = (function () {
     const E = S.clone().addScaledVector(a, along).addScaledVector(pole, h);
     const Wt = S.clone().addScaledVector(a, d);
     return { du: E.clone().sub(S).normalize(), df: Wt.clone().sub(E).normalize() };
+  }
+
+  /**
+   * Correção de alcance dos braços (modo 'rot'): o Carlos tem ombros e pescoço em outras proporções que o pedestre do GTA, então copiar só as rotações
+   * deixa as mãos mais baixas/atrás (mirar, recarregar). Aqui a mão vai para o mesmo lugar em relação ao pescoço (escalado pelo braço) e o braço e o antebraço
+   * giram o mínimo para chegar lá, do mesmo lado do cotovelo; a rotação da mão não muda. Devolve as rotações extras de mundo { cu, cf } ou null.
+   */
+  function armReach(sd, D, P, sh) {
+    const [u, f, w] = C.armBones[sd];
+    const A = C.arms[sd];
+    const L1 = A.d0u.length(), L2 = A.d0f.length();
+    const s = (L1 + L2) / lawArmLen[sd];
+    const tgtU = mul(D[sd + ' upperarm'], mul(C.swing[sd].upperarm, C.cw0.get(u)));
+    const tgtF = mul(D[sd + ' forearm'], mul(C.swing[sd].forearm, C.cw0.get(f)));
+    const dirOf = (tgt, bone, d0) => d0.clone().applyMatrix4(tr(C.cw0.get(bone))).applyMatrix4(tgt).normalize();
+    const duR = dirOf(tgtU, u, A.d0u), dfR = dirOf(tgtF, f, A.d0f);
+    const S = sh[sd];
+    const T = sh.neck.clone().add(P[sd + ' hand'].clone().sub(P.neck).applyMatrix4(F).multiplyScalar(s));
+    const a = T.clone().sub(S);
+    let d = a.length();
+    if (d < 1e-6) return null;
+    a.divideScalar(d);
+    d = Math.max(Math.abs(L1 - L2) + 1e-3, Math.min(d, (L1 + L2) * 0.999));
+    const pole = duR.clone().multiplyScalar(L1);
+    pole.addScaledVector(a, -pole.dot(a));
+    if (pole.lengthSq() < 1e-10) return null;
+    pole.normalize();
+    const along = (L1 * L1 - L2 * L2 + d * d) / (2 * d);
+    const h = Math.sqrt(Math.max(0, L1 * L1 - along * along));
+    const E = S.clone().addScaledVector(a, along).addScaledVector(pole, h);
+    const duI = E.clone().sub(S).normalize(), dfI = S.clone().addScaledVector(a, d).sub(E).normalize();
+    return { cu: fromto(duR, duI), cf: fromto(dfR, dfI) };
   }
 
   /** Posição interpolada (linear) de um nó do IFP no tempo t. */
@@ -611,6 +651,7 @@ const CarlosRetarget = (function () {
   // 'rot': braços copiam a rotação de mundo de cada osso (como a página de referência, que aplica o IFP direto nos ossos);
   // 'dir': método por direção/IK (pensado para o jogo, aproxima os braços do corpo)
   let armMode = 'rot';
+  let armReachOn = true;
   /**
    * Rotação do Root (delta d, no espaço do GTA: x direita, y frente, z cima) no espaço do Carlos.
    * K troca os eixos do GTA para os do Law (x→z, y→x, z→y: 120° em torno de (1,1,1)); F·K·t dá o mesmo (−x, z, y) da translação.
@@ -620,7 +661,13 @@ const CarlosRetarget = (function () {
   function rootG(d) { return mul(mul(F, mul(mul(KAXES, d), tr(KAXES))), Ft); }
   // IFP (GTA: x direita, y frente, z cima) → Carlos (x esquerda, y cima, z frente)
   const motionCfg = { map: [[-1, 0, 0], [0, 0, 1], [0, 1, 0]], scale: 1 };
-  function bake(anim, rootMode, moveBody) {
+  /**
+   * opt.relative: para o jogo. O giro do Root fica como no IFP (a pose de luta já começa de lado, como no SA) e o deslocamento do Root,
+   * contado a partir do 1º quadro, sai à parte em clip.move = { t, f (frente), l (esquerda), u (cima) } em metros, no sistema do corpo (frente = para onde o jogo olha).
+   * opt.fingers === false: sem trilhas de dedos (o jogo fecha a mão por conta própria).
+   */
+  function bake(anim, rootMode, moveBody, opt) {
+    opt = opt || {};
     if (!C) throw new Error('Carlos ainda não preparado.');
     const cname = canon(anim.name);
     const byId = idMap(anim);
@@ -661,7 +708,7 @@ const CarlosRetarget = (function () {
       const D = {};
       for (const k of ROT_IDS) D[k] = mul(mul(F, mul(rotpart(W[IDS[k]]), tr(lw0[k]))), Ft);
       const P = {};
-      for (const k of ['l upperarm', 'l forearm', 'l hand', 'r upperarm', 'r forearm', 'r hand', 'l thigh', 'l calf', 'r thigh', 'r calf']) P[k] = lawPos(W, k);
+      for (const k of ['l upperarm', 'l forearm', 'l hand', 'r upperarm', 'r forearm', 'r hand', 'l thigh', 'l calf', 'r thigh', 'r calf', 'neck']) P[k] = lawPos(W, k);
       let G = new M4();
       if (useRoot && rootNode && rootNode.keys.length) {
         const d = mul(q2m(interp(rootNode.keys, t)), tr(ROOT_REF));
@@ -688,14 +735,26 @@ const CarlosRetarget = (function () {
         }
         dirs[sd] = { du, df, twist };
       }
+      const reach = {};
+      if (armMode === 'rot' && armReachOn) {
+        const sh0 = shoulderPositions(D, new M4()); // sem G: o laço principal gira tudo pelo Root
+        for (const sd of ['l', 'r']) reach[sd] = armReach(sd, D, P, sh0);
+      }
       const Rw = new Map();
       for (const b of C.order) {
         const Rp = Rw.get(b.parent) || C.parentRot.get(b);
         const d = C.drive.get(b);
         let tgt = null;
         if (d && d.k) tgt = mul(D[d.k], C.cw0.get(b));
+        else if (d && d.clav) tgt = mul(D[d.sd + ' clavicle'], mul(C.swing[d.sd].clavicle, C.cw0.get(b)));
         else if (d && d.fing) tgt = mul(D[d.sd + ' ' + d.fing], mul(C.swing[d.sd][d.fing], C.cw0.get(b)));
-        else if (d && armMode === 'rot') { const part = ['upperarm', 'forearm', 'hand'][d.part]; tgt = mul(D[d.sd + ' ' + part], mul(C.swing[d.sd][part], C.cw0.get(b))); }
+        else if (d && armMode === 'rot') {
+          const part = ['upperarm', 'forearm', 'hand'][d.part];
+          tgt = mul(D[d.sd + ' ' + part], mul(C.swing[d.sd][part], C.cw0.get(b)));
+          const rc = reach[d.sd];
+          if (rc && d.part === 0) tgt = mul(rc.cu, tgt);
+          else if (rc && d.part === 1) tgt = mul(rc.cf, tgt);
+        }
         else if (d) {
           const A = C.arms[d.sd], dr = dirs[d.sd];
           if (d.part === 0) {
@@ -719,7 +778,7 @@ const CarlosRetarget = (function () {
     const tracks = [];
     // dedos: o IFP guarda o fechar da mão como giro de 'Finger' (quatro dedos) e 'Finger01' (polegar) em torno do eixo Z do osso
     const sideOf = { l: 1, r: -1 };
-    for (const sd of ['l', 'r']) {
+    for (const sd of (opt.fingers === false ? [] : ['l', 'r'])) {
       for (const [kind, id, k] of [['four', sd === 'l' ? 35 : 25, 1], ['thumb', sd === 'l' ? 36 : 26, 1]]) {
         const nd = byId.get(id), bones = C.fingers[sd][kind];
         if (!nd || !nd.keys.length || !bones.length) continue;
@@ -750,10 +809,54 @@ const CarlosRetarget = (function () {
       }
       tracks.push(new THREE.VectorKeyframeTrack(m.bone.name + '.position', times, vals));
     }
-    return new THREE.AnimationClip(anim.name, Math.max(dur, 0.001), tracks);
+    let move = null;
+    if (opt.relative && rootNode && rootNode.keys.length && rootNode.keys[0].p) {
+      const M = motionCfg.map, p0 = interpPos(rootNode.keys, 0), v = new V3();
+      move = { t: times.slice(), f: [], l: [], u: [] };
+      for (const t of times) {
+        const p = interpPos(rootNode.keys, t).sub(p0);
+        v.set(M[0][0] * p.x + M[0][1] * p.y + M[0][2] * p.z, M[1][0] * p.x + M[1][1] * p.y + M[1][2] * p.z, M[2][0] * p.x + M[2][1] * p.y + M[2][2] * p.z).multiplyScalar(motionCfg.scale);
+        move.l.push(+v.x.toFixed(4)); move.u.push(+v.y.toFixed(4)); move.f.push(+v.z.toFixed(4));
+      }
+    }
+    let keep = tracks;
+    if (opt.fingers === false) {
+      const fb = new Set();
+      for (const sd of ['l', 'r']) for (const b of [...C.fingers[sd].four, ...C.fingers[sd].thumb]) fb.add(b.name + '.quaternion');
+      keep = tracks.filter((t) => !fb.has(t.name));
+    }
+    const clip = new THREE.AnimationClip(anim.name, Math.max(dur, 0.001), keep);
+    clip.move = move;
+    return clip;
   }
 
-  return { prepare, bake, ready: () => !!C, setIK: (v) => { ik = !!v; }, setArmMode: (m) => { armMode = m; }, setFingers: (four, thumb) => { fingerCfg.four = four; fingerCfg.thumb = thumb; },  setMotion: (map, scale) => { motionCfg.map = map; motionCfg.scale = scale; } };
+  /** Giro (em torno da vertical) e inclinação do corpo no 1º quadro, em graus: o jogo remove só o giro. */
+  function rootInfo(anim) {
+    const nd = anim.nodes.find((n) => n.id === 0);
+    if (!nd || !nd.keys.length) return { yaw: 0, tilt: 0 };
+    const G = rootG(mul(q2m(interp(nd.keys, 0)), tr(ROOT_REF)));
+    const f = new V3(0, 0, 1).applyMatrix4(G), up = new V3(0, 1, 0).applyMatrix4(G);
+    return { yaw: Math.atan2(f.x, f.z) * 180 / Math.PI, tilt: Math.acos(Math.max(-1, Math.min(1, up.y))) * 180 / Math.PI };
+  }
+
+  /** Dados prontos para o jogo (public/anims/carlos-extra.json): { duration, tracks: [{ bone, t, q }], move?, drop? } */
+  function bakeGame(anim) {
+    const clip = bake(anim, 'always', false, { relative: true, fingers: false });
+    const orig = new Map(C.order.map((b) => [b.name, (b.userData && b.userData.name) || b.name]));
+    const tracks = clip.tracks.filter((t) => t.name.endsWith('.quaternion')).map((t) => ({
+      bone: orig.get(t.name.slice(0, -'.quaternion'.length)),
+      t: Array.from(t.times, (x) => +x.toFixed(4)),
+      q: Array.from(t.values, (x) => +x.toFixed(4))
+    }));
+    const out = { duration: +clip.duration.toFixed(4), tracks };
+    if (clip.move) {
+      out.move = clip.move;
+      out.drop = { t: clip.move.t, y: clip.move.u.map((x) => Math.min(0, x)) };
+    }
+    return out;
+  }
+
+  return { prepare, bake, bakeGame, rootInfo, ready: () => !!C, setIK: (v) => { ik = !!v; }, setArmMode: (m) => { armMode = m; }, setReach: (v) => { armReachOn = !!v; }, setFingers: (four, thumb) => { fingerCfg.four = four; fingerCfg.thumb = thumb; },  setMotion: (map, scale) => { motionCfg.map = map; motionCfg.scale = scale; } };
 })();
 </script>
 

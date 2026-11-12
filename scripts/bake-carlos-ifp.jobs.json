@@ -1,0 +1,57 @@
+[
+ [
+  "assets-src/ifp/baseball.ifp",
+  {
+   "Bat_1": "bat_swing",
+   "Bat_2": "bat_swing2",
+   "Bat_3": "bat_swing3",
+   "Bat_4": "bat_swing4",
+   "Bat_block": "bat_block",
+   "Bat_Hit_1": "bat_hit_1",
+   "Bat_Hit_2": "bat_hit_2",
+   "Bat_Hit_3": "bat_hit_3",
+   "Bat_IDLE": "bat_idle",
+   "Bat_M": "bat_m"
+  }
+ ],
+ [
+  "assets-src/ifp/fight_e.ifp",
+  {
+   "FightKick": "kick_1",
+   "FightKick_B": "kick_2",
+   "Hit_fightkick": "hitk_1",
+   "Hit_fightkick_B": "hitk_2"
+  }
+ ],
+ [
+  "assets-src/ifp/knife.ifp",
+  {
+   "knife_hit_1": "hit_1",
+   "knife_hit_2": "hit_2",
+   "knife_hit_3": "hit_3",
+   "knife_1": "knife_1",
+   "knife_2": "knife_2",
+   "knife_3": "knife_3",
+   "Knife_4": "knife_4",
+   "Knife_G": "knife_g",
+   "knife_block": "knife_block",
+   "knife_IDLE": "knife_idle",
+   "KILL_Knife_Player": "kill_player",
+   "KILL_Knife_Ped_Damage": "kill_ped_damage",
+   "KILL_Knife_Ped_Die": "kill_ped_die"
+  }
+ ],
+ [
+  "assets-src/ifp/VRolling.ifp",
+  {
+   "VRolling_Front": "roll_f",
+   "VRolling_Frontl": "roll_fl",
+   "VRolling_Frontr": "roll_fr",
+   "VRolling_Left": "roll_l",
+   "VRolling_Right": "roll_r",
+   "VRolling_Back": "roll_b",
+   "VRolling_BackL": "roll_bl",
+   "VRolling_BackR": "roll_br"
+  }
+ ]
+]

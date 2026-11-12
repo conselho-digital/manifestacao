@@ -12,6 +12,8 @@ export interface InputState {
   climb: boolean;
   /** alterna agachado */
   crouch: boolean;
+  /** o botão de agachar está pressionado agora (depois da rolagem, segurar = ficar agachado) */
+  crouchHeld: boolean;
   /** entrar/sair do carro */
   interact: boolean;
   /** id de animação pedida no menu (emote ou ação) */
@@ -43,6 +45,7 @@ let sprintHeld = false;
 let jumpQ = false;
 let climbQ = false;
 let crouchQ = false;
+let crouchTouch = false;
 let interactQ = false;
 let reloadQ = false;
 let switchQ = false;
@@ -76,6 +79,7 @@ window.addEventListener('blur', () => { keys.clear(); mouseFire = false; mouseAi
 
 export const queueJump = (): void => { jumpQ = true; };
 export const queueCrouch = (): void => { crouchQ = true; };
+export const setCrouchHeld = (on: boolean): void => { crouchTouch = on; };
 export const queueClimb = (): void => { climbQ = true; };
 export const queueInteract = (): void => { interactQ = true; };
 export const queueReload = (): void => { reloadQ = true; };
@@ -139,7 +143,7 @@ export function readInput(): InputState {
   const state: InputState = {
     x, y, mag: len, walk,
     sprint: keys.has('KeyQ') || keys.has('ShiftLeft') || keys.has('ShiftRight') || sprintHeld,
-    jump: jumpQ, climb: climbQ, crouch: crouchQ, interact: interactQ, emote: emoteQ, walkClip,
+    jump: jumpQ, climb: climbQ, crouch: crouchQ, crouchHeld: keys.has('KeyZ') || keys.has('ControlLeft') || crouchTouch, interact: interactQ, emote: emoteQ, walkClip,
     fire: fireHeld || mouseFire,
     aim: aimOn || mouseAim,
     reload: reloadQ, switchWeapon: switchQ, weaponStep: stepQ, weaponPick: pickQ,
