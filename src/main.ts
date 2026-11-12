@@ -71,7 +71,7 @@ function menuCamera(dt: number): void {
   const aspect = w / h;
   camera.aspect = aspect;
   const ang = menuT * 0.05; // uma volta em ~2 min
-  const dist = aspect < 1 ? 300 : 205; // cabe a cidade (220 x 168 m) inteira
+  const dist = aspect < 1 ? 330 : 225; // cabe o mapa (244 x 192 m) inteiro
   const elev = 1.2; // ~70° de cima: dá para ver as ruas e a avenida
   camera.position.set(Math.sin(ang) * dist * 0.4, dist * Math.sin(elev), Math.cos(ang) * dist * 0.4);
   camera.lookAt(0, 0, 0);

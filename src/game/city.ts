@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { addBox, COLLIDERS, MAP, PARKS, PLACES, ROADS, TREES, type Rect } from './map';
+import { addBox, CITY, COLLIDERS, MAP, PARKS, PLACES, ROADS, TREES, type Rect } from './map';
 import { buildGrayTower, TOWER } from './tower';
 import { registerCullChildren, FAR_TREES } from './culling';
 import { placeSafraSign } from './safra';
@@ -12,13 +12,15 @@ import { CAR_MODELS, loadCarVisual, TRAFFIC } from './vehicle';
 // Cidade inspirada na maquete da Av. Paulista (SP). O layout é escrito "como na foto" (x para a direita,
 // z para o norte) e convertido para o mundo espelhando o eixo X (R(): x_mundo = -x_foto).
 
-const HX = MAP.halfX;
-const HZ = MAP.halfZ;
+const HX = CITY.halfX; // cidade (quadras)
+const HZ = CITY.halfZ;
+const RX = MAP.halfX; // mapa todo, com a rua em volta
+const RZ = MAP.halfZ;
 /** retângulo no espaço da foto -> retângulo do mundo */
 const R = (sx0: number, sx1: number, sz0: number, sz1: number): Rect => ({ x0: -sx1, x1: -sx0, z0: sz0, z1: sz1 });
 
-const AVENUE: Rect = { x0: -HX, x1: HX, z0: -12, z1: 12 };
-const WALK: Rect = { x0: -HX, x1: HX, z0: -19, z1: 19 }; // avenida + calçadas
+const AVENUE: Rect = { x0: -RX, x1: RX, z0: -12, z1: 12 };
+const WALK: Rect = { x0: -RX, x1: RX, z0: -19, z1: 19 }; // avenida + calçadas
 const N_STREETS = [R(-85, -77, 12, HZ), R(6, 16, 12, HZ), R(48, 58, 12, HZ)];
 const S_STREETS = [R(-68, -58, -HZ, -12), R(18, 27, -HZ, -12)];
 const STREETS = [...N_STREETS, ...S_STREETS];
@@ -211,7 +213,7 @@ class Batch {
     t('redroof', lam({ color: 0xa4482f }));
     t('grayroof', lam({ color: 0x80868d }));
     t('glassfx', lam({ color: 0x9fc3d9 }));
-    t('wood', lam({ color: 0x7a4a2e }));
+    t('wood', lam({ color: 0x0c0d0f })); // muro preto em volta do mapa
   }
 
   private push(key: string, g: THREE.BufferGeometry): void {
@@ -458,16 +460,16 @@ export function createCity(): THREE.Group {
     ...STREETS.map((r, i) => ({ name: `RUA TRANSVERSAL ${i + 1}`, rect: r })),
   );
 
-  const W = HX * 2;
-  const D = HZ * 2;
+  const W = RX * 2;
+  const D = RZ * 2;
 
   // Calçada (chão base)
   city.add(flat(W, D, 0, 0, 0, plainPavers(W / 4, D / 4)));
   // Calçadão (padrão em H) na frente do MASP e na calçada sul
   city.add(flatRect(PLAZA, 0.012, calcadao((PLAZA.x1 - PLAZA.x0) / 3, (PLAZA.z1 - PLAZA.z0) / 3)));
   city.add(flatRect(PAVERS_S, 0.012, calcadao((PAVERS_S.x1 - PAVERS_S.x0) / 3, (PAVERS_S.z1 - PAVERS_S.z0) / 3)));
-  city.add(flatRect({ x0: -HX, x1: HX, z0: 12, z1: 19 }, 0.014, calcadao(W / 3, 7 / 3)));
-  city.add(flatRect({ x0: -HX, x1: HX, z0: -19, z1: -12 }, 0.014, calcadao(W / 3, 7 / 3)));
+  city.add(flatRect({ x0: -HX, x1: HX, z0: 12, z1: 19 }, 0.014, calcadao((HX * 2) / 3, 7 / 3)));
+  city.add(flatRect({ x0: -HX, x1: HX, z0: -19, z1: -12 }, 0.014, calcadao((HX * 2) / 3, 7 / 3)));
 
   // Avenida: asfalto, faixa vermelha central com bordas brancas e linhas de faixa
   city.add(flatRect(AVENUE, 0.02, asphalt(W / 8, 3)));
@@ -478,6 +480,22 @@ export function createCity(): THREE.Group {
     dash.repeat.set(W / 6, 1);
     city.add(flat(W, 0.25, 0, z, 0.035, dash, 0xffffff, true));
   }
+  // Rua em volta da cidade (perimetral): 4 faixas de asfalto com linha central tracejada, ligadas à avenida e às ruas transversais
+  const RING_RECTS: Rect[] = [
+    { x0: -RX, x1: RX, z0: HZ, z1: RZ }, { x0: -RX, x1: RX, z0: -RZ, z1: -HZ },
+    { x0: HX, x1: RX, z0: -HZ, z1: HZ }, { x0: -RX, x1: -HX, z0: -HZ, z1: HZ },
+  ];
+  RING_RECTS.forEach((r, i) => {
+    city.add(flatRect(r, 0.02, asphalt((r.x1 - r.x0) / 8, (r.z1 - r.z0) / 8)));
+    const horiz = i < 2;
+    const len = horiz ? r.x1 - r.x0 : r.z1 - r.z0;
+    const dash = dashTex();
+    if (horiz) dash.repeat.set(len / 6, 1); else dash.repeat.set(1, len / 6);
+    city.add(flat(horiz ? len : 0.22, horiz ? 0.22 : len, (r.x0 + r.x1) / 2, (r.z0 + r.z1) / 2, 0.035, dash, 0xffffff, true));
+  });
+  ROADS.push(...RING_RECTS);
+  PLACES.push({ name: 'AV. PERIMETRAL', rect: { x0: -RX, x1: RX, z0: -RZ, z1: RZ } });
+
   // Ruas transversais com faixa central tracejada
   for (const r of STREETS) {
     const len = r.z1 - r.z0;
@@ -618,7 +636,7 @@ export function createCity(): THREE.Group {
     propSpots.push(['abrigo', x, z]);
   }
   // Moldura da maquete (bordas)
-  for (const [x, z, w, d] of [[0, HZ + 1.5, W + 6, 3], [0, -HZ - 1.5, W + 6, 3], [HX + 1.5, 0, 3, D], [-HX - 1.5, 0, 3, D]] as const) b.box('wood', w, 3, d, x, 0, z);
+  for (const [x, z, w, d] of [[0, RZ + 1.5, W + 6, 3], [0, -RZ - 1.5, W + 6, 3], [RX + 1.5, 0, 3, D], [-RX - 1.5, 0, 3, D]] as const) b.box('wood', w, 4, d, x, 0, z);
 
   for (const m of b.meshes()) city.add(m);
   for (const hp of helipads) city.add(hp);

@@ -9,8 +9,12 @@ export interface Box {
 
 export interface Rect { x0: number; x1: number; z0: number; z1: number }
 
-/** Limites da cidade (metros a partir do centro). */
-export const MAP = { halfX: 110, halfZ: 84 };
+/** Quadras e prédios da cidade (metros a partir do centro). */
+export const CITY = { halfX: 110, halfZ: 84 };
+/** Largura da rua que contorna a cidade. */
+export const RING = 12;
+/** Limites do mapa jogável: a cidade mais a rua em volta (o muro preto fica logo depois). */
+export const MAP = { halfX: CITY.halfX + RING, halfZ: CITY.halfZ + RING };
 
 /** Lugares com nome, em ordem de prioridade (o primeiro que contém o ponto vence). */
 export const PLACES: { name: string; rect: Rect }[] = [];
