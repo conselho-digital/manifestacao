@@ -404,6 +404,25 @@ const CarlosRetarget = (function () {
     const k = Math.min(1, (mn - bend) / Math.max(mn * 0.5, 1));
     return unit(df.clone().multiplyScalar(1 - k).add(tgt.multiplyScalar(k)));
   }
+  /**
+   * Giro da mão em torno do antebraço: o IFP dá a orientação completa da mão (palma para dentro, para baixo…),
+   * mas o retarget só copia a direção do braço. Compara um vetor preso à mão (o mesmo no repouso dos dois esqueletos)
+   * depois da rotação só de direção e depois da rotação completa do Law; o ângulo entre eles, em torno do braço, é o giro que falta.
+   */
+  const REF_VECS = [new V3(0, -1, 0), new V3(0, 0, 1)];
+  function handTwist(Dh, R, df) {
+    let best = 0, bestLen = 0.25;
+    for (const n0 of REF_VECS) {
+      const cur = n0.clone().applyMatrix4(Dh), dirOnly = n0.clone().applyMatrix4(R);
+      cur.addScaledVector(df, -cur.dot(df)); dirOnly.addScaledVector(df, -dirOnly.dot(df));
+      const len = Math.min(cur.length(), dirOnly.length());
+      if (len > bestLen) {
+        bestLen = len;
+        best = Math.atan2(df.dot(new V3().crossVectors(dirOnly, cur)), dirOnly.dot(cur));
+      }
+    }
+    return best;
+  }
   function squeeze(v) { const u = unit(v); u.x *= ARM_SQUEEZE; return u.normalize(); }
   function runarm(sd, clip, P, phiMean) {
     const [gain, flex0, amp, bias] = RUNARM[clip];
@@ -478,7 +497,13 @@ const CarlosRetarget = (function () {
           du = squeeze(P[sd + ' forearm'].clone().sub(P[sd + ' upperarm']).applyMatrix4(F));
           df = flex(du, squeeze(P[sd + ' hand'].clone().sub(P[sd + ' forearm']).applyMatrix4(F)), cname);
         }
-        dirs[sd] = { du, df };
+        let twist = 0;
+        if (!RUNARM[cname] && ROLLS[cname] === undefined) {
+          const hk = sd + ' hand';
+          const Dh = mul(mul(F, mul(rotpart(W[IDS[hk]]), tr(lw0[hk]))), Ft);
+          twist = handTwist(Dh, fromto(C.arms[sd].d0f, df), df);
+        }
+        dirs[sd] = { du, df, twist };
       }
       const Rw = new Map();
       for (const b of C.order) {
@@ -488,10 +513,12 @@ const CarlosRetarget = (function () {
         if (d && d.k) tgt = mul(D[d.k], C.cw0.get(b));
         else if (d) {
           const A = C.arms[d.sd], dr = dirs[d.sd];
-          if (d.part === 0) tgt = mul(fromto(A.d0u, dr.du), C.cw0.get(b));
-          else {
+          if (d.part === 0) {
+            tgt = mul(fromto(A.d0u, dr.du), C.cw0.get(b));
+            tgt = mul(q2m(new Q().setFromAxisAngle(dr.du, dr.twist * 0.3)), tgt); // o giro se reparte: braço 30%, antebraço 65%, mão 100%
+          } else {
             tgt = mul(fromto(A.d0f, dr.df), C.cw0.get(b));
-            const ang = deg(ROLLS[cname] || 0) * (d.sd === 'l' ? 1 : -1); // palma para dentro
+            const ang = deg(ROLLS[cname] || 0) * (d.sd === 'l' ? 1 : -1) + dr.twist * (d.part === 1 ? 0.65 : 1); // palma para dentro (corrida) ou giro da mão do IFP
             tgt = mul(q2m(new Q().setFromAxisAngle(dr.df, ang)), tgt);
           }
         }
@@ -857,7 +884,7 @@ const CarlosRetarget = (function () {
   }).catch((err) => { status('Não consegui carregar o Carlos: ' + err.message, 'err'); console.error(err); });
 
   // Gancho para testes automáticos
-  window.__page = { S, select, selectGame, play };
+  window.__page = { S, select, selectGame, play, scene, camera, controls };
 })();
 </script>
 </body>
