@@ -366,6 +366,12 @@ const CarlosRetarget = (function () {
   const ROOT_REF = q2m(new Q(0.02, 0.03, 0.7, 0.71));
 
   let C = null; // dados do Carlos em repouso
+  /** Comprimento do braço (ombro→cotovelo→pulso) no esqueleto Law, para escalar o alcance das mãos. */
+  const lawArmLen = {};
+  for (const sd of ['l', 'r']) {
+    const pt = (k) => new V3().setFromMatrixPosition(W0[IDS[sd + ' ' + k]]);
+    lawArmLen[sd] = pt('upperarm').distanceTo(pt('forearm')) + pt('forearm').distanceTo(pt('hand'));
+  }
 
   /** Guarda a pose de repouso (chamar uma vez, com a cena do Carlos solta, antes de qualquer animação). */
   function prepare(scene) {
@@ -403,7 +409,9 @@ const CarlosRetarget = (function () {
     const mover = hips.parent && hips.parent.isBone ? hips.parent : hips;
     const pm = mover.parent ? mover.parent.matrixWorld : new M4();
     const motion = { bone: mover, rest: mover.position.clone(), inv: new THREE.Matrix3().setFromMatrix4(pm).invert(), scale: 1 }; // o IFP está em metros reais e o Carlos tem tamanho real (quadril a ~1 m); o rig Law do GLB está em outra unidade
-    C = { order, drive, cw0, parentRot, restQ, arms, motion, boneNames: new Set(order.map((b) => b.name)) };
+    const armBones = {};
+    for (const sd in ARMS) armBones[sd] = ARMS[sd].map((n) => byName[n]);
+    C = { order, drive, cw0, parentRot, restQ, arms, motion, pos0: pos, armBones, boneNames: new Set(order.map((b) => b.name)) };
   }
 
   /** Ossos do IFP por ID do GTA; se os IDs não são os do GTA (arquivo convertido), usa o nome do osso. */
@@ -447,6 +455,58 @@ const CarlosRetarget = (function () {
     const k0 = keys[j - 1], k1 = keys[j];
     const u = (t - k0.t) / ((k1.t - k0.t) || 1);
     return mk(k0).slerp(mk(k1), u);
+  }
+
+  /**
+   * Posições dos ombros do Carlos na pose do quadro (só tronco e cabeça; os braços não mudam a posição dos ombros).
+   * Mesma regra de rotações do laço principal.
+   */
+  function shoulderPositions(D, G) {
+    const Rw = new Map(), Pw = new Map();
+    for (const b of C.order) {
+      const par = b.parent;
+      const Rp = Rw.get(par) || C.parentRot.get(b);
+      const d = C.drive.get(b);
+      let tgt = d && d.k ? mul(G, mul(D[d.k], C.cw0.get(b))) : null;
+      Rw.set(b, tgt || mul(Rp, q2m(C.restQ.get(b))));
+      if (Pw.has(par)) {
+        const delta = mul(Rw.get(par), tr(C.cw0.get(par)));
+        Pw.set(b, Pw.get(par).clone().add(C.pos0.get(b).clone().sub(C.pos0.get(par)).applyMatrix4(delta)));
+      } else Pw.set(b, C.pos0.get(b).clone());
+    }
+    return { l: Pw.get(C.armBones.l[0]), r: Pw.get(C.armBones.r[0]) };
+  }
+
+  /**
+   * Braço por posição das mãos: a mão fica no mesmo lugar em relação ao centro do peito (escalado pelo tamanho do braço),
+   * não na mesma direção a partir do ombro. Assim as duas mãos ficam tão juntas quanto no original (segurar o taco),
+   * mesmo com os ombros do Carlos mais largos. O cotovelo segue o lado para onde o do original dobra.
+   */
+  function armIK(sd, P, sh) {
+    const [u, f, w] = C.armBones[sd];
+    const L1 = C.pos0.get(f).distanceTo(C.pos0.get(u)), L2 = C.pos0.get(w).distanceTo(C.pos0.get(f));
+    const s = (L1 + L2) / lawArmLen[sd];
+    const midL = P['l upperarm'].clone().add(P['r upperarm']).multiplyScalar(0.5);
+    const midC = sh.l.clone().add(sh.r).multiplyScalar(0.5);
+    const S = sh[sd];
+    const T = midC.clone().add(P[sd + ' hand'].clone().sub(midL).applyMatrix4(F).multiplyScalar(s));
+    let a = T.clone().sub(S), d = a.length();
+    if (d < 1e-6) return null;
+    a.divideScalar(d);
+    d = Math.max(Math.abs(L1 - L2) + 1e-3, Math.min(d, (L1 + L2) * 0.999));
+    // lado do cotovelo no original
+    const sw = P[sd + ' hand'].clone().sub(P[sd + ' upperarm']);
+    const pole = P[sd + ' forearm'].clone().sub(P[sd + ' upperarm']);
+    if (sw.lengthSq() > 1e-10) pole.addScaledVector(sw.clone().normalize(), -pole.dot(sw.clone().normalize()));
+    pole.applyMatrix4(F);
+    pole.addScaledVector(a, -pole.dot(a));
+    if (pole.lengthSq() < 1e-10) return null;
+    pole.normalize();
+    const along = (L1 * L1 - L2 * L2 + d * d) / (2 * d);
+    const h = Math.sqrt(Math.max(0, L1 * L1 - along * along));
+    const E = S.clone().addScaledVector(a, along).addScaledVector(pole, h);
+    const Wt = S.clone().addScaledVector(a, d);
+    return { du: E.clone().sub(S).normalize(), df: Wt.clone().sub(E).normalize() };
   }
 
   /** Posição interpolada (linear) de um nó do IFP no tempo t. */
@@ -518,6 +578,7 @@ const CarlosRetarget = (function () {
   const lawPos = (W, k) => new V3().setFromMatrixPosition(W[IDS[k]]);
 
   /** Cria o AnimationClip do Carlos a partir de uma animação do IFP. */
+  let ik = true;
   function bake(anim, rootMode, moveBody) {
     if (!C) throw new Error('Carlos ainda não preparado.');
     const cname = canon(anim.name);
@@ -566,9 +627,14 @@ const CarlosRetarget = (function () {
         G = mul(mul(F, mul(mul(CFIX, d), tr(CFIX))), Ft);
       }
       const dirs = {};
+      // braços por posição das mãos (golpes, taco, mãos no rosto…); corrida, pulo e andar seguem o método por direção do jogo
+      const useIK = ik && !RUNARM[cname] && ROLLS[cname] === undefined && FLEX[cname] === undefined;
+      const sh = useIK ? shoulderPositions(D, G) : null;
       for (const sd of ['l', 'r']) {
         let du, df;
-        if (RUNARM[cname]) [du, df] = runarm(sd, cname, P, phiMean);
+        const ikr = useIK ? armIK(sd, P, sh) : null;
+        if (ikr) ({ du, df } = ikr);
+        else if (RUNARM[cname]) [du, df] = runarm(sd, cname, P, phiMean);
         else {
           du = squeeze(P[sd + ' forearm'].clone().sub(P[sd + ' upperarm']).applyMatrix4(F));
           df = flex(du, squeeze(P[sd + ' hand'].clone().sub(P[sd + ' forearm']).applyMatrix4(F)), cname);
@@ -622,7 +688,7 @@ const CarlosRetarget = (function () {
     return new THREE.AnimationClip(anim.name, Math.max(dur, 0.001), tracks);
   }
 
-  return { prepare, bake, ready: () => !!C };
+  return { prepare, bake, ready: () => !!C, setIK: (v) => { ik = !!v; } };
 })();
 </script>
 
