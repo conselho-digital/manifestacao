@@ -579,6 +579,15 @@ const CarlosRetarget = (function () {
 
   /** Cria o AnimationClip do Carlos a partir de uma animação do IFP. */
   let ik = true;
+  /**
+   * Rotação do Root (delta d, no espaço do GTA: x direita, y frente, z cima) no espaço do Carlos.
+   * K troca os eixos do GTA para os do Law (x→z, y→x, z→y: 120° em torno de (1,1,1)); F·K·t dá o mesmo (−x, z, y) da translação.
+   * Medido contra o esqueleto de pedestre real (DFF, IFP direto no osso): erro médio de ~6° (antes 14°) em Bat_1/2/3 e Bat_Hit_1.
+   */
+  const KAXES = new M4().set(0, 1, 0, 0, 0, 0, 1, 0, 1, 0, 0, 0, 0, 0, 0, 1);
+  function rootG(d) { return mul(mul(F, mul(mul(KAXES, d), tr(KAXES))), Ft); }
+  // IFP (GTA: x direita, y frente, z cima) → Carlos (x esquerda, y cima, z frente)
+  const motionCfg = { map: [[-1, 0, 0], [0, 0, 1], [0, 1, 0]], scale: 1 };
   function bake(anim, rootMode, moveBody) {
     if (!C) throw new Error('Carlos ainda não preparado.');
     const cname = canon(anim.name);
@@ -592,7 +601,7 @@ const CarlosRetarget = (function () {
     if (rootNode) {
       for (const k of rootNode.keys) {
         const d = mul(q2m(new Q(k.q[0], k.q[1], k.q[2], k.q[3])), tr(ROOT_REF));
-        const up = new V3(0, 1, 0).applyMatrix4(mul(mul(F, mul(mul(CFIX, d), tr(CFIX))), Ft));
+        const up = new V3(0, 1, 0).applyMatrix4(rootG(d));
         tilt = Math.max(tilt, Math.acos(Math.max(-1, Math.min(1, up.y))));
       }
     }
@@ -624,7 +633,7 @@ const CarlosRetarget = (function () {
       let G = new M4();
       if (useRoot && rootNode && rootNode.keys.length) {
         const d = mul(q2m(interp(rootNode.keys, t)), tr(ROOT_REF));
-        G = mul(mul(F, mul(mul(CFIX, d), tr(CFIX))), Ft);
+        G = rootG(d);
       }
       const dirs = {};
       // braços por posição das mãos (golpes, taco, mãos no rosto…); corrida, pulo e andar seguem o método por direção do jogo
@@ -677,10 +686,11 @@ const CarlosRetarget = (function () {
     for (const [b, vals] of out) if (vals.length) tracks.push(new THREE.QuaternionKeyframeTrack(b.name + '.quaternion', times, vals));
     if (moveBody !== false && rootNode && rootNode.keys.length && rootNode.keys[0].p) {
       // IFP (GTA: x direita, y frente, z cima) → Carlos (x esquerda, y cima, z frente), na escala do Carlos
-      const m = C.motion, vals = [], v = new V3();
+      const m = C.motion, vals = [], v = new V3(), M = motionCfg.map;
       for (const t of times) {
         const p = interpPos(rootNode.keys, t);
-        v.set(-p.x, p.z, p.y).multiplyScalar(m.scale).applyMatrix3(m.inv).add(m.rest);
+        v.set(M[0][0] * p.x + M[0][1] * p.y + M[0][2] * p.z, M[1][0] * p.x + M[1][1] * p.y + M[1][2] * p.z, M[2][0] * p.x + M[2][1] * p.y + M[2][2] * p.z)
+          .multiplyScalar(m.scale * motionCfg.scale).applyMatrix3(m.inv).add(m.rest);
         vals.push(v.x, v.y, v.z);
       }
       tracks.push(new THREE.VectorKeyframeTrack(m.bone.name + '.position', times, vals));
@@ -688,7 +698,7 @@ const CarlosRetarget = (function () {
     return new THREE.AnimationClip(anim.name, Math.max(dur, 0.001), tracks);
   }
 
-  return { prepare, bake, ready: () => !!C, setIK: (v) => { ik = !!v; } };
+  return { prepare, bake, ready: () => !!C, setIK: (v) => { ik = !!v; },  setMotion: (map, scale) => { motionCfg.map = map; motionCfg.scale = scale; } };
 })();
 </script>
 
