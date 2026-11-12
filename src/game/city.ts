@@ -201,6 +201,8 @@ class Batch {
     t('dark', lam({ map: piers(), vertexColors: true }));
     t('house', lam({ map: houseTex(), vertexColors: true }));
     t('copper', lam({ map: copperTex(), vertexColors: true }));
+    t('cu', lam({ color: 0x8c4d33 }));
+    t('cud', lam({ color: 0x5a2f20 }));
     t('roof', lam({ color: 0xd6d0c1 }));
     t('gray', lam({ color: 0xb9bcc0 }));
     t('metal', lam({ color: 0x5d6168 }));
@@ -284,6 +286,39 @@ const ROOF_DETAILS = false;
 /** Fração da altura original dos prédios (0,5 = metade dos andares). */
 const BUILDING_SCALE = 0.5;
 
+/** Prédio de cobre (referência: torre em degraus com pilastras): base larga com faixa de vidro, corpo com pilastras verticais salientes, bloco recuado com faixas horizontais, casa de máquinas e antena. */
+function addCopperTower(b: Batch, x: number, z: number, w: number, d: number, h: number): void {
+  const BASE = 7;
+  // base (térreo + faixa de vidro) e laje
+  b.wall(x, z, w + 1.4, d + 1.4, BASE, 'copper', 0);
+  b.box('cud', w + 2.2, 0.6, d + 2.2, x, BASE, z);
+  const y0 = BASE + 0.6;
+  const total = h - y0;
+  const shaftH = total * 0.78;
+  // corpo: parede de janelas + pilastras salientes nas 4 faces
+  b.wall(x, z, w, d, shaftH, 'copper', y0);
+  const fw = 1.2; // largura da pilastra
+  const fd = 0.9; // quanto sai da parede
+  for (const fx of [-w / 2 + 0.7, -w / 6, w / 6, w / 2 - 0.7]) for (const sz of [-1, 1]) b.box('cu', fw, shaftH, fd, x + fx, y0, z + sz * (d / 2 + fd / 2 - 0.05));
+  for (const fz of [-d / 2 + 0.7, -d / 6, d / 6, d / 2 - 0.7]) for (const sx of [-1, 1]) b.box('cu', fd, shaftH, fw, x + sx * (w / 2 + fd / 2 - 0.05), y0, z + fz);
+  // cornijas do corpo
+  const top = y0 + shaftH;
+  b.box('cud', w + 1.2, 0.7, d + 1.2, x, top, z);
+  // bloco recuado com faixas horizontais
+  const bw = w * 0.72;
+  const bd = d * 0.72;
+  const bh = total * 0.14;
+  b.wall(x, z, bw, bd, bh, 'copper', top + 0.7);
+  for (let y = top + 0.7 + bh / 3; y < top + 0.7 + bh; y += bh / 3) b.box('cud', bw + 0.5, 0.35, bd + 0.5, x, y - 0.17, z);
+  const roofY = top + 0.7 + bh;
+  b.box('cud', bw + 0.8, 0.7, bd + 0.8, x, roofY, z);
+  // casa de máquinas, caixas e antena treliçada
+  b.box('cu', bw * 0.5, 2.6, bd * 0.5, x, roofY + 0.7, z);
+  b.box('metal', 1.2, 1.2, 1.2, x + bw * 0.3, roofY + 0.7, z - bd * 0.25);
+  b.box('metal', 0.4, 16, 0.4, x - bw * 0.2, roofY + 0.7, z + bd * 0.2);
+  b.box('metal', 1.4, 0.15, 1.4, x - bw * 0.2, roofY + 7, z + bd * 0.2);
+}
+
 function addBuilding(b: Batch, s: Spec, helipads: THREE.Mesh[], hpTex: THREE.Texture, name: string): void {
   const r = R(s.sx0, s.sx1, s.sz0, s.sz1);
   const x = (r.x0 + r.x1) / 2;
@@ -293,6 +328,8 @@ function addBuilding(b: Batch, s: Spec, helipads: THREE.Mesh[], hpTex: THREE.Tex
   const { h, kind } = s;
   footprints.push({ name, r });
   addBox(r.x0, r.x1, r.z0, r.z1, h, kind === 'house' ? '#a8a08e' : kind === 'glass' || kind === 'dark' ? '#6b7f94' : kind === 'copper' ? '#7a4a34' : '#b4ab98');
+
+  if (kind === 'copper') { addCopperTower(b, x, z, w, d, h); return; }
 
   // Casas: paredes + telhado de quatro águas
   if (kind === 'house') {
@@ -305,7 +342,7 @@ function addBuilding(b: Batch, s: Spec, helipads: THREE.Mesh[], hpTex: THREE.Tex
   // Térreo (loja/hall) mais largo e escuro, com marquise
   let y0 = 0;
   if (s.plinth) {
-    b.wall(x, z, w + 1.4, d + 1.4, 7, kind === 'copper' ? 'copper' : 'dark');
+    b.wall(x, z, w + 1.4, d + 1.4, 7, 'dark');
     b.box('roof', w + 2.6, 0.5, d + 2.6, x, 7, z);
     y0 = 7.5;
   }
@@ -719,9 +756,9 @@ export function createCity(): THREE.Group {
 
   city.add(makeTrees(planterBushes));
 
-  // Totens semafóricos "Av. Paulista": um em cada ponta da faixa de pedestre que atravessa a avenida perto do prédio de cobre, de frente para a travessia
-  placeTotem(city, -42.2, 12.9, Math.PI);
-  placeTotem(city, -42.2, -12.9, 0);
+  // Totens semafóricos "Av. Paulista": um em cada extremidade da faixa de pedestre que atravessa a avenida entre o MASP e o prédio de cobre (faixa em x ≈ -3), na calçada, de frente para a travessia
+  placeTotem(city, -0.7, 13.4, Math.PI);
+  placeTotem(city, -0.7, -13.4, 0);
 
   // Escultura "Safra" na calçada em frente ao prédio de cobre (NT), girada 90°: as letras ficam dos dois lados, de frente para quem anda pela calçada
   placeSafraSign(city, -23, 15.6, Math.PI / 2);
