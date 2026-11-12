@@ -114,6 +114,8 @@
         <button type="button" data-tog="wire" aria-pressed="false">Malha</button>
         <button type="button" data-tog="grid" aria-pressed="true">Grade</button>
         <button type="button" data-tog="spin" aria-pressed="false">Girar</button>
+        <button type="button" data-tog="move" aria-pressed="true" title="Aplica o deslocamento do corpo que vem no arquivo (passos, agachar, cair)">Andar</button>
+        <button type="button" data-tog="follow" aria-pressed="true" title="A câmera acompanha o corpo">Seguir</button>
         <span class="sep"></span>
         <button type="button" data-view="front">Frente</button>
         <button type="button" data-view="side">Lado</button>
@@ -385,7 +387,12 @@ const CarlosRetarget = (function () {
       const [u, f, w] = ARMS[sd].map((n) => byName[n]);
       arms[sd] = { d0u: pos.get(f).clone().sub(pos.get(u)), d0f: pos.get(w).clone().sub(pos.get(f)) };
     }
-    C = { order, drive, cw0, parentRot, restQ, arms, boneNames: new Set(order.map((b) => b.name)) };
+    // deslocamento do corpo: o osso Root do IFP move o corpo todo (andar, passo do golpe, agachar, cair)
+    const hips = byName['root hips_00'];
+    const mover = hips.parent && hips.parent.isBone ? hips.parent : hips;
+    const pm = mover.parent ? mover.parent.matrixWorld : new M4();
+    const motion = { bone: mover, rest: mover.position.clone(), inv: new THREE.Matrix3().setFromMatrix4(pm).invert(), scale: 1 }; // o IFP está em metros reais e o Carlos tem tamanho real (quadril a ~1 m); o rig Law do GLB está em outra unidade
+    C = { order, drive, cw0, parentRot, restQ, arms, motion, boneNames: new Set(order.map((b) => b.name)) };
   }
 
   const canon = (name) => {
@@ -408,6 +415,17 @@ const CarlosRetarget = (function () {
     const k0 = keys[j - 1], k1 = keys[j];
     const u = (t - k0.t) / ((k1.t - k0.t) || 1);
     return mk(k0).slerp(mk(k1), u);
+  }
+
+  /** Posição interpolada (linear) de um nó do IFP no tempo t. */
+  function interpPos(keys, t) {
+    const a = keys[0], z = keys[keys.length - 1];
+    if (t <= a.t || keys.length === 1) return new V3(...a.p);
+    if (t >= z.t) return new V3(...z.p);
+    let j = 1;
+    while (j < keys.length && keys[j].t < t) j++;
+    const k0 = keys[j - 1], k1 = keys[j];
+    return new V3(...k0.p).lerp(new V3(...k1.p), (t - k0.t) / ((k1.t - k0.t) || 1));
   }
 
   function flex(du, df, clip) {
@@ -468,7 +486,7 @@ const CarlosRetarget = (function () {
   const lawPos = (W, k) => new V3().setFromMatrixPosition(W[IDS[k]]);
 
   /** Cria o AnimationClip do Carlos a partir de uma animação do IFP. */
-  function bake(anim, rootMode) {
+  function bake(anim, rootMode, moveBody) {
     if (!C) throw new Error('Carlos ainda não preparado.');
     const cname = canon(anim.name);
     const byId = new Map(anim.nodes.map((n) => [n.id, n]));
@@ -550,6 +568,16 @@ const CarlosRetarget = (function () {
     }
     const tracks = [];
     for (const [b, vals] of out) if (vals.length) tracks.push(new THREE.QuaternionKeyframeTrack(b.name + '.quaternion', times, vals));
+    if (moveBody !== false && rootNode && rootNode.keys.length && rootNode.keys[0].p) {
+      // IFP (GTA: x direita, y frente, z cima) → Carlos (x esquerda, y cima, z frente), na escala do Carlos
+      const m = C.motion, vals = [], v = new V3();
+      for (const t of times) {
+        const p = interpPos(rootNode.keys, t);
+        v.set(-p.x, p.z, p.y).multiplyScalar(m.scale).applyMatrix3(m.inv).add(m.rest);
+        vals.push(v.x, v.y, v.z);
+      }
+      tracks.push(new THREE.VectorKeyframeTrack(m.bone.name + '.position', times, vals));
+    }
     return new THREE.AnimationClip(anim.name, Math.max(dur, 0.001), tracks);
   }
 
@@ -606,7 +634,7 @@ const CarlosRetarget = (function () {
     gameClips: new Map(),
     gameSel: '',
     repl: new Map(),         // animação do jogo → animação do arquivo
-    speed: 1
+    speed: 1, moveBody: true, follow: true, who: ''
   };
 
   /* ---------- Carlos ---------- */
@@ -637,7 +665,7 @@ const CarlosRetarget = (function () {
     let c = S.clips.get(name);
     if (!c) {
       const a = S.ifp.anims.find((x) => x.name === name);
-      c = CarlosRetarget.bake(a, 'auto');
+      c = CarlosRetarget.bake(a, 'auto', S.moveBody);
       S.clips.set(name, c);
     }
     return c;
@@ -666,6 +694,7 @@ const CarlosRetarget = (function () {
     act.paused = false;
     act.play();
     S.action = act;
+    S.who = who;
     $('#now').innerHTML = '';
     const t = document.createElement('span');
     t.textContent = who + ': ';
@@ -913,6 +942,12 @@ const CarlosRetarget = (function () {
     else if (name === 'wire') S.rig.traverse((o) => { if (o.isMesh) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { m.wireframe = on; }); });
     else if (name === 'grid') grid.visible = on;
     else if (name === 'spin') controls.autoRotate = on;
+    else if (name === 'follow') S.follow = on;
+    else if (name === 'move') {
+      S.moveBody = on;
+      S.clips.clear();
+      if (S.who === 'Nova') playNew();
+    }
     else if (name === 'bones') {
       if (bonesHelper) { scene.remove(bonesHelper); bonesHelper.geometry.dispose(); bonesHelper = null; }
       if (on) {
@@ -942,10 +977,24 @@ const CarlosRetarget = (function () {
   });
 
   /* ---------- Laço ---------- */
+  let hipsBone = null, hipsPrev = null;
+  const hipsPos = new THREE.Vector3();
   const clock = new THREE.Clock();
   (function tick() {
     requestAnimationFrame(tick);
     if (S.mixer) S.mixer.update(Math.min(clock.getDelta(), 0.1)); else clock.getDelta();
+    if (S.rig) {
+      // a câmera acompanha o corpo no chão (só x e y)
+      hipsBone = hipsBone || S.rig.getObjectByName('root_hips_00');
+      if (hipsBone) {
+        hipsBone.getWorldPosition(hipsPos);
+        if (S.follow && hipsPrev) {
+          const dx = hipsPos.x - hipsPrev.x, dy = hipsPos.y - hipsPrev.y;
+          camera.position.x += dx; camera.position.y += dy; controls.target.x += dx; controls.target.y += dy;
+        }
+        hipsPrev = hipsPos.clone();
+      }
+    }
     controls.update();
     renderer.render(scene, camera);
   })();
