@@ -144,3 +144,11 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 ## Limites de jogadores e FPS
 - No máximo 30 jogadores ao mesmo tempo (`MAX_PLAYERS` em sync.ts, contando você; 29 remotos). Ao entrar, o cliente espera a 1ª lista de presença (até 2 s); se já há 30, mostra "Mapa cheio (30/30)" com botão para tentar de novo e não entra (checagem só no cliente; duas pessoas entrando no mesmo instante podem passar de 30 por pouco).
 - Não há limite de FPS no código: o jogo roda a cada quadro que o navegador pedir (`requestAnimationFrame`, acompanha a taxa da tela, ex. 90/120 Hz) e `powerPreference: 'high-performance'`. O movimento usa o tempo real do quadro (dt, no máximo 50 ms).
+
+## Cache do navegador
+- `vercel.json` (`headers`): `/assets/*` (arquivos do código com hash no nome) cache de 1 ano, imutável; `/models`, `/anims`, `/hud` e `/faces` cache de 1 dia e, depois disso, o navegador usa a cópia antiga enquanto baixa a nova em segundo plano (`stale-while-revalidate` 7 dias). Assim o MASP (`masp.glb`) e os outros modelos não são baixados a cada atualização da página. Se trocar um modelo, o jogador pode ver o antigo por até 1 dia (ou 1 recarga extra). A cidade em si (prédios, ruas, árvores) é gerada por código e não é um arquivo.
+
+## Escalada
+- Altura das mãos no clipe climb_pull medida em `PULL_HANDS` (player.ts). Borda baixa: o clipe começa mais adiante (`pullStartFor`), o corpo sobe com as mãos sempre na borda, e as duas mãos vão por IK para cima da borda, palmas para baixo (`Animator.setClimbHands`, `CLIMB_ROLL`). Borda alta (> 2,1 m): salta com climb_jump antes. Jogadores remotos ainda tocam os clipes inteiros (a pose das mãos deles não usa essa correção).
+- Agachado, o corpo segue a direção do movimento (não vira para a câmera): andar agachado de lado ficava torto.
+- Botões do celular: a janela da arma no HUD é o botão de trocar de arma (toque abre o menu / próxima; arrastar para cima/baixo passa); o botão "Veículo" abre a Garagem (chamar os veículos da conta).

@@ -154,6 +154,8 @@ const CFG: Record<'rifle' | 'pistol', WeaponCfg> = {
 };
 
 /** Lata de spray: giro só da mão (graus) para a palma ficar para a frente, e quanto os dedos fecham (mão meio aberta). */
+/** giro dos antebraços e mãos (rad) na escalada: palma para baixo sobre a borda */
+const CLIMB_ROLL = Math.PI / 2;
 const SPRAY_HAND_ROLL = -Math.PI / 2; // palma para baixo...
 const SPRAY_HAND_BEND = (70 * Math.PI) / 180; // ...e o pulso dobra para trás: palma para a frente, dedos para cima
 const SPRAY_CURL = 0.45;
@@ -184,6 +186,9 @@ export class Animator {
   private handRoll = 0;
   /** dobra só do pulso (rad): a mão sobe e a palma vira para a frente */
   private handBend = 0;
+  /** escalada: altura da borda em relação aos pés (m) e peso (0..1); as duas mãos vão por IK para cima da borda, palmas para baixo */
+  private climbRel: number | null = null;
+  private climbW = 0;
   private armW = 0; // 0 = braços do clipe, 1 = braços segurando o fuzil
   private carryW = 0; // 1 = arma branca carregada em pé (andando/correndo): braços por IK, arma para cima
   private aimK = 0; // 0 = fuzil baixo, 1 = fuzil no ombro
@@ -437,6 +442,12 @@ export class Animator {
     this.aimPitch = p;
   }
 
+  /** Escalada: coloca as duas mãos em cima da borda (altura `rel` acima dos pés), palmas para baixo; null desliga. */
+  setClimbHands(rel: number | null, w = 1): void {
+    this.climbRel = rel;
+    this.climbW = rel === null ? 0 : w;
+  }
+
   /** Qual fuzil está na mão (muda onde ficam as mãos: empunhadura e guarda-mão). */
   setRifleKind(k: RifleKind): void {
     this.rifleKind = k;
@@ -540,7 +551,8 @@ export class Animator {
     const kind = kindOf(this.armed);
     const dbgRoll = (window as unknown as { __ROLL?: number }).__ROLL;
     // segurando arma: palmas viradas uma para a outra (para dentro); no guidão/volante a palma fica para baixo
-    this.armRoll = dbgRoll !== undefined ? dbgRoll * (Math.PI / 180) : this.holdsWeapon && kind && !this.ride?.grips ? Math.PI / 2 : 0;
+    const cr = (window as unknown as { __CROLL?: number }).__CROLL;
+    this.armRoll = this.climbRel !== null ? (cr !== undefined ? cr * (Math.PI / 180) : CLIMB_ROLL) : dbgRoll !== undefined ? dbgRoll * (Math.PI / 180) : this.holdsWeapon && kind && !this.ride?.grips ? Math.PI / 2 : 0;
     const hr = (window as unknown as { __HROLL?: number }).__HROLL;
     this.handRoll = hr !== undefined ? hr * (Math.PI / 180) : isSpray(this.armed) ? SPRAY_HAND_ROLL : 0;
     const hb = (window as unknown as { __HBEND?: number }).__HBEND;
@@ -595,7 +607,7 @@ export class Animator {
     this.carryW = carry ? this.carryW + (1 - this.carryW) * Math.min(1, dt * 10) : 0;
     const flail = this.flailW;
     if (flail > 0) this.flailT += dt;
-    if ((!armed && !holding && !fist && kickW === 0 && flail === 0 && this.crouchK < 0.01 && this.legK < 0.01 && jabW === 0) || !this.spine) {
+    if ((!armed && !holding && !fist && kickW === 0 && flail === 0 && this.crouchK < 0.01 && this.legK < 0.01 && jabW === 0 && this.climbRel === null) || !this.spine) {
       this.groundFeet(dt);
       for (const b of this.touched) this.clean.set(b, b.quaternion.clone()); // tudo vem do clipe
       return;
@@ -611,6 +623,12 @@ export class Animator {
     if (jabW > 0) this.applyJab(jabW, jabE, dt);
     this.updateRoot();
     this.groundFeet(dt);
+    if (this.climbRel !== null && this.climbW > 0.01) {
+      // mãos na borda: palma para baixo sobre o objeto, um pouco à frente do corpo e uma de cada lado
+      const rel = this.climbRel;
+      for (const arm of this.arms) this.solveArm(arm, new THREE.Vector3(arm.side * 0.2, rel + 0.03, 0.42), this.climbW, dt);
+      this.updateRoot();
+    }
     if (!armed && !holding) return;
     if (kind === 'bat' && this.carryW > 0.01) this.carryBat(dt);
     this.updateRoot();

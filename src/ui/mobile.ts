@@ -47,6 +47,8 @@ export interface MobileHudOptions {
   onVoiceToggle: () => void;
   /** engrenagem: pausa o jogo e abre o menu */
   onPause: () => void;
+  /** abre a garagem (chamar um dos veículos da conta) */
+  onGarage: () => void;
   /** loja: abre o menu de pausa na aba Loja */
 }
 
@@ -87,7 +89,7 @@ const CSS = `
 .m-money{position:fixed;right:calc(var(--u)*24.5);top:calc(var(--u)*2.2);font-size:calc(var(--u)*5);color:#d9d9d9}
 .m-speed{position:fixed;right:calc(var(--u)*24.5);top:calc(var(--u)*9.5);width:calc(var(--u)*11);height:calc(var(--u)*2);border:calc(var(--u)*.3) solid #000;background:rgba(0,0,0,.5)}
 .m-speed span{display:block;height:100%;background:#c0392b;width:0}
-.m-weapon{position:fixed;right:calc(var(--u)*1.6);top:calc(var(--u)*2.2);width:calc(var(--u)*22);height:calc(var(--u)*13.5);background:rgba(47,107,47,.9);
+.m-weapon{pointer-events:auto;touch-action:none;position:fixed;right:calc(var(--u)*1.6);top:calc(var(--u)*2.2);width:calc(var(--u)*22);height:calc(var(--u)*13.5);background:rgba(47,107,47,.9);
   border:calc(var(--u)*.5) solid #000;border-radius:calc(var(--u)*1.2);display:flex;align-items:center;justify-content:center;padding:calc(var(--u)*.5)}
 .m-weapon img{width:100%;height:100%;object-fit:contain;filter:drop-shadow(0 0 calc(var(--u)*.4) rgba(0,0,0,.7))}
 .m-ammo{position:fixed;right:calc(var(--u)*1.6);top:calc(var(--u)*16.2);width:calc(var(--u)*22);text-align:center;font-size:calc(var(--u)*3.6)}
@@ -420,7 +422,8 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
     wmenu.querySelector('.sel')?.scrollIntoView({ block: 'nearest' });
   };
   wback.addEventListener('pointerdown', (e) => { e.preventDefault(); closeWeaponMenu(); });
-  const changeBtn = circle(hud, 'm-change foot', ICON.swap, 'Arma');
+  // A janela da arma no HUD é o botão de trocar de arma: tocar abre o menu (mais de 3 armas) ou passa para a próxima; arrastar para cima/baixo passa para a próxima/anterior
+  const changeBtn = weaponBox;
   {
     let y0 = 0;
     let dragged = false;
@@ -451,6 +454,8 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
     changeBtn.addEventListener('pointerup', () => end(true));
     changeBtn.addEventListener('pointercancel', () => end(false));
   }
+  // O botão que era de trocar de arma agora chama os veículos da conta (abre a garagem)
+  holdButton(circle(hud, 'm-change foot', ICON.car, 'Veículo'), opts.onGarage);
   const crouchBtn = circle(hud, 'm-crouch foot', ICON.crouch, 'Agachar');
   holdButton(crouchBtn, queueCrouch);
 

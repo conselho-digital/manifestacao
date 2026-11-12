@@ -135,6 +135,8 @@ const V = {
     best.transformDirection(inv).multiplyScalar(bd);
     return [best.x, best.y, best.z].map((v) => Math.round(v * 100) / 100);
   },
+  /** Escalada: mãos na borda a `rel` m acima dos pés (null desliga). */
+  climbHands(rel: number | null): void { animator.setClimbHands(rel, 1); },
   clips: (): string[] => [...(animator as unknown as { actions: Map<string, unknown> }).actions.keys()],
   /** n poses de um clipe em 2 vistas (lado em cima, frente embaixo). */
   sheet(clip: string, n: number, armed: Armed = 'none', pitch = 0, views: ('side' | 'front' | 'top' | 'cam' | 'closeR' | 'closeB' | 'closeL' | 'closeF' | 'hand' | 'handL' | 'palmF' | 'palmT')[] = ['side', 'front']): number {

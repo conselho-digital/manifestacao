@@ -26,7 +26,25 @@ const CAM_AIM_HEIGHT = 1.5;
 const CRASH_SPEED = 11; // ~40 km/h (era 9): só um pouco menos sensível
 
 // Escalada: pular(0.63s) -> puxar(1.43s) -> levantar(0.4s)
-const CLIMB_T = { grab: 0.633, pull: 2.066, end: 2.466 };
+/** Escalada: altura das mãos (m, acima dos pés) ao longo do clipe climb_pull (amostras a cada PULL_DT s, medidas no esqueleto). O clipe foi feito para uma borda alta (mãos a 2,2 m);
+ *  numa borda baixa o personagem começa o clipe mais adiante, no ponto em que as mãos já estão na altura da borda, e o corpo sobe de modo que as mãos fiquem SEMPRE na borda. */
+const PULL_HANDS = [2.19, 2.12, 1.95, 1.69, 1.43, 1.24, 1.12, 1.0, 0.93, 0.86, 0.86, 0.91, 0.92];
+const PULL_DT = 0.1192;
+const PULL_DUR = 1.433;
+const GRAB_DUR = 0.633; // clipe climb_jump (só em bordas altas)
+const STAND_DUR = 0.4;
+const HIGH_EDGE = 2.1; // acima disso o personagem salta para agarrar a borda
+const handsAt = (t: number): number => {
+  const f = Math.min(PULL_HANDS.length - 1, Math.max(0, t / PULL_DT));
+  const i = Math.min(PULL_HANDS.length - 2, Math.floor(f));
+  return PULL_HANDS[i]! + (PULL_HANDS[i + 1]! - PULL_HANDS[i]!) * (f - i);
+};
+/** instante do clipe em que as mãos estão na altura h (as mãos descem ao longo do clipe) */
+const pullStartFor = (h: number): number => {
+  if (h >= PULL_HANDS[0]!) return 0;
+  for (let t = 0; t < PULL_DUR; t += 0.01) if (handsAt(t) <= h) return t;
+  return PULL_DT * 9;
+};
 const SPECIAL: Record<string, { dur: number; speed: number }> = {
   roll: { dur: 0.93, speed: 3.5 },
   dive: { dur: 1.5, speed: 3 },
@@ -57,6 +75,8 @@ export function seatBlend(car: Car, u: number, entering: boolean): { x: number; 
 
 interface Climb {
   t: number;
+  /** quanto tempo dura cada fase: aproximação/salto, subida (puxar) e levantar */
+  aDur: number; bDur: number; t0: number; high: boolean;
   start: THREE.Vector3;
   face: THREE.Vector2; // ponto de contato no chão
   top: number;
@@ -293,7 +313,7 @@ export class Player {
       this.moveL = dir.x * Math.cos(yaw) - dir.z * Math.sin(yaw);
     }
     // Armado (em pé, andando, mirando ou atirando): o corpo acompanha para onde a câmera aponta
-    if (facesAim(this.armed)) this.heading = yaw;
+    if (facesAim(this.armed) && !this.crouching) this.heading = yaw; // agachado o corpo segue o movimento (andar agachado de lado ficava torto)
 
     // Vertical
     const support = supportHeight(pos.x, pos.z, pos.y);
@@ -331,7 +351,7 @@ export class Player {
     }
     if (this.combatT > 0) this.combatT -= dt;
     if (this.swingT > 0) { this.swingT -= dt; return; } // golpe de taco em andamento
-    const armed = facesAim(this.armed); // só o fuzil e a pistola mirando usam os passos de arma (de frente, de costas e de lado)
+    const armed = facesAim(this.armed) && !this.crouching; // só o fuzil e a pistola mirando usam os passos de arma (de frente, de costas e de lado)
     if (this.crouching) {
       // agachado: andar para a frente ou para trás (de lado usa o andar para a frente)
       a.play(moving ? (armed && this.moveF < -0.5 ? 'crouch_bwd' : 'crouch_fwd') : 'crouch_idle');
@@ -621,41 +641,58 @@ export class Player {
     const fz = pos.z + dz * best.t;
     const lx = THREE.MathUtils.clamp(fx + dx * 0.7, b.minX + 0.3, b.maxX - 0.3);
     const lz = THREE.MathUtils.clamp(fz + dz * 0.7, b.minZ + 0.3, b.maxZ - 0.3);
+    const high = b.top - pos.y > HIGH_EDGE;
+    const t0 = high ? 0 : pullStartFor(b.top - pos.y);
     this.climb = {
-      t: 0, start: pos.clone(), face: new THREE.Vector2(fx - dx * 0.4, fz - dz * 0.4),
+      t: 0, high, t0, aDur: high ? GRAB_DUR : 0.3, bDur: PULL_DUR - t0,
+      start: pos.clone(), face: new THREE.Vector2(fx - dx * 0.25, fz - dz * 0.25),
       top: b.top, land: new THREE.Vector2(lx, lz), dir: new THREE.Vector2(dx, dz),
     };
     this.mode = 'climb';
     this.vy = 0;
     this.emote = null;
-    this.animator?.restart('climb_jump');
+    this.animator?.restart(high ? 'climb_jump' : 'idle');
+    this.climbPhase = 0;
     return true;
   }
+
+  private climbPhase = 0;
 
   private updateClimb(dt: number): void {
     const c = this.climb!;
     const pos = this.object.position;
     c.t += dt;
     const ease = (u: number): number => u * u * (3 - 2 * u);
-    if (c.t < CLIMB_T.grab) {
-      const u = ease(Math.min(1, c.t / CLIMB_T.grab));
+    const bEnd = c.aDur + c.bDur;
+    if (c.t < c.aDur) {
+      // aproximação (e, em borda alta, o salto): chega junto da borda
+      const u = ease(Math.min(1, c.t / c.aDur));
       pos.x = THREE.MathUtils.lerp(c.start.x, c.face.x, u);
       pos.z = THREE.MathUtils.lerp(c.start.z, c.face.y, u);
-    } else if (c.t < CLIMB_T.pull) {
+      pos.y = c.high ? THREE.MathUtils.lerp(c.start.y, Math.max(c.start.y, c.top - PULL_HANDS[0]!), u) : c.start.y;
+    } else if (c.t < bEnd) {
+      // puxar o corpo para cima com as mãos na borda: a altura do corpo sai da altura das mãos no clipe
+      if (this.climbPhase < 1) { this.climbPhase = 1; if (c.t0 > 0) this.animator?.seek('climb_pull', c.t0); else this.animator?.play('climb_pull'); }
+      const tau = c.t - c.aDur;
       pos.x = c.face.x;
       pos.z = c.face.y;
-      const u = ease((c.t - CLIMB_T.grab) / (CLIMB_T.pull - CLIMB_T.grab));
-      pos.y = THREE.MathUtils.lerp(c.start.y, c.top, u);
-      if (this.animator?.name !== 'climb_pull') this.animator?.play('climb_pull');
+      const byHands = c.top - handsAt(c.t0 + tau);
+      const tail = Math.max(0, Math.min(1, (tau - (c.bDur - 0.4)) / 0.4)); // no fim, as pernas sobem e o corpo termina em cima da borda
+      pos.y = Math.max(c.start.y, THREE.MathUtils.lerp(byHands, c.top, ease(tail)));
     } else {
-      const u = ease(Math.min(1, (c.t - CLIMB_T.pull) / (CLIMB_T.end - CLIMB_T.pull)));
+      const u = ease(Math.min(1, (c.t - bEnd) / STAND_DUR));
       pos.x = THREE.MathUtils.lerp(c.face.x, c.land.x, u);
       pos.z = THREE.MathUtils.lerp(c.face.y, c.land.y, u);
       pos.y = c.top;
-      if (this.animator?.name !== 'climb_stand') this.animator?.play('climb_stand');
+      if (this.climbPhase < 2) { this.climbPhase = 2; this.animator?.play('climb_stand'); }
     }
+    // mãos por IK em cima da borda: sobem de peso no fim da aproximação, ficam na borda enquanto o corpo sobe e soltam ao levantar
+    const wIn = c.t < c.aDur ? ease(Math.max(0, (c.t - c.aDur * 0.4) / (c.aDur * 0.6))) : 1;
+    const wOut = c.t > bEnd ? 1 - ease(Math.min(1, (c.t - bEnd) / 0.25)) : 1;
+    this.animator?.setClimbHands(Math.max(0, c.top - pos.y), Math.min(wIn, wOut));
     this.heading = Math.atan2(c.dir.x, c.dir.y);
-    if (c.t >= CLIMB_T.end) {
+    if (c.t >= bEnd + STAND_DUR) {
+      this.animator?.setClimbHands(null);
       pos.set(c.land.x, c.top, c.land.y);
       this.climb = null;
       this.mode = 'ground';

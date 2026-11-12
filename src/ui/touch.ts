@@ -23,7 +23,7 @@ const CSS = `
 `;
 
 /** Cria o HUD (celular e PC) e o menu de animações. */
-export function createHud(opts: { onVoiceToggle: () => void; onPause: () => void }): MobileHud {
+export function createHud(opts: { onVoiceToggle: () => void; onPause: () => void; onGarage: () => void }): MobileHud {
   setViewportUnit();
   const style = document.createElement('style');
   style.textContent = CSS;
