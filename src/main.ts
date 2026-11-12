@@ -246,7 +246,7 @@ void showLobby().then(async (profile) => {
   renderer.shadowMap.needsUpdate = true;
   renderer.setPixelRatio(GAME_PIXEL_RATIO);
   if (intro) { scene.fog = null; } else { scene.fog = menuFog; camera.clearViewOffset(); camera.fov = BASE_FOV; camera.updateProjectionMatrix(); }
-  hud = createHud({ onVoiceToggle: () => { void voice.toggle(); }, onPause: () => pauseMenu?.open(), onGarage: () => pauseMenu?.open('garage') });
+  hud = createHud({ onVoiceTalk: (on) => { void voice.talk(on); }, onPause: () => pauseMenu?.open(), onGarage: () => pauseMenu?.open('garage') });
   hud.addChat(`Sistema: bem-vindo, ${profile.name}!`);
   // Ponto de partida (?pos=x,z serve para inspecionar o mapa)
   const startQ = new URLSearchParams(location.search).get('pos')?.split(',').map(Number);

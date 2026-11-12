@@ -208,6 +208,7 @@ export class Animator {
   private reloadT = -1; // recarregando a pistola: tempo (s) da animação, -1 = nenhuma
   private reloadDur = 1.6;
   private reloadOn = false;
+  private drawCrouch = false; // sacou a pistola agachado: usa o colt45_crouchfire
   private drawT = -1; // sacando a pistola até mirar (ARRESTgun): tempo (s), -1 = nenhum
   private drawDur = 0.5;
   /** mão esquerda no recarregar: onde ela vai em relação ao pulso direito (espaço do personagem) e o peso */
@@ -508,7 +509,7 @@ export class Animator {
   /** Segurando o fuzil: braços na empunhadura, fuzil baixo (rifle) ou no ombro (aim). */
   setArmed(a: Armed): void {
     if (isKnifeLike(a) !== isKnifeLike(this.armed)) this.batLocal = null; // a calibração do taco não serve para a faca (e vice-versa)
-    if (a === 'pistol_aim' && this.armed !== 'pistol_aim') { this.drawT = 0; this.drawDur = this.has('arrestgun') ? this.length('arrestgun') : 0.5; }
+    if (a === 'pistol_aim' && this.armed !== 'pistol_aim') { this.drawCrouch = this.crouchW > 0.5 && !!pistolOverlay?.pistol_cdraw; this.drawT = 0; this.drawDur = this.has('arrestgun') ? this.length('arrestgun') : 0.5; }
     if (a !== 'pistol_aim') this.drawT = -1;
     this.armed = a;
   }
@@ -1007,12 +1008,13 @@ export class Animator {
       ot = this.reloadT; od = this.reloadDur;
       w = THREE.MathUtils.clamp(Math.min(ot / 0.12, (od - ot) / 0.15), 0, 1);
     } else if (pistol && this.drawT >= 0) {
-      tr = pistolOverlay?.pistol_draw;
+      tr = this.drawCrouch ? pistolOverlay?.pistol_cdraw : pistolOverlay?.pistol_draw;
       ot = this.drawT; od = this.drawDur;
+      if (this.drawCrouch) od = 0.3; // só a subida do colt45_crouchfire (o resto é segurar e baixar)
       w = THREE.MathUtils.clamp(ot / 0.05, 0, 1); // o clipe termina na pose de mirar: sem peso de saída
     }
     if (tr) {
-      const ct = Math.min(1, ot / od) * tr.duration;
+      const ct = Math.min(1, ot / od) * (tr === pistolOverlay?.pistol_cdraw ? 0.26 : tr.duration);
       let i = 1;
       while (i < tr.t.length - 1 && tr.t[i]! < ct) i++;
       const k = THREE.MathUtils.clamp((ct - tr.t[i - 1]!) / Math.max(1e-6, tr.t[i]! - tr.t[i - 1]!), 0, 1);

@@ -44,7 +44,7 @@ export interface HudState {
 export interface MobileHudOptions {
   onAnimations: () => void;
   /** botão do microfone (voz por proximidade) */
-  onVoiceToggle: () => void;
+  onVoiceTalk: (on: boolean) => void;
   /** engrenagem: pausa o jogo e abre o menu */
   onPause: () => void;
   /** abre a garagem (chamar um dos veículos da conta) */
@@ -521,17 +521,26 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   // Voz por proximidade: o botão liga o microfone (1º toque) e depois alterna falar/mudo; T faz o mesmo no PC
   const micBtn = circle(hud, 'm-chatbtn m-mic small', ICON.mic, 'Voz');
   const micLbl = micBtn.querySelector('.lbl') as HTMLElement | null;
-  micBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); opts.onVoiceToggle(); });
+  // aperte para falar (push to talk): só transmite enquanto o botão ou a tecla T está apertado
+  let talking = false;
+  const talk = (on: boolean): void => { if (on === talking) return; talking = on; opts.onVoiceTalk(on); };
+  micBtn.addEventListener('pointerdown', (e) => { e.preventDefault(); try { micBtn.setPointerCapture(e.pointerId); } catch { /* sem captura */ } talk(true); });
+  micBtn.addEventListener('pointerup', () => talk(false));
+  micBtn.addEventListener('pointercancel', () => talk(false));
+  micBtn.addEventListener('contextmenu', (e) => e.preventDefault());
   window.addEventListener('keydown', (e) => {
     if (e.target instanceof HTMLInputElement) return;
-    if (e.code === 'KeyT' && !e.repeat) { e.preventDefault(); opts.onVoiceToggle(); }
+    if (e.code === 'KeyT' && !e.repeat) { e.preventDefault(); talk(true); }
   });
+  window.addEventListener('keyup', (e) => { if (e.code === 'KeyT') talk(false); });
+  window.addEventListener('blur', () => talk(false));
+  document.addEventListener('visibilitychange', () => { if (document.hidden) talk(false); });
   const setVoice = (state: VoiceUi, peers: number): void => {
     micBtn.classList.toggle('talk', state === 'live');
     micBtn.classList.toggle('deaf', state === 'denied');
     const ico = micBtn.querySelector('.ico');
-    if (ico) { ico.textContent = ''; ico.insertAdjacentHTML('beforeend', state === 'live' || state === 'off' ? ICON.mic : ICON.micOff); }
-    if (micLbl) micLbl.textContent = state === 'off' ? 'Voz' : state === 'live' ? (peers > 0 ? `Voz ${peers}` : 'Falando') : state === 'muted' ? 'Mudo' : 'Sem mic';
+    if (ico) { ico.textContent = ''; ico.insertAdjacentHTML('beforeend', state === 'denied' ? ICON.micOff : ICON.mic); }
+    if (micLbl) micLbl.textContent = state === 'live' ? (peers > 0 ? `Falando ${peers}` : 'Falando') : state === 'denied' ? 'Sem mic' : 'Segure';
   };
 
   const addChat = (text: string): void => {

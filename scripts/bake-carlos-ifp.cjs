@@ -46,10 +46,11 @@ const HANDS = JOBFILE.hands || [];
     await p.setInputFiles('#fileInput', abs);
     await p.waitForFunction((n) => window.__page.S.ifp && window.__page.S.ifpName === n, path.basename(abs), { timeout: 30000 });
     for (const [from, to] of Object.entries(map)) {
-      const refLast = typeof to === 'string' && to.endsWith('@last');
+      const at = /@([0-9.]+)$/.exec(to);
+      const refLast = at ? Number(at[1]) : typeof to === 'string' && to.endsWith('@last');
       const data = await p.evaluate(([n, last]) => window.__page.handTrack(n, last), [from, refLast]);
       if (!data) { console.warn('não achei', from); continue; }
-      hands[to.replace('@last', '')] = data;
+      hands[to.replace(/@(last|[0-9.]+)$/, '')] = data;
       console.log(to.padEnd(18), 'mãos de', from, data.duration + ' s');
     }
   }

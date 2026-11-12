@@ -55,7 +55,6 @@ export class Voice {
   private local: MediaStream | null = null;
   private track: MediaStreamTrack | null = null;
   private active = false;
-  private live = false;
   private tick = 0;
   private lastFail = new Map<string, number>();
   state: VoiceState = 'off';
@@ -88,8 +87,21 @@ export class Voice {
     this.onState(s, this.peerCount);
   }
 
-  /** Botão do microfone: 1º toque liga a voz (pede o microfone); depois alterna falar/mudo. */
-  async toggle(): Promise<void> {
+  private holding = false;
+  private tail = 0;
+
+  /**
+   * Aperte para falar (push to talk): o microfone fica mudo e só transmite enquanto o botão (ou a tecla T) está apertado.
+   * O 1º aperto pede a permissão do microfone; se soltar antes de liberar, não transmite. Um pouco depois de soltar (0,25 s) o fim da frase não é cortado.
+   */
+  async talk(on: boolean): Promise<void> {
+    this.holding = on;
+    if (!on) {
+      window.clearTimeout(this.tail);
+      this.tail = window.setTimeout(() => { if (!this.holding) this.setLive(false); }, 250);
+      return;
+    }
+    window.clearTimeout(this.tail);
     if (!this.active || (this.state === 'denied' && !this.track)) {
       this.active = true;
       try {
@@ -97,19 +109,20 @@ export class Voice {
           audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
         });
         this.track = this.local.getAudioTracks()[0] ?? null;
-        this.live = true;
-        if (this.track) this.peers.forEach((p) => this.giveTrack(p.pc));
-        this.setState('live');
+        if (this.track) { this.track.enabled = false; this.peers.forEach((p) => this.giveTrack(p.pc)); }
       } catch {
         // sem microfone: continua ouvindo quem estiver perto
-        this.live = false;
         this.setState('denied');
+        return;
       }
-      return;
     }
-    this.live = !this.live;
-    if (this.track) this.track.enabled = this.live;
-    this.setState(this.live ? 'live' : 'muted');
+    this.setLive(this.holding);
+  }
+
+  private setLive(on: boolean): void {
+    if (!this.track) return;
+    this.track.enabled = on;
+    this.setState(on ? 'live' : 'muted');
   }
 
   private giveTrack(pc: RTCPeerConnection): void {

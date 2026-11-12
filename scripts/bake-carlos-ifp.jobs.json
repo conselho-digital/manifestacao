@@ -97,7 +97,8 @@
   [
    "assets-src/ifp/colt45.ifp",
    {
-    "colt45_reload": "pistol_reload"
+    "colt45_reload": "pistol_reload",
+    "colt45_crouchfire": "pistol_cdraw@0.4"
    }
   ],
   [

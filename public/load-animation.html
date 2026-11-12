@@ -54,6 +54,12 @@
   #stage canvas { display: block; width: 100%; height: 100%; }
   #now { position: absolute; left: 10px; top: 10px; background: rgba(18,20,26,.8); border: 1px solid var(--line); border-radius: 8px; padding: 4px 10px; font-size: 13px; max-width: calc(100% - 20px); overflow-wrap: anywhere; }
   #now b { color: var(--accent); }
+  #now { font-family: inherit; color: var(--text); cursor: copy; text-align: left; }
+  #now:disabled { cursor: default; }
+  #now .copied { color: var(--ok); margin-left: 8px; }
+  #carousels { display: flex; flex-direction: column; gap: 14px; }
+  .cat h3 { margin: 0 0 4px; font-size: 14px; font-weight: 600; color: var(--muted); }
+  .cat .arrow { height: 52px; }
   .controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
 
   /* painel do jogo */
@@ -88,17 +94,13 @@
       <span id="count" class="muted"></span>
     </div>
     <div id="empty">Escolha um arquivo .ifp para ver as animações aqui.</div>
-    <div class="carousel" id="carousel" hidden>
-      <button class="arrow" id="prev" aria-label="Animação anterior">‹</button>
-      <div id="track" class="track" role="listbox" aria-label="Animações do arquivo"></div>
-      <button class="arrow" id="next" aria-label="Próxima animação">›</button>
-    </div>
+    <div id="carousels" hidden></div>
   </section>
 
   <!-- 3. personagem -->
   <section style="display:flex; flex-direction:column; gap:10px">
     <div id="stage">
-      <div id="now">Carregando o Carlos…</div>
+      <button type="button" id="now" title="Clique para copiar o nome da animação">Carregando o Carlos…</button>
       <div id="tools" role="toolbar" aria-label="Ferramentas do personagem">
         <button type="button" data-tog="body" aria-pressed="true">Corpo</button>
         <button type="button" data-tog="bones" aria-pressed="false">Esqueleto</button>
@@ -975,9 +977,27 @@ const CarlosRetarget = (function () {
     t.textContent = who + ': ';
     const b = document.createElement('b'); b.textContent = label;
     $('#now').append(t, b);
+    $('#now').dataset.name = label;
     $('#btnPlay').disabled = false;
     $('#btnPlay').textContent = 'Pausar';
   }
+
+  /** Clique no rótulo "Nova: nome" copia o nome da animação para a área de transferência. */
+  $('#now').onclick = async () => {
+    const name = $('#now').dataset.name;
+    if (!name) return;
+    let ok = false;
+    try { await navigator.clipboard.writeText(name); ok = true; } catch (e) {
+      const ta = document.createElement('textarea'); ta.value = name; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      try { ok = document.execCommand('copy'); } catch (e2) { ok = false; }
+      ta.remove();
+    }
+    const tag = document.createElement('span'); tag.className = 'copied'; tag.textContent = ok ? 'copiado!' : 'não consegui copiar';
+    $('#now').querySelectorAll('.copied').forEach((x) => x.remove());
+    $('#now').appendChild(tag);
+    setTimeout(() => tag.remove(), 1400);
+  };
 
   $('#btnPlay').onclick = () => {
     if (!S.action) return;
@@ -998,9 +1018,29 @@ const CarlosRetarget = (function () {
   $('#gamePanel').addEventListener('pointerdown', () => { activeCar = 'game'; });
   function fmt(d) { return d.toFixed(2).replace('.', ',') + ' s'; }
 
-  function buildCarousel() {
-    track.textContent = '';
-    S.ifp.anims.forEach((a, i) => {
+  /** Tipos de animação (pelo nome): cada tipo vira um carrossel próprio; o que não casa com nenhum vai em "Outras". */
+  const CATS = [
+    ['Carro', /^(car_|drive|kart|pass_smoke|smoke_in_car|driveby|boat)/i],
+    ['Moto e bicicleta', /^(bike|bmx|mtb|quad|chop|sport|bikeh|bikev|bike_)/i],
+    ['Lutar e apanhar', /^(fight|hit|kd_|ko_|floor_|dam_|bat_|knife|kill_|gun_butt|shot_|shove|block|golf|katana|dildo|chainsaw_hit|punch)/i],
+    ['Armas', /^(gun|colt|weapon|arrest|2guns|sawnoff|rifle|ak|m4|uzi|python|shotgun|spas|sniper|rocket|idle_armed|run_armed|run_1armed|walk_armed|swat|bomber|flame|csaw|buddy|tec|silenced|spray|camera|didhi|parachute|fire_|fuck)/i],
+    ['Correr e andar', /^(run|walk|sprint|jog|woman_(run|walk)|player_sneak|swim|turn|roadcross|crouch|roll|vrolling|evade|ev_)/i],
+    ['Pular, cair e escalar', /^(jump|fall|climb|abseil|glide|land|dive|getup|seat|ladder|parachute)/i],
+    ['Parado e conversa', /^(idle|chat|endchat|phone|cower|duck|hands|fac|talk|gum|atm|tap|xpress|fucku|laugh|stretch|sit|dance|dnce|bar_|bd_|bet_|blackjack|casino|crack|lay|lkaround|flee|gym|gnstwall|handsup|kiss|prtial|pool|shop|strip|wash|wave|medic|newspaper|pass_|prostitute|dealer|sunbathe|smk|drnkbr|eat_|food|vend|wuzi|snm_)/i],
+  ];
+  const catOf = (name) => { for (const [l, re] of CATS) if (re.test(name)) return l; return 'Outras'; };
+
+  /** Um carrossel (com setas) para um tipo de animação; as setas andam só dentro dele. */
+  function makeCarousel(label, idxs) {
+    const wrap = document.createElement('section');
+    wrap.className = 'cat';
+    const h = document.createElement('h3'); h.textContent = label + ' · ' + idxs.length;
+    const car = document.createElement('div'); car.className = 'carousel';
+    const prev = document.createElement('button'); prev.className = 'arrow'; prev.type = 'button'; prev.textContent = '‹'; prev.setAttribute('aria-label', 'Anterior em ' + label);
+    const next = document.createElement('button'); next.className = 'arrow'; next.type = 'button'; next.textContent = '›'; next.setAttribute('aria-label', 'Próxima em ' + label);
+    const trk = document.createElement('div'); trk.className = 'track'; trk.setAttribute('role', 'listbox'); trk.setAttribute('aria-label', label);
+    idxs.forEach((i) => {
+      const a = S.ifp.anims[i];
       const card = document.createElement('button');
       card.type = 'button';
       card.className = 'card';
@@ -1008,13 +1048,32 @@ const CarlosRetarget = (function () {
       card.setAttribute('aria-selected', 'false');
       card.dataset.i = String(i);
       const b = document.createElement('b'); b.textContent = a.name;
-      const s = document.createElement('small'); s.textContent = fmt(a.duration);
-      card.append(b, s);
+      const sm = document.createElement('small'); sm.textContent = fmt(a.duration);
+      card.append(b, sm);
       card.onclick = () => select(i);
-      track.appendChild(card);
+      trk.appendChild(card);
     });
+    const step = (d) => {
+      const at = idxs.indexOf(S.sel);
+      select(idxs[Math.max(0, Math.min(idxs.length - 1, (at < 0 ? (d > 0 ? -1 : idxs.length) : at) + d))]);
+    };
+    prev.onclick = () => step(-1);
+    next.onclick = () => step(1);
+    car.append(prev, trk, next);
+    wrap.append(h, car);
+    return wrap;
+  }
+
+  function buildCarousel() {
+    const box = $('#carousels');
+    box.textContent = '';
+    const groups = new Map();
+    S.ifp.anims.forEach((a, i) => { const c = catOf(a.name); if (!groups.has(c)) groups.set(c, []); groups.get(c).push(i); });
+    const order = [...CATS.map((c) => c[0]), 'Outras'].filter((l) => groups.has(l));
+    S.order = [];
+    for (const l of order) { box.appendChild(makeCarousel(l, groups.get(l))); S.order.push(...groups.get(l)); }
     $('#empty').hidden = true;
-    $('#carousel').hidden = false;
+    box.hidden = false;
   }
 
   function select(i, playIt) {
@@ -1022,11 +1081,13 @@ const CarlosRetarget = (function () {
     if (!n) return;
     i = Math.max(0, Math.min(n - 1, i));
     S.sel = i;
-    const cards = track.children;
-    for (let k = 0; k < cards.length; k++) cards[k].setAttribute('aria-selected', k === i ? 'true' : 'false');
-    const card = cards[i];
-    centerCard(track, card);
-    $('#count').textContent = (i + 1) + ' de ' + n;
+    let chosen = null;
+    document.querySelectorAll('#carousels .card').forEach((c) => {
+      const on = Number(c.dataset.i) === i;
+      c.setAttribute('aria-selected', on ? 'true' : 'false');
+      if (on) chosen = c;
+    });
+    if (chosen) centerCard(chosen.parentElement, chosen);
     $('#btnUse').disabled = false;
     if (playIt !== false) playNew();
     updateReplaceButton();
@@ -1036,14 +1097,12 @@ const CarlosRetarget = (function () {
     const a = S.ifp.anims[S.sel];
     try { play(ifpClip(a.name), a.name, 'Nova'); } catch (err) { status('Não consegui preparar "' + a.name + '": ' + err.message, 'err'); }
   }
-  $('#prev').onclick = () => select(S.sel - 1);
-  $('#next').onclick = () => select(S.sel + 1);
   window.addEventListener('keydown', (e) => {
     if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
     const dir = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0;
     if (!dir) return;
     e.preventDefault();
-    if (activeCar === 'game' && !$('#gamePanel').hidden && S.gameRaw) stepGame(dir); else select(S.sel + dir);
+    if (activeCar === 'game' && !$('#gamePanel').hidden && S.gameRaw) stepGame(dir); else { const o = S.order || []; const at = o.indexOf(S.sel); select(o[Math.max(0, Math.min(o.length - 1, at + dir))] ?? S.sel + dir); }
   });
 
   /* ---------- Arquivo ---------- */
@@ -1054,8 +1113,9 @@ const CarlosRetarget = (function () {
       const ifp = parseIFP(await file.arrayBuffer());
       if (!ifp.anims.length) throw new Error('o arquivo não tem animações.');
       S.ifp = ifp; S.ifpName = file.name; S.clips.clear(); S.sel = -1;
+      $('#count').textContent = file.name;
       const bad = (ifp.warnings || []).length;
-      status(ifp.anims.length + ' animações (' + ifp.format + ').' + (bad ? ' Atenção: ' + ifp.warnings.join('; ') + '.' : ''), bad ? 'warn' : 'ok');
+      status(file.name + (bad ? ' — atenção: ' + ifp.warnings.join('; ') + '.' : ''), bad ? 'warn' : 'ok');
       buildCarousel();
       select(0);
       refreshReplacements();
@@ -1308,7 +1368,7 @@ const CarlosRetarget = (function () {
       samples.push({ t: act.time, pr, q, pl: pos.clone() });
     }
     act.stop();
-    const s0 = refLast ? samples[samples.length - 1] : samples[0], q0i = s0.q.clone().invert(); // refLast: o movimento é medido a partir da pose final (ex.: sacar a pistola até mirar)
+    const s0 = typeof refLast === 'number' ? samples.reduce((b, x) => Math.abs(x.t - refLast) < Math.abs(b.t - refLast) ? x : b) : refLast ? samples[samples.length - 1] : samples[0], q0i = s0.q.clone().invert(); // refLast: o movimento é medido a partir da pose final (ex.: sacar a pistola até mirar); número = a partir da pose desse instante (s)
     const out = { duration: +clip.duration.toFixed(4), t: [], rp: [], rq: [], lr: [] };
     for (const s of samples) {
       const rp = s.pr.clone().sub(s0.pr), rq = s.q.clone().multiply(q0i);

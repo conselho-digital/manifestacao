@@ -151,7 +151,7 @@ export function buildCarVisual(src: THREE.Object3D, colorHex: number, look?: Pai
   const model = src.clone(true);
   const paint = new THREE.Color(colorHex);
   const done = new Map<THREE.Material, THREE.Material>();
-  if (look) applyTeamPaint(model, look, bike);
+  if (look?.police) applyTeamPaint(model, look, bike); // só a viatura é repintada; os pessoais mantêm as cores do arquivo (a equipe vai em adesivos nas portas dos carros; moto sem nada)
   model.traverse((o) => {
     const m = o as THREE.Mesh;
     if (!m.isMesh) return;
@@ -228,7 +228,7 @@ function stickerTexture(c1: string, c2: string): THREE.CanvasTexture {
   return t;
 }
 
-/** Adesivos da equipe: um em cada porta (o da porta gira junto com ela) e um no capô. */
+/** Adesivos da equipe: um em cada porta da frente (o da porta gira junto com ela). */
 function addTeamStickers(group: THREE.Group, wheels: Record<string, THREE.Object3D>, look: PaintLook): void {
   group.updateMatrixWorld(true);
   const mat = new THREE.MeshBasicMaterial({ map: stickerTexture(look.c1, look.c2), transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 });
@@ -243,20 +243,6 @@ function addTeamStickers(group: THREE.Group, wheels: Record<string, THREE.Object
     m.position.copy(pivot.worldToLocal(world.addScaledVector(new THREE.Vector3(side, 0, 0), 0.014)));
     m.rotation.y = side * (Math.PI / 2);
     pivot.add(m);
-  }
-  // capô: raio de cima para baixo na frente do carro, para achar a altura e a inclinação
-  const box = new THREE.Box3().setFromObject(group);
-  const size = box.getSize(new THREE.Vector3());
-  const ray = new THREE.Raycaster(new THREE.Vector3(0, box.max.y + 1, box.max.z - size.z * 0.24), new THREE.Vector3(0, -1, 0), 0, size.y + 2);
-  const hit = ray.intersectObject(group, true).find((h) => h.object instanceof THREE.Mesh && !(h.object.material as THREE.Material).transparent);
-  if (hit && hit.face) {
-    const n = hit.face.normal.clone().transformDirection(hit.object.matrixWorld);
-    if (n.y > 0.5) {
-      const m = disc(0.55);
-      m.position.copy(group.worldToLocal(hit.point.clone().addScaledVector(n, 0.012)));
-      m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), n);
-      group.add(m);
-    }
   }
 }
 
