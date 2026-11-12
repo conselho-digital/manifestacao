@@ -41,10 +41,11 @@
   /* carrossel */
   .carousel { position: relative; display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; align-items: center; }
   .arrow { width: 40px; height: 64px; padding: 0; font-size: 20px; }
-  #track { position: relative; display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x proximity; padding: 4px 2px 8px; scrollbar-width: thin; }
+  .track { position: relative; display: flex; gap: 10px; overflow-x: auto; scroll-snap-type: x proximity; padding: 4px 2px 8px; scrollbar-width: thin; }
   .card { flex: 0 0 auto; width: 148px; min-height: 64px; text-align: left; scroll-snap-align: center; padding: 10px 12px; background: var(--panel); display: flex; flex-direction: column; gap: 2px; }
   .card b { font-weight: 600; overflow-wrap: anywhere; }
   .card small { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .card.done { border-color: var(--ok); }
   .card[aria-selected="true"] { border-color: var(--accent); background: #17263a; box-shadow: 0 0 0 1px var(--accent) inset; }
   #empty { padding: 18px; text-align: center; color: var(--muted); background: var(--panel); border-radius: 10px; border: 1px solid var(--line); }
   #count { font-variant-numeric: tabular-nums; }
@@ -58,18 +59,18 @@
 
   /* painel do jogo */
   #gamePanel { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
-  #gameList { display: flex; flex-wrap: wrap; gap: 8px; max-height: 230px; overflow-y: auto; padding: 2px; }
-  .chip { padding: 7px 12px; border-radius: 999px; font-size: 14px; background: var(--panel2); }
-  .chip small { color: var(--muted); margin-left: 6px; }
-  .chip[aria-pressed="true"] { border-color: var(--accent); background: #17263a; }
-  .chip.done { border-color: var(--ok); }
+  
+  #tools { position: absolute; left: 10px; right: 10px; bottom: 10px; display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+  #tools .sep { width: 1px; align-self: stretch; background: var(--line); margin: 2px 2px; }
+  #tools button { padding: 5px 10px; font-size: 13px; background: rgba(27,30,38,.86); border-radius: 7px; }
+  #tools button[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); font-weight: 600; }
   #replList { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
   #replList li { display: flex; align-items: center; gap: 10px; padding: 8px 10px; background: var(--panel2); border-radius: 8px; }
   #replList li span { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; }
   #replList button { padding: 3px 9px; }
   #jsonOut { width: 100%; font: 12px ui-monospace, Menlo, Consolas, monospace; background: #0d0f14; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
-  @media (max-width: 520px) { .arrow { width: 34px; } .card { width: 132px; } }
-  @media (prefers-reduced-motion: reduce) { #track { scroll-behavior: auto; } }
+  @media (max-width: 520px) { .arrow { width: 34px; } .card { width: 132px; } #tools button { padding: 4px 8px; font-size: 12px; } }
+  @media (prefers-reduced-motion: reduce) { .track { scroll-behavior: auto; } }
 </style>
 </head>
 <body>
@@ -98,7 +99,7 @@
     <div id="empty">Escolha um arquivo .ifp para ver as animações aqui.</div>
     <div class="carousel" id="carousel" hidden>
       <button class="arrow" id="prev" aria-label="Animação anterior">‹</button>
-      <div id="track" role="listbox" aria-label="Animações do arquivo"></div>
+      <div id="track" class="track" role="listbox" aria-label="Animações do arquivo"></div>
       <button class="arrow" id="next" aria-label="Próxima animação">›</button>
     </div>
   </section>
@@ -107,6 +108,18 @@
   <section style="display:flex; flex-direction:column; gap:10px">
     <div id="stage">
       <div id="now">Carregando o Carlos…</div>
+      <div id="tools" role="toolbar" aria-label="Ferramentas do personagem">
+        <button type="button" data-tog="body" aria-pressed="true">Corpo</button>
+        <button type="button" data-tog="bones" aria-pressed="false">Esqueleto</button>
+        <button type="button" data-tog="wire" aria-pressed="false">Malha</button>
+        <button type="button" data-tog="grid" aria-pressed="true">Grade</button>
+        <button type="button" data-tog="spin" aria-pressed="false">Girar</button>
+        <span class="sep"></span>
+        <button type="button" data-view="front">Frente</button>
+        <button type="button" data-view="side">Lado</button>
+        <button type="button" data-view="back">Costas</button>
+        <button type="button" data-view="three">3/4</button>
+      </div>
     </div>
     <div class="controls">
       <button id="btnPlay" disabled>Pausar</button>
@@ -127,7 +140,11 @@
       <button id="btnBack">Fechar</button>
     </div>
     <div class="muted" id="gameHelp">Clique numa animação para ver o Carlos executando e escolha qual vai ser substituída.</div>
-    <div id="gameList"></div>
+    <div class="carousel" id="gameCarousel">
+      <button class="arrow" id="gprev" aria-label="Animação do jogo anterior">‹</button>
+      <div id="gameTrack" class="track" role="listbox" aria-label="Animações do jogo"></div>
+      <button class="arrow" id="gnext" aria-label="Próxima animação do jogo">›</button>
+    </div>
     <div class="row">
       <button id="btnSeeNew" disabled>Ver a nova</button>
       <button class="primary grow" id="btnReplace" disabled>Substituir</button>
@@ -667,6 +684,14 @@ const CarlosRetarget = (function () {
 
   /* ---------- Carrossel ---------- */
   const track = $('#track');
+  const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  /** Centraliza um cartão no carrossel sem rolar a página. */
+  function centerCard(trk, card) {
+    trk.scrollTo({ left: card.offsetLeft - (trk.clientWidth - card.offsetWidth) / 2, behavior: reduceMotion() ? 'auto' : 'smooth' });
+  }
+  let activeCar = 'new'; // qual carrossel as setas do teclado controlam
+  $('#carouselBox').addEventListener('pointerdown', () => { activeCar = 'new'; });
+  $('#gamePanel').addEventListener('pointerdown', () => { activeCar = 'game'; });
   function fmt(d) { return d.toFixed(2).replace('.', ',') + ' s'; }
 
   function buildCarousel() {
@@ -696,7 +721,7 @@ const CarlosRetarget = (function () {
     const cards = track.children;
     for (let k = 0; k < cards.length; k++) cards[k].setAttribute('aria-selected', k === i ? 'true' : 'false');
     const card = cards[i];
-    track.scrollTo({ left: card.offsetLeft - (track.clientWidth - card.offsetWidth) / 2, behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+    centerCard(track, card);
     $('#count').textContent = (i + 1) + ' de ' + n;
     $('#btnUse').disabled = false;
     if (playIt !== false) playNew();
@@ -711,8 +736,10 @@ const CarlosRetarget = (function () {
   $('#next').onclick = () => select(S.sel + 1);
   window.addEventListener('keydown', (e) => {
     if (/^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName)) return;
-    if (e.key === 'ArrowLeft') { e.preventDefault(); select(S.sel - 1); }
-    else if (e.key === 'ArrowRight') { e.preventDefault(); select(S.sel + 1); }
+    const dir = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0;
+    if (!dir) return;
+    e.preventDefault();
+    if (activeCar === 'game' && !$('#gamePanel').hidden && S.gameRaw) stepGame(dir); else select(S.sel + dir);
   });
 
   /* ---------- Arquivo ---------- */
@@ -749,8 +776,8 @@ const CarlosRetarget = (function () {
 
   async function loadGame() {
     if (S.gameRaw) return true;
-    const list = $('#gameList');
-    list.textContent = 'Carregando…';
+    const trk = $('#gameTrack');
+    trk.textContent = 'Carregando…';
     try {
       const all = {};
       for (const f of ['/anims/carlos.json', '/anims/carlos-extra.json']) {
@@ -761,43 +788,52 @@ const CarlosRetarget = (function () {
       S.gameRaw = all;
       return true;
     } catch (err) {
-      list.textContent = '';
-      const p = document.createElement('div');
-      p.className = 'muted';
-      p.textContent = 'Não consegui carregar a lista do jogo (' + err.message + '). Ela só funciona com a página aberta pelo site do jogo.';
-      list.appendChild(p);
+      trk.textContent = 'Não consegui carregar a lista do jogo (' + err.message + '). Ela só funciona com a página aberta pelo site do jogo.';
       return false;
     }
   }
 
   function buildGameList() {
-    const list = $('#gameList');
-    list.textContent = '';
-    for (const name of Object.keys(S.gameRaw)) {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.className = 'chip';
-      b.dataset.name = name;
-      b.setAttribute('aria-pressed', 'false');
-      b.textContent = LABEL[name] || name;
-      if (LABEL[name]) { const s = document.createElement('small'); s.textContent = name; b.appendChild(s); }
-      b.onclick = () => selectGame(name);
-      list.appendChild(b);
+    const trk = $('#gameTrack');
+    trk.textContent = '';
+    S.gameNames = Object.keys(S.gameRaw);
+    for (const name of S.gameNames) {
+      const c = document.createElement('button');
+      c.type = 'button';
+      c.className = 'card';
+      c.dataset.name = name;
+      c.setAttribute('role', 'option');
+      c.setAttribute('aria-selected', 'false');
+      const b = document.createElement('b'); b.textContent = LABEL[name] || name;
+      const sm = document.createElement('small'); sm.textContent = (LABEL[name] ? name + ' · ' : '') + fmt(S.gameRaw[name].duration);
+      c.append(b, sm);
+      c.onclick = () => selectGame(name);
+      trk.appendChild(c);
     }
     markGame();
   }
   function markGame() {
-    document.querySelectorAll('#gameList .chip').forEach((c) => {
-      c.setAttribute('aria-pressed', c.dataset.name === S.gameSel ? 'true' : 'false');
+    document.querySelectorAll('#gameTrack .card').forEach((c) => {
+      c.setAttribute('aria-selected', c.dataset.name === S.gameSel ? 'true' : 'false');
       c.classList.toggle('done', S.repl.has(c.dataset.name));
     });
   }
   function selectGame(name) {
     S.gameSel = name;
     markGame();
+    const card = document.querySelector('#gameTrack .card[aria-selected="true"]');
+    if (card) centerCard($('#gameTrack'), card);
     play(gameClip(name), (LABEL[name] || name) + ' (' + name + ')', 'Jogo');
     updateReplaceButton();
   }
+  function stepGame(dir) {
+    const names = S.gameNames || [];
+    if (!names.length) return;
+    const i = names.indexOf(S.gameSel);
+    selectGame(names[Math.max(0, Math.min(names.length - 1, (i < 0 ? (dir > 0 ? -1 : names.length) : i) + dir))]);
+  }
+  $('#gprev').onclick = () => stepGame(-1);
+  $('#gnext').onclick = () => stepGame(1);
   function updateReplaceButton() {
     const b = $('#btnReplace');
     const a = S.ifp && S.sel >= 0 ? S.ifp.anims[S.sel].name : '';
@@ -868,6 +904,42 @@ const CarlosRetarget = (function () {
       setTimeout(() => URL.revokeObjectURL(url), 2000);
     } catch (e) { /* o texto abaixo serve */ }
   };
+
+  /* ---------- Ferramentas do personagem ---------- */
+  let bonesHelper = null;
+  const VIEWS = { front: [0, 3.6, 1.3], side: [3.6, 0, 1.15], back: [0, -3.6, 1.3], three: [1.9, 3.3, 1.5] };
+  function setTool(name, on) {
+    if (name === 'body') S.rig.traverse((o) => { if (o.isMesh) o.visible = on; });
+    else if (name === 'wire') S.rig.traverse((o) => { if (o.isMesh) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { m.wireframe = on; }); });
+    else if (name === 'grid') grid.visible = on;
+    else if (name === 'spin') controls.autoRotate = on;
+    else if (name === 'bones') {
+      if (bonesHelper) { scene.remove(bonesHelper); bonesHelper.geometry.dispose(); bonesHelper = null; }
+      if (on) {
+        bonesHelper = new THREE.SkeletonHelper(S.rig);
+        bonesHelper.material = new THREE.LineBasicMaterial({ color: 0x7dffb0, depthTest: false, transparent: true });
+        bonesHelper.renderOrder = 999;
+        scene.add(bonesHelper);
+      }
+    }
+  }
+  document.querySelectorAll('#tools [data-tog]').forEach((b) => {
+    b.onclick = () => {
+      if (!S.rig) return;
+      const on = b.getAttribute('aria-pressed') !== 'true';
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+      setTool(b.dataset.tog, on);
+    };
+  });
+  controls.autoRotateSpeed = 2.5;
+  document.querySelectorAll('#tools [data-view]').forEach((b) => {
+    b.onclick = () => {
+      const v = VIEWS[b.dataset.view];
+      controls.target.set(0, 0, 0.92);
+      camera.position.set(v[0], v[1], v[2]);
+      controls.update();
+    };
+  });
 
   /* ---------- Laço ---------- */
   const clock = new THREE.Clock();
