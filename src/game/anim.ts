@@ -20,7 +20,7 @@ export const ARMED_FROM_CODE: Armed[] = ['none', 'rifle', 'aim', 'bat', 'pistol'
 export const isBatLike = (a: Armed): boolean => a === 'bat' || a === 'sign' || a === 'cricket' || a === 'baseball' || (EXTRA_MELEE_KEYS as readonly string[]).includes(a);
 /** O corpo gira para onde a câmera mira só ao mirar ou atirar (arma levantada). Com a arma baixa a câmera olha livre e o corpo segue o movimento. */
 /** Armas de uma mão que usam os clipes da faca (knife.ifp): faca e garrafa quebrada. */
-export const isKnifeLike = (a: Armed): boolean => a === 'knife' || a === 'bottle';
+export const isKnifeLike = (a: Armed): boolean => a === 'knife' || a === 'bottle' || a === 'cleaver';
 export const facesAim = (a: Armed): boolean => a === 'aim' || a === 'pistol_aim' || a === 'spray_aim';
 const isAimPose = (a: Armed): boolean => a === 'aim' || a === 'pistol_aim' || a === 'spray_aim';
 const isSpray = (a: Armed): boolean => a === 'spray' || a === 'spray_aim';
@@ -28,7 +28,7 @@ type Kind3 = 'rifle' | 'pistol' | 'bat';
 const kindOf = (a: Armed): Kind3 | null => (a === 'rifle' || a === 'aim' ? 'rifle' : a === 'pistol' || a === 'pistol_aim' || isSpray(a) ? 'pistol' : isBatLike(a) ? 'bat' : null);
 
 /** Clipes que tocam uma vez e param no último quadro. */
-const ONCE = new Set(['roll_f', 'roll_fl', 'roll_fr', 'roll_l', 'roll_r', 'roll_b', 'roll_bl', 'roll_br', 'bat_swing4', 'arrestgun', 'knife_1', 'knife_2', 'knife_3', 'knife_4', 'knife_g', 'kill_player', 'kill_ped_damage', 'kill_ped_die', 'kick_1', 'kick_2', 'hitk_1', 'hitk_2', 'hit_1', 'hit_2', 'hit_3', 'block', 'punch_1', 'punch_2', 'punch_3', 'punch_4', 'bat_swing', 'bat_swing2', 'bat_swing3', 'bat_hit_1', 'bat_hit_2', 'bat_hit_3', 'car_getin_l', 'car_getout_l', 'bike_fall', 'ko_front', 'getup_front', 'jump_launch', 'jump_land', 'climb_jump', 'climb_pull', 'climb_stand', 'roll', 'dive']);
+const ONCE = new Set(['roll_f', 'roll_fl', 'roll_fr', 'roll_l', 'roll_r', 'roll_b', 'roll_bl', 'roll_br', 'bat_swing4', 'arrestgun', 'knife_1', 'knife_2', 'knife_3', 'knife_4', 'knife_g', 'kill_player', 'kill_ped_damage', 'kill_ped_die', 'kick_1', 'kick_2', 'hitk_1', 'hitk_2', 'hit_1', 'hit_2', 'hit_3', 'block', 'punch_1', 'punch_2', 'punch_3', 'punch_4', 'bat_swing', 'bat_swing2', 'bat_swing3', 'bat_hit_1', 'bat_hit_2', 'bat_hit_3', 'car_getin_l', 'car_getout_l', 'car_open_l', 'car_closedoor_l', 'car_close_l', 'bike_pickup_l', 'bike_pickup_r', 'bike_pullup_l', 'bike_pullup_r', 'bike_fall', 'ko_front', 'getup_front', 'jump_launch', 'jump_land', 'climb_jump', 'climb_pull', 'climb_stand', 'roll', 'dive']);
 export const isOnceClip = (name: string): boolean => ONCE.has(name);
 
 /** Clipes em que o personagem não segura o fuzil (escalar, rolar, mergulhar, emotes). */
@@ -41,7 +41,7 @@ const OWN_HOLD = (name: string): boolean => name.startsWith('gun_') || name.star
 /** Clipes em que as pernas ficam paradas na pose do 1º quadro (golpes, reações a golpes e as posições de luta): o IFP não guarda o deslocamento do corpo, então os passos do soco/tacada faziam as pernas patinarem com o corpo parado. */
 // Os clipes do baseball/fight_e/knife novos (bat_*, kick_*, hit_*, hitk_*) têm passos e deslocamento do corpo e não ficam parados.
 const PLANTED = new Set(['punch_1', 'punch_2', 'punch_3', 'combat_idle', 'block']);
-const TIME_SCALE: Record<string, number> = { ko: 1.8, getup: 1.8, ko_front: 1.5, getup_front: 1.8, bike_fall: 1.2, car_getin_l: 0.62, car_getout_l: 0.62, hit_1: 1.8, hit_2: 1.4, hit_3: 2.2, punch_1: 2.2, punch_2: 2.2, punch_3: 2.0, punch_4: 1.6, bat_swing: 1.4, bat_swing2: 1.5, bat_swing3: 1.6, bat_hit_1: 1.3, bat_hit_2: 1.3, bat_hit_3: 1.8, arrestgun: 1.3, knife_1: 1.5, knife_2: 1.5, knife_3: 1.4, knife_4: 1.2, kick_1: 1.3, kick_2: 1.8, hitk_1: 1.4, hitk_2: 2, gun_fwd: 1.2, gun_bwd: 1.0, gun_left: 1.5, gun_right: 1.4, crouch_fwd: 0.6, crouch_bwd: 0.6,
+const TIME_SCALE: Record<string, number> = { ko: 1.8, getup: 1.8, ko_front: 1.5, getup_front: 1.8, bike_fall: 1.2, car_getin_l: 0.9, car_getout_l: 0.85, car_open_l: 1.25, car_closedoor_l: 1.2, car_close_l: 1.2, bike_pickup_l: 1.15, bike_pickup_r: 1.15, bike_pullup_l: 1, bike_pullup_r: 1, hit_1: 1.8, hit_2: 1.4, hit_3: 2.2, punch_1: 2.2, punch_2: 2.2, punch_3: 2.0, punch_4: 1.6, bat_swing: 1.4, bat_swing2: 1.5, bat_swing3: 1.6, bat_hit_1: 1.3, bat_hit_2: 1.3, bat_hit_3: 1.8, arrestgun: 1.3, knife_1: 1.5, knife_2: 1.5, knife_3: 1.4, knife_4: 1.2, kick_1: 1.3, kick_2: 1.8, hitk_1: 1.4, hitk_2: 2, gun_fwd: 1.2, gun_bwd: 1.0, gun_left: 1.5, gun_right: 1.4, crouch_fwd: 0.6, crouch_bwd: 0.6,
   // andar/correr: o passo do clipe (medido pelo pé de apoio, ver dev/anim-viewer) é bem menor que a velocidade do jogo (andar 2,1 m/s, correr 6,2 m/s) e os pés patinavam; acelera o clipe até ficar perto, sem passar da cadência natural
   walk: 1.6, walk_armed: 1.3, sprint: 1.3, w_gang: 1.6, w_drunk: 1.5, w_old: 1.6, w_fat: 1.6, w_sneak: 1.6 };
 

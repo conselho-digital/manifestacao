@@ -52,24 +52,56 @@ const SPECIAL: Record<string, { dur: number; speed: number }> = {
 
 type Mode = 'ground' | 'air' | 'climb' | 'special' | 'drive' | 'dead' | 'approach' | 'enter' | 'exit' | 'ko';
 
-/** Entrar/sair do veículo: duração da sequência (o clipe car_getin_l é esticado para isso) e lado onde o personagem fica. */
-export const SEQ_DUR = 1.5;
+/** Entrar/sair do veículo em etapas (cada uma com o seu clipe do GTA SA) e lado onde o personagem fica. */
+type SeqStage = 'open' | 'getin' | 'close' | 'pickup' | 'pullup' | 'getout' | 'shut';
 const DOOR_SIDE = { car: 1.6, bike: 0.95 }; // distância do centro do veículo (lado do motorista, +x do modelo)
+/** duração de cada etapa em segundos (o clipe é acelerado/esticado para isso, ver TIME_SCALE em anim.ts) */
+const STAGE_DUR: Record<SeqStage, number> = { open: 0.9, getin: 1.15, close: 0.55, pickup: 1.0, pullup: 1.0, getout: 1.3, shut: 0.6 };
+/** clipe de cada etapa; `side` -1 = lado direito da moto */
+export const stageClip = (st: SeqStage, side: number): string => {
+  const r = side < 0 ? '_r' : '_l';
+  switch (st) {
+    case 'open': return 'car_open_l';
+    case 'getin': return 'car_getin_l';
+    case 'close': return 'car_closedoor_l';
+    case 'pickup': return 'bike_pickup' + r;
+    case 'pullup': return 'bike_pullup' + r;
+    case 'getout': return side < 0 ? 'car_getout_r' : 'car_getout_l';
+    default: return 'car_close_l';
+  }
+};
+/** Que etapa um clipe de entrar/sair representa: u = andamento (null = o do clipe), entering, lado. Usado nos jogadores remotos. */
+export function stageOfClip(name: string): { u: number | null; entering: boolean; side: number } | null {
+  switch (name) {
+    case 'car_open_l': return { u: 0, entering: true, side: 1 };
+    case 'bike_pickup_l': return { u: 0, entering: true, side: 1 };
+    case 'bike_pickup_r': return { u: 0, entering: true, side: -1 };
+    case 'car_getin_l': return { u: null, entering: true, side: 1 };
+    case 'bike_pullup_l': return { u: null, entering: true, side: 1 };
+    case 'bike_pullup_r': return { u: null, entering: true, side: -1 };
+    case 'car_closedoor_l': return { u: 1, entering: true, side: 1 };
+    case 'car_getout_l': return { u: null, entering: false, side: 1 };
+    case 'car_getout_r': return { u: null, entering: false, side: -1 };
+    case 'car_close_l': return { u: 1, entering: false, side: 1 };
+    default: return null;
+  }
+}
 
 /**
  * Posição do modelo durante a sequência de entrar/sair (u = 0..1 do tempo): deslocamento no espaço do veículo
  * (x para a esquerda, y da pélvis, z para a frente) e giro do modelo (de frente para a porta -> de frente para a rua).
+ * `side` 1 = lado esquerdo (porta do motorista), -1 = lado direito (só motos).
  */
-export function seatBlend(car: Car, u: number, entering: boolean): { x: number; y: number; z: number; turn: number } {
+export function seatBlend(car: Car, u: number, entering: boolean, side = 1): { x: number; y: number; z: number; turn: number } {
   const k = THREE.MathUtils.clamp((u - 0.2) / 0.6, 0, 1);
   const f = entering ? k * k * (3 - 2 * k) : 1 - k * k * (3 - 2 * k); // 1 = sentado
   const seat = car.seat ?? new THREE.Vector3(0.48, 0.7, -0.2);
-  const out = { x: car.bike ? DOOR_SIDE.bike : DOOR_SIDE.car, y: 0, z: seat.z - (car.bike ? 0 : 0.1) };
+  const out = { x: (car.bike ? DOOR_SIDE.bike : DOOR_SIDE.car) * side, y: 0, z: seat.z - (car.bike ? 0 : 0.1) };
   return {
     x: THREE.MathUtils.lerp(out.x, seat.x, f),
     y: THREE.MathUtils.lerp(out.y, seat.y - 0.97, f),
     z: THREE.MathUtils.lerp(out.z, seat.z, f),
-    turn: -(Math.PI / 2) * (1 - f),
+    turn: -(Math.PI / 2) * (1 - f) * side,
   };
 }
 
@@ -104,6 +136,8 @@ export class Player {
   private crouching = false;
   private swingT = 0;
   private seqT = 0; // entrando/saindo do carro
+  private stage: SeqStage = 'open';
+  private side = 1; // lado de onde entra/sai (1 esquerda; -1 direita, só motos)
   private approachT = 0; // caminhando até a porta
   private koVel = new THREE.Vector2();
   private koT = 0;
@@ -504,6 +538,9 @@ export class Player {
     if (!best) { if (denied) this.onEnterDenied?.(denied); return false; }
     best.driver = 'local';
     this.car = best;
+    // moto: entra pelo lado em que o jogador está; carro: só pela porta do motorista
+    this.side = best.bike && (pos.x - best.x) * Math.cos(best.heading) - (pos.z - best.z) * Math.sin(best.heading) < 0 ? -1 : 1;
+    best.holdFallen = best.fallen; // moto caída: continua deitada até o personagem levantar
     this.emote = null;
     this.vy = 0;
     this.object.visible = true; // o motorista aparece sentado (carro ou moto)
@@ -517,7 +554,7 @@ export class Player {
 
   /** Ponto ao lado do motorista (lado esquerdo do veículo), no chão. */
   private doorPoint(car: Car): THREE.Vector2 {
-    const side = car.bike ? DOOR_SIDE.bike : DOOR_SIDE.car;
+    const side = (car.bike ? DOOR_SIDE.bike : DOOR_SIDE.car) * this.side;
     const z = (car.seat?.z ?? -0.2) - (car.bike ? 0 : 0.1);
     // +x do modelo é a esquerda do veículo; z do assento ao longo do comprimento
     const lx = Math.cos(car.heading);
@@ -537,9 +574,8 @@ export class Player {
     const dist = Math.hypot(dx, dz);
     this.approachT += dt;
     if (dist < 0.12 || this.approachT > 1.6) {
-      car.openDoor(SEQ_DUR + 0.4);
       this.mode = 'enter';
-      this.seqT = 0;
+      this.setStage(car.bike ? (car.fallen ? 'pickup' : 'pullup') : 'open');
       return;
     }
     const step = Math.min(dist, WALK_SPEED * dt);
@@ -553,9 +589,9 @@ export class Player {
     const car = this.car!;
     if (input.interact) {
       car.speed = 0;
-      car.openDoor(SEQ_DUR + 0.4);
+      this.side = car.bike ? this.side : 1;
       this.mode = 'exit';
-      this.seqT = 0;
+      this.setStage('getout');
       return;
     }
     // No carro: acelerador, freio e freio de mão; o joystick (A/D) só esterça
@@ -586,13 +622,27 @@ export class Player {
     if (model && this.modelRot0 !== null) model.rotation.y = this.modelRot0;
   }
 
-  /** Entrando/saindo do veículo: o personagem passa da porta (ou do lado da moto) para o banco, ou o contrário. */
+  private setStage(st: SeqStage): void {
+    this.stage = st;
+    this.seqT = 0;
+  }
+
+  /** Entrando/saindo do veículo, em etapas: abrir a porta, sentar, fechar (carro); levantar a moto caída e subir (moto); sair e fechar a porta. */
   private updateSeq(dt: number): void {
     const car = this.car!;
-    const dur = SEQ_DUR;
+    const st = this.stage;
+    const dur = STAGE_DUR[st];
     this.seqT = Math.min(dur, this.seqT + dt);
-    const entering = this.mode === 'enter';
-    const b = seatBlend(car, this.seqT / dur, entering);
+    const u = this.seqT / dur;
+    // porta: abre no meio do "abrir", fecha no meio do "fechar"; moto caída levanta no meio do "levantar"
+    if (st === 'open' && u >= 0.4) car.doorHold = true;
+    else if (st === 'getout' && u >= 0.1) car.doorHold = true;
+    else if ((st === 'close' || st === 'shut') && u >= 0.45) car.doorHold = false;
+    if (st === 'pickup' && u >= 0.5) car.holdFallen = false;
+    const seated = st === 'close';
+    const entering = st === 'open' || st === 'getin' || st === 'close' || st === 'pickup' || st === 'pullup';
+    const at = st === 'open' || st === 'pickup' ? 0 : st === 'shut' ? 1 : seated ? 1 : u; // 0/1 = só ao lado do veículo / sentado
+    const b = seatBlend(car, at, entering, this.side);
     this.object.position.set(car.x, 0, car.z);
     this.object.rotation.order = 'XYZ';
     this.object.rotation.set(0, car.heading, 0);
@@ -604,10 +654,20 @@ export class Player {
     }
     this.animator?.setRideRaw(b);
     this.animator?.setArmed('none');
-    this.animator?.play(entering ? 'car_getin_l' : 'car_getout_l');
+    this.animator?.play(stageClip(st, this.side));
     this.animator?.update(dt);
-    if (this.seqT >= dur) {
-      if (entering) { this.mode = 'drive'; this.resetModelRot(); } else this.exitCar();
+    if (this.seqT < dur) return;
+    switch (st) {
+      case 'open': this.setStage('getin'); break;
+      case 'getin': this.setStage('close'); break;
+      case 'pickup': this.setStage('pullup'); break;
+      case 'getout': if (car.bike) this.exitCar(); else this.setStage('shut'); break;
+      case 'shut': this.exitCar(); break;
+      default: // close, pullup: sentado, pode dirigir
+        car.doorHold = false;
+        car.holdFallen = false;
+        this.mode = 'drive';
+        this.resetModelRot();
     }
   }
 
@@ -701,9 +761,10 @@ export class Player {
   private exitCar(): void {
     const car = this.car!;
     // Sai pelo lado do motorista (esquerdo)
-    const rx = Math.cos(car.heading);
-    const rz = -Math.sin(car.heading);
+    const rx = Math.cos(car.heading) * this.side;
+    const rz = -Math.sin(car.heading) * this.side;
     const side = (car.bike ? DOOR_SIDE.bike : DOOR_SIDE.car) + 0.3;
+    car.doorHold = false;
     this.object.position.set(
       THREE.MathUtils.clamp(car.x + rx * side, -(MAP.halfX - 1), MAP.halfX - 1), 0,
       THREE.MathUtils.clamp(car.z + rz * side, -(MAP.halfZ - 1), MAP.halfZ - 1),
@@ -711,7 +772,6 @@ export class Player {
     this.resetModelRot();
     car.driver = null;
     car.speed = 0;
-    car.openDoor(1);
     this.onExitCar?.(car);
     this.object.rotation.set(0, car.heading, 0);
     this.object.rotation.order = 'XYZ';

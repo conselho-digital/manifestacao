@@ -60,6 +60,20 @@
    {
     "ARRESTgun": "arrestgun"
    }
+  ],
+  [
+   "assets-src/ifp/ped-arrestgun.ifp",
+   {
+    "CAR_open_LHS": "car_open_l",
+    "CAR_getin_LHS": "car_getin_l",
+    "CAR_getout_LHS": "car_getout_l",
+    "CAR_close_LHS": "car_close_l",
+    "CAR_closedoor_LHS": "car_closedoor_l",
+    "BIKE_pickupL": "bike_pickup_l",
+    "BIKE_pickupR": "bike_pickup_r",
+    "BIKE_pullupL": "bike_pullup_l",
+    "BIKE_pullupR": "bike_pullup_r"
+   }
   ]
  ],
  "hands": [

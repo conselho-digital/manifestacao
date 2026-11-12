@@ -3,7 +3,7 @@ import { createCharacter } from './characters';
 import { ARMED_FROM_CODE, Animator } from './anim';
 import { CARS, PERSONAL, type Car } from './vehicle';
 import { WeaponVisual } from './weapons';
-import { seatBlend } from './player';
+import { seatBlend, stageOfClip } from './player';
 import { makeTeamRing, type TeamLook } from './teams';
 import { rifleFromNetCode } from './rifles';
 import type { MoveMsg, PlayerInfo } from '../net/sync';
@@ -146,12 +146,17 @@ export class RemotePlayer {
     }
     if (this.animator && !car) {
       // entrando/saindo de um veículo: o boneco vai da porta ao banco como no jogador local (o clipe dá o tempo)
-      const seq = this.anim === 'car_getin_l' || this.anim === 'car_getout_l' ? this.nearestCar(1.5) : null;
-      if (seq && this.model) {
+      const st = stageOfClip(this.anim);
+      const seq = st ? this.nearestCar(1.5) : null;
+      if (seq && st && this.model) {
         this.modelRot0 ??= this.model.rotation.y;
-        const b = seatBlend(seq, this.animator.name === this.anim ? this.animator.progress : 0, this.anim === 'car_getin_l');
+        const prog = this.animator.name === this.anim ? this.animator.progress : 0;
+        const b = seatBlend(seq, st.u ?? prog, st.entering, st.side);
         this.animator.setRideRaw(b);
         this.model.rotation.y = this.modelRot0 + b.turn;
+        // a porta do motorista fica aberta enquanto ele abre, senta e até fechar
+        const open = this.anim === 'car_open_l' ? prog >= 0.4 : this.anim === 'car_closedoor_l' || this.anim === 'car_close_l' ? prog < 0.45 : true;
+        if (open) seq.openDoor(0.5);
       } else {
         this.animator.setRide(null);
         if (this.modelRot0 !== null && this.model) { this.model.rotation.y = this.modelRot0; this.modelRot0 = null; }

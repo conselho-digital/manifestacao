@@ -385,6 +385,11 @@ export class Car {
   private doorOpen = 0;
   /** abre a porta do motorista por um instante (entrar/sair) */
   openDoor(sec = 0.9): void { this.doorT = sec; }
+  /** porta do motorista aberta até soltar (sequência de entrar/sair: abrir, sentar, fechar) */
+  doorHold = false;
+  /** moto caída que o piloto está levantando: continua deitada até soltar */
+  holdFallen = false;
+  private rising = false;
   /** onde fica a pélvis do piloto (espaço do carro); null em carros */
   seat: THREE.Vector3 | null = null;
   /** mãos no guidão: [esquerda, direita] (espaço do carro) */
@@ -577,12 +582,18 @@ export class Car {
       this.root.rotation.z = Math.sin(performance.now() * 0.05) * this.wobble * 0.04;
     }
     // moto caída: deita de lado; quando alguém sobe, levanta
-    if (this.bike && this.driver === null && this.fallen) {
+    if (this.bike && this.fallen && (this.driver === null || this.holdFallen)) {
       this.lean += (1.25 - this.lean) * Math.min(1, dt * 5);
       this.apply(0);
-    } else if (this.bike && this.fallen && this.driver !== null) this.fallen = false;
+    } else if (this.bike && this.fallen && this.driver !== null && !this.holdFallen) { this.fallen = false; this.rising = true; }
+    if (this.rising) {
+      // a moto levanta (o piloto a ergueu): volta do lado deitado para a vertical
+      this.lean += (0 - this.lean) * Math.min(1, dt * 5);
+      this.apply(0);
+      if (Math.abs(this.lean) < 0.03) this.rising = false;
+    }
     // portas: abrem enquanto doorT > 0,25 e fecham no final
-    this.doorOpen += ((this.doorT > 0.25 ? 1 : 0) - this.doorOpen) * Math.min(1, dt * 10);
+    this.doorOpen += ((this.doorT > 0.25 || this.doorHold ? 1 : 0) - this.doorOpen) * Math.min(1, dt * 10);
     if (this.doorT > 0) this.doorT -= dt;
     const dl = this.wheels['door_L'];
     if (dl) dl.rotation.y = -this.doorOpen * 1.0;
