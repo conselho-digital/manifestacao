@@ -364,8 +364,8 @@ export class Combat {
     if (m.h === this.d.net.id && !this.dead && this.invuln <= 0 && this.protectT <= 0 && !this.paused) {
       const base = m.k === 'k' ? KICK_DAMAGE : m.k === 'f' ? FIST_DAMAGE : m.k === 'b' ? BAT_DAMAGE : m.k === 'p' ? PISTOL_DAMAGE : (SHOT_DAMAGE[m.k] ?? AK_DAMAGE);
       const dmg = m.hs && m.k !== 'f' && m.k !== 'b' && m.k !== 'k' ? base * 2 : base;
-      if (m.k === 'f' || m.k === 'b' || m.k === 'k') this.player?.flinch(m.k);
-      else if (performance.now() - this.lastFlinchAt > 700) { this.lastFlinchAt = performance.now(); this.player?.flinch('f'); } // levou tiro: reage (no máximo a cada 0,7 s)
+      if (m.k === 'f' || m.k === 'b' || m.k === 'k') this.player?.flinch(m.k, shooter?.root.position);
+      else if (performance.now() - this.lastFlinchAt > 700) { this.lastFlinchAt = performance.now(); this.player?.flinch('f', shooter?.root.position); } // levou tiro: reage (no máximo a cada 0,7 s)
       this.damage(dmg, m.id, { f: 'PUNHO', k: 'CHUTE', b: 'ARMA BRANCA', p: 'PISTOLA', r: 'AK-47', m: 'M4A1', q: 'M16', h: 'HONEY BADGER' }[m.k]);
     }
   }

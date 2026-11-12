@@ -74,6 +74,23 @@
     "BIKE_pullupL": "bike_pullup_l",
     "BIKE_pullupR": "bike_pullup_r"
    }
+  ],
+  [
+   "assets-src/ifp/ped-arrestgun.ifp",
+   {
+    "getup": "getup",
+    "getup_front": "getup_front",
+    "Gun_stand": "gun_idle",
+    "run_1armed": "run_1armed",
+    "run_armed": "run_armed",
+    "HIT_front": "hitr_front",
+    "HIT_back": "hitr_back",
+    "HIT_L": "hitr_l",
+    "HIT_R": "hitr_r",
+    "HIT_behind": "hitr_behind",
+    "KO_skid_back": "ko_skid_back",
+    "KO_skid_front": "ko_skid_front"
+   }
   ]
  ],
  "hands": [

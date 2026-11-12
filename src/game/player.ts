@@ -142,6 +142,7 @@ export class Player {
   private koVel = new THREE.Vector2();
   private koT = 0;
   private koCool = 0;
+  private koFace = false; // atropelado: caiu de bruços (ko_skid_front) ou de costas (ko_skid_back)
   private koFront = false; // jogado da moto: voa para a frente (dive), cai de cara e levanta (getup_front)
   private koVy = 0;
   private modelRot0: number | null = null;
@@ -211,23 +212,29 @@ export class Player {
     this.weaponVis?.setRifleKind(k);
   }
 
-  /** Levou um golpe (soco, taco, bandeira): reações knife_hit_1, 2 e 3 em sequência (volta ao 1 se ficar 2,5 s sem apanhar). */
-  flinch(kind: 'f' | 'b' | 'k' = 'f'): void {
+  /** Levou um golpe (soco, chute, tiro, taco): de soco/chute/tiro reage com os HIT_* do ped.ifp conforme o lado de onde veio; de arma branca, Bat_Hit_1-3 (baseball.ifp). */
+  flinch(kind: 'f' | 'b' | 'k' = 'f', from?: { x: number; z: number }): void {
     if (this.mode !== 'ground') return;
     const now = performance.now();
     this.hitN = now - this.lastHitAt > 2500 ? 1 : this.hitN % 3 + 1;
     this.lastHitAt = now;
-    if (kind === 'k') {
+    let id: string;
+    if (kind === 'b') id = `bat_hit_${this.hitN}`;
+    else if (from && this.animator?.has('hitr_front')) {
+      // de onde veio o golpe em relação ao corpo: frente, trás (duas reações em revezamento) ou lado
+      const p = this.object.position;
+      const dx = from.x - p.x;
+      const dz = from.z - p.z;
+      const f = dx * Math.sin(this.heading) + dz * Math.cos(this.heading);
+      const l = dx * Math.cos(this.heading) - dz * Math.sin(this.heading);
       this.hitAlt = !this.hitAlt;
-      const id = this.hitAlt ? 'hitk_2' : 'hitk_1';
-      this.swingT = this.clipLen(id, 0.6);
-      this.animator?.restart(id);
-      this.startMotion(id);
-      return;
-    }
-    // levou golpe de arma branca: reações Bat_Hit_1-3 (baseball.ifp); de soco: knife_hit_1-3 (knife.ifp)
-    const id = `${kind === 'b' ? 'bat_hit' : 'hit'}_${this.hitN}`;
-    this.swingT = this.clipLen(id, this.hitN === 3 ? 0.8 : 0.4);
+      if (Math.abs(f) >= Math.abs(l)) id = f >= 0 ? 'hitr_front' : this.hitAlt ? 'hitr_back' : 'hitr_behind';
+      else id = l > 0 ? 'hitr_l' : 'hitr_r';
+    } else if (kind === 'k') {
+      this.hitAlt = !this.hitAlt;
+      id = this.hitAlt ? 'hitk_2' : 'hitk_1';
+    } else id = `hit_${this.hitN}`;
+    this.swingT = this.clipLen(id, 0.6);
     this.animator?.restart(id);
     this.startMotion(id);
   }
@@ -290,7 +297,7 @@ export class Player {
     m.l = cur.l;
     if (Math.abs(df) + Math.abs(dl) < 1e-5) return;
     // quem apanha só escorrega um pouco (o IFP empurra 1 a 2 m por golpe)
-    const k = /^(hit_|bat_hit_|hitk_)/.test(m.name) ? 0.4 : 1;
+    const k = /^(hit_|bat_hit_|hitk_|hitr_)/.test(m.name) ? 0.4 : 1;
     const h = this.heading;
     this.moveHoriz((Math.sin(h) * df + Math.cos(h) * dl) * k, (Math.cos(h) * df - Math.sin(h) * dl) * k);
   }
@@ -482,7 +489,9 @@ export class Player {
       else clip = this.moveL > 0 ? 'gun_left' : 'gun_right';
       a.play(a.has(clip) ? clip : 'walk');
     } else if (moving) {
-      const clip = input.sprint ? 'sprint' : input.walkClip;
+      // correndo armado: fuzil nas duas mãos = run_armed; pistola = run_1armed (ped.ifp); sem arma de fogo, sprint
+      const gunRun = this.armed === 'rifle' || this.armed === 'aim' ? 'run_armed' : this.armed === 'pistol' || this.armed === 'pistol_aim' ? 'run_1armed' : 'sprint';
+      const clip = input.sprint ? (a.has(gunRun) ? gunRun : 'sprint') : input.walkClip;
       a.play(a.has(clip) ? clip : 'walk');
     } else if (this.emote && a.has(this.emote)) a.play(this.emote);
     else if (this.armed === 'pistol_aim' && a.has('arrestgun')) a.play('arrestgun'); // pistola mirando parado: o corpo e a pose de mirar do ARRESTgun (ped.ifp)
@@ -691,7 +700,13 @@ export class Player {
         this.emote = null;
         this.weaponVis?.setHidden(true);
         this.animator?.setArmed('none');
-        this.animator?.play('ko');
+        // cai de costas (KO_skid_back) se o carro vem pela frente, de bruços (KO_skid_front) se vem por trás; o corpo se vira para cair no sentido da batida
+        const fwd = Math.sin(this.heading) * dir.x + Math.cos(this.heading) * dir.y;
+        this.koFace = fwd >= 0;
+        if (!this.koFace) this.heading = Math.atan2(-dir.x, -dir.y);
+        else this.heading = Math.atan2(dir.x, dir.y);
+        this.object.rotation.y = this.heading;
+        this.animator?.restart(this.koFace ? 'ko_skid_front' : 'ko_skid_back');
         return true;
       }
     }
@@ -743,8 +758,9 @@ export class Player {
     } else {
       this.koVel.multiplyScalar(Math.exp(-dt * 2.4));
       pos.y = Math.max(0, pos.y - 20 * dt);
-      if (this.koT > 1.6) this.animator?.play('getup');
-      if (this.koT > 3.2) this.endKo();
+      const lie = this.koFace ? 1.5 : 1.3; // fica caído um instante antes de levantar
+      if (this.koT > lie) this.animator?.play(this.koFace ? 'getup_front' : 'getup');
+      if (this.koT > lie + this.clipLen(this.koFace ? 'getup_front' : 'getup', 1.3)) this.endKo();
     }
     this.animator?.update(dt);
   }
