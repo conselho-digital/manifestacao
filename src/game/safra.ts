@@ -2,6 +2,7 @@
 // (lê-se de baixo para cima), grossas, com a borda dourada, como nas fotos de referência. Sem fonte 3D: cada letra é
 // desenhada num canvas e "extrudada" em fatias (planos com recorte pela transparência), o que dá volume com 2 chamadas de desenho.
 import * as THREE from 'three';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { addBox } from './map';
 
 const TEXT = 'Safra';
@@ -54,37 +55,37 @@ export function createSafraSign(): THREE.Group {
   const brass = new THREE.MeshLambertMaterial({ color: GOLD });
   const brassDark = new THREE.MeshLambertMaterial({ color: 0xa57d2e });
 
-  // letras: posições ao longo do eixo de leitura (x local, depois giradas para cima)
+  // letras: posições ao longo do eixo de leitura (x local, depois giradas para cima). Cada letra = 1 malha com todas as
+  // fatias juntas + 1 plano da frente branca (antes eram ~20 malhas por letra: muitas chamadas de desenho)
   const letters = new THREE.Group();
   let cursor = 0;
-  const sideGeos: THREE.BufferGeometry[] = [];
-  const frontMeshes: THREE.Mesh[] = [];
-  const sideMats: THREE.MeshLambertMaterial[] = [];
   for (const ch of TEXT) {
     const t = letterTextures(ch);
     const w = t.w * PX;
     const h = t.h * PX;
-    const sideMat = new THREE.MeshLambertMaterial({ map: t.side, transparent: true, alphaTest: 0.5, side: THREE.DoubleSide });
-    sideMats.push(sideMat);
+    const sideMat = new THREE.MeshLambertMaterial({ map: t.side, alphaTest: 0.5, side: THREE.DoubleSide });
+    const slices: THREE.BufferGeometry[] = [];
     for (let i = 0; i < SLICES; i++) {
       const g = new THREE.PlaneGeometry(w, h);
       g.translate(cursor + w / 2, h / 2 - t.capCenter * PX, PILLAR / 2 + (i / (SLICES - 1)) * DEPTH * 0.92);
-      const m = new THREE.Mesh(g, sideMat);
-      letters.add(m);
+      slices.push(g);
     }
+    letters.add(new THREE.Mesh(mergeGeometries(slices)!, sideMat));
     const fg = new THREE.PlaneGeometry(w, h);
     fg.translate(cursor + w / 2, h / 2 - t.capCenter * PX, PILLAR / 2 + DEPTH);
-    const fm = new THREE.Mesh(fg, new THREE.MeshLambertMaterial({ map: t.front, transparent: true, alphaTest: 0.5, emissive: 0xffffff, emissiveIntensity: 0.85, emissiveMap: t.front }));
-    frontMeshes.push(fm);
-    letters.add(fm);
+    letters.add(new THREE.Mesh(fg, new THREE.MeshLambertMaterial({ map: t.front, alphaTest: 0.5, emissive: 0xffffff, emissiveIntensity: 0.85, emissiveMap: t.front })));
     cursor += w - 0.12 + GAP;
   }
-  void sideGeos;
   const total = cursor - GAP;
   // de lado: lê-se de baixo para cima, o topo das letras aponta para a esquerda
   letters.rotation.z = Math.PI / 2;
   letters.position.set(0, BASE_Y, 0);
-  group.add(letters);
+  // "Safra" nos dois lados: a segunda cópia gira 180° em volta do pilar (lê-se certo de frente e de trás)
+  const side1 = new THREE.Group();
+  side1.add(letters);
+  const side2 = side1.clone();
+  side2.rotation.y = Math.PI;
+  group.add(side1, side2);
   const top = BASE_Y + total;
 
   // pilar de latão (com uma emenda mais escura perto do chão, como nas fotos) e base de pedra

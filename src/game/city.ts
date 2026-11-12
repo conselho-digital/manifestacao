@@ -723,8 +723,8 @@ export function createCity(): THREE.Group {
   placeTotem(city, -42.2, 12.9, Math.PI);
   placeTotem(city, -42.2, -12.9, 0);
 
-  // Escultura "Safra" na calçada em frente ao prédio de cobre (NT), de frente para a avenida
-  placeSafraSign(city, -23, 15.6, Math.PI);
+  // Escultura "Safra" na calçada em frente ao prédio de cobre (NT), girada 90°: as letras ficam dos dois lados, de frente para quem anda pela calçada
+  placeSafraSign(city, -23, 15.6, Math.PI / 2);
 
   validate();
   void loadMasp(city);
