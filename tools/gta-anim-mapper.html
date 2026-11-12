@@ -156,6 +156,8 @@
     <h2>3. Salvar</h2>
     <div class="card">
       <button class="primary" id="btnSave">Salvar Mapeamento (JSON)</button>
+      <button id="btnCopy" style="width:100%; margin-top:6px">Copiar JSON</button>
+      <textarea id="jsonOut" readonly hidden rows="8" aria-label="JSON do mapeamento" style="width:100%; margin-top:6px; font:11px ui-monospace,monospace; background:#11141a; color:var(--text); border:1px solid var(--line); border-radius:6px"></textarea>
       <div style="margin-top:8px"><label class="file" style="margin:0"><span>Carregar um mapeamento salvo</span><input type="file" id="fJson" accept=".json,application/json"></label></div>
     </div>
   </aside>
@@ -1730,17 +1732,29 @@ const CarlosRetarget = (function () {
       actions
     };
   }
-  $('#btnSave').onclick = () => {
+  /** Mostra o JSON na caixa de texto (e tenta copiar); serve quando o navegador bloqueia downloads. */
+  async function showJson(copy) {
     const json = JSON.stringify(buildJson(), null, 2);
-    const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'animation-mapping.json';
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    setTimeout(() => URL.revokeObjectURL(url), 2000);
-    log('Mapeamento salvo (animation-mapping.json).', 'ok');
+    const box = $('#jsonOut');
+    box.value = json; box.hidden = false;
+    let copied = false;
+    if (copy) { try { await navigator.clipboard.writeText(json); copied = true; } catch (e) { box.select(); } }
+    return { json, copied };
+  }
+  $('#btnSave').onclick = async () => {
+    const { json } = await showJson(false);
+    try {
+      const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+      const a = document.createElement('a');
+      a.href = url; a.download = 'animation-mapping.json';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 2000);
+    } catch (e) { /* download bloqueado */ }
+    log('Mapeamento salvo (animation-mapping.json). Se o download não começar, use "Copiar JSON".', 'ok');
+  };
+  $('#btnCopy').onclick = async () => {
+    const r = await showJson(true);
+    log(r.copied ? 'JSON copiado.' : 'Não consegui copiar sozinho: o texto está selecionado na caixa, use Ctrl+C.', r.copied ? 'ok' : 'warn');
   };
   $('#fJson').onchange = async (e) => {
     const f = e.target.files[0];
