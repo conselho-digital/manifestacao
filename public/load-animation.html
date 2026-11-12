@@ -192,41 +192,61 @@ function parseIFP(buf) {
   throw new Error('Formato de IFP desconhecido ("' + magic + '"). Suportados: ANP3 e ANPK.');
 }
 
+/** Ordena os quadros pelo tempo e tira tempos repetidos (o mixer exige tempos crescentes). */
+function cleanKeys(keys) {
+  keys.sort((a, b) => a.t - b.t);
+  const out = [];
+  for (const k of keys) if (!out.length || k.t > out[out.length - 1].t) out.push(k);
+  return out;
+}
+
 function parseANP3(dv, u8) {
-  const res = { format: 'ANP3', name: cstr(u8, 8, 24), anims: [] };
+  const res = { format: 'ANP3', name: cstr(u8, 8, 24), anims: [], warnings: [] };
   const count = dv.getUint32(32, true);
   let p = 36;
   for (let a = 0; a < count && p + 36 <= dv.byteLength; a++) {
     const name = cstr(u8, p, 24);
     const numNodes = dv.getUint32(p + 24, true), dataSize = dv.getUint32(p + 28, true);
     const animStart = p + 36;
+    const animEnd = animStart + dataSize;
     p = animStart;
-    const nodes = [];
-    let duration = 0;
-    for (let n = 0; n < numNodes; n++) {
-      const nm = cstr(u8, p, 24).trim();
-      const type = dv.getUint32(p + 24, true), nf = dv.getUint32(p + 28, true), id = dv.getInt32(p + 32, true);
-      p += 36;
-      const keys = [];
-      for (let k = 0; k < nf; k++) {
-        const q = [dv.getInt16(p, true) / 4096, dv.getInt16(p + 2, true) / 4096, dv.getInt16(p + 4, true) / 4096, dv.getInt16(p + 6, true) / 4096];
-        const t = dv.getInt16(p + 8, true) / 60;
-        let pos = null;
-        if (type === 4) { pos = [dv.getInt16(p + 10, true) / 1024, dv.getInt16(p + 12, true) / 1024, dv.getInt16(p + 14, true) / 1024]; p += 16; } else p += 10;
-        keys.push({ t, q, p: pos });
-        if (t > duration) duration = t;
+    try {
+      if (numNodes > 512) throw new Error('número de ossos absurdo (' + numNodes + ')');
+      const nodes = [];
+      let duration = 0;
+      for (let n = 0; n < numNodes; n++) {
+        if (p + 36 > dv.byteLength) throw new Error('arquivo termina no meio da animação');
+        const nm = cstr(u8, p, 24).trim();
+        const type = dv.getUint32(p + 24, true), nf = dv.getUint32(p + 28, true), id = dv.getInt32(p + 32, true);
+        p += 36;
+        if (type !== 3 && type !== 4) throw new Error('o osso "' + nm + '" usa o tipo de quadro ' + type + ' (só os tipos 3 e 4 são lidos)');
+        const size = type === 4 ? 16 : 10;
+        if (nf > 100000 || p + nf * size > dv.byteLength) throw new Error('o osso "' + nm + '" declara ' + nf + ' quadros, mais do que cabe no arquivo');
+        const keys = [];
+        for (let k = 0; k < nf; k++, p += size) {
+          const q = [dv.getInt16(p, true) / 4096, dv.getInt16(p + 2, true) / 4096, dv.getInt16(p + 4, true) / 4096, dv.getInt16(p + 6, true) / 4096];
+          const t = dv.getInt16(p + 8, true) / 60;
+          const pos = type === 4 ? [dv.getInt16(p + 10, true) / 1024, dv.getInt16(p + 12, true) / 1024, dv.getInt16(p + 14, true) / 1024] : null;
+          keys.push({ t, q, p: pos });
+        }
+        const clean = cleanKeys(keys);
+        if (clean.length) duration = Math.max(duration, clean[clean.length - 1].t);
+        nodes.push({ name: nm, id, type, keys: clean });
       }
-      nodes.push({ name: nm, id, type, keys });
+      res.anims.push({ name, duration, nodes });
+      // dataSize às vezes cobre preenchimento depois do último osso
+      if (dataSize && animEnd > p && animEnd <= dv.byteLength) p = animEnd;
+    } catch (err) {
+      res.warnings.push('"' + name + '" ignorada: ' + err.message);
+      if (dataSize && animEnd <= dv.byteLength) p = animEnd; else break;
     }
-    res.anims.push({ name, duration, nodes });
-    // dataSize às vezes cobre preenchimento depois do último osso
-    if (dataSize && animStart + dataSize > p && animStart + dataSize <= dv.byteLength) p = animStart + dataSize;
   }
+  if (res.anims.length < count && !res.warnings.length) res.warnings.push('o cabeçalho diz ' + count + ' animações, mas só ' + res.anims.length + ' foram lidas');
   return res;
 }
 
 function parseANPK(dv, u8) {
-  const res = { format: 'ANPK', name: '', anims: [] };
+  const res = { format: 'ANPK', name: '', anims: [], warnings: [] };
   const root = chunkAtRaw(dv, 0);
   let o = 8;
   const end = Math.min(dv.byteLength, 8 + root.size);
@@ -267,7 +287,7 @@ function parseANPK(dv, u8) {
           keys.push({ t, q: qt, p: pos });
           if (t > duration) duration = t;
         }
-        nodes.push({ name: nm.trim(), id: bid, type: fsz >= 32 ? 4 : 3, keys });
+        nodes.push({ name: nm.trim(), id: bid, type: fsz >= 32 ? 4 : 3, keys: cleanKeys(keys) });
       }
       q = cEnd;
     }
@@ -395,6 +415,27 @@ const CarlosRetarget = (function () {
     C = { order, drive, cw0, parentRot, restQ, arms, motion, boneNames: new Set(order.map((b) => b.name)) };
   }
 
+  /** Ossos do IFP por ID do GTA; se os IDs não são os do GTA (arquivo convertido), usa o nome do osso. */
+  const NAME_ID = {
+    root: 0, normal: 0, ripped: 0, pelvis: 1, spine: 2, spine1: 3, neck: 4, head: 5,
+    rclavicle: 21, rupperarm: 22, rforearm: 23, rhand: 24, rfinger: 25, rfinger01: 26,
+    lclavicle: 31, lupperarm: 32, lforearm: 33, lhand: 34, lfinger: 35, lfinger01: 36,
+    lthigh: 41, lcalf: 42, lfoot: 43, ltoe0: 44, rthigh: 51, rcalf: 52, rfoot: 53, rtoe0: 54
+  };
+  const NAME_SPACED = { 'spine 1': 2, 'spine 2': 3 }; // nomes do tipo Bip01 "Spine 1/2" = Spine e Spine1 do GTA
+  function idMap(anim) {
+    const std = new Set([0, ...Object.values(LAW.boneId)]); // 0 = Root (deslocamento do corpo)
+    const byId = new Map();
+    for (const n of anim.nodes) if (std.has(n.id) && !byId.has(n.id)) byId.set(n.id, n);
+    if (byId.size >= 6) return byId; // IDs do GTA: é o caso normal
+    const byName = new Map();
+    for (const n of anim.nodes) {
+      const raw = String(n.name).toLowerCase().replace(/bip01/g, '').trim();
+      const id = NAME_SPACED[raw] !== undefined ? NAME_SPACED[raw] : NAME_ID[raw.replace(/[^a-z0-9]/g, '')];
+      if (id !== undefined && !byName.has(id)) byName.set(id, n);
+    }
+    return byName.size > byId.size ? byName : byId;
+  }
   const canon = (name) => {
     const l = String(name).toLowerCase();
     if (/^walk(_player)?$/.test(l)) return 'walk';
@@ -489,7 +530,7 @@ const CarlosRetarget = (function () {
   function bake(anim, rootMode, moveBody) {
     if (!C) throw new Error('Carlos ainda não preparado.');
     const cname = canon(anim.name);
-    const byId = new Map(anim.nodes.map((n) => [n.id, n]));
+    const byId = idMap(anim);
     const dur = anim.duration;
     const n = dur > 1e-4 ? Math.min(900, Math.max(2, Math.round(dur * (dur <= 3 ? 30 : 15)) + 1)) : 1;
     const times = Array.from({ length: n }, (_, i) => (n === 1 ? 0 : dur * i / (n - 1)));
@@ -789,7 +830,8 @@ const CarlosRetarget = (function () {
       if (!ifp.anims.length) throw new Error('o arquivo não tem animações.');
       S.ifp = ifp; S.ifpName = file.name; S.clips.clear(); S.sel = -1;
       $('#fileName').textContent = file.name;
-      status(ifp.anims.length + ' animações (' + ifp.format + ').', 'ok');
+      const bad = (ifp.warnings || []).length;
+      status(ifp.anims.length + ' animações (' + ifp.format + ').' + (bad ? ' Atenção: ' + ifp.warnings.join('; ') + '.' : ''), bad ? 'warn' : 'ok');
       buildCarousel();
       select(0);
       refreshReplacements();
