@@ -1,0 +1,1472 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Visualizador e Mapeador de Animações GTA SA</title>
+<!--
+  Visualizador e Mapeador de Animações do GTA San Andreas (.dff + .txd + .ifp)
+  Arquivo único: HTML + CSS + JavaScript. Three.js vem por CDN (r147, versão com OrbitControls em script comum).
+  Não envia nada para a internet: os arquivos são lidos só no seu navegador.
+
+  Como usar: escolha o .dff (modelo), o .txd (textura) e o .ifp (animações) e clique em "Carregar e Processar".
+  Depois clique numa animação da lista para ver em loop, ligue as ações do jogo às animações (painel "Mapeamento")
+  e salve o JSON.
+
+  Formatos (parsers escritos aqui, sem biblioteca externa):
+   - DFF (RenderWare Clump): FrameList (+ nome e HAnim), GeometryList (vértices, normais, UV, triângulos, materiais),
+     Skin PLG (pesos e matrizes inversas), BinMesh como reserva. Não lê DFF nativo de PS2/Xbox.
+   - TXD (D3D8/D3D9 do PC): DXT1/DXT3/DXT5, 8888, 888, 565, 1555, 4444, 555, paleta de 8 e 4 bits, LUM8. 1º nível de mipmap.
+   - IFP: ANP3 (GTA San Andreas) e ANPK (GTA III / Vice City / SA em chunks).
+-->
+<style>
+  :root {
+    --bg: #14161a; --panel: #1c1f25; --panel2: #232730; --line: #30343e; --text: #e6e8ee; --muted: #8b92a3;
+    --accent: #4da3ff; --accent2: #2f7fd6; --ok: #4cd08a; --warn: #f0b84a; --err: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 13px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; align-items: center; gap: 12px; padding: 8px 14px; background: var(--panel); border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 15px; margin: 0; font-weight: 600; }
+  header small { color: var(--muted); }
+  main { display: grid; grid-template-columns: 320px minmax(0, 1fr) 290px; height: calc(100% - 41px); }
+  aside, section.center { min-height: 0; overflow: auto; }
+  aside { background: var(--panel); border-right: 1px solid var(--line); padding: 10px; }
+  aside#right { border-right: 0; border-left: 1px solid var(--line); display: flex; flex-direction: column; overflow: hidden; }
+  section.center { display: flex; flex-direction: column; overflow: hidden; }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); margin: 14px 0 6px; }
+  h2:first-child { margin-top: 0; }
+  .card { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 9px; margin-bottom: 10px; }
+  label.file { display: block; margin-bottom: 8px; }
+  label.file span { display: block; color: var(--muted); font-size: 12px; margin-bottom: 2px; }
+  input[type=file] { width: 100%; font-size: 12px; color: var(--muted); }
+  input[type=file]::file-selector-button { background: #2c313c; color: var(--text); border: 1px solid var(--line); border-radius: 5px; padding: 4px 8px; margin-right: 8px; cursor: pointer; }
+  button, select, input[type=text], input[type=search] { font: inherit; color: var(--text); background: #2a2f3a; border: 1px solid var(--line); border-radius: 6px; padding: 5px 9px; }
+  button { cursor: pointer; }
+  button:hover:not(:disabled) { background: #343a47; }
+  button:disabled { opacity: .45; cursor: default; }
+  button.primary { background: var(--accent2); border-color: var(--accent); color: #fff; font-weight: 600; width: 100%; padding: 8px; }
+  button.primary:hover:not(:disabled) { background: var(--accent); }
+  select { max-width: 100%; }
+  #viewport { position: relative; flex: 1 1 auto; min-height: 200px; background: #0f1115; }
+  #viewport canvas { display: block; width: 100%; height: 100%; }
+  #hud { position: absolute; left: 8px; top: 8px; right: 8px; display: flex; flex-wrap: wrap; gap: 6px; pointer-events: none; }
+  #hud span { background: rgba(20,22,26,.78); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; color: var(--muted); }
+  #hud b { color: var(--text); font-weight: 600; }
+  #viewTools { position: absolute; right: 8px; top: 8px; display: flex; gap: 10px; background: rgba(20,22,26,.78); border: 1px solid var(--line); border-radius: 6px; padding: 3px 8px; }
+  #viewTools label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+  .bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 8px 10px; background: var(--panel); border-top: 1px solid var(--line); }
+  .bar .grow { flex: 1 1 200px; display: flex; align-items: center; gap: 8px; min-width: 200px; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  .mono { font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
+  #nowPlaying { color: var(--accent); font-weight: 600; }
+  .testbar button { padding: 7px 12px; }
+  .testbar button.on { background: var(--accent2); border-color: var(--accent); color: #fff; }
+  .testbar kbd, .map-row kbd { background: #11141a; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; font: 11px ui-monospace, monospace; color: var(--muted); margin-left: 4px; }
+  #log { max-height: 92px; overflow: auto; padding: 6px 10px; background: #101216; border-top: 1px solid var(--line); font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; color: var(--muted); }
+  #log .ok { color: var(--ok); } #log .warn { color: var(--warn); } #log .err { color: var(--err); }
+  .map-row { display: grid; grid-template-columns: 1fr auto; gap: 4px 6px; align-items: center; padding: 6px 0; border-bottom: 1px solid var(--line); }
+  .map-row:last-child { border-bottom: 0; }
+  .map-row .name { grid-column: 1 / -1; font-weight: 600; }
+  .map-row select { width: 100%; }
+  .map-row .sub { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
+  .opts label { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+  .opts select { margin-left: auto; }
+  #filter { width: 100%; margin-bottom: 6px; }
+  #listWrap { flex: 1 1 auto; overflow: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--panel2); }
+  table { width: 100%; border-collapse: collapse; }
+  th { position: sticky; top: 0; background: #2a2f3a; text-align: left; font-weight: 600; color: var(--muted); padding: 5px 8px; font-size: 12px; }
+  td { padding: 4px 8px; border-top: 1px solid var(--line); }
+  tbody tr { cursor: pointer; }
+  tbody tr:hover { background: #2b303b; }
+  tbody tr.sel { background: #254a77; }
+  td.num, th.num { text-align: right; width: 1%; white-space: nowrap; color: var(--muted); }
+  #thumbs { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+  #thumbs canvas { width: 40px; height: 40px; border: 1px solid var(--line); background: repeating-conic-gradient(#444 0 25%, #333 0 50%) 0 0 / 8px 8px; border-radius: 3px; }
+  .hint { color: var(--muted); font-size: 12px; margin: 4px 0 0; }
+  @media (max-width: 1000px) {
+    main { grid-template-columns: 1fr; height: auto; }
+    aside, section.center { overflow: visible; }
+    aside { border-right: 0; border-bottom: 1px solid var(--line); }
+    aside#right { border-left: 0; max-height: 380px; }
+    #viewport { height: 60vh; flex: none; }
+    html, body { height: auto; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1>Visualizador e Mapeador de Animações — GTA San Andreas</h1>
+  <small>.dff · .txd · .ifp → JSON de ações para o seu jogo</small>
+</header>
+
+<main>
+  <!-- ============ Painel esquerdo: upload + mapeamento ============ -->
+  <aside id="left">
+    <h2>1. Arquivos</h2>
+    <div class="card">
+      <label class="file"><span>Modelo 3D (.dff)</span><input type="file" id="fDff" accept=".dff"></label>
+      <label class="file"><span>Textura (.txd)</span><input type="file" id="fTxd" accept=".txd"></label>
+      <label class="file"><span>Animações (.ifp)</span><input type="file" id="fIfp" accept=".ifp"></label>
+      <button class="primary" id="btnLoad">Carregar e Processar</button>
+      <p class="hint">Dá para carregar só um deles (por exemplo, trocar apenas o .ifp no mesmo boneco).</p>
+      <div id="thumbs" title="Texturas do .txd"></div>
+    </div>
+
+    <h2>2. Mapeamento de ações do jogo</h2>
+    <div class="card">
+      <div id="mapRows"></div>
+      <div style="display:flex; gap:6px; margin-top:8px">
+        <input type="text" id="newAction" placeholder="Nova ação (ex.: Cair)" style="flex:1; min-width:0">
+        <button id="btnAddAction">Adicionar</button>
+      </div>
+      <div style="display:flex; gap:6px; margin-top:8px; flex-wrap:wrap">
+        <button id="btnSuggest" title="Procura nomes parecidos (idle, walk, run, jump…)">Sugerir automático</button>
+        <button id="btnClearMap">Limpar</button>
+      </div>
+    </div>
+
+    <h2>Opções de animação</h2>
+    <div class="card opts">
+      <label>Ossos: <select id="optBones">
+        <option value="auto">Automático (ID, depois nome)</option>
+        <option value="id">Só por ID do osso</option>
+        <option value="name">Só por nome</option>
+      </select></label>
+      <label><input type="checkbox" id="optInPlace" checked> Root parado (sem andar para frente)</label>
+      <label><input type="checkbox" id="optConj"> Inverter rotação (conjugado)</label>
+      <p class="hint">ANP3 já vem no sentido certo. Se um IFP ANPK parecer torto, marque a inversão.</p>
+    </div>
+
+    <h2>3. Salvar</h2>
+    <div class="card">
+      <button class="primary" id="btnSave">Salvar Mapeamento (JSON)</button>
+      <div style="margin-top:8px"><label class="file" style="margin:0"><span>Carregar um mapeamento salvo</span><input type="file" id="fJson" accept=".json,application/json"></label></div>
+    </div>
+  </aside>
+
+  <!-- ============ Centro: visualizador, controles e teste ============ -->
+  <section class="center">
+    <div id="viewport">
+      <div id="hud">
+        <span>Animação: <b id="nowPlaying">—</b></span>
+        <span id="modelInfo">Sem modelo</span>
+      </div>
+      <div id="viewTools">
+        <label><input type="checkbox" id="vGrid" checked> Grade</label>
+        <label><input type="checkbox" id="vBones"> Ossos</label>
+        <label><input type="checkbox" id="vWire"> Wireframe</label>
+        <button id="btnFrame" style="padding:1px 8px">Enquadrar</button>
+      </div>
+    </div>
+
+    <div class="bar" id="transport">
+      <button id="btnPlay" disabled>▶ Play</button>
+      <button id="btnPause" disabled>⏸ Pause</button>
+      <button id="btnStop" disabled>⏹ Stop</button>
+      <div class="grow">
+        <input type="range" id="timeline" min="0" max="1" step="0.001" value="0" disabled>
+        <span class="mono" id="timeTxt">0.00 / 0.00 s</span>
+      </div>
+      <label>Velocidade <select id="speed">
+        <option value="0.1">0.1×</option><option value="0.25">0.25×</option><option value="0.5">0.5×</option>
+        <option value="1" selected>1×</option><option value="1.5">1.5×</option><option value="2">2×</option>
+      </select></label>
+      <label><input type="checkbox" id="loopChk" checked> Loop</label>
+    </div>
+
+    <div class="bar testbar" id="testBar">
+      <b style="margin-right:4px">Testar ações:</b>
+      <span id="testBtns"></span>
+      <span class="mono">Teclas: W andar · Shift+W correr · Espaço pular · C agachar · F golpear</span>
+    </div>
+    <div id="log"></div>
+  </section>
+
+  <!-- ============ Painel direito: lista de animações ============ -->
+  <aside id="right">
+    <h2>Animações do .ifp <span id="animCount" class="mono"></span></h2>
+    <input type="search" id="filter" placeholder="Filtrar pelo nome…">
+    <div id="listWrap">
+      <table>
+        <thead><tr><th>Nome</th><th class="num">Dur.</th><th class="num">Ossos</th></tr></thead>
+        <tbody id="animBody"></tbody>
+      </table>
+    </div>
+    <p class="hint">Clique para tocar em loop. Clique duas vezes numa linha para ligá-la à última ação escolhida no mapeamento.</p>
+  </aside>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+
+<!-- ======================================================================================= -->
+<!--  PARSERS (JavaScript puro, sem Three.js): DFF, TXD e IFP                                -->
+<!-- ======================================================================================= -->
+<script id="parsers">
+'use strict';
+
+/* ---------- Utilidades RenderWare ---------- */
+const RW = {
+  STRUCT: 0x01, STRING: 0x02, EXTENSION: 0x03, TEXTURE: 0x06, MATERIAL: 0x07, MATLIST: 0x08,
+  FRAMELIST: 0x0E, GEOMETRY: 0x0F, CLUMP: 0x10, ATOMIC: 0x14, TEXNATIVE: 0x15, TXDICT: 0x16, GEOLIST: 0x1A,
+  SKIN: 0x116, HANIM: 0x11E, BINMESH: 0x50E, FRAMENAME: 0x253F2FE
+};
+
+/** Versão da biblioteca do chunk (ex.: 0x1C020037 → 0x36003). */
+function rwVersion(v) {
+  return (v & 0xFFFF0000) ? (((v >>> 14) & 0x3FF00) | ((v >>> 16) & 0x3F) | 0x30000) : ((v << 8) >>> 0);
+}
+
+/** Lê o cabeçalho de 12 bytes (tipo, tamanho, versão) de um chunk. */
+function chunkAt(dv, o) {
+  if (o + 12 > dv.byteLength) return null;
+  const size = dv.getUint32(o + 4, true);
+  return { type: dv.getUint32(o, true), size, ver: rwVersion(dv.getUint32(o + 8, true)), start: o, body: o + 12, end: Math.min(o + 12 + size, dv.byteLength) };
+}
+
+/** Chunks filhos consecutivos entre start e end. */
+function chunkList(dv, start, end) {
+  const out = [];
+  let o = start;
+  while (o + 12 <= end) {
+    const c = chunkAt(dv, o);
+    if (!c) break;
+    out.push(c);
+    o = c.end;
+  }
+  return out;
+}
+
+/** Texto terminado em zero (latin1). */
+function cstr(u8, start, maxLen) {
+  let s = '';
+  for (let i = 0; i < maxLen; i++) {
+    const c = u8[start + i];
+    if (c === 0 || c === undefined) break;
+    s += String.fromCharCode(c);
+  }
+  return s;
+}
+
+/* ---------- DFF ---------- */
+function parseDFF(buf) {
+  const dv = new DataView(buf);
+  const u8 = new Uint8Array(buf);
+  const top = chunkList(dv, 0, dv.byteLength);
+  const clump = top.find((c) => c.type === RW.CLUMP);
+  if (!clump) throw new Error('Não parece um DFF (chunk Clump não encontrado).');
+  let frames = [], geoms = [];
+  const atomics = [];
+  for (const c of chunkList(dv, clump.body, clump.end)) {
+    if (c.type === RW.FRAMELIST) frames = parseFrameList(dv, u8, c);
+    else if (c.type === RW.GEOLIST) geoms = parseGeometryList(dv, u8, c);
+    else if (c.type === RW.ATOMIC) {
+      const st = chunkList(dv, c.body, c.end).find((k) => k.type === RW.STRUCT);
+      if (st) atomics.push({ frame: dv.getUint32(st.body, true), geom: dv.getUint32(st.body + 4, true) });
+    }
+  }
+  // Modelo sem lista de atômicos (raro): usa cada geometria no frame 0
+  if (!atomics.length) geoms.forEach((_, i) => atomics.push({ frame: 0, geom: i }));
+  return { frames, geoms, atomics, version: clump.ver };
+}
+
+function parseFrameList(dv, u8, c) {
+  const kids = chunkList(dv, c.body, c.end);
+  const st = kids.find((k) => k.type === RW.STRUCT);
+  let o = st.body;
+  const n = dv.getUint32(o, true);
+  o += 4;
+  const frames = [];
+  for (let i = 0; i < n; i++) {
+    const rot = [];
+    for (let j = 0; j < 9; j++) rot.push(dv.getFloat32(o + j * 4, true));
+    const pos = [dv.getFloat32(o + 36, true), dv.getFloat32(o + 40, true), dv.getFloat32(o + 44, true)];
+    frames.push({ rot, pos, parent: dv.getInt32(o + 48, true), name: '', nodeId: -1, hier: null });
+    o += 56;
+  }
+  // Depois da struct vem uma Extension por frame (nome e HAnim)
+  const exts = kids.filter((k) => k.type === RW.EXTENSION);
+  for (let i = 0; i < n && i < exts.length; i++) {
+    for (const e of chunkList(dv, exts[i].body, exts[i].end)) {
+      if (e.type === RW.FRAMENAME) frames[i].name = cstr(u8, e.body, e.size);
+      else if (e.type === RW.HANIM && e.size >= 12) {
+        const f = frames[i];
+        f.nodeId = dv.getInt32(e.body + 4, true);
+        const numNodes = dv.getUint32(e.body + 8, true);
+        if (numNodes > 0 && e.size >= 20 + numNodes * 12) {
+          const nodes = [];
+          let p = e.body + 20; // versão, id, nº de nós, flags, tamanho do keyframe
+          for (let k = 0; k < numNodes; k++, p += 12) nodes.push({ id: dv.getInt32(p, true), index: dv.getInt32(p + 4, true), flags: dv.getInt32(p + 8, true) });
+          f.hier = nodes;
+        }
+      }
+    }
+  }
+  return frames;
+}
+
+function parseGeometryList(dv, u8, c) {
+  const kids = chunkList(dv, c.body, c.end);
+  return kids.filter((k) => k.type === RW.GEOMETRY).map((g) => parseGeometry(dv, u8, g));
+}
+
+function parseGeometry(dv, u8, c) {
+  const kids = chunkList(dv, c.body, c.end);
+  const st = kids.find((k) => k.type === RW.STRUCT);
+  let o = st.body;
+  const flags = dv.getUint32(o, true);
+  const numTris = dv.getUint32(o + 4, true);
+  const numVerts = dv.getUint32(o + 8, true);
+  const numMorph = dv.getUint32(o + 12, true);
+  o += 16;
+  if (flags & 0x01000000) throw new Error('Geometria "nativa" (PS2/Xbox) não é suportada. Use o DFF do PC.');
+  if (c.ver < 0x34000) o += 12; // ambient, diffuse, specular
+  const g = { numVerts, positions: new Float32Array(numVerts * 3), normals: null, uvs: null, tris: new Uint32Array(numTris * 3), triMat: new Uint16Array(numTris), materials: [], skin: null };
+  if (flags & 0x08) o += numVerts * 4; // cores pré-calculadas (ignoradas)
+  let texSets = (flags >> 16) & 0xFF;
+  if (!texSets) texSets = (flags & 0x04) ? 1 : (flags & 0x80) ? 2 : 0;
+  if (texSets > 0) {
+    g.uvs = new Float32Array(numVerts * 2);
+    for (let i = 0; i < numVerts * 2; i++) g.uvs[i] = dv.getFloat32(o + i * 4, true);
+    o += numVerts * 8 * texSets; // só o 1º conjunto de UV é usado
+  }
+  for (let t = 0; t < numTris; t++, o += 8) {
+    // ordem gravada: vértice2, vértice1, material, vértice3
+    const v2 = dv.getUint16(o, true), v1 = dv.getUint16(o + 2, true), m = dv.getUint16(o + 4, true), v3 = dv.getUint16(o + 6, true);
+    g.tris[t * 3] = v1; g.tris[t * 3 + 1] = v2; g.tris[t * 3 + 2] = v3; g.triMat[t] = m;
+  }
+  for (let m = 0; m < numMorph; m++) {
+    o += 16; // esfera envolvente
+    const hasV = dv.getUint32(o, true), hasN = dv.getUint32(o + 4, true);
+    o += 8;
+    if (hasV) {
+      if (m === 0) for (let i = 0; i < numVerts * 3; i++) g.positions[i] = dv.getFloat32(o + i * 4, true);
+      o += numVerts * 12;
+    }
+    if (hasN) {
+      if (m === 0) {
+        g.normals = new Float32Array(numVerts * 3);
+        for (let i = 0; i < numVerts * 3; i++) g.normals[i] = dv.getFloat32(o + i * 4, true);
+      }
+      o += numVerts * 12;
+    }
+  }
+  for (const k of kids) {
+    if (k.type === RW.MATLIST) g.materials = parseMaterialList(dv, u8, k);
+    else if (k.type === RW.EXTENSION) {
+      for (const e of chunkList(dv, k.body, k.end)) {
+        if (e.type === RW.SKIN) { try { g.skin = parseSkin(dv, e, numVerts); } catch (err) { g.skinError = err.message; } }
+        else if (e.type === RW.BINMESH && !numTris) parseBinMesh(dv, e, g);
+      }
+    }
+  }
+  return g;
+}
+
+/** Lista de triângulos reconstruída do Bin Mesh (só quando a struct não traz triângulos). */
+function parseBinMesh(dv, e, g) {
+  const strip = dv.getUint32(e.body, true) === 1;
+  const numMeshes = dv.getUint32(e.body + 4, true);
+  let o = e.body + 12;
+  const tris = [], mats = [];
+  for (let m = 0; m < numMeshes; m++) {
+    const n = dv.getUint32(o, true), mat = dv.getUint32(o + 4, true);
+    o += 8;
+    const idx = [];
+    for (let i = 0; i < n; i++, o += 4) idx.push(dv.getUint32(o, true));
+    if (strip) {
+      for (let i = 2; i < n; i++) {
+        const a = idx[i - 2], b = idx[i - 1], d = idx[i];
+        if (a === b || b === d || a === d) continue;
+        if (i & 1) tris.push(b, a, d); else tris.push(a, b, d);
+        mats.push(mat);
+      }
+    } else {
+      for (let i = 0; i + 2 < n; i += 3) { tris.push(idx[i], idx[i + 1], idx[i + 2]); mats.push(mat); }
+    }
+  }
+  g.tris = Uint32Array.from(tris);
+  g.triMat = Uint16Array.from(mats);
+}
+
+function parseSkin(dv, e, numVerts) {
+  let o = e.body;
+  const numBones = dv.getUint8(o), numUsed = dv.getUint8(o + 1);
+  o += 4;
+  o += numUsed; // índices dos ossos usados
+  const indices = new Uint8Array(numVerts * 4);
+  for (let i = 0; i < numVerts * 4; i++) indices[i] = dv.getUint8(o + i);
+  o += numVerts * 4;
+  const weights = new Float32Array(numVerts * 4);
+  for (let i = 0; i < numVerts * 4; i++) weights[i] = dv.getFloat32(o + i * 4, true);
+  o += numVerts * 16;
+  const inv = new Float32Array(numBones * 16);
+  for (let b = 0; b < numBones; b++) {
+    if (o + 4 <= e.end && dv.getUint32(o, true) === 0xDEADBEAF && (e.end - o) >= (numBones - b) * 68) o += 4; // formato antigo
+    for (let i = 0; i < 16; i++) inv[b * 16 + i] = dv.getFloat32(o + i * 4, true);
+    o += 64;
+  }
+  return { numBones, indices, weights, inv };
+}
+
+function parseMaterialList(dv, u8, c) {
+  const kids = chunkList(dv, c.body, c.end);
+  const st = kids.find((k) => k.type === RW.STRUCT);
+  const n = dv.getUint32(st.body, true);
+  const refs = [];
+  for (let i = 0; i < n; i++) refs.push(dv.getInt32(st.body + 4 + i * 4, true));
+  const mats = [];
+  let mi = 0;
+  const matChunks = kids.filter((k) => k.type === RW.MATERIAL);
+  for (let i = 0; i < n; i++) mats.push(refs[i] >= 0 && mats[refs[i]] ? mats[refs[i]] : parseMaterial(dv, u8, matChunks[mi++]));
+  return mats;
+}
+
+function parseMaterial(dv, u8, c) {
+  const m = { color: [255, 255, 255, 255], texture: '', mask: '' };
+  if (!c) return m;
+  const kids = chunkList(dv, c.body, c.end);
+  const st = kids.find((k) => k.type === RW.STRUCT);
+  m.color = [dv.getUint8(st.body + 4), dv.getUint8(st.body + 5), dv.getUint8(st.body + 6), dv.getUint8(st.body + 7)];
+  const textured = dv.getUint32(st.body + 12, true);
+  const tex = kids.find((k) => k.type === RW.TEXTURE);
+  if (textured && tex) {
+    const strs = chunkList(dv, tex.body, tex.end).filter((k) => k.type === RW.STRING);
+    if (strs[0]) m.texture = cstr(u8, strs[0].body, strs[0].size);
+    if (strs[1]) m.mask = cstr(u8, strs[1].body, strs[1].size);
+  }
+  return m;
+}
+
+/* ---------- TXD ---------- */
+function parseTXD(buf) {
+  const dv = new DataView(buf);
+  const u8 = new Uint8Array(buf);
+  const top = chunkList(dv, 0, dv.byteLength);
+  const dict = top.find((c) => c.type === RW.TXDICT);
+  if (!dict) throw new Error('Não parece um TXD (dicionário de texturas não encontrado).');
+  const out = [];
+  for (const c of chunkList(dv, dict.body, dict.end)) {
+    if (c.type !== RW.TEXNATIVE) continue;
+    try { out.push(parseTexture(dv, u8, c)); } catch (err) { out.push({ name: '?', error: err.message }); }
+  }
+  return out;
+}
+
+function parseTexture(dv, u8, c) {
+  const st = chunkList(dv, c.body, c.end).find((k) => k.type === RW.STRUCT);
+  let o = st.body;
+  const platform = dv.getUint32(o, true);
+  if (platform !== 8 && platform !== 9) throw new Error('TXD de console (plataforma ' + platform + ') não é suportado; use o TXD do PC.');
+  const name = cstr(u8, o + 8, 32), mask = cstr(u8, o + 40, 32);
+  const raster = dv.getUint32(o + 72, true);
+  const field76 = dv.getUint32(o + 76, true);
+  const w = dv.getUint16(o + 80, true), h = dv.getUint16(o + 82, true);
+  const depth = dv.getUint8(o + 84), levels = dv.getUint8(o + 85), flags87 = dv.getUint8(o + 87);
+  o += 88;
+  const fmt = raster & 0x0F00, pal8 = !!(raster & 0x2000), pal4 = !!(raster & 0x4000);
+  // compressão: D3D9 traz o FOURCC; D3D8 traz o tipo (1 = DXT1, 3 = DXT3, 5 = DXT5)
+  let dxt = 0;
+  if (platform === 9) {
+    if (field76 === 0x31545844) dxt = 1; else if (field76 === 0x33545844) dxt = 3; else if (field76 === 0x35545844) dxt = 5;
+    else if (field76 === 0x32545844) dxt = 3; else if (field76 === 0x34545844) dxt = 5;
+    else if (flags87 & 0x08) dxt = 1;
+  } else if (flags87 >= 1 && flags87 <= 5) dxt = flags87 === 2 ? 3 : flags87 === 4 ? 5 : flags87;
+  let palette = null;
+  if (!dxt && (pal8 || pal4)) {
+    const count = pal8 ? 256 : 32; // paleta de 4 bits também ocupa 32 entradas
+    palette = u8.subarray(o, o + count * 4);
+    o += count * 4;
+  }
+  if (!w || !h || w > 8192 || h > 8192) throw new Error('Tamanho de textura inválido (' + w + 'x' + h + ').');
+  const dataSize = dv.getUint32(o, true);
+  o += 4;
+  const rgba = new Uint8Array(w * h * 4);
+  if (dxt) decodeDXT(u8, o, w, h, dxt, rgba);
+  else decodeRaw(u8, o, w, h, fmt, depth, pal8, pal4, palette, rgba, dataSize);
+  let hasAlpha = false;
+  for (let i = 3; i < rgba.length; i += 4) if (rgba[i] < 255) { hasAlpha = true; break; }
+  return { name, mask, width: w, height: h, rgba, hasAlpha, format: dxt ? 'DXT' + dxt : (pal8 ? 'PAL8' : pal4 ? 'PAL4' : 'RAW' + depth), levels };
+}
+
+/** Pixels sem compressão (D3D byte order: B,G,R,A). */
+function decodeRaw(u8, o, w, h, fmt, depth, pal8, pal4, pal, out, dataSize) {
+  const n = w * h;
+  if (pal8 || pal4) {
+    for (let i = 0; i < n; i++) {
+      let idx;
+      if (pal8) idx = u8[o + i]; else { const b = u8[o + (i >> 1)]; idx = (i & 1) ? (b >> 4) : (b & 15); }
+      out[i * 4] = pal[idx * 4]; out[i * 4 + 1] = pal[idx * 4 + 1]; out[i * 4 + 2] = pal[idx * 4 + 2]; out[i * 4 + 3] = pal[idx * 4 + 3];
+    }
+    return;
+  }
+  if (depth === 32 || fmt === 0x500 || fmt === 0x600) {
+    const bpp = (dataSize >= n * 4 || depth === 32) ? 4 : 3;
+    for (let i = 0; i < n; i++) {
+      const p = o + i * bpp;
+      out[i * 4] = u8[p + 2]; out[i * 4 + 1] = u8[p + 1]; out[i * 4 + 2] = u8[p];
+      out[i * 4 + 3] = (bpp === 4 && fmt !== 0x600) ? u8[p + 3] : 255;
+    }
+    return;
+  }
+  if (depth === 8 || fmt === 0x400) { // LUM8
+    for (let i = 0; i < n; i++) { const v = u8[o + i]; out[i * 4] = out[i * 4 + 1] = out[i * 4 + 2] = v; out[i * 4 + 3] = 255; }
+    return;
+  }
+  const x5 = (v) => (v << 3) | (v >> 2);
+  for (let i = 0; i < n; i++) { // 16 bits
+    const v = u8[o + i * 2] | (u8[o + i * 2 + 1] << 8);
+    let r, g, b, a = 255;
+    if (fmt === 0x200) { r = (v >> 11) & 31; g = (v >> 5) & 63; b = v & 31; out[i * 4] = x5(r); out[i * 4 + 1] = (g << 2) | (g >> 4); out[i * 4 + 2] = x5(b); out[i * 4 + 3] = 255; continue; }
+    if (fmt === 0x300) { a = ((v >> 12) & 15) * 17; r = ((v >> 8) & 15) * 17; g = ((v >> 4) & 15) * 17; b = (v & 15) * 17; out[i * 4] = r; out[i * 4 + 1] = g; out[i * 4 + 2] = b; out[i * 4 + 3] = a; continue; }
+    if (fmt === 0x100) a = (v & 0x8000) ? 255 : 0; // 1555
+    r = (v >> 10) & 31; g = (v >> 5) & 31; b = v & 31;
+    out[i * 4] = x5(r); out[i * 4 + 1] = x5(g); out[i * 4 + 2] = x5(b); out[i * 4 + 3] = a;
+  }
+}
+
+/** Descompacta DXT1/DXT3/DXT5 para RGBA. */
+function decodeDXT(u8, o, w, h, kind, out) {
+  const bw = Math.ceil(w / 4), bh = Math.ceil(h / 4);
+  const col = [[0, 0, 0, 255], [0, 0, 0, 255], [0, 0, 0, 255], [0, 0, 0, 255]];
+  const unpack = (v, c) => {
+    const r = (v >> 11) & 31, g = (v >> 5) & 63, b = v & 31;
+    c[0] = (r << 3) | (r >> 2); c[1] = (g << 2) | (g >> 4); c[2] = (b << 3) | (b >> 2);
+  };
+  let p = o;
+  for (let by = 0; by < bh; by++) {
+    for (let bx = 0; bx < bw; bx++) {
+      const cp = kind === 1 ? p : p + 8;
+      const c0 = u8[cp] | (u8[cp + 1] << 8), c1 = u8[cp + 2] | (u8[cp + 3] << 8);
+      unpack(c0, col[0]); unpack(c1, col[1]);
+      col[0][3] = col[1][3] = 255;
+      if (kind !== 1 || c0 > c1) {
+        for (let k = 0; k < 3; k++) { col[2][k] = ((2 * col[0][k] + col[1][k]) / 3) | 0; col[3][k] = ((col[0][k] + 2 * col[1][k]) / 3) | 0; }
+        col[2][3] = col[3][3] = 255;
+      } else {
+        for (let k = 0; k < 3; k++) { col[2][k] = ((col[0][k] + col[1][k]) / 2) | 0; col[3][k] = 0; }
+        col[2][3] = 255; col[3][3] = 0;
+      }
+      const bits = (u8[cp + 4] | (u8[cp + 5] << 8) | (u8[cp + 6] << 16) | (u8[cp + 7] << 24)) >>> 0;
+      let alpha = null;
+      if (kind === 5) {
+        const a0 = u8[p], a1 = u8[p + 1];
+        const tbl = [a0, a1];
+        if (a0 > a1) for (let k = 1; k < 7; k++) tbl.push(((7 - k) * a0 + k * a1) / 7 | 0);
+        else { for (let k = 1; k < 5; k++) tbl.push(((5 - k) * a0 + k * a1) / 5 | 0); tbl.push(0, 255); }
+        let lo = u8[p + 2] | (u8[p + 3] << 8) | (u8[p + 4] << 16), hi = u8[p + 5] | (u8[p + 6] << 8) | (u8[p + 7] << 16);
+        alpha = [];
+        for (let k = 0; k < 8; k++) alpha.push(tbl[(lo >> (k * 3)) & 7]);
+        for (let k = 0; k < 8; k++) alpha.push(tbl[(hi >> (k * 3)) & 7]);
+      }
+      for (let py = 0; py < 4; py++) {
+        for (let px = 0; px < 4; px++) {
+          const x = bx * 4 + px, y = by * 4 + py;
+          if (x >= w || y >= h) continue;
+          const k = py * 4 + px;
+          const c = col[(bits >>> (2 * k)) & 3];
+          const q = (y * w + x) * 4;
+          out[q] = c[0]; out[q + 1] = c[1]; out[q + 2] = c[2];
+          if (kind === 1) out[q + 3] = c[3];
+          else if (kind === 3) out[q + 3] = ((u8[p + (k >> 1)] >> ((k & 1) * 4)) & 15) * 17;
+          else out[q + 3] = alpha[k];
+        }
+      }
+      p += kind === 1 ? 8 : 16;
+    }
+  }
+}
+
+/* ---------- IFP ---------- */
+/**
+ * Retorna { format, name, anims: [{ name, duration, nodes: [{ name, id, type, keys: [{ t, q:[x,y,z,w], p:[x,y,z]|null }] }] }] }
+ * Tempo em segundos, translação em metros, quaternion como gravado no arquivo.
+ */
+function parseIFP(buf) {
+  const dv = new DataView(buf);
+  const u8 = new Uint8Array(buf);
+  const magic = cstr(u8, 0, 4);
+  if (magic === 'ANP3') return parseANP3(dv, u8);
+  if (magic === 'ANPK') return parseANPK(dv, u8);
+  throw new Error('Formato de IFP desconhecido ("' + magic + '"). Suportados: ANP3 e ANPK.');
+}
+
+function parseANP3(dv, u8) {
+  const res = { format: 'ANP3', name: cstr(u8, 8, 24), anims: [] };
+  const count = dv.getUint32(32, true);
+  let p = 36;
+  for (let a = 0; a < count && p + 36 <= dv.byteLength; a++) {
+    const name = cstr(u8, p, 24);
+    const numNodes = dv.getUint32(p + 24, true), dataSize = dv.getUint32(p + 28, true);
+    const animStart = p + 36;
+    p = animStart;
+    const nodes = [];
+    let duration = 0;
+    for (let n = 0; n < numNodes; n++) {
+      const nm = cstr(u8, p, 24).trim();
+      const type = dv.getUint32(p + 24, true), nf = dv.getUint32(p + 28, true), id = dv.getInt32(p + 32, true);
+      p += 36;
+      const keys = [];
+      for (let k = 0; k < nf; k++) {
+        const q = [dv.getInt16(p, true) / 4096, dv.getInt16(p + 2, true) / 4096, dv.getInt16(p + 4, true) / 4096, dv.getInt16(p + 6, true) / 4096];
+        const t = dv.getInt16(p + 8, true) / 60;
+        let pos = null;
+        if (type === 4) { pos = [dv.getInt16(p + 10, true) / 1024, dv.getInt16(p + 12, true) / 1024, dv.getInt16(p + 14, true) / 1024]; p += 16; } else p += 10;
+        keys.push({ t, q, p: pos });
+        if (t > duration) duration = t;
+      }
+      nodes.push({ name: nm, id, type, keys });
+    }
+    res.anims.push({ name, duration, nodes });
+    // dataSize às vezes cobre preenchimento depois do último osso
+    if (dataSize && animStart + dataSize > p && animStart + dataSize <= dv.byteLength) p = animStart + dataSize;
+  }
+  return res;
+}
+
+function parseANPK(dv, u8) {
+  const res = { format: 'ANPK', name: '', anims: [] };
+  const root = chunkAtRaw(dv, 0);
+  let o = 8;
+  const end = Math.min(dv.byteLength, 8 + root.size);
+  // INFO (nº de animações + nome do pacote)
+  const info = chunkAtRaw(dv, o);
+  if (info.tag === 'INFO') { res.name = cstr(u8, o + 12, info.size - 4); o += 8 + info.size; }
+  while (o + 8 <= end) {
+    const nameC = chunkAtRaw(dv, o);
+    if (nameC.tag !== 'NAME') break;
+    const animName = cstr(u8, o + 8, nameC.size);
+    o += 8 + align4(nameC.size);
+    const dgan = chunkAtRaw(dv, o);
+    if (dgan.tag !== 'DGAN') break;
+    const dEnd = o + 8 + dgan.size;
+    let q = o + 8;
+    const inf = chunkAtRaw(dv, q);
+    q += 8 + inf.size; // INFO do DGAN
+    const nodes = [];
+    let duration = 0;
+    while (q + 8 <= dEnd) {
+      const cpan = chunkAtRaw(dv, q);
+      if (cpan.tag !== 'CPAN') break;
+      const cEnd = q + 8 + cpan.size;
+      const an = chunkAtRaw(dv, q + 8);
+      if (an.tag === 'ANIM') {
+        const b = q + 16;
+        const nm = cstr(u8, b, 28);
+        const nf = dv.getInt32(b + 28, true);
+        const bid = dv.getInt32(b + 40, true); // no SA este campo guarda o ID do osso
+        const fsz = nf > 0 ? Math.floor((an.size - 44) / nf) : 0;
+        let f = b + 44;
+        const keys = [];
+        for (let k = 0; k < nf; k++, f += fsz) {
+          const qt = [dv.getFloat32(f, true), dv.getFloat32(f + 4, true), dv.getFloat32(f + 8, true), dv.getFloat32(f + 12, true)];
+          let pos = null, t;
+          if (fsz >= 32) { pos = [dv.getFloat32(f + 16, true), dv.getFloat32(f + 20, true), dv.getFloat32(f + 24, true)]; t = dv.getFloat32(f + fsz - 4, true); }
+          else t = dv.getFloat32(f + 16, true);
+          keys.push({ t, q: qt, p: pos });
+          if (t > duration) duration = t;
+        }
+        nodes.push({ name: nm.trim(), id: bid, type: fsz >= 32 ? 4 : 3, keys });
+      }
+      q = cEnd;
+    }
+    res.anims.push({ name: animName, duration, nodes });
+    o = dEnd;
+  }
+  return res;
+}
+
+function align4(n) { return (n + 3) & ~3; }
+function chunkAtRaw(dv, o) {
+  if (o + 8 > dv.byteLength) return { tag: '', size: 0 };
+  return { tag: String.fromCharCode(dv.getUint8(o), dv.getUint8(o + 1), dv.getUint8(o + 2), dv.getUint8(o + 3)), size: dv.getUint32(o + 4, true) };
+}
+</script>
+
+<!-- ======================================================================================= -->
+<!--  APLICATIVO: cena Three.js, animações, mapeamento                                       -->
+<!-- ======================================================================================= -->
+<script id="app">
+'use strict';
+(function () {
+  const $ = (s) => document.querySelector(s);
+
+  /* ---------- Registro de mensagens ---------- */
+  function log(msg, kind) {
+    const d = document.createElement('div');
+    if (kind) d.className = kind;
+    d.textContent = msg;
+    const box = $('#log');
+    box.appendChild(d);
+    box.scrollTop = box.scrollHeight;
+  }
+
+  if (typeof THREE === 'undefined' || !THREE.OrbitControls) {
+    log('Não consegui carregar o Three.js (CDN). Verifique a internet.', 'err');
+    return;
+  }
+
+  /* ---------- Cena ---------- */
+  const view = $('#viewport');
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  view.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x0f1115);
+  // O GTA usa Z para cima e os pedestres olham para +Y: a câmera também usa Z para cima (nada precisa ser girado ou espelhado)
+  const camera = new THREE.PerspectiveCamera(45, 1, 0.05, 500);
+  camera.up.set(0, 0, 1);
+  camera.position.set(2.2, 3.4, 1.6);
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.target.set(0, 0, 0.9);
+  controls.enableDamping = true;
+  controls.update();
+
+  scene.add(new THREE.AmbientLight(0xffffff, 0.75));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.9);
+  sun.position.set(3, 5, 8);
+  scene.add(sun);
+  const fill = new THREE.DirectionalLight(0x99aaff, 0.35);
+  fill.position.set(-4, -3, 2);
+  scene.add(fill);
+
+  const grid = new THREE.GridHelper(20, 40, 0x4a5160, 0x2a2f3a);
+  grid.rotation.x = Math.PI / 2; // a grade fica no plano XY (chão)
+  scene.add(grid);
+
+  function resize() {
+    const w = view.clientWidth, h = view.clientHeight;
+    if (!w || !h) return;
+    renderer.setSize(w, h, false);
+    renderer.domElement.style.width = w + 'px';
+    renderer.domElement.style.height = h + 'px';
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  new ResizeObserver(resize).observe(view);
+  window.addEventListener('resize', resize);
+  resize();
+
+  /* ---------- Estado ---------- */
+  const ACTIONS = [
+    { id: 'idle', label: 'Parado (Idle)', key: '', loop: true },
+    { id: 'walk', label: 'Andar (Walk)', key: 'W', loop: true },
+    { id: 'run', label: 'Correr (Run)', key: 'Shift+W', loop: true },
+    { id: 'jump', label: 'Pular (Jump)', key: 'Espaço', loop: false },
+    { id: 'crouch', label: 'Agachar (Crouch)', key: 'C', loop: true },
+    { id: 'attack', label: 'Golpear / Bater (Punch/Attack)', key: 'F', loop: false }
+  ];
+  const S = {
+    dffBuf: null, dffName: '', txdBuf: null, txdName: '', ifpName: '',
+    dff: null, txd: null, texMap: new Map(),
+    rig: null, bones: [], boneById: new Map(), boneByName: new Map(), skeletonHelper: null, rigRoot: null,
+    ifp: null, clips: new Map(), clipInfo: new Map(),
+    mixer: null, action: null, current: '', speed: 1,
+    map: {}, lastActionId: ACTIONS[0].id, mode: 'list', keys: new Set()
+  };
+  ACTIONS.forEach((a) => { S.map[a.id] = { anim: '', loop: a.loop }; });
+
+  /* ---------- Textura ---------- */
+  function makeTexture(t) {
+    const tex = new THREE.DataTexture(t.rgba, t.width, t.height, THREE.RGBAFormat);
+    tex.encoding = THREE.sRGBEncoding;
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.magFilter = THREE.LinearFilter;
+    tex.minFilter = THREE.LinearMipmapLinearFilter;
+    tex.generateMipmaps = true;
+    tex.anisotropy = 4;
+    tex.flipY = false; // DFF e DataTexture partem do topo da imagem: não inverter
+    tex.needsUpdate = true;
+    tex.userData.alpha = t.hasAlpha;
+    return tex;
+  }
+
+  function showThumbs() {
+    const box = $('#thumbs');
+    box.textContent = '';
+    if (!S.txd) return;
+    for (const t of S.txd) {
+      if (!t.rgba) continue;
+      const c = document.createElement('canvas');
+      c.width = c.height = 40;
+      c.title = t.name + ' — ' + t.width + '×' + t.height + ' ' + t.format;
+      const g = c.getContext('2d');
+      const tmp = document.createElement('canvas');
+      tmp.width = t.width; tmp.height = t.height;
+      tmp.getContext('2d').putImageData(new ImageData(new Uint8ClampedArray(t.rgba.buffer, t.rgba.byteOffset, t.rgba.length), t.width, t.height), 0, 0);
+      g.drawImage(tmp, 0, 0, 40, 40);
+      box.appendChild(c);
+    }
+  }
+
+  /* ---------- Modelo ---------- */
+  function disposeRig() {
+    if (S.action) S.action = null;
+    if (S.mixer) { S.mixer.stopAllAction(); S.mixer.uncacheRoot(S.rig); S.mixer = null; }
+    if (S.skeletonHelper) { scene.remove(S.skeletonHelper); S.skeletonHelper.geometry.dispose(); S.skeletonHelper = null; }
+    if (S.rig) {
+      S.rig.traverse((o) => {
+        if (o.isMesh) {
+          o.geometry.dispose();
+          (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => m.dispose());
+        }
+      });
+      scene.remove(S.rig);
+    }
+    S.rig = null; S.bones = []; S.boneById.clear(); S.boneByName.clear();
+  }
+
+  const normName = (s) => String(s || '').toLowerCase().replace(/bip01/g, '').replace(/[^a-z0-9]/g, '');
+
+  function buildGeometry(g) {
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(g.positions, 3));
+    if (g.normals) geo.setAttribute('normal', new THREE.BufferAttribute(g.normals, 3));
+    if (g.uvs) geo.setAttribute('uv', new THREE.BufferAttribute(g.uvs, 2));
+    // índices agrupados por material (um grupo por material usado)
+    const nMat = Math.max(1, g.materials.length);
+    const buckets = Array.from({ length: nMat }, () => []);
+    for (let t = 0; t < g.triMat.length; t++) buckets[Math.min(g.triMat[t], nMat - 1)].push(t);
+    const idx = [];
+    buckets.forEach((list, m) => {
+      if (!list.length) return;
+      const start = idx.length;
+      for (const t of list) idx.push(g.tris[t * 3], g.tris[t * 3 + 1], g.tris[t * 3 + 2]);
+      geo.addGroup(start, idx.length - start, m);
+    });
+    geo.setIndex(idx);
+    if (!g.normals) geo.computeVertexNormals();
+    return geo;
+  }
+
+  function buildMaterials(g, missing) {
+    const mats = g.materials.length ? g.materials : [{ color: [200, 200, 200, 255], texture: '' }];
+    return mats.map((m) => {
+      let map = null;
+      if (m.texture) {
+        map = S.texMap.get(m.texture.toLowerCase()) || null;
+        if (!map && S.txd) missing.add(m.texture);
+      }
+      const mat = new THREE.MeshLambertMaterial({
+        color: map ? 0xffffff : new THREE.Color(m.color[0] / 255, m.color[1] / 255, m.color[2] / 255),
+        map, side: THREE.DoubleSide, alphaTest: map && map.userData.alpha ? 0.3 : 0
+      });
+      if (m.color[3] < 255 && !map) { mat.transparent = true; mat.opacity = Math.max(0.15, m.color[3] / 255); }
+      mat.wireframe = $('#vWire').checked;
+      return mat;
+    });
+  }
+
+  function buildModel() {
+    disposeRig();
+    const d = S.dff;
+    if (!d) return;
+    const rig = new THREE.Group();
+    S.rig = rig;
+    scene.add(rig);
+
+    // Um objeto por frame (todos como Bone: o SkeletonHelper e o mixer tratam igual)
+    const objs = d.frames.map((f, i) => {
+      const b = new THREE.Bone();
+      b.name = 'f' + i;
+      b.userData = { label: f.name, nodeId: f.nodeId };
+      const m = new THREE.Matrix4();
+      const r = f.rot, p = f.pos;
+      m.set(r[0], r[3], r[6], p[0], r[1], r[4], r[7], p[1], r[2], r[5], r[8], p[2], 0, 0, 0, 1);
+      m.decompose(b.position, b.quaternion, b.scale);
+      b.userData.rest = { p: b.position.clone(), q: b.quaternion.clone() };
+      return b;
+    });
+    d.frames.forEach((f, i) => { (f.parent >= 0 && objs[f.parent] ? objs[f.parent] : rig).add(objs[i]); });
+    S.bones = objs;
+    d.frames.forEach((f, i) => {
+      if (f.nodeId >= 0 && !S.boneById.has(f.nodeId)) S.boneById.set(f.nodeId, objs[i]);
+      const nn = normName(f.name);
+      if (nn && !S.boneByName.has(nn)) S.boneByName.set(nn, objs[i]);
+    });
+    rig.updateMatrixWorld(true);
+
+    // Hierarquia HAnim (ordem dos ossos usada pelo Skin)
+    const hierFrame = d.frames.find((f) => f.hier && f.hier.length);
+    const missing = new Set();
+    let tris = 0, skinned = 0, badRest = 0;
+    for (const at of d.atomics) {
+      const g = d.geoms[at.geom];
+      if (!g) continue;
+      const geo = buildGeometry(g);
+      const mats = buildMaterials(g, missing);
+      tris += g.triMat.length;
+      if (g.skin) {
+        const sk = g.skin;
+        let bones;
+        if (hierFrame) bones = hierFrame.hier.map((n) => S.boneById.get(n.id) || objs[0] || rig);
+        else bones = objs.filter((o) => o.userData.nodeId >= 0);
+        while (bones.length < sk.numBones) bones.push(bones[0] || rig);
+        bones = bones.slice(0, sk.numBones);
+        const inv = bones.map((_, i) => new THREE.Matrix4().fromArray(sk.inv, i * 16));
+        // pesos normalizados
+        const w = new Float32Array(sk.weights);
+        for (let v = 0; v < g.numVerts; v++) {
+          const s = w[v * 4] + w[v * 4 + 1] + w[v * 4 + 2] + w[v * 4 + 3];
+          if (s > 0) for (let k = 0; k < 4; k++) w[v * 4 + k] /= s;
+        }
+        geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(Uint16Array.from(sk.indices), 4));
+        geo.setAttribute('skinWeight', new THREE.Float32BufferAttribute(w, 4));
+        const mesh = new THREE.SkinnedMesh(geo, mats);
+        mesh.frustumCulled = false;
+        rig.add(mesh);
+        const skel = new THREE.Skeleton(bones, inv);
+        mesh.bind(skel, new THREE.Matrix4());
+        skinned++;
+        // diagnóstico: na pose de repouso, osso × inversa deve dar identidade
+        const test = new THREE.Matrix4();
+        bones.forEach((b, i) => {
+          test.multiplyMatrices(b.matrixWorld, inv[i]);
+          let dev = 0;
+          for (let k = 0; k < 16; k++) dev = Math.max(dev, Math.abs(test.elements[k] - (k % 5 === 0 ? 1 : 0)));
+          if (dev > 0.05) badRest++;
+        });
+      } else {
+        const mesh = new THREE.Mesh(geo, mats);
+        (objs[at.frame] || rig).add(mesh);
+      }
+    }
+    rig.updateMatrixWorld(true);
+
+    // Informações e aviso de texturas
+    const nb = hierFrame ? hierFrame.hier.length : objs.filter((o) => o.userData.nodeId >= 0).length;
+    $('#modelInfo').textContent = (S.dffName || 'modelo') + ' · ' + d.frames.length + ' frames · ' + nb + ' ossos · ' + tris + ' triângulos' + (skinned ? ' · com skin' : '');
+    log('Modelo: ' + d.frames.length + ' frames, ' + d.geoms.length + ' geometrias, ' + nb + ' ossos, ' + tris + ' triângulos' + (skinned ? ', skin ativo.' : '.'), 'ok');
+    if (missing.size) log('Texturas que o DFF pede e o TXD não tem: ' + Array.from(missing).join(', '), 'warn');
+    if (!S.txd) log('Sem TXD: o modelo aparece só com a cor dos materiais.', 'warn');
+    if (badRest) log('Aviso: ' + badRest + ' osso(s) não batem com a matriz inversa na pose de repouso (o modelo pode aparecer deformado).', 'warn');
+    d.geoms.forEach((g, i) => { if (g.skinError) log('Skin da geometria ' + i + ' não pôde ser lido: ' + g.skinError, 'warn'); });
+
+    updateHelpers();
+    frameModel();
+    S.mixer = new THREE.AnimationMixer(rig);
+    S.mixer.addEventListener('finished', onActionFinished);
+  }
+
+  function updateHelpers() {
+    if (S.skeletonHelper) { scene.remove(S.skeletonHelper); S.skeletonHelper.geometry.dispose(); S.skeletonHelper = null; }
+    if (S.rig && $('#vBones').checked && S.bones.length) {
+      S.skeletonHelper = new THREE.SkeletonHelper(S.rig);
+      S.skeletonHelper.material.linewidth = 2;
+      scene.add(S.skeletonHelper);
+    }
+    grid.visible = $('#vGrid').checked;
+    if (S.rig) S.rig.traverse((o) => {
+      if (o.isMesh) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => { m.wireframe = $('#vWire').checked; });
+    });
+  }
+
+  function frameModel() {
+    if (!S.rig) return;
+    const box = new THREE.Box3();
+    S.rig.updateMatrixWorld(true);
+    S.rig.traverse((o) => {
+      if (o.isSkinnedMesh) { o.geometry.computeBoundingBox(); box.union(o.geometry.boundingBox); }
+      else if (o.isMesh) box.expandByObject(o);
+    });
+    if (box.isEmpty()) return;
+    const c = box.getCenter(new THREE.Vector3()), sz = box.getSize(new THREE.Vector3());
+    const r = Math.max(sz.x, sz.y, sz.z, 0.3);
+    controls.target.copy(c);
+    camera.position.set(c.x + r * 0.9, c.y + r * 1.6, c.z + r * 0.35);
+    camera.near = Math.max(0.01, r / 200);
+    camera.far = Math.max(200, r * 80);
+    camera.updateProjectionMatrix();
+    controls.update();
+  }
+
+  /* ---------- Animações ---------- */
+  /** Osso do modelo que corresponde a um nó do IFP. */
+  function findBone(node, mode) {
+    if (mode !== 'name' && node.id >= 0 && S.boneById.has(node.id)) return S.boneById.get(node.id);
+    if (mode !== 'id') { const b = S.boneByName.get(normName(node.name)); if (b) return b; }
+    return null;
+  }
+
+  function makeClip(anim) {
+    const mode = $('#optBones').value, inPlace = $('#optInPlace').checked, conj = $('#optConj').checked;
+    const tracks = [];
+    let matched = 0;
+    const used = new Set();
+    for (const node of anim.nodes) {
+      const bone = findBone(node, mode);
+      if (!bone || used.has(bone) || !node.keys.length) continue;
+      used.add(bone);
+      matched++;
+      const times = [], qv = [], pv = [];
+      const hasPos = node.keys[0].p !== null;
+      const first = node.keys[0].p;
+      const rest = bone.userData.rest.p;
+      let last = -1;
+      for (const k of node.keys) {
+        if (k.t <= last) continue; // tempos precisam crescer
+        last = k.t;
+        times.push(k.t);
+        const q = new THREE.Quaternion(k.q[0], k.q[1], k.q[2], k.q[3]);
+        if (conj) q.set(-q.x, -q.y, -q.z, q.w);
+        if (q.lengthSq() > 0) q.normalize(); else q.set(0, 0, 0, 1);
+        qv.push(q.x, q.y, q.z, q.w);
+        if (hasPos && k.p) {
+          if (inPlace && bone.userData.nodeId === 0) pv.push(rest.x + (k.p[0] - first[0]), rest.y + (k.p[1] - first[1]), k.p[2]);
+          else pv.push(k.p[0], k.p[1], k.p[2]);
+        }
+      }
+      if (!times.length) continue;
+      tracks.push(new THREE.QuaternionKeyframeTrack(bone.name + '.quaternion', times, qv));
+      if (pv.length === times.length * 3) tracks.push(new THREE.VectorKeyframeTrack(bone.name + '.position', times, pv));
+    }
+    const clip = new THREE.AnimationClip(anim.name, Math.max(anim.duration, 0.001), tracks);
+    return { clip, matched, total: anim.nodes.length };
+  }
+
+  function rebuildClips() {
+    stopPlayback(true);
+    S.clips.clear(); S.clipInfo.clear();
+    if (!S.ifp) return;
+    for (const a of S.ifp.anims) {
+      if (S.clips.has(a.name)) continue;
+      if (S.rig) {
+        const r = makeClip(a);
+        S.clips.set(a.name, r.clip);
+        S.clipInfo.set(a.name, { matched: r.matched, total: r.total });
+      } else S.clipInfo.set(a.name, { matched: 0, total: a.nodes.length });
+    }
+    if (S.rig && S.ifp.anims.length) {
+      const first = S.clipInfo.get(S.ifp.anims[0].name);
+      log('Ossos ligados (1ª animação): ' + first.matched + ' de ' + first.total + (first.matched === 0 ? ' — nenhum! Troque o modo de ossos nas opções.' : '.'), first.matched ? 'ok' : 'err');
+    }
+    renderList();
+  }
+
+  /* ---------- Reprodução ---------- */
+  function ensureMixer() {
+    if (!S.mixer && S.rig) { S.mixer = new THREE.AnimationMixer(S.rig); S.mixer.addEventListener('finished', onActionFinished); }
+    return S.mixer;
+  }
+
+  function startClip(name, opts) {
+    opts = opts || {};
+    const clip = S.clips.get(name);
+    if (!clip || !ensureMixer()) return false;
+    const loop = opts.loop !== undefined ? opts.loop : $('#loopChk').checked;
+    const act = S.mixer.clipAction(clip);
+    const fade = opts.fade !== undefined ? opts.fade : 0.12;
+    if (S.action && S.action !== act) S.action.fadeOut(fade);
+    act.reset();
+    act.setLoop(loop ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
+    act.clampWhenFinished = true;
+    act.timeScale = S.speed;
+    act.setEffectiveWeight(1);
+    if (fade > 0) act.fadeIn(fade);
+    act.paused = false;
+    act.play();
+    S.action = act;
+    S.current = name;
+    $('#nowPlaying').textContent = name;
+    markSelected();
+    setTransport(true);
+    return true;
+  }
+
+  function stopPlayback(silent) {
+    if (S.mixer) S.mixer.stopAllAction();
+    S.action = null;
+    S.current = '';
+    if (S.mixer) S.mixer.update(0);
+    $('#nowPlaying').textContent = '—';
+    $('#timeline').value = 0;
+    $('#timeTxt').textContent = '0.00 / 0.00 s';
+    setTransport(false);
+    markSelected();
+    if (!silent) updateTestButtons();
+  }
+
+  function setTransport(on) {
+    for (const id of ['#btnPlay', '#btnPause', '#btnStop', '#timeline']) $(id).disabled = !on;
+  }
+
+  $('#btnPlay').onclick = () => {
+    if (!S.action) { if (S.current) startClip(S.current); return; }
+    if (S.action.paused) S.action.paused = false;
+    else if (!S.action.isRunning()) { S.action.reset().play(); }
+  };
+  $('#btnPause').onclick = () => { if (S.action) S.action.paused = !S.action.paused; };
+  $('#btnStop').onclick = () => { S.mode = 'list'; stopPlayback(); };
+
+  let scrubbing = false;
+  const tl = $('#timeline');
+  tl.addEventListener('pointerdown', () => { scrubbing = true; });
+  window.addEventListener('pointerup', () => { scrubbing = false; });
+  tl.addEventListener('input', () => {
+    if (!S.action) return;
+    S.action.paused = true;
+    S.action.time = parseFloat(tl.value);
+    S.mixer.update(0);
+  });
+  $('#speed').onchange = (e) => { S.speed = parseFloat(e.target.value); if (S.action) S.action.timeScale = S.speed; };
+  $('#loopChk').onchange = () => { if (S.current && S.mode === 'list') startClip(S.current, { fade: 0 }); };
+
+  /* ---------- Lista de animações ---------- */
+  function renderList() {
+    const body = $('#animBody');
+    body.textContent = '';
+    const anims = S.ifp ? S.ifp.anims : [];
+    $('#animCount').textContent = anims.length ? '(' + anims.length + ')' : '';
+    const q = $('#filter').value.trim().toLowerCase();
+    for (const a of anims) {
+      if (q && !a.name.toLowerCase().includes(q)) continue;
+      const tr = document.createElement('tr');
+      tr.dataset.name = a.name;
+      const info = S.clipInfo.get(a.name);
+      const c1 = document.createElement('td'); c1.textContent = a.name;
+      const c2 = document.createElement('td'); c2.className = 'num'; c2.textContent = a.duration.toFixed(2) + 's';
+      const c3 = document.createElement('td'); c3.className = 'num'; c3.textContent = info && S.rig ? info.matched + '/' + info.total : String(a.nodes.length);
+      tr.append(c1, c2, c3);
+      tr.onclick = () => { S.mode = 'list'; if (!S.rig) { log('Carregue um modelo (.dff) para ver a animação.', 'warn'); return; } startClip(a.name); updateTestButtons(); };
+      tr.ondblclick = () => { setMapping(S.lastActionId, a.name); };
+      body.appendChild(tr);
+    }
+    markSelected();
+  }
+  function markSelected() {
+    document.querySelectorAll('#animBody tr').forEach((tr) => tr.classList.toggle('sel', tr.dataset.name === S.current));
+  }
+  $('#filter').oninput = renderList;
+
+  /* ---------- Mapeamento ---------- */
+  function actionList() { return S.actionsList || (S.actionsList = ACTIONS.slice()); }
+
+  function buildMapUI() {
+    const box = $('#mapRows');
+    box.textContent = '';
+    for (const a of actionList()) {
+      const m = S.map[a.id] || (S.map[a.id] = { anim: '', loop: a.loop });
+      const row = document.createElement('div');
+      row.className = 'map-row';
+      const nm = document.createElement('div'); nm.className = 'name';
+      nm.textContent = a.label;
+      if (a.key) { const k = document.createElement('kbd'); k.textContent = a.key; nm.appendChild(k); }
+      const sel = document.createElement('select');
+      sel.dataset.action = a.id;
+      fillSelect(sel, m.anim);
+      sel.onchange = () => { m.anim = sel.value; S.lastActionId = a.id; saveLocal(); updateTestButtons(); };
+      sel.onfocus = () => { S.lastActionId = a.id; };
+      const test = document.createElement('button'); test.textContent = '▶'; test.title = 'Testar esta ação';
+      test.onclick = () => { S.lastActionId = a.id; runAction(a.id, true); };
+      const sub = document.createElement('div'); sub.className = 'sub';
+      const lp = document.createElement('label'); lp.style.cssText = 'display:flex;align-items:center;gap:4px';
+      const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = m.loop;
+      cb.onchange = () => { m.loop = cb.checked; saveLocal(); };
+      lp.append(cb, document.createTextNode('Repetir (loop)'));
+      const dur = document.createElement('span'); dur.className = 'mono'; dur.dataset.dur = a.id;
+      sub.append(lp, dur);
+      row.append(nm, sel, test, sub);
+      box.appendChild(row);
+    }
+    refreshDur();
+    updateTestButtons();
+  }
+
+  function fillSelect(sel, value) {
+    sel.textContent = '';
+    const none = document.createElement('option'); none.value = ''; none.textContent = '— nenhuma —';
+    sel.appendChild(none);
+    const names = S.ifp ? S.ifp.anims.map((a) => a.name) : [];
+    if (value && !names.includes(value)) names.unshift(value); // mapeamento carregado de um JSON, IFP ainda não carregado
+    for (const n of names) { const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o); }
+    sel.value = value || '';
+  }
+
+  function refreshSelects() {
+    document.querySelectorAll('#mapRows select').forEach((sel) => fillSelect(sel, (S.map[sel.dataset.action] || {}).anim));
+    refreshDur();
+  }
+  function refreshDur() {
+    document.querySelectorAll('[data-dur]').forEach((el) => {
+      const a = S.map[el.dataset.dur];
+      const clip = a && S.clips.get(a.anim);
+      el.textContent = clip ? clip.duration.toFixed(2) + ' s' : '';
+    });
+  }
+
+  function setMapping(id, anim) {
+    const m = S.map[id];
+    if (!m) return;
+    m.anim = anim;
+    const sel = document.querySelector('#mapRows select[data-action="' + id + '"]');
+    if (sel) sel.value = anim;
+    saveLocal(); refreshDur(); updateTestButtons();
+    log('Ação "' + id + '" → ' + anim, 'ok');
+  }
+
+  $('#btnAddAction').onclick = () => {
+    const input = $('#newAction');
+    const label = input.value.trim();
+    if (!label) return;
+    let id = label.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '') || 'acao';
+    while (S.map[id]) id += '_2';
+    actionList().push({ id, label, key: '', loop: false });
+    S.map[id] = { anim: '', loop: false };
+    input.value = '';
+    buildMapUI();
+  };
+  $('#newAction').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('#btnAddAction').click(); });
+
+  $('#btnClearMap').onclick = () => { for (const k of Object.keys(S.map)) S.map[k].anim = ''; refreshSelects(); saveLocal(); updateTestButtons(); };
+
+  /** Sugestão automática pelos nomes mais comuns das animações do SA. */
+  const GUESS = {
+    idle: [/^idle_stance$/i, /^idle/i, /stand/i, /stance/i],
+    walk: [/^walk_player$/i, /^walk$/i, /^walk_/i, /walk/i],
+    run: [/^run_player$/i, /^run$/i, /^run_/i, /^sprint/i, /run/i],
+    jump: [/^jump_launch$/i, /^jump_/i, /jump/i],
+    crouch: [/^crouch/i, /duck/i, /^gun_crouch/i],
+    attack: [/^fighta_1$/i, /^fighta_/i, /^bat_1$/i, /punch/i, /fight/i, /attack/i]
+  };
+  $('#btnSuggest').onclick = () => {
+    if (!S.ifp) { log('Carregue um .ifp primeiro.', 'warn'); return; }
+    let n = 0;
+    for (const a of actionList()) {
+      const pats = GUESS[a.id];
+      if (!pats) continue;
+      for (const re of pats) {
+        const hit = S.ifp.anims.find((x) => re.test(x.name));
+        if (hit) { S.map[a.id].anim = hit.name; n++; break; }
+      }
+    }
+    refreshSelects(); saveLocal(); updateTestButtons();
+    log('Sugestão automática: ' + n + ' ação(ões) preenchida(s). Confira e ajuste.', n ? 'ok' : 'warn');
+  };
+
+  /* ---------- Testar ações ---------- */
+  function updateTestButtons() {
+    const box = $('#testBtns');
+    box.textContent = '';
+    for (const a of actionList()) {
+      const m = S.map[a.id];
+      const b = document.createElement('button');
+      b.textContent = a.label.replace(/ \(.*\)/, '');
+      b.disabled = !(m && m.anim && S.clips.has(m.anim));
+      b.dataset.action = a.id;
+      b.title = m && m.anim ? '→ ' + m.anim : 'Sem animação mapeada';
+      b.onclick = () => runAction(a.id, true);
+      box.appendChild(b);
+      box.appendChild(document.createTextNode(' '));
+    }
+    markActiveTest();
+  }
+  function markActiveTest() {
+    document.querySelectorAll('#testBtns button').forEach((b) => {
+      const m = S.map[b.dataset.action];
+      b.classList.toggle('on', S.mode === 'action' && !!m && m.anim === S.current && !!S.action);
+    });
+  }
+
+  let currentActionId = '';
+  /** Toca a animação ligada a uma ação do jogo. `manual` = clique no botão (loops ficam tocando até outra ação). */
+  function runAction(id, manual) {
+    const m = S.map[id];
+    if (!m || !m.anim) { log('A ação "' + id + '" ainda não tem animação.', 'warn'); return; }
+    if (!S.clips.has(m.anim)) { log('Animação "' + m.anim + '" não está no .ifp carregado ou falta o modelo.', 'warn'); return; }
+    S.mode = 'action';
+    currentActionId = id;
+    startClip(m.anim, { loop: m.loop });
+    markActiveTest();
+  }
+  function returnToIdle() {
+    const idle = S.map.idle;
+    if (idle && idle.anim && S.clips.has(idle.anim)) { currentActionId = 'idle'; startClip(idle.anim, { loop: true }); markActiveTest(); }
+  }
+  function onActionFinished(e) {
+    if (S.mode === 'action' && e.action === S.action) { returnToIdle(); }
+  }
+
+  /** Teclado: W/Shift+W/C seguram; Espaço e F disparam uma vez. */
+  function driveKeys() {
+    const k = S.keys;
+    let id = '';
+    if (k.has('w')) id = k.has('shift') ? 'run' : 'walk';
+    else if (k.has('c')) id = 'crouch';
+    if (id) { if (currentActionId !== id || S.mode !== 'action' || !S.action) runAction(id); }
+    else if (S.mode === 'action' && S.action && ['walk', 'run', 'crouch'].includes(currentActionId)) returnToIdle();
+  }
+  const typing = (e) => /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName) && e.target.type !== 'checkbox' && e.target.type !== 'range';
+  window.addEventListener('keydown', (e) => {
+    if (typing(e)) return;
+    const key = e.key.toLowerCase();
+    if (key === ' ' || key === 'f') {
+      e.preventDefault();
+      if (!e.repeat) runAction(key === ' ' ? 'jump' : 'attack');
+      return;
+    }
+    if (['w', 'c', 'shift'].includes(key)) { S.keys.add(key); driveKeys(); }
+  });
+  window.addEventListener('keyup', (e) => {
+    const key = e.key.toLowerCase();
+    if (S.keys.delete(key)) driveKeys();
+  });
+  window.addEventListener('blur', () => { S.keys.clear(); });
+
+  /* ---------- Carregar arquivos ---------- */
+  async function readFile(input) {
+    const f = input.files && input.files[0];
+    return f ? { name: f.name, buf: await f.arrayBuffer() } : null;
+  }
+
+  $('#btnLoad').onclick = async () => {
+    const btn = $('#btnLoad');
+    btn.disabled = true;
+    try {
+      const [dff, txd, ifp] = [await readFile($('#fDff')), await readFile($('#fTxd')), await readFile($('#fIfp'))];
+      if (!dff && !txd && !ifp) { log('Escolha pelo menos um arquivo (.dff, .txd ou .ifp).', 'warn'); return; }
+      let rebuild = false;
+      if (txd) {
+        try {
+          S.txd = parseTXD(txd.buf);
+          S.txdName = txd.name;
+          S.texMap.forEach((t) => t.dispose());
+          S.texMap.clear();
+          for (const t of S.txd) {
+            if (t.rgba) S.texMap.set(t.name.toLowerCase(), makeTexture(t));
+            else log('Textura "' + t.name + '" ignorada: ' + t.error, 'warn');
+          }
+          log('TXD ' + txd.name + ': ' + S.texMap.size + ' textura(s) (' + S.txd.filter((t) => t.rgba).map((t) => t.name + ' ' + t.width + '×' + t.height + ' ' + t.format).join(', ') + ').', 'ok');
+          showThumbs();
+          rebuild = true;
+        } catch (err) { log('TXD: ' + err.message, 'err'); }
+      }
+      if (dff) {
+        try {
+          S.dff = parseDFF(dff.buf);
+          S.dffName = dff.name;
+          rebuild = true;
+        } catch (err) { log('DFF: ' + err.message, 'err'); }
+      }
+      if (rebuild && S.dff) buildModel();
+      let reclip = rebuild;
+      if (ifp) {
+        try {
+          S.ifp = parseIFP(ifp.buf);
+          S.ifpName = ifp.name;
+          log('IFP ' + ifp.name + ' (' + S.ifp.format + '): ' + S.ifp.anims.length + ' animação(ões).', 'ok');
+          reclip = true;
+        } catch (err) { log('IFP: ' + err.message, 'err'); }
+      }
+      if (reclip) { rebuildClips(); refreshSelects(); updateTestButtons(); }
+      if (!S.dff && S.ifp) log('Carregue também o modelo (.dff) para ver as animações.', 'warn');
+    } catch (err) {
+      log('Erro: ' + err.message, 'err');
+      console.error(err);
+    } finally { btn.disabled = false; }
+  };
+
+  ['#optBones', '#optInPlace', '#optConj'].forEach((id) => {
+    $(id).onchange = () => {
+      const cur = S.current;
+      rebuildClips(); refreshSelects(); updateTestButtons();
+      if (cur && S.clips.has(cur)) startClip(cur, { fade: 0 });
+    };
+  });
+  $('#vGrid').onchange = updateHelpers;
+  $('#vBones').onchange = updateHelpers;
+  $('#vWire').onchange = updateHelpers;
+  $('#btnFrame').onclick = frameModel;
+
+  /* ---------- Salvar / carregar mapeamento (JSON) ---------- */
+  function buildJson() {
+    const actions = {};
+    for (const a of actionList()) {
+      const m = S.map[a.id];
+      const info = S.ifp && S.ifp.anims.find((x) => x.name === m.anim);
+      actions[a.id] = { label: a.label, animation: m.anim || null, loop: !!m.loop, duration: info ? +info.duration.toFixed(3) : null };
+    }
+    return {
+      format: 'gta-sa-animation-mapping', version: 1,
+      source: { ifp: S.ifpName || null, ifpFormat: S.ifp ? S.ifp.format : null, model: S.dffName || null, texture: S.txdName || null },
+      options: { boneMatching: $('#optBones').value, rootInPlace: $('#optInPlace').checked, invertQuaternion: $('#optConj').checked },
+      actions
+    };
+  }
+  $('#btnSave').onclick = () => {
+    const json = JSON.stringify(buildJson(), null, 2);
+    const url = URL.createObjectURL(new Blob([json], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'animation-mapping.json';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+    log('Mapeamento salvo (animation-mapping.json).', 'ok');
+  };
+  $('#fJson').onchange = async (e) => {
+    const f = e.target.files[0];
+    if (!f) return;
+    try {
+      const j = JSON.parse(await f.text());
+      if (!j || typeof j !== 'object' || !j.actions) throw new Error('JSON sem o campo "actions".');
+      for (const [id, v] of Object.entries(j.actions)) {
+        if (!S.map[id]) { actionList().push({ id, label: (v && v.label) || id, key: '', loop: false }); S.map[id] = { anim: '', loop: false }; }
+        S.map[id].anim = (v && typeof v.animation === 'string') ? v.animation : '';
+        S.map[id].loop = !!(v && v.loop);
+      }
+      if (j.options) {
+        if (typeof j.options.boneMatching === 'string') $('#optBones').value = j.options.boneMatching;
+        $('#optInPlace').checked = j.options.rootInPlace !== false;
+        $('#optConj').checked = !!j.options.invertQuaternion;
+      }
+      buildMapUI();
+      rebuildClips();
+      refreshSelects();
+      updateTestButtons();
+      log('Mapeamento carregado.', 'ok');
+    } catch (err) { log('JSON inválido: ' + err.message, 'err'); }
+    e.target.value = '';
+  };
+
+  /* ---------- Guardar o mapeamento no navegador (conveniência) ---------- */
+  function saveLocal() {
+    try { localStorage.setItem('gta-anim-map', JSON.stringify(S.map)); } catch (e) { /* sem armazenamento */ }
+  }
+  function loadLocal() {
+    try {
+      const s = JSON.parse(localStorage.getItem('gta-anim-map') || 'null');
+      if (s && typeof s === 'object') for (const [id, v] of Object.entries(s)) if (S.map[id] && v && typeof v.anim === 'string') { S.map[id].anim = v.anim; S.map[id].loop = !!v.loop; }
+    } catch (e) { /* ignora */ }
+  }
+
+  /* ---------- Laço principal ---------- */
+  const clock = new THREE.Clock();
+  function tick() {
+    requestAnimationFrame(tick);
+    const dt = Math.min(clock.getDelta(), 0.1);
+    if (S.mixer) S.mixer.update(dt);
+    if (S.action) {
+      const d = S.action.getClip().duration;
+      if (!scrubbing) { tl.max = String(d); tl.value = String(Math.min(S.action.time, d)); }
+      $('#timeTxt').textContent = Math.min(S.action.time, d).toFixed(2) + ' / ' + d.toFixed(2) + ' s';
+      if (S.action.paused) $('#btnPause').textContent = '⏵ Retomar'; else $('#btnPause').textContent = '⏸ Pause';
+    }
+    controls.update();
+    renderer.render(scene, camera);
+  }
+
+  loadLocal();
+  buildMapUI();
+  log('Pronto. Escolha os arquivos e clique em "Carregar e Processar".');
+  tick();
+
+  // Gancho para testes automáticos
+  window.__mapper = { S, scene, camera, controls, startClip, runAction, buildJson, renderer };
+})();
+</script>
+</body>
+</html>
