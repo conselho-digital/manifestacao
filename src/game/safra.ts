@@ -1,14 +1,12 @@
 // Escultura "Safra" (letreiro dourado de pé na calçada): pilar de latão quadrado e as letras brancas empilhadas, de lado
 // (lê-se de baixo para cima), grossas, com a borda dourada, como nas fotos de referência. Sem fonte 3D: cada letra é
-// desenhada num canvas e "extrudada" em fatias (planos com recorte pela transparência), o que dá volume com 2 chamadas de desenho.
+// desenhada num canvas, o contorno é extraído (marching squares) e extrudado em sólido (ExtrudeGeometry, com os furos).
 import * as THREE from 'three';
-import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { addBox } from './map';
 
 const TEXT = 'Safra';
 const PX = 0.018; // metros por pixel do canvas (letra maiúscula ≈ 2,6 m antes da escala do mapa)
 const DEPTH = 1.5; // espessura das letras
-const SLICES = 20;
 const PILLAR = 1.0; // lado do pilar
 const BASE_Y = 2.3; // onde começa a primeira letra (o S)
 const GAP = 0.24;
@@ -17,36 +15,130 @@ const GAP = 0.24;
 const SCALE = 0.5;
 const GOLD = 0xd2a64a;
 
-function letterTextures(ch: string): { front: THREE.CanvasTexture; side: THREE.CanvasTexture; w: number; h: number; capCenter: number } {
+type Pt = [number, number];
+
+/** Desenha a letra num canvas e devolve a máscara (1 = tinta) com o tamanho e o centro das maiúsculas. */
+function letterMask(ch: string): { mask: Uint8Array; W: number; H: number; capCenter: number } {
   const size = 200;
   const font = `800 ${size}px "Segoe UI", "Helvetica Neue", Arial, system-ui, sans-serif`;
   const probe = document.createElement('canvas').getContext('2d')!;
   probe.font = font;
-  const tw = Math.ceil(probe.measureText(ch).width);
   const pad = 14;
-  const W = tw + pad * 2;
+  const W = Math.ceil(probe.measureText(ch).width) + pad * 2;
   const H = Math.round(size * 1.25);
-  const draw = (fill: string, stroke: string, lw: number): THREE.CanvasTexture => {
-    const c = document.createElement('canvas');
-    c.width = W;
-    c.height = H;
-    const g = c.getContext('2d')!;
-    g.font = font;
-    g.textBaseline = 'alphabetic';
-    g.lineJoin = 'round';
-    const baseline = Math.round(size * 0.97);
-    g.lineWidth = lw;
-    g.strokeStyle = stroke;
-    g.strokeText(ch, pad, baseline);
-    g.fillStyle = fill;
-    g.fillText(ch, pad, baseline);
-    const t = new THREE.CanvasTexture(c);
-    t.colorSpace = THREE.SRGBColorSpace;
-    t.anisotropy = 4;
-    return t;
+  const c = document.createElement('canvas');
+  c.width = W;
+  c.height = H;
+  const g = c.getContext('2d', { willReadFrequently: true })!;
+  g.font = font;
+  g.textBaseline = 'alphabetic';
+  g.fillStyle = '#000';
+  const baseline = Math.round(size * 0.97);
+  g.fillText(ch, pad, baseline);
+  const data = g.getImageData(0, 0, W, H).data;
+  const mask = new Uint8Array(W * H);
+  for (let i = 0; i < W * H; i++) mask[i] = data[i * 4 + 3]! > 127 ? 1 : 0;
+  return { mask, W, H, capCenter: baseline - size * 0.36 };
+}
+
+/** Contornos da máscara (marching squares): lista de laços fechados em pixels. */
+function traceLoops(mask: Uint8Array, W: number, H: number): Pt[][] {
+  const at = (x: number, y: number): number => (x < 0 || y < 0 || x >= W || y >= H ? 0 : mask[y * W + x]!);
+  const key = (x: number, y: number): string => `${x},${y}`;
+  const adj = new Map<string, Pt[]>();
+  const link = (a: Pt, b: Pt): void => {
+    for (const [p, q] of [[a, b], [b, a]] as const) {
+      const k = key(p[0], p[1]);
+      const l = adj.get(k);
+      if (l) l.push(q); else adj.set(k, [q]);
+    }
   };
-  // frente: branco com borda dourada fina; lado: a silhueta toda dourada (um pouco mais gorda)
-  return { front: draw('#ffffff', '#dcb256', 7), side: draw('#dcb256', '#dcb256', 8), w: W, h: H, capCenter: Math.round(size * 0.97) - size * 0.36 };
+  for (let y = -1; y < H; y++) {
+    for (let x = -1; x < W; x++) {
+      const idx = at(x, y) * 8 + at(x + 1, y) * 4 + at(x + 1, y + 1) * 2 + at(x, y + 1);
+      // coordenadas dos centros dos pixels: a célula liga os centros (x,y)..(x+1,y+1); T/R/B/L = meios das 4 arestas
+      const T: Pt = [x + 1, y + 0.5], R: Pt = [x + 1.5, y + 1], B: Pt = [x + 1, y + 1.5], L: Pt = [x + 0.5, y + 1];
+      const segs: Record<number, [Pt, Pt][]> = {
+        1: [[L, B]], 2: [[B, R]], 3: [[L, R]], 4: [[T, R]], 5: [[T, R], [L, B]], 6: [[T, B]], 7: [[T, L]], 8: [[T, L]],
+        9: [[T, B]], 10: [[T, L], [B, R]], 11: [[T, R]], 12: [[L, R]], 13: [[B, R]], 14: [[L, B]],
+      };
+      for (const [a, b] of segs[idx] ?? []) link(a, b);
+    }
+  }
+  const loops: Pt[][] = [];
+  const used = new Set<string>();
+  for (const [k, nb] of adj) {
+    if (used.has(k) || nb.length !== 2) continue;
+    const loop: Pt[] = [];
+    let cur = k;
+    let prev = '';
+    for (let guard = 0; guard < 100000; guard++) {
+      used.add(cur);
+      const [cx, cy] = cur.split(',').map(Number) as [number, number];
+      loop.push([cx, cy]);
+      const n = adj.get(cur)!.map((p) => key(p[0], p[1]));
+      const next = n.find((q) => q !== prev && !used.has(q)) ?? n.find((q) => q !== prev);
+      if (!next || next === k && guard > 1 || used.has(next) && next !== k) break;
+      if (next === k) break;
+      prev = cur;
+      cur = next;
+    }
+    if (loop.length > 8) loops.push(loop);
+  }
+  return loops;
+}
+
+/** Simplifica um laço (Ramer–Douglas–Peucker) com tolerância em pixels. */
+function simplify(loop: Pt[], eps: number): Pt[] {
+  const rdp = (pts: Pt[]): Pt[] => {
+    if (pts.length < 3) return pts;
+    const [a, b] = [pts[0]!, pts[pts.length - 1]!];
+    let dmax = 0;
+    let im = 0;
+    const dx = b[0] - a[0], dy = b[1] - a[1];
+    const len = Math.hypot(dx, dy) || 1;
+    for (let i = 1; i < pts.length - 1; i++) {
+      const d = Math.abs(dy * (pts[i]![0] - a[0]) - dx * (pts[i]![1] - a[1])) / len;
+      if (d > dmax) { dmax = d; im = i; }
+    }
+    if (dmax <= eps) return [a, b];
+    return [...rdp(pts.slice(0, im + 1)).slice(0, -1), ...rdp(pts.slice(im))];
+  };
+  // fecha o laço cortando em dois pontos distantes
+  let far = 0, fd = 0;
+  for (let i = 1; i < loop.length; i++) { const d = Math.hypot(loop[i]![0] - loop[0]![0], loop[i]![1] - loop[0]![1]); if (d > fd) { fd = d; far = i; } }
+  const h1 = rdp(loop.slice(0, far + 1));
+  const h2 = rdp([...loop.slice(far), loop[0]!]);
+  return [...h1.slice(0, -1), ...h2.slice(0, -1)];
+}
+
+const inside = (p: Pt, poly: Pt[]): boolean => {
+  let c = false;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const [xi, yi] = poly[i]!, [xj, yj] = poly[j]!;
+    if (yi > p[1] !== yj > p[1] && p[0] < ((xj - xi) * (p[1] - yi)) / (yj - yi) + xi) c = !c;
+  }
+  return c;
+};
+
+/** Forma 3D da letra (com furos, como o miolo do "a"): contornos da máscara em metros. */
+function letterShape(ch: string): { shape: THREE.Shape; w: number } {
+  const { mask, W, H, capCenter } = letterMask(ch);
+  const loops = traceLoops(mask, W, H).map((l) => simplify(l, 0.9)).filter((l) => l.length >= 3);
+  const world = (p: Pt): THREE.Vector2 => new THREE.Vector2(p[0] * PX, (H - p[1] - capCenter) * PX);
+  // laço de profundidade par = contorno externo; ímpar = furo
+  const depth = loops.map((l, i) => loops.reduce((n, o, j) => n + (i !== j && inside(l[0]!, o) ? 1 : 0), 0));
+  const shapes: { shape: THREE.Shape; area: number }[] = [];
+  loops.forEach((l, i) => {
+    if (depth[i]! % 2 === 0) {
+      const sh = new THREE.Shape(l.map(world));
+      shapes.push({ shape: sh, area: Math.abs(THREE.ShapeUtils.area(l.map(world))) });
+    }
+  });
+  // um "Shape" por letra: o principal (maior); os furos vão para o contorno que os contém
+  const main = shapes.sort((a, b) => b.area - a.area)[0]!.shape;
+  loops.forEach((l, i) => { if (depth[i]! % 2 === 1) main.holes.push(new THREE.Path(l.map(world))); });
+  return { shape: main, w: W * PX };
 }
 
 /** Cria a escultura (origem no chão, frente = +Z). Devolve também a altura total. */
@@ -55,25 +147,18 @@ export function createSafraSign(): THREE.Group {
   const brass = new THREE.MeshLambertMaterial({ color: GOLD });
   const brassDark = new THREE.MeshLambertMaterial({ color: 0xa57d2e });
 
-  // letras: posições ao longo do eixo de leitura (x local, depois giradas para cima). Cada letra = 1 malha com todas as
-  // fatias juntas + 1 plano da frente branca (antes eram ~20 malhas por letra: muitas chamadas de desenho)
+  // letras: sólidos de verdade (contorno da letra extrudado): frente branca, lados e bordas em latão. Uma malha por letra.
   const letters = new THREE.Group();
   let cursor = 0;
+  const capMat = new THREE.MeshLambertMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.8 });
+  const sideMat = new THREE.MeshLambertMaterial({ color: GOLD });
   for (const ch of TEXT) {
-    const t = letterTextures(ch);
-    const w = t.w * PX;
-    const h = t.h * PX;
-    const sideMat = new THREE.MeshLambertMaterial({ map: t.side, alphaTest: 0.5, side: THREE.DoubleSide });
-    const slices: THREE.BufferGeometry[] = [];
-    for (let i = 0; i < SLICES; i++) {
-      const g = new THREE.PlaneGeometry(w, h);
-      g.translate(cursor + w / 2, h / 2 - t.capCenter * PX, PILLAR / 2 + (i / (SLICES - 1)) * DEPTH * 0.92);
-      slices.push(g);
-    }
-    letters.add(new THREE.Mesh(mergeGeometries(slices)!, sideMat));
-    const fg = new THREE.PlaneGeometry(w, h);
-    fg.translate(cursor + w / 2, h / 2 - t.capCenter * PX, PILLAR / 2 + DEPTH);
-    letters.add(new THREE.Mesh(fg, new THREE.MeshLambertMaterial({ map: t.front, alphaTest: 0.5, emissive: 0xffffff, emissiveIntensity: 0.85, emissiveMap: t.front })));
+    const { shape, w } = letterShape(ch);
+    const geo = new THREE.ExtrudeGeometry(shape, { depth: DEPTH, bevelEnabled: true, bevelThickness: 0.05, bevelSize: 0.05, bevelSegments: 1, curveSegments: 1 });
+    geo.translate(cursor, 0, PILLAR / 2);
+    const m = new THREE.Mesh(geo, [capMat, sideMat]);
+    m.castShadow = true;
+    letters.add(m);
     cursor += w - 0.12 + GAP;
   }
   const total = cursor - GAP;
