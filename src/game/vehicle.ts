@@ -145,17 +145,61 @@ function applyCommonLook(model: THREE.Object3D, bike: boolean, dark: string[]): 
 const BIKE_DARK: Record<string, string[]> = { harley: ['m1', 'm12'] };
 
 /** Roda: pneu preto (raio externo) e aro cinza (miolo), pela distância ao eixo no espaço da roda. */
-function addTire(mat: THREE.MeshStandardMaterial, radius: number): void {
+function addTire(mat: THREE.MeshStandardMaterial, radius: number, spokes = false): void {
   mat.onBeforeCompile = (sh) => {
     sh.uniforms.uRim = { value: radius * 0.68 };
+    sh.uniforms.uHub = { value: radius * 0.2 };
     sh.vertexShader = sh.vertexShader
-      .replace('#include <common>', '#include <common>\nvarying float vTR;')
-      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvTR = length(position.yz);');
+      .replace('#include <common>', '#include <common>\nvarying vec2 vYZ;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvYZ = position.yz;');
+    // raio e ângulo por pixel (interpolar o ângulo por vértice entortava os raios): aro cinza com 5 raios escuros (ou liso, sem `spokes`); pneu preto por fora
+    const rim = spokes ? 'mix(vec3(0.62, 0.63, 0.66), vec3(0.2), step(0.3, abs(sin(2.5 * atan(vYZ.y, vYZ.x)))) * step(uHub, length(vYZ)))' : 'vec3(0.55, 0.56, 0.58)';
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying float vTR;\nuniform float uRim;')
-      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.rgb = mix(vec3(0.55, 0.56, 0.58), vec3(0.07), step(uRim, vTR));');
+      .replace('#include <common>', '#include <common>\nvarying vec2 vYZ;\nuniform float uRim;\nuniform float uHub;')
+      .replace('#include <color_fragment>', `#include <color_fragment>\ndiffuseColor.rgb = mix(${rim}, vec3(0.07), step(uRim, length(vYZ)));`);
   };
-  mat.customProgramCacheKey = () => 'teamtire';
+  mat.customProgramCacheKey = () => (spokes ? 'teamtire-s2' : 'teamtire2');
+}
+
+/** Viatura (Duster): roda de cilindro liso (o modelo original, simplificado, ficava um bloco pontudo): pneu preto, aro com 5 raios. */
+function roundWheels(model: THREE.Object3D): void {
+  for (const n of ['wheel_FL', 'wheel_FR', 'wheel_BL', 'wheel_BR']) {
+    const root = model.getObjectByName(n);
+    if (!root) continue;
+    const meshes: THREE.Mesh[] = [];
+    root.traverse((o) => { if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh); });
+    const m = meshes[0];
+    if (!m) continue;
+    m.geometry.computeBoundingBox();
+    const bb = m.geometry.boundingBox!;
+    const r = Math.max(bb.max.y - bb.min.y, bb.max.z - bb.min.z) / 2;
+    const w = bb.max.x - bb.min.x;
+    const g = new THREE.CylinderGeometry(r, r, w, 28, 1);
+    g.rotateZ(Math.PI / 2); // eixo da roda em x
+    g.translate((bb.max.x + bb.min.x) / 2, (bb.max.y + bb.min.y) / 2, (bb.max.z + bb.min.z) / 2);
+    const mat = new THREE.MeshStandardMaterial({ color: BLACK, roughness: 0.75, metalness: 0.05 });
+    addTire(mat, r, true);
+    m.geometry = g;
+    m.material = mat;
+    for (const extra of meshes.slice(1)) extra.removeFromParent();
+  }
+}
+
+/** Mais contraste na viatura: brancos mais brancos (a cor do material multiplica a textura e a cor de vértice); os pretos continuam pretos. */
+function boostContrast(model: THREE.Object3D): void {
+  const done = new Map<THREE.Material, THREE.Material>();
+  model.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    for (let q: THREE.Object3D | null = m; q; q = q.parent) if (/^wheel/.test(q.name)) return; // roda: material próprio (o clone perderia o shader do pneu)
+    const fix = (mat: THREE.Material): THREE.Material => {
+      if (mat.name === 'glass' || mat.name === 'light' || !(mat instanceof THREE.MeshStandardMaterial)) return mat;
+      let c = done.get(mat);
+      if (!c) { const std = mat.clone(); std.color.multiplyScalar(1.45); std.roughness = Math.min(std.roughness, 0.5); std.metalness = Math.max(std.metalness, 0.1); c = std; done.set(mat, c); }
+      return c;
+    };
+    m.material = Array.isArray(m.material) ? m.material.map(fix) : fix(m.material);
+  });
 }
 
 /** Acrescenta ao material pintado a segunda cor: faixa de baixo (soleiras e para-choques) e teto, pela altura no mundo. */
@@ -190,7 +234,8 @@ export function buildCarVisual(src: THREE.Object3D, colorHex: number, look?: Pai
   const model = src.clone(true);
   const paint = new THREE.Color(colorHex);
   const done = new Map<THREE.Material, THREE.Material>();
-  if (!look?.police) applyCommonLook(model, bike, BIKE_DARK[modelName] ?? []); // todo veículo comum: pneu preto (e motor preto nas motos)
+  if (!look?.police) applyCommonLook(model, bike, BIKE_DARK[modelName] ?? []);
+  if (modelName === POLICE_MODEL) { roundWheels(model); boostContrast(model); } // todo veículo comum: pneu preto (e motor preto nas motos)
   if (look?.police) applyTeamPaint(model, look, bike); // só a viatura é repintada; os pessoais mantêm as cores do arquivo (a equipe vai em adesivos nas portas dos carros; moto sem nada)
   model.traverse((o) => {
     const m = o as THREE.Mesh;
