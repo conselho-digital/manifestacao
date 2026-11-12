@@ -10,7 +10,9 @@ const ROOT = path.resolve(__dirname, '..');
 const THREE147 = process.env.THREE147;
 if (!THREE147) { console.error('Defina THREE147 (pasta "package" do three@0.147.0).'); process.exit(1); }
 /** [arquivo .ifp, { nome no IFP: nome no jogo }] */
-const JOBS = JSON.parse(fs.readFileSync(process.argv[2] || path.join(__dirname, 'bake-carlos-ifp.jobs.json'), 'utf8'));
+const JOBFILE = JSON.parse(fs.readFileSync(process.argv[2] || path.join(__dirname, 'bake-carlos-ifp.jobs.json'), 'utf8'));
+const JOBS = JOBFILE.clips;
+const HANDS = JOBFILE.hands || [];
 
 (async () => {
   const b = await chromium.launch({ args: ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'] });
@@ -37,7 +39,22 @@ const JOBS = JSON.parse(fs.readFileSync(process.argv[2] || path.join(__dirname, 
       console.log(to.padEnd(14), 'de', from.padEnd(22), data.duration + ' s', data.tracks.length + ' ossos', data.move ? 'move ' + Math.max(...data.move.f).toFixed(2) + ' m' : '');
     }
   }
+  // trilhas das mãos (armas curtas): public/anims/pistol-overlay.json
+  const hands = {};
+  for (const [file, map] of HANDS) {
+    const abs = path.isAbsolute(file) ? file : path.join(ROOT, file);
+    await p.setInputFiles('#fileInput', abs);
+    await p.waitForFunction((n) => window.__page.S.ifp && window.__page.S.ifpName === n, path.basename(abs), { timeout: 30000 });
+    for (const [from, to] of Object.entries(map)) {
+      const refLast = typeof to === 'string' && to.endsWith('@last');
+      const data = await p.evaluate(([n, last]) => window.__page.handTrack(n, last), [from, refLast]);
+      if (!data) { console.warn('não achei', from); continue; }
+      hands[to.replace('@last', '')] = data;
+      console.log(to.padEnd(18), 'mãos de', from, data.duration + ' s');
+    }
+  }
   await b.close();
+  if (Object.keys(hands).length) fs.writeFileSync(path.join(ROOT, 'public/anims/pistol-overlay.json'), JSON.stringify(hands));
   const target = path.join(ROOT, 'public/anims/carlos-extra.json');
   const cur = JSON.parse(fs.readFileSync(target, 'utf8'));
   Object.assign(cur, out);

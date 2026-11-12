@@ -45,7 +45,7 @@ const INVULNERABLE = 2;
 /** depois de morrer: 60 s andando sem arma e sem levar dano de jogadores ou carros */
 export const PROTECT_TIME = 60;
 /** armas brancas de duas mãos (golpes do baseball.ifp) e o que o jogador segura com cada uma */
-const MELEE_ARMED: Partial<Record<number, Armed>> = { 2: 'bat', 4: 'sign', 5: 'cricket', 6: 'baseball', 7: 'bottle', 8: 'pipe', 9: 'cleaver', 10: 'sickle', 11: 'axe' };
+const MELEE_ARMED: Partial<Record<number, Armed>> = { 2: 'bat', 4: 'sign', 5: 'cricket', 6: 'baseball', 7: 'bottle', 8: 'pipe', 9: 'cleaver', 10: 'sickle', 11: 'axe', 16: 'knife' };
 const KILL_MONEY = 100;
 const SPAWNS: [number, number][] = [[25, 16], [-10, -16], [64, 16], [-45, 16], [30, -16], [-60, -16], [-14, 16], [80, -16]];
 
@@ -84,7 +84,7 @@ export class Combat {
   /** começa de mãos livres (punho); o botão Arma troca */
   weapon: WeaponId = 1;
   /** munição de cada arma (só quem tem a arma recebe) */
-  private ammo = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15].map(() => ({ mag: 0, reserve: 0 }));
+  private ammo = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16].map(() => ({ mag: 0, reserve: 0 }));
   get mag(): number { return this.ammo[this.weapon]!.mag; }
   get reserve(): number { return this.ammo[this.weapon]!.reserve; }
   /** tem mira (fuzil ou pistola) */
@@ -131,7 +131,7 @@ export class Combat {
 
   /** Armas que o jogador tem, na ordem do botão de troca. */
   ownedWeapons(): WeaponId[] {
-    return ([0, 12, 13, 14, 3, 2, 4, 5, 6, 7, 8, 9, 10, 11, 15, 1] as const).filter((w) => this.d.inv.has(w));
+    return ([0, 12, 13, 14, 3, 2, 4, 5, 6, 7, 8, 9, 10, 11, 16, 15, 1] as const).filter((w) => this.d.inv.has(w));
   }
 
   /** Munição de uma arma (para o menu). */

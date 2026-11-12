@@ -1279,8 +1279,50 @@ const CarlosRetarget = (function () {
     if (S.ifp) playNew();
   }).catch((err) => { status('Não consegui carregar o Carlos: ' + err.message, 'err'); console.error(err); });
 
+  /**
+   * Trilha das mãos de uma animação parcial (arma curta) para o jogo, no espaço do modelo (x esquerda, y cima, z frente):
+   * rp/rq = movimento do pulso direito (posição e giro) a partir do 1º quadro, somado ao lugar em que o jogo já segura a arma;
+   * lr = onde está a mão esquerda em relação ao pulso direito (valor absoluto: ir buscar o carregador e voltar).
+   */
+  function handTrack(name, refLast) {
+    const a = S.ifp && S.ifp.anims.find((x) => x.name === name);
+    if (!a || !S.rig) return null;
+    const clip = CarlosRetarget.bake(a, 'never', false, { relative: true, fingers: false });
+    const model = S.rig.children[0];
+    S.mixer.stopAllAction();
+    const act = S.mixer.clipAction(clip);
+    act.reset(); act.play(); act.setEffectiveWeight(1); act.paused = true;
+    const R = S.rig.getObjectByName('arm_right_wrist_051'), L = S.rig.getObjectByName('arm_left_wrist_040');
+    const n = Math.max(2, Math.round(clip.duration * 30) + 1);
+    const inv = new THREE.Matrix4(), m = new THREE.Matrix4(), pos = new THREE.Vector3(), sc = new THREE.Vector3();
+    const samples = [];
+    for (let i = 0; i < n; i++) {
+      act.time = clip.duration * i / (n - 1);
+      S.mixer.update(0);
+      S.rig.updateMatrixWorld(true);
+      inv.copy(model.matrixWorld).invert();
+      const q = new THREE.Quaternion();
+      m.multiplyMatrices(inv, R.matrixWorld).decompose(pos, q, sc);
+      const pr = pos.clone();
+      m.multiplyMatrices(inv, L.matrixWorld).decompose(pos, new THREE.Quaternion(), sc);
+      samples.push({ t: act.time, pr, q, pl: pos.clone() });
+    }
+    act.stop();
+    const s0 = refLast ? samples[samples.length - 1] : samples[0], q0i = s0.q.clone().invert(); // refLast: o movimento é medido a partir da pose final (ex.: sacar a pistola até mirar)
+    const out = { duration: +clip.duration.toFixed(4), t: [], rp: [], rq: [], lr: [] };
+    for (const s of samples) {
+      const rp = s.pr.clone().sub(s0.pr), rq = s.q.clone().multiply(q0i);
+      const le = s.pl.clone().sub(s.pr);
+      out.t.push(+s.t.toFixed(4));
+      out.rp.push(...[rp.x, rp.y, rp.z].map((v) => +v.toFixed(4)));
+      out.rq.push(...[rq.x, rq.y, rq.z, rq.w].map((v) => +v.toFixed(4)));
+      out.lr.push(...[le.x, le.y, le.z].map((v) => +v.toFixed(4)));
+    }
+    return out;
+  }
+
   // Gancho para testes automáticos
-  window.__page = { S, select, selectGame, play, scene, camera, controls };
+  window.__page = { S, select, selectGame, play, scene, camera, controls, handTrack };
 })();
 </script>
 </body>

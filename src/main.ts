@@ -395,6 +395,7 @@ function loop(): void {
         yaw += d * Math.min(1, dt * 2.5);
       }
       combat.update(dt, input, player);
+      player.setReloading(combat.reloading);
       player.update(dt, input, yaw);
       aimK += ((input.aim && combat.isGun && !player.isDriving ? 1 : 0) - aimK) * Math.min(1, dt * 9);
       player.followCamera(camera, dt, yaw + camOffset, pitch, aimK, intro !== null);

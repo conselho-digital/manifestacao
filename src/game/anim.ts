@@ -11,14 +11,16 @@ type Kind = 'gta' | 'carlos';
 
 export type Armed = 'none' | 'rifle' | 'aim' | 'pistol' | 'pistol_aim' | 'bat' | 'sign' | 'cricket' | 'baseball' | 'spray' | 'spray_aim' | ExtraMelee;
 /** Armas brancas extras (pacote de armas): garrafa quebrada, cano, cutelo, foice e machado. */
-export const EXTRA_MELEE_KEYS = ['bottle', 'pipe', 'cleaver', 'sickle', 'axe'] as const;
+export const EXTRA_MELEE_KEYS = ['bottle', 'pipe', 'cleaver', 'sickle', 'axe', 'knife'] as const;
 export type ExtraMelee = (typeof EXTRA_MELEE_KEYS)[number];
-export const ARMED_CODE: Record<Armed, number> = { none: 0, rifle: 1, aim: 2, bat: 3, pistol: 4, pistol_aim: 5, sign: 6, cricket: 7, baseball: 8, bottle: 9, pipe: 10, cleaver: 11, sickle: 12, axe: 13, spray: 20, spray_aim: 21 };
+export const ARMED_CODE: Record<Armed, number> = { none: 0, rifle: 1, aim: 2, bat: 3, pistol: 4, pistol_aim: 5, sign: 6, cricket: 7, baseball: 8, bottle: 9, pipe: 10, cleaver: 11, sickle: 12, axe: 13, knife: 22, spray: 20, spray_aim: 21 };
 // 14–19 são os fuzis (rifleFromNetCode); 20 e 21 a lata de spray
-export const ARMED_FROM_CODE: Armed[] = ['none', 'rifle', 'aim', 'bat', 'pistol', 'pistol_aim', 'sign', 'cricket', 'baseball', 'bottle', 'pipe', 'cleaver', 'sickle', 'axe', 'none', 'none', 'none', 'none', 'none', 'none', 'spray', 'spray_aim'];
+export const ARMED_FROM_CODE: Armed[] = ['none', 'rifle', 'aim', 'bat', 'pistol', 'pistol_aim', 'sign', 'cricket', 'baseball', 'bottle', 'pipe', 'cleaver', 'sickle', 'axe', 'none', 'none', 'none', 'none', 'none', 'none', 'spray', 'spray_aim', 'knife'];
 /** Armas brancas de duas mãos (bandeira, placa, tacos de críquete e de beisebol): usam os clipes do baseball.ifp. */
 export const isBatLike = (a: Armed): boolean => a === 'bat' || a === 'sign' || a === 'cricket' || a === 'baseball' || (EXTRA_MELEE_KEYS as readonly string[]).includes(a);
 /** O corpo gira para onde a câmera mira só ao mirar ou atirar (arma levantada). Com a arma baixa a câmera olha livre e o corpo segue o movimento. */
+/** Armas de uma mão que usam os clipes da faca (knife.ifp): faca e garrafa quebrada. */
+export const isKnifeLike = (a: Armed): boolean => a === 'knife' || a === 'bottle';
 export const facesAim = (a: Armed): boolean => a === 'aim' || a === 'pistol_aim' || a === 'spray_aim';
 const isAimPose = (a: Armed): boolean => a === 'aim' || a === 'pistol_aim' || a === 'spray_aim';
 const isSpray = (a: Armed): boolean => a === 'spray' || a === 'spray_aim';
@@ -26,7 +28,7 @@ type Kind3 = 'rifle' | 'pistol' | 'bat';
 const kindOf = (a: Armed): Kind3 | null => (a === 'rifle' || a === 'aim' ? 'rifle' : a === 'pistol' || a === 'pistol_aim' || isSpray(a) ? 'pistol' : isBatLike(a) ? 'bat' : null);
 
 /** Clipes que tocam uma vez e param no último quadro. */
-const ONCE = new Set(['roll_f', 'roll_fl', 'roll_fr', 'roll_l', 'roll_r', 'roll_b', 'roll_bl', 'roll_br', 'bat_swing4', 'knife_1', 'knife_2', 'knife_3', 'knife_4', 'knife_g', 'kill_player', 'kill_ped_damage', 'kill_ped_die', 'kick_1', 'kick_2', 'hitk_1', 'hitk_2', 'hit_1', 'hit_2', 'hit_3', 'block', 'punch_1', 'punch_2', 'punch_3', 'punch_4', 'bat_swing', 'bat_swing2', 'bat_swing3', 'bat_hit_1', 'bat_hit_2', 'bat_hit_3', 'car_getin_l', 'car_getout_l', 'bike_fall', 'ko_front', 'getup_front', 'jump_launch', 'jump_land', 'climb_jump', 'climb_pull', 'climb_stand', 'roll', 'dive']);
+const ONCE = new Set(['roll_f', 'roll_fl', 'roll_fr', 'roll_l', 'roll_r', 'roll_b', 'roll_bl', 'roll_br', 'bat_swing4', 'arrestgun', 'knife_1', 'knife_2', 'knife_3', 'knife_4', 'knife_g', 'kill_player', 'kill_ped_damage', 'kill_ped_die', 'kick_1', 'kick_2', 'hitk_1', 'hitk_2', 'hit_1', 'hit_2', 'hit_3', 'block', 'punch_1', 'punch_2', 'punch_3', 'punch_4', 'bat_swing', 'bat_swing2', 'bat_swing3', 'bat_hit_1', 'bat_hit_2', 'bat_hit_3', 'car_getin_l', 'car_getout_l', 'bike_fall', 'ko_front', 'getup_front', 'jump_launch', 'jump_land', 'climb_jump', 'climb_pull', 'climb_stand', 'roll', 'dive']);
 export const isOnceClip = (name: string): boolean => ONCE.has(name);
 
 /** Clipes em que o personagem não segura o fuzil (escalar, rolar, mergulhar, emotes). */
@@ -39,7 +41,7 @@ const OWN_HOLD = (name: string): boolean => name.startsWith('gun_') || name.star
 /** Clipes em que as pernas ficam paradas na pose do 1º quadro (golpes, reações a golpes e as posições de luta): o IFP não guarda o deslocamento do corpo, então os passos do soco/tacada faziam as pernas patinarem com o corpo parado. */
 // Os clipes do baseball/fight_e/knife novos (bat_*, kick_*, hit_*, hitk_*) têm passos e deslocamento do corpo e não ficam parados.
 const PLANTED = new Set(['punch_1', 'punch_2', 'punch_3', 'combat_idle', 'block']);
-const TIME_SCALE: Record<string, number> = { ko: 1.8, getup: 1.8, ko_front: 1.5, getup_front: 1.8, bike_fall: 1.2, car_getin_l: 0.62, car_getout_l: 0.62, hit_1: 1.8, hit_2: 1.4, hit_3: 2.2, punch_1: 2.2, punch_2: 2.2, punch_3: 2.0, punch_4: 1.6, bat_swing: 1.4, bat_swing2: 1.5, bat_swing3: 1.6, bat_hit_1: 1.3, bat_hit_2: 1.3, bat_hit_3: 1.8, kick_1: 1.3, kick_2: 1.8, hitk_1: 1.4, hitk_2: 2, gun_fwd: 1.2, gun_bwd: 1.0, gun_left: 1.5, gun_right: 1.4, crouch_fwd: 0.6, crouch_bwd: 0.6,
+const TIME_SCALE: Record<string, number> = { ko: 1.8, getup: 1.8, ko_front: 1.5, getup_front: 1.8, bike_fall: 1.2, car_getin_l: 0.62, car_getout_l: 0.62, hit_1: 1.8, hit_2: 1.4, hit_3: 2.2, punch_1: 2.2, punch_2: 2.2, punch_3: 2.0, punch_4: 1.6, bat_swing: 1.4, bat_swing2: 1.5, bat_swing3: 1.6, bat_hit_1: 1.3, bat_hit_2: 1.3, bat_hit_3: 1.8, arrestgun: 1.3, knife_1: 1.5, knife_2: 1.5, knife_3: 1.4, knife_4: 1.2, kick_1: 1.3, kick_2: 1.8, hitk_1: 1.4, hitk_2: 2, gun_fwd: 1.2, gun_bwd: 1.0, gun_left: 1.5, gun_right: 1.4, crouch_fwd: 0.6, crouch_bwd: 0.6,
   // andar/correr: o passo do clipe (medido pelo pé de apoio, ver dev/anim-viewer) é bem menor que a velocidade do jogo (andar 2,1 m/s, correr 6,2 m/s) e os pés patinavam; acelera o clipe até ficar perto, sem passar da cadência natural
   walk: 1.6, walk_armed: 1.3, sprint: 1.3, w_gang: 1.6, w_drunk: 1.5, w_old: 1.6, w_fat: 1.6, w_sneak: 1.6 };
 
@@ -173,9 +175,14 @@ const CFG_SPRAY: WeaponCfg = {
   crouchAim: P3(0, -0.08, 0),
 };
 
+/** Trilha das mãos de uma animação curta de pistola (colt45.ifp): movimento do pulso direito a partir do começo e lugar da mão esquerda em relação ao pulso direito. */
+interface HandTrack { duration: number; t: number[]; rp: number[]; rq: number[]; lr: number[] }
+let pistolOverlay: Record<string, HandTrack> | null = null;
+const overlayLoad = (): Promise<unknown> => (pistolOverlay ? Promise.resolve() : (fetchJson('/anims/pistol-overlay.json') as unknown as Promise<Record<string, HandTrack>>).then((d) => { pistolOverlay = d; }).catch(() => undefined));
+
 /** Baixa os dados de animação de antemão (Law e Carlos). */
 export function preloadAnimations(): Promise<unknown> {
-  return Promise.all(['/anims/ped.json', '/anims/ped-extra.json', '/anims/carlos.json', '/anims/carlos-extra.json'].map((u) => fetchJson(u).catch(() => undefined)));
+  return Promise.all([overlayLoad(), ...['/anims/ped.json', '/anims/ped-extra.json', '/anims/carlos.json', '/anims/carlos-extra.json'].map((u) => fetchJson(u).catch(() => undefined))]);
 }
 
 export class Animator {
@@ -198,6 +205,13 @@ export class Animator {
   private aimK = 0; // 0 = fuzil baixo, 1 = fuzil no ombro
   private jabT = -1; // soco em andamento (0..1), -1 = nenhum
   private recoil = 0; // coice do último tiro (1 -> 0)
+  private reloadT = -1; // recarregando a pistola: tempo (s) da animação, -1 = nenhuma
+  private reloadDur = 1.6;
+  private reloadOn = false;
+  private drawT = -1; // sacando a pistola até mirar (ARRESTgun): tempo (s), -1 = nenhum
+  private drawDur = 0.5;
+  /** mão esquerda no recarregar: onde ela vai em relação ao pulso direito (espaço do personagem) e o peso */
+  private ovLeft: { lr: THREE.Vector3; w: number } | null = null;
   private flailW = 0; // "ragdoll" falso: braços e pernas balançam soltos (0..1)
   private flailT = 0;
   /** orientação do taco no espaço da mão direita, calibrada no bat_idle (mãos afastadas) */
@@ -493,12 +507,22 @@ export class Animator {
 
   /** Segurando o fuzil: braços na empunhadura, fuzil baixo (rifle) ou no ombro (aim). */
   setArmed(a: Armed): void {
+    if (isKnifeLike(a) !== isKnifeLike(this.armed)) this.batLocal = null; // a calibração do taco não serve para a faca (e vice-versa)
+    if (a === 'pistol_aim' && this.armed !== 'pistol_aim') { this.drawT = 0; this.drawDur = this.has('arrestgun') ? this.length('arrestgun') : 0.5; }
+    if (a !== 'pistol_aim') this.drawT = -1;
     this.armed = a;
   }
 
   /** Soco direto do boxe (jab): braço da frente estica, o de trás protege o rosto, o tronco gira. */
   jab(): void {
     this.jabT = 0;
+  }
+
+  /** Recarregando a pistola: toca o colt45_reload nas mãos (a arma desce e vira, a mão esquerda vai buscar o carregador). */
+  setReloading(on: boolean, dur = 1.6): void {
+    if (on && !this.reloadOn) { this.reloadT = 0; this.reloadDur = dur; }
+    if (!on) this.reloadT = -1;
+    this.reloadOn = on;
   }
 
   /** Coice: o fuzil recua e sobe um pouco por um instante. */
@@ -590,6 +614,8 @@ export class Animator {
     this.armW += (ikTarget - this.armW) * Math.min(1, dt * 10);
     this.aimK += ((isAimPose(this.armed) ? 1 : 0) - this.aimK) * Math.min(1, dt * 9);
     this.recoil = Math.max(0, this.recoil - dt * 9);
+    if (this.reloadT >= 0) { this.reloadT += dt; if (this.reloadT >= this.reloadDur) this.reloadT = -1; }
+    if (this.drawT >= 0) { this.drawT += dt; if (this.drawT >= this.drawDur) this.drawT = -1; }
     // agachado parado: tronco desce; andando agachado o clipe já inclina o corpo, então só um pouco
     const crouchT = this.clipName === 'crouch_idle' ? 1 : this.clipName.startsWith('crouch_') ? 0.2 : 0;
     this.crouchK += (crouchT - this.crouchK) * Math.min(1, dt * 8);
@@ -632,7 +658,7 @@ export class Animator {
     const kickW = kickT >= 0 ? Math.max(0, Math.sin(Math.PI * THREE.MathUtils.clamp((kickT - 0.3) / 0.45, 0, 1))) : 0;
     if (kind === 'bat' && holding) this.poseBat();
     // andando/correndo com arma branca o clipe balança os braços e a arma apontaria para o chão (muleta): carrega para cima
-    const carry = kind === 'bat' && holding && !this.clipName.startsWith('bat_') && !fist;
+    const carry = kind === 'bat' && holding && !isKnifeLike(this.armed) && !this.clipName.startsWith('bat_') && !fist;
     this.carryW = carry ? this.carryW + (1 - this.carryW) * Math.min(1, dt * 10) : 0;
     const flail = this.flailW;
     if (flail > 0) this.flailT += dt;
@@ -799,6 +825,21 @@ export class Animator {
     const axis = hl.clone().sub(hr);
     const handQ = this.quatIn(right.h, new THREE.Quaternion());
     this.bat.position.copy(hr);
+    const knife = isKnifeLike(this.armed);
+    if (knife) {
+      // arma de uma mão (faca, garrafa): presa à mão direita; a orientação no espaço da mão é calibrada no knife_idle (lâmina para a frente e um pouco para cima)
+      const idle = this.clipName === 'knife_idle' && (this.current?.getEffectiveWeight() ?? 0) > 0.98;
+      const want = new THREE.Vector3(0, 0.35, 0.94).normalize();
+      if (idle) {
+        const xA = new THREE.Vector3().crossVectors(Y, want).normalize();
+        const yA = new THREE.Vector3().crossVectors(want, xA);
+        const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(xA, yA, want));
+        this.batLocal = handQ.clone().invert().multiply(q);
+      }
+      if (this.batLocal) this.bat.quaternion.copy(handQ).multiply(this.batLocal);
+      else this.bat.quaternion.copy(handQ.clone().multiply(right.q0[2].clone().invert()).multiply(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), want)));
+      return;
+    }
     // o mastro fica preso à mão direita (como no GTA): a orientação no espaço da mão é calibrada uma vez
     // no bat_idle, quando as duas mãos estão afastadas e a reta entre elas dá a direção do mastro
     // (recalibra sempre que o bat_idle está completo e com as mãos afastadas: uma calibração feita no meio da transição de outro clipe deixava a arma para baixo)
@@ -954,6 +995,35 @@ export class Animator {
       q.slerp(qh, 1 - k);
     }
     pos.addScaledVector(new THREE.Vector3(0, 0, -1).applyQuaternion(q), 0.05 * this.recoil); // recua no coice
+    this.ovLeft = null;
+    // animações curtas nas mãos da pistola: recarregar (colt45_reload) e sacar até mirar (ARRESTgun)
+    const pistol = kindOf(this.armed) === 'pistol' && !isSpray(this.armed);
+    let tr: HandTrack | undefined;
+    let ot = 0;
+    let od = 1;
+    let w = 1;
+    if (pistol && this.reloadT >= 0) {
+      tr = pistolOverlay?.pistol_reload;
+      ot = this.reloadT; od = this.reloadDur;
+      w = THREE.MathUtils.clamp(Math.min(ot / 0.12, (od - ot) / 0.15), 0, 1);
+    } else if (pistol && this.drawT >= 0) {
+      tr = pistolOverlay?.pistol_draw;
+      ot = this.drawT; od = this.drawDur;
+      w = THREE.MathUtils.clamp(ot / 0.05, 0, 1); // o clipe termina na pose de mirar: sem peso de saída
+    }
+    if (tr) {
+      const ct = Math.min(1, ot / od) * tr.duration;
+      let i = 1;
+      while (i < tr.t.length - 1 && tr.t[i]! < ct) i++;
+      const k = THREE.MathUtils.clamp((ct - tr.t[i - 1]!) / Math.max(1e-6, tr.t[i]! - tr.t[i - 1]!), 0, 1);
+      const v3 = (a: number[]): THREE.Vector3 => new THREE.Vector3(a[(i - 1) * 3]!, a[(i - 1) * 3 + 1]!, a[(i - 1) * 3 + 2]!).lerp(new THREE.Vector3(a[i * 3]!, a[i * 3 + 1]!, a[i * 3 + 2]!), k);
+      const rp = v3(tr.rp).multiplyScalar(w).applyQuaternion(flat);
+      const qa = new THREE.Quaternion().fromArray(tr.rq, (i - 1) * 4).slerp(new THREE.Quaternion().fromArray(tr.rq, i * 4), k);
+      const dq = new THREE.Quaternion().slerp(qa, w); // identidade → giro do clipe, com o peso de entrada e saída
+      pos.add(rp);
+      q.premultiply(flat.clone().multiply(dq).multiply(flat.clone().invert()));
+      this.ovLeft = { lr: v3(tr.lr).applyQuaternion(flat), w };
+    }
     return { pos, q };
   }
 
@@ -962,6 +1032,11 @@ export class Animator {
     const w = isSpray(this.armed) && arm.side > 0 ? 0 : this.armW; // lata de spray: só a mão direita segura
     if (w < 0.01) return;
     const wrist = (arm.side < 0 ? cfgHold.gripR : cfgHold.gripL).clone().applyQuaternion(frame.q).add(frame.pos);
+    if (arm.side > 0 && this.ovLeft) {
+      // recarregando: a mão esquerda segue o colt45_reload em relação ao pulso direito
+      const rW = cfgHold.gripR.clone().applyQuaternion(frame.q).add(frame.pos);
+      wrist.lerp(rW.add(this.ovLeft.lr), this.ovLeft.w);
+    }
     this.solveArm(arm, wrist, w, dt);
   }
 

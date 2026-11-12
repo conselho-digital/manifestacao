@@ -41,6 +41,7 @@ export const EXTRA_MELEE: Record<ExtraMelee, { file: string; grip: number; scale
   cleaver: { file: 'cleaver.glb', grip: -0.08, scale: 1, roll: 1.9 },
   sickle: { file: 'sickle.glb', grip: 0, scale: 1, roll: 1.9 },
   axe: { file: 'axe.glb', grip: -0.2, scale: 1, roll: 1.9 },
+  knife: { file: 'knife.glb', grip: 0.02, scale: 1 },
 };
 const extraSrc = new Map<ExtraMelee, Promise<THREE.Object3D>>();
 export const loadExtra = (k: ExtraMelee): Promise<THREE.Object3D> => {

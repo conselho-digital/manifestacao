@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { COLLIDERS, MAP, rayBox, TREES, type Box } from './map';
 import type { InputState } from './input';
 import { CARS, hittables, type Car } from './vehicle';
-import { ARMED_CODE, facesAim, isBatLike, type Animator, type Armed } from './anim';
+import { ARMED_CODE, facesAim, isBatLike, isKnifeLike, type Animator, type Armed } from './anim';
 import type { WeaponVisual } from './weapons';
 import { rifleNetCode, type RifleKind } from './rifles';
 
@@ -112,6 +112,8 @@ export class Player {
   private koVy = 0;
   private modelRot0: number | null = null;
   private punchN = 0;
+  private knifeN = 0;
+  private lastKnifeAt = -1e9;
   private kickAlt = false;
   private hitN = 0;
   private hitAlt = false;
@@ -217,9 +219,17 @@ export class Player {
   /** Golpe de arma branca (taco, bandeira, placa, facas...): sempre o clipe Bat_1 do baseball.ifp (a tacada), nunca os outros (Bat_2 e Bat_3 pareciam soco). */
   swing(): void {
     if (this.mode !== 'ground') return;
-    this.swingT = this.clipLen('bat_swing', 0.7);
-    this.animator?.restart('bat_swing');
-    this.startMotion('bat_swing');
+    // faca e garrafa: sequência knife_1, knife_2, knife_3 (knife.ifp); as outras armas brancas: a tacada Bat_1
+    let id = 'bat_swing';
+    if (isKnifeLike(this.armed) && this.animator?.has('knife_1')) {
+      const now = performance.now();
+      this.knifeN = now - this.lastKnifeAt > 1800 ? 1 : this.knifeN % 3 + 1;
+      this.lastKnifeAt = now;
+      id = `knife_${this.knifeN}`;
+    }
+    this.swingT = this.clipLen(id, 0.7);
+    this.animator?.restart(id);
+    this.startMotion(id);
   }
 
   /** Quanto o clipe dura de verdade (s, já com a velocidade); `fallback` se o clipe ainda não carregou. */
@@ -249,6 +259,11 @@ export class Player {
     const k = /^(hit_|bat_hit_|hitk_)/.test(m.name) ? 0.4 : 1;
     const h = this.heading;
     this.moveHoriz((Math.sin(h) * df + Math.cos(h) * dl) * k, (Math.cos(h) * df - Math.sin(h) * dl) * k);
+  }
+
+  /** Recarregando (a pistola mostra o colt45_reload nas mãos). */
+  setReloading(on: boolean): void {
+    this.animator?.setReloading(on);
   }
 
   /** Muda o que o personagem segura (braços e arma na mão). */
@@ -436,7 +451,8 @@ export class Player {
       const clip = input.sprint ? 'sprint' : input.walkClip;
       a.play(a.has(clip) ? clip : 'walk');
     } else if (this.emote && a.has(this.emote)) a.play(this.emote);
-    else a.play(this.combatT > 0 && this.armed === 'none' && a.has('combat_idle') ? 'combat_idle' : isBatLike(this.armed) && a.has('bat_idle') ? 'bat_idle' : (this.armed === 'rifle' || this.armed === 'aim') && a.has('gun_idle') ? 'gun_idle' : 'idle');
+    else if (this.armed === 'pistol_aim' && a.has('arrestgun')) a.play('arrestgun'); // pistola mirando parado: o corpo e a pose de mirar do ARRESTgun (ped.ifp)
+    else a.play(this.combatT > 0 && this.armed === 'none' && a.has('combat_idle') ? 'combat_idle' : isKnifeLike(this.armed) && a.has('knife_idle') ? 'knife_idle' : isBatLike(this.armed) && a.has('bat_idle') ? 'bat_idle' : (this.armed === 'rifle' || this.armed === 'aim') && a.has('gun_idle') ? 'gun_idle' : 'idle');
   }
 
   /** Emote (loop até mexer) ou ação (rolar, mergulhar). */
