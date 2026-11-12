@@ -629,7 +629,7 @@ const CarlosRetarget = (function () {
       const dirs = {};
       // braços por posição das mãos (golpes, taco, mãos no rosto…); corrida, pulo e andar seguem o método por direção do jogo
       const useIK = ik && !RUNARM[cname] && ROLLS[cname] === undefined && FLEX[cname] === undefined;
-      const sh = useIK ? shoulderPositions(D, G) : null;
+      const sh = useIK ? shoulderPositions(D, new M4()) : null; // sem G: o laço principal gira tudo pelo Root
       for (const sd of ['l', 'r']) {
         let du, df;
         const ikr = useIK ? armIK(sd, P, sh) : null;
@@ -772,7 +772,7 @@ const CarlosRetarget = (function () {
     let c = S.clips.get(name);
     if (!c) {
       const a = S.ifp.anims.find((x) => x.name === name);
-      c = CarlosRetarget.bake(a, 'auto', S.moveBody);
+      c = CarlosRetarget.bake(a, 'always', S.moveBody); // o Root do IFP também gira o corpo (ex.: Bat_3 gira ~140°)
       S.clips.set(name, c);
     }
     return c;
