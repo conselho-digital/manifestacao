@@ -359,6 +359,7 @@ const CarlosRetarget = (function () {
     l: ['arm left shoulder 2_038', 'arm left elbow_041', 'arm left wrist_040'],
     r: ['arm right shoulder 2_049', 'arm right elbow_050', 'arm right wrist_051']
   };
+  const FINGER_GAIN = 0.9, THUMB_GAIN = 0.4; // giro do dedo do IFP → giro de cada junta do dedo do Carlos (63° do punho fechado ≈ 57°)
   const ARM_SQUEEZE = 0.5; // o corpo do Carlos é mais largo: aproxima os braços do tronco
   const ROLLS = { run: -60, sprint: -60, jump_launch: -40, jump_air: -40, jump_land: -30 };
   const FLEX = { run: 80, sprint: 90, jump_launch: 55, jump_air: 60, jump_land: 40, walk: 22 };
@@ -411,7 +412,13 @@ const CarlosRetarget = (function () {
     const motion = { bone: mover, rest: mover.position.clone(), inv: new THREE.Matrix3().setFromMatrix4(pm).invert(), scale: 1 }; // o IFP está em metros reais e o Carlos tem tamanho real (quadril a ~1 m); o rig Law do GLB está em outra unidade
     const armBones = {};
     for (const sd in ARMS) armBones[sd] = ARMS[sd].map((n) => byName[n]);
-    C = { order, drive, cw0, parentRot, restQ, arms, motion, pos0: pos, armBones, boneNames: new Set(order.map((b) => b.name)) };
+    // dedos do Carlos: 'finger 2' (a-c) = os quatro dedos juntos, 'finger 1' (a-c) = polegar; correspondem a 'Finger' e 'Finger01' do esqueleto do GTA
+    const fingers = {};
+    for (const [sd, w] of [['l', 'left'], ['r', 'right']]) {
+      const get = (k) => byName['arm ' + w + ' finger ' + k] || byName[Object.keys(byName).find((n) => n.startsWith('arm ' + w + ' finger ' + k))];
+      fingers[sd] = { four: ['2a', '2b', '2c'].map(get).filter(Boolean), thumb: ['1a', '1b', '1c'].map(get).filter(Boolean) };
+    }
+    C = { order, drive, cw0, parentRot, restQ, arms, motion, pos0: pos, armBones, fingers, boneNames: new Set(order.map((b) => b.name)) };
   }
 
   /** Ossos do IFP por ID do GTA; se os IDs não são os do GTA (arquivo convertido), usa o nome do osso. */
@@ -683,6 +690,26 @@ const CarlosRetarget = (function () {
       }
     }
     const tracks = [];
+    // dedos: o IFP guarda o fechar da mão como giro de 'Finger' (quatro dedos) e 'Finger01' (polegar) em torno do eixo Z do osso
+    const sideOf = { l: 1, r: -1 };
+    for (const sd of ['l', 'r']) {
+      for (const [kind, id, k] of [['four', sd === 'l' ? 35 : 25, FINGER_GAIN], ['thumb', sd === 'l' ? 36 : 26, THUMB_GAIN]]) {
+        const nd = byId.get(id), bones = C.fingers[sd][kind];
+        if (!nd || !nd.keys.length || !bones.length) continue;
+        const vals = [];
+        for (const t of times) {
+          const q = interp(nd.keys, t);
+          let a = 2 * Math.atan2(q.z, q.w);
+          if (a > Math.PI) a -= 2 * Math.PI; else if (a < -Math.PI) a += 2 * Math.PI;
+          vals.push(Math.max(0, Math.min(a, deg(125))) * k * sideOf[sd]);
+        }
+        for (const b of bones) {
+          const rest = C.restQ.get(b), arr = [];
+          for (const a of vals) { const r = rest.clone().multiply(new Q().setFromAxisAngle(new V3(0, 0, 1), a)); arr.push(r.x, r.y, r.z, r.w); }
+          tracks.push(new THREE.QuaternionKeyframeTrack(b.name + '.quaternion', times, arr));
+        }
+      }
+    }
     for (const [b, vals] of out) if (vals.length) tracks.push(new THREE.QuaternionKeyframeTrack(b.name + '.quaternion', times, vals));
     if (moveBody !== false && rootNode && rootNode.keys.length && rootNode.keys[0].p) {
       // IFP (GTA: x direita, y frente, z cima) → Carlos (x esquerda, y cima, z frente), na escala do Carlos
