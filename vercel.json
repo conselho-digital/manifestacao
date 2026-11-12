@@ -42,5 +42,11 @@
         }
       ]
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/load-animation",
+      "destination": "/load-animation.html"
+    }
   ]
 }
