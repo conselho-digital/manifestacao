@@ -1,5 +1,10 @@
 import * as THREE from 'three';
 
+/** neblina: começa em FOG_NEAR m e cobre tudo em FOG_FAR; o que passa de FOG_FAR + folga nem é desenhado (câmera) */
+export const FOG_COLOR = 0xe9eff5;
+export const FOG_NEAR = 70;
+export const FOG_FAR = 230;
+
 const BLUR_KEY = 'arena:blur';
 const BLUR_DEFAULT = 0.45;
 
@@ -40,7 +45,7 @@ export function createRenderer(): THREE.WebGLRenderer {
 export function createScene(): THREE.Scene {
   const scene = new THREE.Scene();
   scene.background = new THREE.Color(0x87b8e8);
-  scene.fog = new THREE.Fog(0x87b8e8, 90, 270);
+  scene.fog = new THREE.Fog(FOG_COLOR, FOG_NEAR, FOG_FAR); // neblina branca bem fraca: some o que está longe
 
   scene.add(new THREE.HemisphereLight(0xffffff, 0x556070, 1.0));
 
@@ -58,7 +63,7 @@ export function createScene(): THREE.Scene {
 }
 
 export function createCamera(): THREE.PerspectiveCamera {
-  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 400);
+  const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, FOG_FAR + 30);
   camera.position.set(0, 18, 24);
   camera.lookAt(0, 0, 0);
   return camera;

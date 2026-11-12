@@ -9,7 +9,7 @@ import { showLobby } from './ui/lobby';
 import { createHud } from './ui/touch';
 import type { MobileHud } from './ui/mobile';
 import { Animator } from './game/anim';
-import { Net } from './net/sync';
+import { FULL, MAX_PLAYERS, Net } from './net/sync';
 import { Voice } from './net/voice';
 import { RemotePlayer } from './game/remote';
 import { CARS, createCars, despawnPersonal, TRAFFIC, findVehicleSpot, PERSONAL, spawnPersonal, updateEngines, updateTraffic } from './game/vehicle';
@@ -328,7 +328,21 @@ void showLobby().then(async (profile) => {
       onRtc: (m) => void voice.onSignal(m),
     });
   } catch (e) {
-    console.warn('Multiplayer indisponível, jogando offline:', e);
+    if (e instanceof Error && e.message === FULL) {
+      // mapa cheio: avisa e não deixa jogar (recarregar tenta de novo)
+      const box = document.createElement('div');
+      box.style.cssText = 'position:fixed;inset:0;z-index:99;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(6,10,18,.92);color:#fff;font-family:system-ui,sans-serif;text-align:center;padding:20px';
+      const h = document.createElement('h2');
+      h.textContent = `Mapa cheio (${MAX_PLAYERS}/${MAX_PLAYERS})`;
+      const pp = document.createElement('p');
+      pp.textContent = 'Já há 30 jogadores. Tente de novo em instantes.';
+      const bt = document.createElement('button');
+      bt.textContent = 'Tentar de novo';
+      bt.style.cssText = 'padding:12px 22px;font-size:16px;font-weight:800;border:0;border-radius:11px;background:#4cc2ff;color:#10202e';
+      bt.onclick = () => location.reload();
+      box.append(h, pp, bt);
+      document.body.appendChild(box);
+    } else console.warn('Multiplayer indisponível, jogando offline:', e);
   }
 });
 
@@ -410,7 +424,7 @@ function loop(): void {
         bike: player.isBike,
         kmh: Math.abs(player.carSpeed) * 3.6,
         remotes: [...remotes.values()].map((r) => ({ name: r.info.name, x: r.root.position.x, z: r.root.position.z })),
-        players: remotes.size + 1, maxPlayers: 30,
+        players: remotes.size + 1, maxPlayers: MAX_PLAYERS,
         health: (combat.health / MAX_HEALTH) * 100, armor: combat.armor, money: combat.money,
         weapon: HUD_KEY[combat.weapon], weaponName: combat.weaponName, weaponId: combat.weapon,
         weaponList: combat.ownedWeapons().map((id) => ({ id, key: HUD_KEY[id], name: WEAPON_NAMES[id] })),

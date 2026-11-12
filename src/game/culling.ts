@@ -5,8 +5,8 @@ import * as THREE from 'three';
 import { CARS, TRAFFIC } from './vehicle';
 
 /** distâncias (m) a partir do jogador: além disso a neblina já quase cobre e o objeto some */
-export const FAR_VEHICLES = 150;
-export const FAR_TREES = 170;
+export const FAR_VEHICLES = 190;
+export const FAR_TREES = 220;
 
 /** além destas distâncias (m) o objeto continua aparecendo, mas não projeta sombra (a sombra só cobre ~45 m em volta do jogador) */
 const SHADOW_TREES = 55;

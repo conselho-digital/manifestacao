@@ -90,7 +90,10 @@ export interface NetHandlers {
 const CHANNEL = `arena:${(new URLSearchParams(location.search).get('room') ?? 'main').replace(/[^a-z0-9_-]/gi, '').slice(0, 24) || 'main'}`;
 export const MAX_NAME = 16;
 export const MAX_CHAT = 80;
-const MAX_REMOTE = 30; // limite de jogadores remotos renderizados
+/** máximo de jogadores no mapa ao mesmo tempo (contando você) */
+export const MAX_PLAYERS = 30;
+export const FULL = 'MAPA_CHEIO';
+const MAX_REMOTE = MAX_PLAYERS - 1; // limite de jogadores remotos renderizados
 const LIMIT = Math.max(MAP.halfX, MAP.halfZ) + 10; // coordenadas fora disso são descartadas
 const MAX_ANIM = 24;
 const MIN_SHOT_GAP_MS = 60; // ignora rajadas impossíveis
@@ -259,6 +262,14 @@ export class Net {
         else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') reject(new Error(status));
       });
     });
+    // mapa cheio? espera a 1ª lista de presença (até 2 s) e confere quantos já estão dentro
+    await new Promise<void>((resolve) => { const t = window.setTimeout(resolve, 2000); channel.on('presence', { event: 'sync' }, () => { window.clearTimeout(t); resolve(); }); });
+    const others = Object.keys(channel.presenceState()).filter((k) => k !== this.id).length;
+    if (others >= MAX_PLAYERS) {
+      this.channel = null;
+      void channel.unsubscribe();
+      throw new Error(FULL);
+    }
     await channel.track(me);
     this.ready = true;
     return true;
