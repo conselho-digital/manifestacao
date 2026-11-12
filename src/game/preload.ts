@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { BIKE_MODELS, buildCarVisual, CAR_MODELS, loadModel, POLICE_LOOK } from './vehicle';
+import { BIKE_MODELS, buildCarVisual, CAR_MODELS, loadModel, POLICE_LOOK, POLICE_MODEL } from './vehicle';
 import { loadWeaponModels } from './weapons';
 import { preloadAnimations } from './anim';
 import { createCharacter, CHARACTERS } from './characters';
@@ -12,7 +12,7 @@ import { createCharacter, CHARACTERS } from './characters';
 export async function warmUp(renderer: THREE.WebGLRenderer, scene: THREE.Scene, camera: THREE.PerspectiveCamera, gameFog: THREE.Fog | THREE.FogExp2 | null): Promise<void> {
   try {
     const group = new THREE.Group();
-    const models = await Promise.all([...CAR_MODELS, ...BIKE_MODELS].map((m) => loadModel(m).then((src) => buildCarVisual(src, 0xcccccc).group)));
+    const models = await Promise.all([...CAR_MODELS, POLICE_MODEL, ...BIKE_MODELS].map((m) => loadModel(m).then((src) => buildCarVisual(src, 0xcccccc).group)));
     // também as pinturas que usam shaders próprios (viatura, cores da equipe: pneu, faixa e letreiro): sem isso o shader só compilava na primeira vez que o carro aparecia, e o jogo engasgava
     const painted = await Promise.all([...CAR_MODELS, ...BIKE_MODELS].flatMap((m) => {
       const bike = (BIKE_MODELS as readonly string[]).includes(m);

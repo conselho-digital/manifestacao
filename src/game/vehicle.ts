@@ -4,6 +4,8 @@ import { COLLIDERS, MAP } from './map';
 import { EngineSound } from './audio';
 
 export const CAR_MODELS = ['blistac', 'buffalo', 'clover'] as const;
+/** modelo das viaturas da PM (só as viaturas; fora do sorteio do trânsito e da garagem) */
+export const POLICE_MODEL = 'duster';
 export const BIKE_MODELS = ['harley', 'triumph', 'bmw', 'suzuki'] as const;
 /** Assento do piloto (z = para a frente, y = para cima), no espaço do modelo antes de subir até o chão. */
 const SEATS: Record<string, [number, number]> = { harley: [-0.46, 0.14], triumph: [-0.51, 0.42], bmw: [-0.4, 0.47], suzuki: [-0.4, 0.57] };
@@ -819,7 +821,7 @@ export function createCars(): THREE.Group {
     [-98, 16, -Math.PI / 2],
   ];
   spawn.forEach(([x, z, h], i) => {
-    const car = new Car(i, x, z, h, 0xffffff, 'buffalo', POLICE_LOOK);
+    const car = new Car(i, x, z, h, 0xffffff, POLICE_MODEL, null);
     CARS.push(car);
     group.add(car.root);
   });
