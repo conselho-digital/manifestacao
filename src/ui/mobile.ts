@@ -69,7 +69,7 @@ const CSS = `
 .m-hud.desktop .m-look,.m-hud.desktop .m-stick{display:none}
 .m-hud.driving .foot,.m-hud.driving .m-stick{display:none!important}
 .m-steerL,.m-steerR{bottom:calc(var(--u)*10);width:calc(var(--u)*23.8);height:calc(var(--u)*23.8);}
-.m-wheelie{left:calc(var(--u)*44);bottom:calc(var(--u)*10);width:calc(var(--u)*17);height:calc(var(--u)*17)}
+.m-wheelie{left:calc(var(--u)*58);bottom:calc(var(--u)*10);width:calc(var(--u)*17);height:calc(var(--u)*17)}
 .m-hud:not(.bike) .m-wheelie{display:none!important}
 .m-steerL{left:calc(var(--u)*6)}
 .m-steerR{left:calc(var(--u)*31.8)}
