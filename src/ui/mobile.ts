@@ -68,11 +68,11 @@ const CSS = `
 .m-look{position:fixed;inset:0;pointer-events:auto;touch-action:none}
 .m-hud.desktop .m-look,.m-hud.desktop .m-stick{display:none}
 .m-hud.driving .foot,.m-hud.driving .m-stick{display:none!important}
-.m-steerL,.m-steerR{bottom:calc(var(--u)*10);width:calc(var(--u)*17);height:calc(var(--u)*17);}
+.m-steerL,.m-steerR{bottom:calc(var(--u)*10);width:calc(var(--u)*23.8);height:calc(var(--u)*23.8);}
 .m-wheelie{left:calc(var(--u)*44);bottom:calc(var(--u)*10);width:calc(var(--u)*17);height:calc(var(--u)*17)}
 .m-hud:not(.bike) .m-wheelie{display:none!important}
 .m-steerL{left:calc(var(--u)*6)}
-.m-steerR{left:calc(var(--u)*25)}
+.m-steerR{left:calc(var(--u)*31.8)}
 .m-hud:not(.driving) .car{display:none!important}
 .m-out{text-shadow:-1px -1px 0 #000,1px -1px 0 #000,-1px 1px 0 #000,1px 1px 0 #000,0 2px 3px rgba(0,0,0,.6)}
 .m-map{position:fixed;left:calc(var(--u)*1.6);top:calc(var(--u)*2.2);width:calc(var(--u)*21);height:calc(var(--u)*21);border-radius:50%;pointer-events:auto;touch-action:none;
