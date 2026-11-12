@@ -91,6 +91,30 @@
     "KO_skid_back": "ko_skid_back",
     "KO_skid_front": "ko_skid_front"
    }
+  ],
+  [
+   "assets-src/ifp/ped-arrestgun.ifp",
+   {
+    "CAR_sit": "car_sit2",
+    "run_player": "run_player",
+    "sprint_civi": "sprint_civi",
+    "Drive_L": "drive_l",
+    "Drive_R": "drive_r",
+    "WALK_player": "walk_player"
+   }
+  ],
+  [
+   "assets-src/ifp/ped-arrestgun.ifp",
+   {
+    "CAR_sit": "car_sit",
+    "run_player": "sprint"
+   }
+  ],
+  [
+   "assets-src/ifp/ped-arrestgun.ifp",
+   {
+    "run_player": "run"
+   }
   ]
  ],
  "hands": [

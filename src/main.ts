@@ -19,7 +19,7 @@ import { Billboard } from './game/billboard';
 import { updateCulling } from './game/culling';
 import { WeaponVisual } from './game/weapons';
 import { warmUp } from './game/preload';
-import { setListener } from './game/audio';
+import { playHornAt, setListener } from './game/audio';
 import { HUD_KEY, Inventory, WEAPON_NAMES, type WeaponId } from './game/inventory';
 import { isAdmin, lookOf, makeTeamRing, saveTeamId, teamById, validTeamId } from './game/teams';
 import { loadPrices, loadPurchases } from './game/shop';
@@ -107,6 +107,10 @@ void billboard.start();
 if (import.meta.env.DEV) (window as unknown as { __net: Net; __game: { ready: () => boolean } }).__net = net;
 if (import.meta.env.DEV) (window as unknown as { __game: { ready: () => boolean; camera: THREE.PerspectiveCamera; scene: THREE.Scene; renderer: THREE.WebGLRenderer; combat: () => Combat | null; player: () => Player | null; sim: { TRAFFIC: typeof TRAFFIC; CARS: typeof CARS; updateTraffic: typeof updateTraffic; spawnPersonal: typeof spawnPersonal } } }).__game = { ready: () => !!player, camera, scene, renderer, combat: () => combat, player: () => player, sim: { TRAFFIC, CARS, updateTraffic, spawnPersonal } };
 let profileName = 'Jogador';
+let lastHornAt = 0; // última buzina minha (ms)
+let hornDownAt = 0; // quando apertei a buzina (0 = solta)
+let hornLong = false; // este aperto já virou sirene
+let lastSirenBeat = 0;
 // Voz por proximidade (WebRTC): sinalização pelo canal do Supabase; só liga depois do primeiro toque no botão do microfone
 const voice = new Voice(net.id, (to, k, d) => net.sendRtc(to, k, d), (state, peers) => {
   hud?.setVoice(state, peers);
@@ -325,6 +329,12 @@ void showLobby().then(async (profile) => {
         if (who) hud?.addChat(`${who}: ${m.t}`);
       },
       onSpray: (m) => graffiti.add(m, remotes.get(m.id)?.info.name ?? ''),
+      onHorn: (m) => {
+        if (!m.siren) { playHornAt(m.x, m.z, m.bike); return; }
+        // aviso de sirene: a viatura mais perto desse ponto fica com a sirene ligada por mais 2,5 s
+        const car = CARS.find((c) => c.police && c.driver !== null && Math.hypot(c.x - m.x, c.z - m.z) < 8);
+        if (car) { car.siren = true; car.sirenBeat = performance.now(); }
+      },
       onRtc: (m) => void voice.onSignal(m),
     });
   } catch (e) {
@@ -397,6 +407,24 @@ function loop(): void {
       combat.update(dt, input, player);
       player.setReloading(combat.reloading);
       player.update(dt, input, yaw);
+      // buzina: segurando H/botão repete a cada 0,4 s; na viatura, segurar 0,5 s liga/desliga a sirene (até sair do carro); os outros ouvem pelo canal
+      const dc = player.drivenCar;
+      const nowH = performance.now();
+      if (input.horn && player.isDriving && dc) {
+        if (hornDownAt === 0) { hornDownAt = nowH; hornLong = false; }
+        if (!hornLong && dc.police && nowH - hornDownAt >= 500) {
+          hornLong = true;
+          dc.siren = !dc.siren;
+          lastSirenBeat = 0;
+          if (navigator.vibrate) navigator.vibrate(40);
+        }
+        if (!hornLong && nowH - lastHornAt > 400) {
+          lastHornAt = nowH;
+          playHornAt(dc.x, dc.z, dc.bike);
+          net.sendHorn(dc.x, dc.z, dc.bike ? 1 : 0);
+        }
+      } else hornDownAt = 0;
+      if (dc?.siren && player.isDriving && nowH - lastSirenBeat > 1000) { lastSirenBeat = nowH; net.sendHorn(dc.x, dc.z, 2); }
       aimK += ((input.aim && combat.isGun && !player.isDriving ? 1 : 0) - aimK) * Math.min(1, dt * 9);
       player.followCamera(camera, dt, yaw + camOffset, pitch, aimK, intro !== null);
       if (intro) flyIntro(dt);

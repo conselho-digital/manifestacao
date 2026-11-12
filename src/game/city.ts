@@ -7,7 +7,7 @@ import { registerCullChildren, FAR_TREES } from './culling';
 import { placeSafraSign } from './safra';
 import { placeTotem } from './totem';
 import { HEIGHT, makeTrees, type Species, type TreeSpec } from './trees';
-import { CAR_MODELS, loadCarVisual, TRAFFIC } from './vehicle';
+import { CAR_MODELS, colorForModel, COMMON_COLORS, loadCarVisual, TRAFFIC } from './vehicle';
 
 // Cidade inspirada na maquete da Av. Paulista (SP). O layout é escrito "como na foto" (x para a direita,
 // z para o norte) e convertido para o mundo espelhando o eixo X (R(): x_mundo = -x_foto).
@@ -27,7 +27,7 @@ const STREETS = [...N_STREETS, ...S_STREETS];
 const TRIANON = R(-54, -8, -60, -34);
 const PAVERS_S = R(-54, 16, -34, -19);
 const PLAZA = R(-58, 8, 19, 46);
-const PARKING = R(28, 40, -84, -60);
+const PARKING = R(28, 40, -78, -56); // estacionamento (quadra sul, recuado 6 m da borda: calçada mais larga)
 
 const MASP = { x: 23, z: 34, length: 54 }; // x já em coordenadas do mundo
 const MASP_SRC = { cx: 37.5, cz: -11, groundY: -139.67, len: 1500 };
@@ -279,6 +279,37 @@ class Batch {
   }
 }
 
+
+/**
+ * Calçadas mais largas (pedido do usuário, marcado no mapa): os prédios ficavam colados na borda das quadras. Cada quadra tem as extensões
+ * ocupadas pelos prédios (espaço da foto) e as novas, menores nas bordas que ganharam calçada; o prédio é remapeado por uma escala+deslocamento
+ * (fica um pouco mais estreito, o resto "anda para o lado"). Norte: borda de cima 84 -> 78 em todas; lados voltados para as ruas transversais ~5 m.
+ */
+interface BlockMap { sx: [number, number]; sz: [number, number]; toSx?: [number, number]; toSz?: [number, number] }
+const NORTH_Z: [number, number] = [19, 84];
+const NORTH_TO_Z: [number, number] = [19, 78];
+const SOUTH_Z: [number, number] = [-84, -19];
+const SOUTH_TO_Z: [number, number] = [-78, -19];
+const BLOCK_MAPS: BlockMap[] = [
+  { sx: [-104, -86], sz: NORTH_Z, toSx: [-104, -91], toSz: NORTH_TO_Z }, // A (noroeste... quadra mais à esquerda no mapa)
+  { sx: [-76, 2], sz: NORTH_Z, toSx: [-71, 2], toSz: NORTH_TO_Z }, // B (MASP, praça)
+  { sx: [18, 46], sz: NORTH_Z, toSx: [21, 43], toSz: NORTH_TO_Z }, // C (prédio de cobre)
+  { sx: [60, 106], sz: NORTH_Z, toSx: [64, 106], toSz: NORTH_TO_Z }, // D
+  { sx: [-106, -78], sz: SOUTH_Z, toSz: SOUTH_TO_Z }, // E
+  { sx: [-54, 16], sz: SOUTH_Z, toSz: SOUTH_TO_Z }, // F (Trianon)
+  { sx: [41, 108], sz: SOUTH_Z, toSx: [41, 103], toSz: SOUTH_TO_Z }, // G
+];
+const lerpMap = (v: number, a: [number, number], b: [number, number]): number => b[0] + ((v - a[0]) * (b[1] - b[0])) / (a[1] - a[0]);
+function widenSidewalks(sx0: number, sx1: number, sz0: number, sz1: number): { sx0: number; sx1: number; sz0: number; sz1: number } {
+  const cx = (sx0 + sx1) / 2;
+  const cz = (sz0 + sz1) / 2;
+  const blk = BLOCK_MAPS.find((m) => cx >= m.sx[0] - 1 && cx <= m.sx[1] + 1 && cz >= m.sz[0] && cz <= m.sz[1]);
+  if (!blk) return { sx0, sx1, sz0, sz1 };
+  const mx = (v: number): number => (blk.toSx ? lerpMap(v, blk.sx, blk.toSx) : v);
+  const mz = (v: number): number => (blk.toSz ? lerpMap(v, blk.sz, blk.toSz) : v);
+  return { sx0: mx(sx0), sx1: mx(sx1), sz0: mz(sz0), sz1: mz(sz1) };
+}
+
 const footprints: { name: string; r: Rect; allowWalk?: boolean }[] = [];
 /** postes e abrigos (para a verificação de desenvolvimento: nada no meio da rua) */
 const propSpots: [string, number, number][] = [];
@@ -435,7 +466,7 @@ const flatRect = (r: Rect, y: number, tex: THREE.Texture | null, color = 0xfffff
 /** Carro decorativo: os mesmos modelos dos carros dirigíveis (Blista, Buffalo e Clover). */
 function ambientVehicle(color: number, model: string): THREE.Group {
   const g = new THREE.Group();
-  void loadCarVisual(model, color).then((v) => g.add(v));
+  void loadCarVisual(model, colorForModel(model, color)).then((v) => g.add(v));
   return g;
 }
 
@@ -549,8 +580,10 @@ export function createCity(): THREE.Group {
   const helipads: THREE.Mesh[] = [];
   const hpTex = helipadTex();
   /** Altura dos prédios = metade da original (metade dos andares); casas não mudam; com térreo (plinth) fica pelo menos 18 m, os outros 10 m */
-  const S = (n: string, sx0: number, sx1: number, sz0: number, sz1: number, h: number, kind: Kind, o: Partial<Spec> = {}): void =>
-    addBuilding(b, { sx0, sx1, sz0, sz1, h: kind === 'house' ? h : Math.max(o.plinth ? 18 : 10, h * BUILDING_SCALE), kind, ...o }, helipads, hpTex, n);
+  const S = (n: string, sx0: number, sx1: number, sz0: number, sz1: number, h: number, kind: Kind, o: Partial<Spec> = {}): void => {
+    const m = widenSidewalks(sx0, sx1, sz0, sz1);
+    addBuilding(b, { sx0: m.sx0, sx1: m.sx1, sz0: m.sz0, sz1: m.sz1, h: kind === 'house' ? h : Math.max(o.plinth ? 18 : 10, h * BUILDING_SCALE), kind, ...o }, helipads, hpTex, n);
+  };
 
   // Norte, fileira da frente
   S('N2', -104, -86, 19, 40, 46, 'cream');
@@ -642,7 +675,7 @@ export function createCity(): THREE.Group {
   for (const hp of helipads) city.add(hp);
 
   // Carros parados no estacionamento
-  const colors = [0xb9bec5, 0xecf0f1, 0x4a4f57, 0x8b9099, 0x2b2e33, 0x7a2f2a]; // cores comuns de carro (nada de cores berrantes)
+  const colors = COMMON_COLORS; // cores comuns de carro (nada de cores berrantes)
   const pk = new THREE.Group();
   for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) {
     if (rand() < 0.25) continue;

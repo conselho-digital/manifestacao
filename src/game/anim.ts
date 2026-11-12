@@ -43,7 +43,7 @@ const OWN_HOLD = (name: string): boolean => name.startsWith('gun_') || name.star
 const PLANTED = new Set(['punch_1', 'punch_2', 'punch_3', 'combat_idle', 'block']);
 const TIME_SCALE: Record<string, number> = { ko: 1.8, getup: 1.1, ko_front: 1.5, getup_front: 1.1, ko_skid_back: 1, ko_skid_front: 1, hitr_front: 1.1, hitr_back: 1.1, hitr_l: 1.1, hitr_r: 1.1, hitr_behind: 1.1, run_armed: 1.15, run_1armed: 1.15, bike_fall: 1.2, car_getin_l: 0.9, car_getout_l: 0.85, car_open_l: 1.25, car_closedoor_l: 1.2, car_close_l: 1.2, bike_pickup_l: 1.15, bike_pickup_r: 1.15, bike_pullup_l: 1, bike_pullup_r: 1, hit_1: 1.8, hit_2: 1.4, hit_3: 2.2, punch_1: 2.2, punch_2: 2.2, punch_3: 2.0, punch_4: 1.6, bat_swing: 1.4, bat_swing2: 1.5, bat_swing3: 1.6, bat_hit_1: 1.3, bat_hit_2: 1.3, bat_hit_3: 1.8, arrestgun: 1.3, knife_1: 1.5, knife_2: 1.5, knife_3: 1.4, knife_4: 1.2, kick_1: 1.3, kick_2: 1.8, hitk_1: 1.4, hitk_2: 2, gun_fwd: 1.2, gun_bwd: 1.0, gun_left: 1.5, gun_right: 1.4, crouch_fwd: 0.6, crouch_bwd: 0.6,
   // andar/correr: o passo do clipe (medido pelo pé de apoio, ver dev/anim-viewer) é bem menor que a velocidade do jogo (andar 2,1 m/s, correr 6,2 m/s) e os pés patinavam; acelera o clipe até ficar perto, sem passar da cadência natural
-  walk: 1.6, walk_armed: 1.3, sprint: 1.3, w_gang: 1.6, w_drunk: 1.5, w_old: 1.6, w_fat: 1.6, w_sneak: 1.6 };
+  walk: 1.6, walk_armed: 1.3, sprint: 1.1, run: 1.1, w_gang: 1.6, w_drunk: 1.5, w_old: 1.6, w_fat: 1.6, w_sneak: 1.6 };
 
 /** Animações disponíveis no menu. */
 export const EMOTES: { id: string; label: string }[] = [

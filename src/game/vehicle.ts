@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { COLLIDERS, MAP } from './map';
-import { EngineSound } from './audio';
+import { EngineSound, SirenSound } from './audio';
 
 export const CAR_MODELS = ['blistac', 'buffalo', 'clover'] as const;
 /** modelo das viaturas da PM (só as viaturas; fora do sorteio do trânsito e da garagem) */
@@ -40,7 +40,10 @@ export interface PaintLook { c1: string; c2: string; /** pintura de viatura: tet
 /** Viatura da PM: o Buffalo pintado de branco com a faixa de baixo preta (letreiro e luzes no teto vêm de `police`). */
 /** pintura padrão dos carros comuns (cinza claro); a equipe aparece nos adesivos redondos (portas e capô) */
 /** cores comuns de carro (as mesmas do trânsito), sorteadas por dono nos carros pessoais */
-export const COMMON_COLORS = [0xb9bec5, 0xecf0f1, 0x4a4f57, 0x8b9099, 0x2b2e33, 0x7a2f2a];
+export const COMMON_COLORS = [0xb9bec5, 0xecf0f1, 0x4a4f57, 0x2b2e33, 0x1c2a55, 0x6a1419, 0xc0322b]; // prata, branco, grafite, preto, azul escuro, vermelho escuro, vermelho claro
+export const CLOVER_BROWN = 0x4a2f22;
+/** cores do carro: as comuns; o Clover também pode ser marrom escuro (troca o grafite, para não mudar o sorteio da cidade) */
+export const colorForModel = (model: string, c: number): number => (model === 'clover' && c === 0x4a4f57 ? CLOVER_BROWN : c);
 export const DEFAULT_PAINT = '#b9bec5';
 export const POLICE_LOOK: PaintLook = { c1: '#f1f2f4', c2: '#16181b', police: true };
 
@@ -217,7 +220,9 @@ export function buildCarVisual(src: THREE.Object3D, colorHex: number, look?: Pai
     const hinge = origin.clone();
     if (name.startsWith('door')) {
       // a porta gira na dobradiça: na ponta da frente da porta (junto ao para-brisa), não no meio dela
-      hinge.z = new THREE.Box3().setFromObject(node).applyMatrix4(toModel).max.z;
+      const db = new THREE.Box3().setFromObject(node).applyMatrix4(toModel);
+      hinge.z = db.max.z;
+      hinge.x = (db.min.x + db.max.x) / 2; // modelos com os vértices da porta já no espaço do carro (nó na origem, como o Duster): o eixo fica na porta, não no meio do carro
     }
     const pivot = new THREE.Group(); // pivô: esterça/abre sem atrapalhar o giro
     pivot.name = name;
@@ -413,6 +418,11 @@ export class Car {
   /** moto caída que o piloto está levantando: continua deitada até soltar */
   holdFallen = false;
   private rising = false;
+  /** sirene da viatura ligada (segurar a buzina por 0,5 s); some ao sair do carro. Nos outros jogadores vale enquanto chegam avisos (`sirenBeat`). */
+  siren = false;
+  sirenBeat = 0;
+  private sirenSnd = new SirenSound();
+  get police(): boolean { return this.model === POLICE_MODEL; }
   /** onde fica a pélvis do piloto (espaço do carro); null em carros */
   seat: THREE.Vector3 | null = null;
   /** mãos no guidão: [esquerda, direita] (espaço do carro) */
@@ -639,6 +649,9 @@ export class Car {
       if (this.rearLocked) skid = Math.max(skid, 0.55); // freio de mão travando as traseiras sempre chia
     }
     this.skidSmooth += (skid - this.skidSmooth) * Math.min(1, dt * 10);
+    if (this.siren && this.driver !== 'local' && performance.now() - this.sirenBeat > 2500) this.siren = false;
+    if (this.driver === null) this.siren = false;
+    this.sirenSnd.update(this.siren, this.x, this.z);
     this.engine.update(this.driver !== null, this.seenSpeed, this.x, this.z, this.driver === null ? 0 : this.throttle, this.skidSmooth);
   }
 
@@ -757,7 +770,7 @@ export function spawnPersonal(ownerId: string, model: string, look: PaintLook | 
   if (!car) {
     let h = 0;
     for (const ch of ownerId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-    car = new Car(nextPersonalId++, x, z, heading, COMMON_COLORS[h % COMMON_COLORS.length]!, model, look);
+    car = new Car(nextPersonalId++, x, z, heading, colorForModel(model, COMMON_COLORS[h % COMMON_COLORS.length]!), model, look);
     car.ownerId = ownerId;
     CARS.push(car);
     carsGroup.add(car.root);

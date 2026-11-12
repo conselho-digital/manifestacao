@@ -33,6 +33,8 @@ export interface InputState {
   gas: boolean;
   brake: boolean;
   handbrake: boolean;
+  /** buzina (tecla H ou botão) */
+  horn: boolean;
   /** moto: empinar */
   wheelie: boolean;
 }
@@ -62,6 +64,7 @@ let mouseAim = false;
 let padGas = false;
 let padBrake = false;
 let padHand = false;
+let padHorn = false;
 let padWheelie = false;
 
 window.addEventListener('keydown', (e) => {
@@ -91,6 +94,7 @@ export const setSprint = (v: boolean): void => { sprintHeld = v; };
 export const setFire = (v: boolean): void => { fireHeld = v; };
 export const setAim = (v: boolean): void => { aimOn = v; };
 export const setWheelie = (v: boolean): void => { padWheelie = v; };
+export const setHorn = (on: boolean): void => { padHorn = on; };
 export const setPedals = (gas: boolean, brake: boolean, hand: boolean): void => { padGas = gas; padBrake = brake; padHand = hand; };
 export const setWalkClip = (id: string): void => { walkClip = id; };
 export const getWalkClip = (): string => walkClip;
@@ -150,6 +154,7 @@ export function readInput(): InputState {
     gas: keys.has('KeyW') || keys.has('ArrowUp') || padGas,
     brake: keys.has('KeyS') || keys.has('ArrowDown') || padBrake,
     handbrake: keys.has('Space') || padHand,
+    horn: keys.has('KeyH') || padHorn,
     wheelie: keys.has('KeyV') || padWheelie,
   };
   jumpQ = false;

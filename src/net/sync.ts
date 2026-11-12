@@ -82,6 +82,8 @@ export interface NetHandlers {
   onChat(m: ChatMsg): void;
   /** alguém pintou uma parede com a lata de spray */
   onSpray(m: SprayMsg): void;
+  /** alguém buzinou (x, z do veículo; bike = moto) */
+  onHorn(m: { id: string; x: number; z: number; bike: boolean; siren: boolean }): void;
   /** sinalização da voz (WebRTC): oferta, resposta e candidatos ICE de quem fala comigo */
   onRtc(m: { from: string; k: RtcKind; d: unknown }): void;
 }
@@ -164,6 +166,7 @@ function cleanSpray(raw: unknown): SprayMsg | null {
 }
 
 const MIN_SPRAY_GAP_MS = 900;
+const MIN_HORN_GAP_MS = 250;
 const SEND_INTERVAL_MS = 80; // ~12 envios/s
 
 export class Net {
@@ -176,6 +179,7 @@ export class Net {
   private lastShotAt = new Map<string, number>();
   private lastChatAt = new Map<string, number>();
   private lastSprayAt = new Map<string, number>();
+  private lastHornAt = new Map<string, number>();
 
   /** Entra na sala. Retorna false se o Supabase não estiver configurado. */
   async join(me: Omit<PlayerInfo, 'id'>, h: NetHandlers): Promise<boolean> {
@@ -210,6 +214,7 @@ export class Net {
           this.lastShotAt.delete(id);
           this.lastChatAt.delete(id);
           this.lastSprayAt.delete(id);
+          this.lastHornAt.delete(id);
           h.onLeave(id);
         }
       }
@@ -248,6 +253,18 @@ export class Net {
       if (now - (this.lastSprayAt.get(m.id) ?? 0) < MIN_SPRAY_GAP_MS) return;
       this.lastSprayAt.set(m.id, now);
       h.onSpray(m);
+    });
+
+    channel.on('broadcast', { event: 'horn' }, ({ payload }) => {
+      const m = payload as Record<string, unknown> | null;
+      if (!m || !idOk(m.id) || m.id === this.id || !this.known.has(m.id)) return;
+      const x = finite(m.x, LIMIT);
+      const z = finite(m.z, LIMIT);
+      if (x === null || z === null) return;
+      const now = performance.now();
+      if (now - (this.lastHornAt.get(m.id) ?? 0) < MIN_HORN_GAP_MS) return;
+      this.lastHornAt.set(m.id, now);
+      h.onHorn({ id: m.id, x, z, bike: m.b === 1, siren: m.b === 2 });
     });
 
     channel.on('broadcast', { event: 'rtc' }, ({ payload }) => {
@@ -309,6 +326,11 @@ export class Net {
   /** Sinalização da voz para um jogador. */
   sendRtc(to: string, k: RtcKind, d: unknown): void {
     this.send('rtc', { from: this.id, to, k, d });
+  }
+
+  /** kind: 0 buzina de carro, 1 buzina de moto, 2 aviso de que a sirene da viatura continua ligada (a cada 1 s) */
+  sendHorn(x: number, z: number, kind: 0 | 1 | 2): void {
+    this.send('horn', { id: this.id, x: Math.round(x * 10) / 10, z: Math.round(z * 10) / 10, b: kind });
   }
 
   sendSpray(m: Omit<SprayMsg, 'id'>): void {

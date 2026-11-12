@@ -1,7 +1,7 @@
 import { ICON } from './icons';
 import { CARS } from '../game/vehicle';
 import { COLLIDERS, MAP, PARKS, placeName, ROADS } from '../game/map';
-import { addLook, queueCrouch, queueInteract, queueJump, queueReload, queueSwitch, queueWeaponPick, queueWeaponStep, setAim, setCrouchHeld, setFire, setPedals, setSprint, setTouchVector, setWheelie } from '../game/input';
+import { addLook, queueCrouch, queueInteract, queueJump, queueReload, queueSwitch, queueWeaponPick, queueWeaponStep, setAim, setCrouchHeld, setFire, setHorn, setPedals, setSprint, setTouchVector, setWheelie } from '../game/input';
 
 /** Dados do jogo que o HUD mostra (preenchidos pelo main a cada quadro). */
 export interface HudState {
@@ -134,6 +134,7 @@ const CSS = `
 .m-gas{right:calc(var(--u)*1.2);bottom:calc(var(--u)*9.5);width:calc(var(--u)*17);height:calc(var(--u)*17)}
 .m-brake{right:calc(var(--u)*19.4);bottom:calc(var(--u)*8);width:calc(var(--u)*14);height:calc(var(--u)*14)}
 .m-hand{right:calc(var(--u)*34.6);bottom:calc(var(--u)*7);width:calc(var(--u)*12);height:calc(var(--u)*12)}
+.m-horn{right:calc(var(--u)*34.6);bottom:calc(var(--u)*20);width:calc(var(--u)*11);height:calc(var(--u)*11)}
 .m-kmh{position:fixed;right:calc(var(--u)*17);top:calc(var(--u)*2.2);font-size:calc(var(--u)*6.5);color:#fff;text-align:right}
 .m-kmh small{display:block;font-size:calc(var(--u)*2.6);color:#ccc}
 .m-stick{position:fixed;left:calc(var(--u)*8);bottom:calc(var(--u)*9);width:calc(var(--u)*28);height:calc(var(--u)*28);border-radius:50%;pointer-events:auto;touch-action:none;
@@ -198,6 +199,8 @@ function holdButton(el: El, onDown: () => void, onUp?: () => void, look = false)
     el.classList.add('on');
     lastX = e.clientX;
     lastY = e.clientY;
+    // dirigindo: os botões fazem o celular vibrar ao tocar (só onde o navegador deixa; no iPhone não existe)
+    if (el.parentElement?.classList.contains('driving')) { try { navigator.vibrate?.(14); } catch { /* sem vibração */ } }
     onDown();
   });
   if (look) {
@@ -476,6 +479,7 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   holdButton(circle(hud, 'm-gas car', ICON.gas, null), () => { gas = true; pedals(); }, () => { gas = false; pedals(); });
   holdButton(circle(hud, 'm-brake car', ICON.brake, null), () => { brake = true; pedals(); }, () => { brake = false; pedals(); });
   holdButton(circle(hud, 'm-hand car', ICON.handbrake, null), () => { hand = true; pedals(); }, () => { hand = false; pedals(); });
+  holdButton(circle(hud, 'm-horn car', ICON.horn, null), () => setHorn(true), () => setHorn(false)); // buzina
 
   // No carro: dois botões para virar para os lados (no lugar do joystick)
   holdButton(circle(hud, 'm-wheelie car', ICON.up, null), () => setWheelie(true), () => setWheelie(false));

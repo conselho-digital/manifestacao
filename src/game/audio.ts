@@ -255,6 +255,97 @@ export function playSprayAt(x: number, z: number): void {
   } catch { /* sem áudio */ }
 }
 
+/** Buzina do veículo em (x, z): carro = duas notas graves; moto = uma nota mais aguda e fina. Ouve-se até ~80 m. */
+export function playHornAt(x: number, z: number, bike: boolean): void {
+  const prox = proximity(x, z, 80, 6);
+  if (prox.gain < 0.02) return;
+  const c = audioCtx();
+  const out = audioOut();
+  if (!c || !out) return;
+  try {
+    const t0 = c.currentTime;
+    const dur = 0.42;
+    const g = c.createGain();
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(0.2 * prox.gain, t0 + 0.02);
+    g.gain.setValueAtTime(0.2 * prox.gain, t0 + dur - 0.06);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+    const lp = c.createBiquadFilter();
+    lp.type = 'lowpass';
+    lp.frequency.value = bike ? 2600 : 1800;
+    const pan = c.createStereoPanner();
+    pan.pan.value = prox.pan;
+    g.connect(lp).connect(pan).connect(out);
+    for (const f of bike ? [660, 840] : [410, 515]) {
+      const o = c.createOscillator();
+      o.type = 'sawtooth';
+      o.frequency.value = f;
+      o.connect(g);
+      o.start(t0);
+      o.stop(t0 + dur + 0.02);
+    }
+  } catch { /* sem áudio */ }
+}
+
+/** Sirene da viatura (lamento que sobe e desce): um par por carro; volume e lado seguem a posição do veículo (ouve-se até ~160 m). */
+export class SirenSound {
+  private osc: OscillatorNode | null = null;
+  private lfo: OscillatorNode | null = null;
+  private gain: GainNode | null = null;
+  private pan: StereoPannerNode | null = null;
+  private failed = false;
+
+  private start(): boolean {
+    if (this.osc) return true;
+    if (this.failed) return false;
+    const c = audioCtx();
+    const out = audioOut();
+    if (!c || !out) { this.failed = true; return false; }
+    try {
+      this.osc = c.createOscillator();
+      this.osc.type = 'sawtooth';
+      this.osc.frequency.value = 1000;
+      this.lfo = c.createOscillator();
+      this.lfo.type = 'triangle';
+      this.lfo.frequency.value = 0.55; // um lamento a cada ~1,8 s
+      const depth = c.createGain();
+      depth.gain.value = 420; // varre de ~600 a ~1400 Hz
+      this.lfo.connect(depth).connect(this.osc.frequency);
+      const filt = c.createBiquadFilter();
+      filt.type = 'bandpass';
+      filt.frequency.value = 1500;
+      filt.Q.value = 0.6;
+      this.gain = c.createGain();
+      this.gain.gain.value = 0;
+      this.pan = c.createStereoPanner();
+      this.osc.connect(filt).connect(this.gain).connect(this.pan).connect(out);
+      this.osc.start();
+      this.lfo.start();
+      return true;
+    } catch {
+      this.failed = true;
+      return false;
+    }
+  }
+
+  private stop(): void {
+    try { this.osc?.stop(); this.lfo?.stop(); this.gain?.disconnect(); } catch { /* já parado */ }
+    this.osc = this.lfo = null;
+    this.gain = null;
+    this.pan = null;
+  }
+
+  update(on: boolean, x: number, z: number): void {
+    if (!on) { if (this.osc) this.stop(); return; }
+    const c = audioCtx();
+    if (!c || !this.start() || !this.gain || !this.pan) return;
+    const prox = proximity(x, z, 160, 8);
+    const t = c.currentTime;
+    this.gain.gain.setTargetAtTime(0.11 * prox.gain, t, 0.08);
+    this.pan.pan.setTargetAtTime(prox.pan, t, 0.05);
+  }
+}
+
 /** Clique de arma vazia (só quem atira ouve). */
 export function playClick(): void {
   const c = audioCtx();
