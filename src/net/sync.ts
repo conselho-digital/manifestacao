@@ -93,8 +93,11 @@ const CHANNEL = `arena:${(new URLSearchParams(location.search).get('room') ?? 'm
 export const MAX_NAME = 16;
 export const MAX_CHAT = 80;
 /** máximo de jogadores no mapa ao mesmo tempo (contando você) */
-export const MAX_PLAYERS = 30;
+/** `?max=N` (só no npm run dev) baixa o limite para testar a sessão seguinte sem precisar de 30 abas */
+export const MAX_PLAYERS = (import.meta.env.DEV && Number(new URLSearchParams(location.search).get('max'))) || 30;
 export const FULL = 'MAPA_CHEIO';
+/** quantas sessões de 30 jogadores existem no máximo (12 × 30 = 360 jogadores) */
+export const MAX_ROOMS = 12;
 const MAX_REMOTE = MAX_PLAYERS - 1; // limite de jogadores remotos renderizados
 const LIMIT = Math.max(MAP.halfX, MAP.halfZ) + 10; // coordenadas fora disso são descartadas
 const MAX_ANIM = 24;
@@ -182,12 +185,40 @@ export class Net {
   private lastHornAt = new Map<string, number>();
 
   /** Entra na sala. Retorna false se o Supabase não estiver configurado. */
+  /** Número da sessão (1 = a principal; 2, 3... quando as anteriores estão cheias). */
+  roomIndex = 1;
+
+  /**
+   * Entra na primeira sessão com vaga: `arena:main` e, se já houver 30 jogadores, `arena:main-2`, `-3`... (até MAX_ROOMS).
+   * Cada sessão é um canal separado (presence, movimento, tiros e voz só valem dentro dela). Sempre tenta a 1ª primeiro,
+   * então as sessões de cima esvaziam e voltam a receber gente quando alguém sai.
+   */
   async join(me: Omit<PlayerInfo, 'id'>, h: NetHandlers): Promise<boolean> {
     if (!supabase) return false;
-    const channel = supabase.channel(CHANNEL, { config: { presence: { key: this.id } } });
-    this.channel = channel;
+    for (let i = 1; i <= MAX_ROOMS; i++) {
+      try {
+        const ok = await this.joinRoom(i === 1 ? CHANNEL : `${CHANNEL}-${i}`, me, h);
+        if (ok) { this.roomIndex = i; return true; }
+      } catch (e) {
+        if (e instanceof Error && e.message === FULL && i < MAX_ROOMS) continue; // cheia: tenta a próxima sessão
+        throw e;
+      }
+    }
+    return false;
+  }
 
-    channel.on('presence', { event: 'sync' }, () => {
+  private async joinRoom(room: string, me: Omit<PlayerInfo, 'id'>, h: NetHandlers): Promise<boolean> {
+    if (!supabase) return false;
+    const channel = supabase.channel(room, { config: { presence: { key: this.id } } });
+    this.channel = channel;
+    // a lista de presença só vale depois que eu entrei (se a sessão estiver cheia, ninguém dela vira jogador remoto)
+    let accepted = false;
+    let firstSync = (): void => undefined;
+    const synced = new Promise<void>((resolve) => { firstSync = resolve; });
+
+    const onSync = (): void => {
+      firstSync();
+      if (!accepted) return;
       const state = channel.presenceState<Omit<PlayerInfo, 'id'>>();
       const now = new Set(Object.keys(state));
       for (const [id, metas] of Object.entries(state)) {
@@ -218,7 +249,8 @@ export class Net {
           h.onLeave(id);
         }
       }
-    });
+    };
+    channel.on('presence', { event: 'sync' }, onSync); // registrado ANTES de assinar (depois de assinar o Supabase recusa)
     channel.on('broadcast', { event: 'move' }, ({ payload }) => {
       const m = cleanMove(payload);
       if (m && m.id !== this.id) h.onMove(m);
@@ -279,16 +311,18 @@ export class Net {
         else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') reject(new Error(status));
       });
     });
-    // mapa cheio? espera a 1ª lista de presença (até 2 s) e confere quantos já estão dentro
-    await new Promise<void>((resolve) => { const t = window.setTimeout(resolve, 2000); channel.on('presence', { event: 'sync' }, () => { window.clearTimeout(t); resolve(); }); });
+    // sessão cheia? espera a 1ª lista de presença (até 2 s) e confere quantos já estão dentro
+    await Promise.race([synced, new Promise<void>((resolve) => { window.setTimeout(resolve, 2000); })]);
     const others = Object.keys(channel.presenceState()).filter((k) => k !== this.id).length;
     if (others >= MAX_PLAYERS) {
       this.channel = null;
-      void channel.unsubscribe();
+      await channel.unsubscribe();
       throw new Error(FULL);
     }
     await channel.track(me);
+    accepted = true;
     this.ready = true;
+    onSync(); // processa quem já estava na sessão
     return true;
   }
 

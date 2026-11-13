@@ -9,7 +9,7 @@ import { showLobby } from './ui/lobby';
 import { createHud } from './ui/touch';
 import type { MobileHud } from './ui/mobile';
 import { Animator } from './game/anim';
-import { FULL, MAX_PLAYERS, Net } from './net/sync';
+import { FULL, MAX_PLAYERS, MAX_ROOMS, Net } from './net/sync';
 import { Voice } from './net/voice';
 import { RemotePlayer } from './game/remote';
 import { sparksObject, updateSparks } from './game/sparks';
@@ -344,15 +344,16 @@ void showLobby().then(async (profile) => {
       },
       onRtc: (m) => void voice.onSignal(m),
     });
+    if (net.roomIndex > 1) hud?.addChat(`Sessão ${net.roomIndex}: as anteriores estavam cheias (${MAX_PLAYERS}/${MAX_PLAYERS}). Você entrou numa sessão nova; só vê e fala com quem está nela.`);
   } catch (e) {
     if (e instanceof Error && e.message === FULL) {
       // mapa cheio: avisa e não deixa jogar (recarregar tenta de novo)
       const box = document.createElement('div');
       box.style.cssText = 'position:fixed;inset:0;z-index:99;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;background:rgba(6,10,18,.92);color:#fff;font-family:system-ui,sans-serif;text-align:center;padding:20px';
       const h = document.createElement('h2');
-      h.textContent = `Mapa cheio (${MAX_PLAYERS}/${MAX_PLAYERS})`;
+      h.textContent = 'Servidor cheio';
       const pp = document.createElement('p');
-      pp.textContent = 'Já há 30 jogadores. Tente de novo em instantes.';
+      pp.textContent = `Todas as ${MAX_ROOMS} sessões estão cheias. Tente de novo em instantes.`;
       const bt = document.createElement('button');
       bt.textContent = 'Tentar de novo';
       bt.style.cssText = 'padding:12px 22px;font-size:16px;font-weight:800;border:0;border-radius:11px;background:#4cc2ff;color:#10202e';
