@@ -607,14 +607,14 @@ export class Player {
     // No carro: acelerador, freio e freio de mão; o joystick (A/D) só esterça
     car.drive(dt, input.gas, input.brake, input.handbrake, input.x, input.wheelie);
     if (car.bike && car.impact > CRASH_SPEED) { this.crashBike(car, car.impact); return; }
-    this.object.position.set(car.x, 0, car.z);
+    this.object.position.set(car.x, car.groundY, car.z);
     this.heading = car.heading;
-    this.object.rotation.y = car.heading;
+    this.object.rotation.order = 'YXZ';
+    this.object.rotation.set(car.slopeP, car.heading, car.slopeR); // o piloto acompanha a inclinação do relevo junto com o veículo
     const bp = car.bikePose();
     if (bp) {
       // o piloto fica preso à moto: gira junto em torno do eixo traseiro (empinar e inclinar)
-      this.object.rotation.order = 'YXZ';
-      this.object.rotation.set(bp.pitch, car.heading, bp.roll);
+      this.object.rotation.set(bp.pitch + car.slopeP, car.heading, bp.roll + car.slopeR);
       const r = new THREE.Euler(bp.pitch, 0, bp.roll, 'XYZ');
       const d = bp.axle.clone().sub(bp.axle.clone().applyEuler(r)).applyAxisAngle(new THREE.Vector3(0, 1, 0), car.heading);
       this.object.position.add(d);
@@ -653,9 +653,9 @@ export class Player {
     const entering = st === 'open' || st === 'getin' || st === 'close' || st === 'pickup' || st === 'pullup';
     const at = st === 'open' || st === 'pickup' ? 0 : st === 'shut' ? 1 : seated ? 1 : u; // 0/1 = só ao lado do veículo / sentado
     const b = seatBlend(car, at, entering, this.side);
-    this.object.position.set(car.x, 0, car.z);
-    this.object.rotation.order = 'XYZ';
-    this.object.rotation.set(0, car.heading, 0);
+    this.object.position.set(car.x, car.groundY, car.z);
+    this.object.rotation.order = 'YXZ';
+    this.object.rotation.set(car.slopeP, car.heading, car.slopeR);
     this.heading = car.heading;
     const model = this.object.children[0];
     if (model) {
@@ -723,7 +723,7 @@ export class Player {
     this.car = null;
     this.object.rotation.order = 'XYZ';
     this.object.rotation.set(0, h, 0);
-    this.object.position.set(car.x + Math.sin(h) * 0.9, 0.9, car.z + Math.cos(h) * 0.9);
+    this.object.position.set(car.x + Math.sin(h) * 0.9, car.groundY + 0.9, car.z + Math.cos(h) * 0.9);
     this.resetModelRot();
     this.heading = h;
     this.mode = 'ko';
@@ -784,7 +784,7 @@ export class Player {
     const side = (car.bike ? DOOR_SIDE.bike : DOOR_SIDE.car) + 0.3;
     car.doorHold = false;
     this.object.position.set(
-      THREE.MathUtils.clamp(car.x + rx * side, -(MAP.halfX - 1), MAP.halfX - 1), 0,
+      THREE.MathUtils.clamp(car.x + rx * side, -(MAP.halfX - 1), MAP.halfX - 1), terrainHeight(car.x + rx * side, car.z + rz * side),
       THREE.MathUtils.clamp(car.z + rz * side, -(MAP.halfZ - 1), MAP.halfZ - 1),
     );
     this.resetModelRot();

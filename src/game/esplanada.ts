@@ -226,10 +226,17 @@ const PIT_Z1 = 28;
 const PIT_Z2 = 160; // fundo: z 28 → 160 (passa pelas torres de trás); a rampa de subida só começa depois delas: z 160 → 188 (28 m)
 const PIT_Z3 = 188;
 const smooth = (t: number): number => { const c = Math.min(1, Math.max(0, t)); return c * c * (3 - 2 * c); };
+// plataforma do estacionamento do lado direito, atrás do Congresso: fica na altura das avenidas (y = 0); a borda sul e a leste são taludes curtos
+const PLAT = { x1: -21.8, z0: 141.2, band: 2.5 };
 export function pitHeight(x: number, z: number): number {
   const ax = Math.abs(x);
   if (ax >= PIT_X || z <= PIT_Z0 || z >= PIT_Z3) return 0;
-  return -PIT_D * smooth((PIT_X - ax) / (PIT_X - PIT_XB)) * smooth((z - PIT_Z0) / (PIT_Z1 - PIT_Z0)) * smooth((PIT_Z3 - z) / (PIT_Z3 - PIT_Z2));
+  const base = -PIT_D * smooth((PIT_X - ax) / (PIT_X - PIT_XB)) * smooth((z - PIT_Z0) / (PIT_Z1 - PIT_Z0)) * smooth((PIT_Z3 - z) / (PIT_Z3 - PIT_Z2));
+  if (x < 0) {
+    const d = Math.hypot(Math.max(0, x - PLAT.x1), Math.max(0, PLAT.z0 - z));
+    if (d < PLAT.band) return base * smooth(d / PLAT.band);
+  }
+  return base;
 }
 const PIT_REGION = { x0: -53, x1: 53, z0: 2, z1: 189 };
 
@@ -376,6 +383,9 @@ export function createEsplanada(): THREE.Group {
     roof: new THREE.MeshStandardMaterial({ color: 0xc7c3b9, roughness: 0.9 }),
     wall: new THREE.MeshStandardMaterial({ color: 0x3a3d3a, roughness: 1 }),
   };
+  // ordem das camadas vista de longe (a profundidade perde precisão em 500 m e a grama aparecia por cima das ruas): ruas > calçadas > gramado
+  for (const m of [mats.avenue, mats.street, mats.lot, mats.lotBays, mats.asp]) { m.polygonOffset = true; m.polygonOffsetFactor = -2; m.polygonOffsetUnits = -2; }
+  mats.concrete.polygonOffset = true; mats.concrete.polygonOffsetFactor = -1; mats.concrete.polygonOffsetUnits = -1;
   const flats = new Map<THREE.Material, THREE.BufferGeometry[]>();
   const addFlat = (m: THREE.Material, g: THREE.BufferGeometry): void => { (flats.get(m) ?? flats.set(m, []).get(m)!).push(g); };
 
@@ -458,8 +468,10 @@ export function createEsplanada(): THREE.Group {
   // calçada cinza-clara no fim da rampa, ligando as duas ruas
   addFlat(mats.pave, flatGeom(-26, 26, 65, 71, 0.1, 4));
   // duas ruas, mais juntas, que descem da fachada; sobre o lago (z > 49) ficam acima da água
-  for (const r of [{ x0: -31, x1: -26, z0: -37, z1: 92 }, { x0: 26, x1: 31, z0: -37, z1: 92 }]) {
-    addFlat(mats.street, flatGeom(r.x0, r.x1, r.z0, 49, 0.05, 12, 'road-z'));
+  for (const r of [{ x0: -31, x1: -26, z0: -90, z1: 92 }, { x0: 26, x1: 31, z0: -90, z1: 92 }]) {
+    // dois trechos: não cobre o cruzamento com a rua transversal (evita pintura sobreposta)
+    addFlat(mats.street, flatGeom(r.x0, r.x1, r.z0, CROSS[1]!.z0, 0.05, 12, 'road-z'));
+    addFlat(mats.street, flatGeom(r.x0, r.x1, CROSS[1]!.z1, 49, 0.05, 12, 'road-z'));
     addFlat(mats.streetBr, flatGeom(r.x0, r.x1, 49, r.z1, 0.1, 12, 'road-z'));
     ROADS.push(r);
   }
@@ -527,13 +539,12 @@ export function createEsplanada(): THREE.Group {
   addFlat(mats.lawn, flatGeom(-55, 55, 124, 188, 0.015, 12));
   const back = (m: THREE.Material, x0: number, x1: number, z0: number, z1: number, y: number, tile = 4): void => { addFlat(m, flatGeom(x0, x1, z0, z1, y, tile)); };
   back(mats.asp, 28.6, 41.7, 124.8, 152.3, 0.047); // via que sai do estacionamento esquerdo e desce até o prédio
-  back(mats.asp, -38.5, -29.2, 124.8, 141.2, 0.047); // via do lado direito
+  back(mats.asp, -38.5, -29.2, 124.8, 138.7, 0.047); // via do lado direito
   const WALKS: [number, number, number, number][] = [
     [41.7, 46.1, 124.8, 156.9], [33.9, 46.1, 141.2, 152.3], [23.9, 28.8, 147, 156.9], [2.9, 28.6, 124.8, 147], // 1, 2, 3 e a praça das torres (4)
-    [-25.3, 2.3, 141.7, 143.9], // 5: passeio de pedestres, da calçada do estacionamento até a praça das torres
-    [-25.3, -22.3, 124.8, 188], // 6: calçada da esquerda do estacionamento = entrada de pedestres
-    [-46, -42, 128.2, 188], // 7-9: calçada do lado da avenida, ao longo de todo o estacionamento
-    [-42, -38.5, 128.2, 141.2], [-29.2, -25.3, 128.2, 141.2], // calçadas dos dois lados da via de serviço
+    [-25.3, -22.3, 141.2, 188], // 6: calçada da esquerda do estacionamento = entrada de pedestres
+    [-46, -42, 141.2, 188], // 7-9: calçada do lado da avenida, ao longo de todo o estacionamento
+    [-42, -38.5, 128.2, 138.7], [-29.2, -25.3, 128.2, 138.7], // calçadas dos dois lados da via de serviço
     [46.1, 55, 100.5, 103.2], // 10: passeio curto da avenida até o prédio
   ];
   for (const [x0, x1, z0, z1] of WALKS) back(mats.concrete, x0, x1, z0, z1, 0.06);
@@ -574,6 +585,50 @@ export function createEsplanada(): THREE.Group {
     posts.push(new THREE.BoxGeometry(0.44, 0.12, 0.44).translate(gx, 1.36 + dy, za));
     addBox(gx - 0.25, gx + 0.25, za - 0.25, za + 0.25, 1.3 + dy, '#30343a', dy);
     addBox(gx - 0.1, gx + 0.1, zb, za, 1.15 + dy, '#d22a2a', dy);
+  }
+  // ponte de pedestres: sai da calçada do estacionamento (na altura da avenida, y 0) e desce suave até a praça das torres (y −4,5), sobre o rebaixo
+  {
+    const bx0 = -22.3;
+    const bx1 = 2.3;
+    const bz0 = 141.7;
+    const bz1 = 143.9;
+    const y0 = 0;
+    const y1 = -PIT_D + 0.1;
+    const N = 20;
+    const deckAt = (x: number): number => y0 + ((x - bx0) / (bx1 - bx0)) * (y1 - y0);
+    const ang = Math.atan2(y1 - y0, bx1 - bx0);
+    const len = Math.hypot(bx1 - bx0, y1 - y0);
+    const cx = (bx0 + bx1) / 2;
+    const cy = (y0 + y1) / 2;
+    const cz = (bz0 + bz1) / 2;
+    const parts: THREE.BufferGeometry[] = [];
+    const part = (h: number, d: number, dz: number, dyy: number): void => {
+      const g = new THREE.BoxGeometry(len, h, d);
+      g.rotateZ(ang);
+      g.translate(cx, cy + dyy, cz + dz);
+      parts.push(g);
+    };
+    part(0.3, bz1 - bz0, 0, -0.15); // tabuleiro
+    part(0.9, 0.12, -(bz1 - bz0) / 2 + 0.06, 0.45); // guarda-corpo (lado sul)
+    part(0.9, 0.12, (bz1 - bz0) / 2 - 0.06, 0.45); // guarda-corpo (lado norte)
+    for (let x = bx0 + 4; x < bx1 - 2; x += 6) { // pilares até o chão
+      const top = deckAt(x) - 0.3;
+      const ground = pitHeight(x, cz);
+      if (top - ground > 0.4) parts.push(new THREE.BoxGeometry(0.7, top - ground, 1.2).translate(x, (top + ground) / 2, cz));
+    }
+    const bridge = new THREE.Mesh(mergeGeometries(parts, false)!, new THREE.MeshStandardMaterial({ color: 0xc9c5b8, roughness: 0.9 }));
+    bridge.castShadow = true;
+    bridge.receiveShadow = true;
+    city.add(bridge);
+    // colisão em degraus de 1,2 m (queda de 0,22 m cada: dá para subir e descer andando); o guarda-corpo bloqueia as laterais
+    for (let i = 0; i < N; i++) {
+      const xa = bx0 + (i / N) * (bx1 - bx0);
+      const xb = bx0 + ((i + 1) / N) * (bx1 - bx0);
+      const top = deckAt((xa + xb) / 2);
+      addBox(xa, xb, bz0, bz1, top, '#c9c5b8', top - 0.5);
+      addBox(xa, xb, bz0 - 0.1, bz0, top + 0.9, '#c9c5b8', top);
+      addBox(xa, xb, bz1, bz1 + 0.1, top + 0.9, '#c9c5b8', top);
+    }
   }
   const postMesh = new THREE.Mesh(mergeGeometries(posts, false)!, new THREE.MeshStandardMaterial({ color: 0xf2c200, roughness: 0.7 }));
   const armMesh = new THREE.Mesh(mergeGeometries(arms, false)!, new THREE.MeshStandardMaterial({ map: T.stripes!, roughness: 0.6 }));

@@ -453,6 +453,10 @@ export class Car {
   private throttle = 0;
   private tilt = 0;
   private lean = 0;
+  /** relevo: altura do chão sob o veículo e inclinação (frente/trás e lados) que ele acompanha */
+  groundY = 0;
+  slopeP = 0;
+  slopeR = 0;
   /** derrapagem: a velocidade segue heading + slip (freio de mão trava as rodas traseiras e a traseira sai) */
   private slip = 0;
   private rearLocked = false;
@@ -769,12 +773,9 @@ export class Car {
       const k = Math.exp(-dt * 3);
       this.pushX *= k;
       this.pushZ *= k;
-      this.root.position.set(this.x, terrainHeight(this.x, this.z), this.z);
+      this.root.position.set(this.x, this.groundY, this.z);
     }
-    if (this.wobble > 0) {
-      this.wobble = Math.max(0, this.wobble - dt * 2.5);
-      this.root.rotation.z = Math.sin(performance.now() * 0.05) * this.wobble * 0.04;
-    }
+    if (this.wobble > 0) this.wobble = Math.max(0, this.wobble - dt * 2.5);
     // moto caída: deita de lado; quando alguém sobe, levanta
     if (this.bike && this.fallen && (this.driver === null || this.holdFallen)) {
       this.lean += (1.25 - this.lean) * Math.min(1, dt * 5);
@@ -829,8 +830,21 @@ export class Car {
   }
 
   private apply(steer: number, dt = 0): void {
-    this.root.position.set(this.x, terrainHeight(this.x, this.z), this.z);
-    this.root.rotation.y = this.heading;
+    // acompanha o relevo (terreno rebaixado): altura pela média de 4 pontos e inclinação pela diferença entre frente/trás e esquerda/direita
+    const sh = Math.sin(this.heading);
+    const ch = Math.cos(this.heading);
+    const L = this.bike ? 0.9 : 1.6;
+    const W = 0.8;
+    const hF = terrainHeight(this.x + sh * L, this.z + ch * L);
+    const hB = terrainHeight(this.x - sh * L, this.z - ch * L);
+    const hL = terrainHeight(this.x + ch * W, this.z - sh * W); // +x local = esquerda
+    const hR = terrainHeight(this.x - ch * W, this.z + sh * W);
+    this.groundY = (hF + hB + hL + hR) / 4;
+    this.slopeP = Math.atan2(hB - hF, 2 * L);
+    this.slopeR = Math.atan2(hL - hR, 2 * W);
+    this.root.position.set(this.x, this.groundY, this.z);
+    this.root.rotation.order = 'YXZ';
+    this.root.rotation.set(this.slopeP, this.heading, this.slopeR + (this.wobble > 0 ? Math.sin(performance.now() * 0.05) * this.wobble * 0.04 : 0));
     this.spin += (this.speed * dt) / (this.bike ? 0.33 : 0.36);
     if (!this.rearLocked) this.rearSpin = this.spin; // freio de mão: as rodas traseiras ficam travadas
     if (this.bike && this.body) {
