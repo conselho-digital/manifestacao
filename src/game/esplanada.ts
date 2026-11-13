@@ -262,14 +262,14 @@ export function createEsplanada(): THREE.Group {
   diag(50, -170, 0, -140, 3);
   diag(-50, -110, 0, -140, 3);
   diag(50, -110, 0, -140, 3);
-  // água em frente ao Congresso, no formato da foto de satélite (x, z em metros): dois retângulos fora das ruas, uma peça de cada lado da
+  // água em frente ao Congresso, no formato da foto de satélite (x, z em metros; quem olha para o Congresso (norte, +z) vê +x à ESQUERDA, então x da foto está invertido): dois retângulos fora das ruas, uma peça de cada lado da
   // rampa (borda curva) e um lago ondulado logo abaixo da calçada; as ruas e a calçada ficam POR CIMA
   const LAKES: [number, number][][] = [
-    [[-39.8, 90.4], [-29.8, 90.4], [-29.8, 62.6], [-39.8, 62.6]],
-    [[-25.5, 90.4], [-21.4, 90.4], [-19.2, 86.3], [-17.3, 81.9], [-15.5, 76.2], [-13.6, 71.8], [-25.5, 71.3]],
-    [[-6.1, 71.1], [26.7, 71.1], [26.7, 90.1], [21.1, 90.1], [17.8, 86.3], [13.1, 82.8], [4.7, 79.7], [-1.9, 77.5], [-5.6, 73.7]],
-    [[30.9, 90.4], [41.1, 90.4], [41.1, 62.6], [30.9, 62.6]],
-    [[-25.5, 61.2], [26.7, 61.2], [26.7, 54.6], [17.8, 56.9], [12.2, 57.4], [8.4, 55.1], [5.6, 49.9], [2.8, 48.5], [-4.7, 49.0], [-12.2, 49.9], [-18.8, 53.2], [-25.5, 54.6]],
+    [[39.8, 90.4], [29.8, 90.4], [29.8, 62.6], [39.8, 62.6]],
+    [[25.5, 90.4], [21.4, 90.4], [19.2, 86.3], [17.3, 81.9], [15.5, 76.2], [13.6, 71.8], [25.5, 71.3]],
+    [[6.1, 71.1], [-26.7, 71.1], [-26.7, 90.1], [-21.1, 90.1], [-17.8, 86.3], [-13.1, 82.8], [-4.7, 79.7], [1.9, 77.5], [5.6, 73.7]],
+    [[-30.9, 90.4], [-41.1, 90.4], [-41.1, 62.6], [-30.9, 62.6]],
+    [[25.5, 61.2], [-26.7, 61.2], [-26.7, 54.6], [-17.8, 56.9], [-12.2, 57.4], [-8.4, 55.1], [-5.6, 49.9], [-2.8, 48.5], [4.7, 49.0], [12.2, 49.9], [18.8, 53.2], [25.5, 54.6]],
   ];
   const polyGeom = (pts: [number, number][], y: number, grow: number): THREE.BufferGeometry => {
     // margem de pedra = o mesmo contorno deslocado para fora (grow metros, pela média das normais dos dois lados de cada ponto)
