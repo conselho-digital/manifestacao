@@ -18,6 +18,13 @@ const CROSS: Rect[] = [
   { x0: -55, x1: 55, z0: -105, z1: -90 }, // 1ª transversal (cruza o gramado)
   { x0: -55, x1: 55, z0: -35, z1: -20 }, // 2ª transversal
 ];
+// ruas que saem das avenidas entre os ministérios (alinhadas com a 1ª transversal)
+const OUTER: Rect[] = [{ x0: -HX, x1: -85, z0: -105, z1: -90 }, { x0: 85, x1: HX, z0: -105, z1: -90 }];
+// estacionamentos: margens, e dois estreitos ao lado das torres do Congresso
+const lots: Rect[] = [
+  { x0: 104, x1: 146, z0: -34, z1: -12 }, { x0: 102, x1: 118, z0: 100, z1: 136 }, { x0: -146, x1: -114, z0: 114, z1: 140 },
+  { x0: -52, x1: -26, z0: 146, z1: 178 }, { x0: 26, x1: 52, z0: 146, z1: 178 },
+];
 const CONG_FRONT = 70; // z da frente do Congresso
 const CONG_SCALE = 2.5; // o modelo do usuário tem ~44 unidades de comprimento: vira ~111 m
 
@@ -82,11 +89,20 @@ function makeTextures(): Record<string, THREE.CanvasTexture> {
     g.fillRect(4, 0, 2, 128);
     g.fillRect(122, 0, 2, 128);
   });
+  // estacionamento: ladrilho de 21 m; vagas de 2,6 x 5 m em duas fileiras com corredor no meio
   const lot = canvasTex(128, 128, (g) => {
     noiseFill(g, 128, 128, [96, 98, 102], 12, r, 500);
     g.fillStyle = 'rgba(235,235,235,.85)';
-    for (let x = 4; x < 128; x += 16) g.fillRect(x, 4, 2, 52);
-    for (let x = 4; x < 128; x += 16) g.fillRect(x, 72, 2, 52);
+    for (let x = 0; x <= 128; x += 16) { g.fillRect(x, 6, 2, 30); g.fillRect(x, 92, 2, 30); }
+    g.fillRect(0, 6, 128, 2);
+    g.fillRect(0, 120, 128, 2);
+  });
+  // telhado de galpão com nervuras (ladrilho de 8 m, nervuras a cada 1 m)
+  const rib = canvasTex(64, 64, (g) => {
+    g.fillStyle = '#c4c5c0';
+    g.fillRect(0, 0, 64, 64);
+    g.fillStyle = 'rgba(90,92,90,.35)';
+    for (let x = 0; x < 64; x += 8) g.fillRect(x, 0, 2, 64);
   });
   // fachadas: o ladrilho cobre 16 m de largura x 8 m de altura (2 andares)
   const ministry = canvasTex(256, 256, (g) => {
@@ -129,10 +145,10 @@ function makeTextures(): Record<string, THREE.CanvasTexture> {
     g.fillStyle = '#35495a';
     for (let x = 12; x < 256; x += 64) g.fillRect(x, 20, 40, 216);
   });
-  return { grass, lawn, concrete, avenue, street, lot, ministry, warehouse, plain, palace };
+  return { grass, lawn, concrete, avenue, street, lot, rib, ministry, warehouse, plain, palace };
 }
 
-interface Bld { x0: number; x1: number; z0: number; z1: number; h: number; tex: 'ministry' | 'warehouse' | 'plain' | 'palace'; core?: boolean }
+interface Bld { x0: number; x1: number; z0: number; z1: number; h: number; tex: 'ministry' | 'warehouse' | 'plain' | 'palace'; core?: boolean; roof?: 'rib' | 'gable' }
 
 /** Paredes de uma caixa (sem topo e sem base), com UV em metros para a fachada ladrilhar (tw x th m). */
 function boxWalls(x0: number, x1: number, z0: number, z1: number, y0: number, y1: number, tw: number, th: number): THREE.BufferGeometry {
@@ -196,7 +212,10 @@ export function createEsplanada(): THREE.Group {
     avenue: std(T.avenue!, 0xffffff, 0.9),
     street: std(T.street!, 0xffffff, 0.9),
     lot: std(T.lot!, 0xffffff, 0.9),
-    water: new THREE.MeshStandardMaterial({ color: 0x4f86ab, roughness: 0.12, metalness: 0.15 }),
+    water: new THREE.MeshStandardMaterial({ color: 0x5f7f92, roughness: 0.15, metalness: 0.15 }),
+    terra: new THREE.MeshStandardMaterial({ color: 0xa65a3c, roughness: 0.95 }),
+    ribRoof: std(T.rib!),
+    gable: new THREE.MeshStandardMaterial({ color: 0x9a968c, roughness: 0.9, side: THREE.DoubleSide }),
     stone: new THREE.MeshStandardMaterial({ color: 0xb8b2a4, roughness: 0.9 }),
     roof: new THREE.MeshStandardMaterial({ color: 0xc7c3b9, roughness: 0.9 }),
     wall: new THREE.MeshStandardMaterial({ color: 0x3a3d3a, roughness: 1 }),
@@ -213,9 +232,9 @@ export function createEsplanada(): THREE.Group {
   ];
   for (const r of lawns) { addFlat(mats.lawn, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.015, 12)); PARKS.push(r); }
   // faixas de gramado ao lado das avenidas (lado de fora)
-  for (const r of [{ x0: -97, x1: -88, z0: -172, z1: 188 }, { x0: 88, x1: 97, z0: -172, z1: 188 }]) { addFlat(mats.lawn, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.015, 12)); PARKS.push(r); }
+  for (const r of [{ x0: -97, x1: -88, z0: -172, z1: 188 }, { x0: 88, x1: 97, z0: -172, z1: 188 }, { x0: 97, x1: HX - 4, z0: -90, z1: -36 }]) { addFlat(mats.lawn, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.015, 12)); PARKS.push(r); }
   // ladrilho dos ministérios: o pátio (concreto) das duas margens
-  for (const r of [{ x0: -HX, x1: -97, z0: -175, z1: HZ }, { x0: 97, x1: HX, z0: -175, z1: HZ }]) addFlat(mats.concrete, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.03, 4));
+  for (const r of [{ x0: -HX, x1: -97, z0: -175, z1: HZ }, { x0: 97, x1: HX, z0: -175, z1: HZ }]) addFlat(mats.lawn, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.015, 12)); // margens: gramado, com pátio de concreto em volta de cada prédio
   // calçadas ao longo das avenidas (3 m) e em volta dos gramados (caminhos de 3 m)
   const walk: Rect[] = [
     { x0: -88, x1: -85, z0: -175, z1: HZ }, { x0: -55, x1: -52, z0: -175, z1: HZ },
@@ -226,6 +245,7 @@ export function createEsplanada(): THREE.Group {
     { x0: -46, x1: 46, z0: 64, z1: 67 }, // beira dos espelhos d'água
     { x0: -52, x1: 52, z0: -175, z1: -172 }, { x0: -52, x1: 52, z0: -108, z1: -105 },
     { x0: -52, x1: 52, z0: -90, z1: -88 }, { x0: -52, x1: 52, z0: -37, z1: -35 },
+    { x0: 88, x1: 104, z0: -62, z1: -59 }, { x0: 112, x1: 124, z0: -90, z1: -80 }, // caminho até o palácio e rampa de entrada
   ];
   for (const r of walk) addFlat(mats.concrete, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.035, 4));
   // caminhos em diagonal no gramado sul (como na foto de referência)
@@ -253,15 +273,11 @@ export function createEsplanada(): THREE.Group {
   for (const r of [AV_L, AV_R]) { addFlat(mats.avenue, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.05, 12, 'road-z')); ROADS.push(r); }
   addFlat(mats.street, flatGeom(PERIM_S.x0, PERIM_S.x1, PERIM_S.z0, PERIM_S.z1, 0.05, 12, 'road-x'));
   ROADS.push(PERIM_S);
-  for (const r of CROSS) { addFlat(mats.street, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.05, 12, 'road-x')); ROADS.push(r); }
+  for (const r of [...CROSS, ...OUTER]) { addFlat(mats.street, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.05, 12, 'road-x')); ROADS.push(r); }
+  // pátios de terracota entre os ministérios de cada par (como na maquete)
+  for (const r of [{ x0: -112, x1: -102, z0: -146, z1: -138 }, { x0: 103, x1: 110, z0: -146, z1: -138 }]) addFlat(mats.terra, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.055, 4));
   // estacionamentos (margem leste e oeste)
-  const lots: Rect[] = [{ x0: 118, x1: 146, z0: 56, z1: 104 }, { x0: -146, x1: -120, z0: -22, z1: -6 }];
-  for (const r of lots) addFlat(mats.lot, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.045, 8));
-  for (const [m, list] of flats) {
-    const mesh = new THREE.Mesh(mergeGeometries(list, false)!, m);
-    mesh.receiveShadow = true;
-    city.add(mesh);
-  }
+  for (const r of lots) addFlat(mats.lot, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.045, 21));
 
   // ---- ministérios e demais prédios ----
   const B: Bld[] = [];
@@ -269,20 +285,56 @@ export function createEsplanada(): THREE.Group {
     B.push({ x0, x1, z0: zA, z1: zA + 22, h: 24, tex: 'ministry', core: true });
     B.push({ x0, x1, z0: zB, z1: zB + 22, h: 24, tex: 'ministry', core: true });
   };
-  // fileira oeste (dois pares de ministérios + galpão + blocos)
+  // margem oeste: par de ministérios ao sul; par empilhado ao norte da rua; galpão com telhado nervurado, galpões baixos e prédio quadrado
   pair(-146, -100, -168, -138);
-  pair(-146, -100, -90, -60);
-  B.push({ x0: -144, x1: -112, z0: 4, z1: 40, h: 12, tex: 'plain' });
-  B.push({ x0: -144, x1: -104, z0: 56, z1: 150, h: 14, tex: 'warehouse' });
-  B.push({ x0: -144, x1: -118, z0: 158, z1: 180, h: 10, tex: 'plain' });
-  // fileira leste (dois pares + palácio com colunas + galpões)
+  pair(-146, -100, -88, -60);
+  B.push({ x0: -126, x1: -100, z0: -32, z1: 50, h: 12, tex: 'warehouse', roof: 'rib' });
+  B.push({ x0: -146, x1: -130, z0: -30, z1: -6, h: 7, tex: 'warehouse' });
+  B.push({ x0: -146, x1: -130, z0: -2, z1: 18, h: 9, tex: 'warehouse' });
+  B.push({ x0: -146, x1: -130, z0: 22, z1: 44, h: 7, tex: 'warehouse' });
+  B.push({ x0: -146, x1: -112, z0: 56, z1: 74, h: 8, tex: 'warehouse' });
+  B.push({ x0: -140, x1: -108, z0: 80, z1: 108, h: 16, tex: 'plain' });
+  // margem leste: par ao sul, palácio com colunas, blocos cinza, edifício creme e galpão de duas águas
   pair(100, 146, -168, -138);
-  pair(100, 146, -90, -60);
-  B.push({ x0: 102, x1: 146, z0: -26, z1: 30, h: 15, tex: 'palace' });
-  B.push({ x0: 110, x1: 146, z0: 112, z1: 176, h: 12, tex: 'warehouse' });
-  B.push({ x0: 124, x1: 146, z0: 38, z1: 52, h: 9, tex: 'plain' });
+  B.push({ x0: 104, x1: 132, z0: -78, z1: -38, h: 16, tex: 'palace' });
+  B.push({ x0: 106, x1: 146, z0: 0, z1: 58, h: 14, tex: 'plain' });
+  B.push({ x0: 108, x1: 144, z0: 64, z1: 86, h: 9, tex: 'plain' });
+  B.push({ x0: 124, x1: 146, z0: 96, z1: 150, h: 10, tex: 'warehouse', roof: 'rib' });
+  B.push({ x0: 126, x1: 146, z0: 152, z1: 168, h: 7, tex: 'warehouse' });
+  B.push({ x0: 112, x1: 146, z0: 170, z1: 188, h: 12, tex: 'warehouse', roof: 'gable' });
+  // pátio de concreto em volta de cada prédio das margens
+  for (const b of B) {
+    const x0 = Math.max(b.x0 - 5, b.x0 < 0 ? -HX : 97);
+    const x1 = Math.min(b.x1 + 5, b.x1 < 0 ? -97 : HX);
+    addFlat(mats.concrete, flatGeom(x0, x1, Math.max(b.z0 - 5, -175), Math.min(b.z1 + 5, HZ), 0.03, 4));
+  }
+  for (const [m, list] of flats) {
+    const mesh = new THREE.Mesh(mergeGeometries(list, false)!, m);
+    mesh.receiveShadow = true;
+    city.add(mesh);
+  }
   const wallsBy: Record<string, THREE.BufferGeometry[]> = { ministry: [], warehouse: [], plain: [], palace: [] };
   const roofs: THREE.BufferGeometry[] = [];
+  const ribRoofs: THREE.BufferGeometry[] = [];
+  const gables: THREE.BufferGeometry[] = [];
+  // telhado plano com UV em metros (as nervuras correm no sentido de z)
+  const ribPlane = (x0: number, x1: number, z0: number, z1: number, y: number): THREE.BufferGeometry => {
+    const g = flatGeom(x0, x1, z0, z1, y + 0.02, 8);
+    return g;
+  };
+  // telhado de duas águas (cumeeira no sentido de z)
+  const gableGeom = (x0: number, x1: number, z0: number, z1: number, y: number, rise: number): THREE.BufferGeometry => {
+    const xm = (x0 + x1) / 2;
+    const v: number[][] = [
+      [x0, y, z0], [xm, y + rise, z0], [xm, y + rise, z1], [x0, y, z0], [xm, y + rise, z1], [x0, y, z1],
+      [xm, y + rise, z0], [x1, y, z0], [x1, y, z1], [xm, y + rise, z0], [x1, y, z1], [xm, y + rise, z1],
+      [x0, y, z0], [x1, y, z0], [xm, y + rise, z0], [x0, y, z1], [xm, y + rise, z1], [x1, y, z1],
+    ];
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(v.flat(), 3));
+    g.computeVertexNormals();
+    return g;
+  };
   const roofAt = (x0: number, x1: number, z0: number, z1: number, y: number): void => {
     const g = new THREE.PlaneGeometry(x1 - x0, z1 - z0);
     g.rotateX(-Math.PI / 2);
@@ -291,8 +343,10 @@ export function createEsplanada(): THREE.Group {
   };
   for (const b of B) {
     wallsBy[b.tex]!.push(boxWalls(b.x0, b.x1, b.z0, b.z1, 0, b.h, 16, 8));
-    roofAt(b.x0, b.x1, b.z0, b.z1, b.h);
-    addBox(b.x0, b.x1, b.z0, b.z1, b.h, b.tex === 'warehouse' ? '#a89e72' : '#b4ab98');
+    if (b.roof === 'rib') ribRoofs.push(ribPlane(b.x0, b.x1, b.z0, b.z1, b.h));
+    else if (b.roof === 'gable') gables.push(gableGeom(b.x0, b.x1, b.z0, b.z1, b.h, 4));
+    else roofAt(b.x0, b.x1, b.z0, b.z1, b.h);
+    addBox(b.x0, b.x1, b.z0, b.z1, b.roof === 'gable' ? b.h + 2 : b.h, b.tex === 'warehouse' ? '#a89e72' : '#b4ab98');
     if (b.core) {
       // blocos de circulação no topo (como na maquete) e nas pontas
       for (const cx of [b.x0 + 8, b.x1 - 8]) {
@@ -302,18 +356,27 @@ export function createEsplanada(): THREE.Group {
     }
   }
   // passarelas ligando os dois prédios de cada par (a 8 m do chão: dá para passar por baixo)
-  for (const [x0, x1, za, zb] of [[-126, -120, -146, -138], [-126, -120, -68, -60], [124, 130, -146, -138], [124, 130, -68, -60]] as const) {
+  for (const [x0, x1, za, zb] of [[-126, -120, -146, -138], [-126, -120, -66, -60], [124, 130, -146, -138]] as const) {
     wallsBy.plain!.push(boxWalls(x0, x1, za, zb, 8, 13, 16, 8));
     roofAt(x0, x1, za, zb, 13);
     addBox(x0, x1, za, zb, 13, '#b4ab98', 8);
   }
-  // colunas do palácio (fachada voltada para a avenida)
-  for (let z = -22; z <= 26; z += 6) {
-    wallsBy.palace!.push(boxWalls(97, 99, z - 0.7, z + 0.7, 0, 13, 16, 8));
-    addBox(97, 99, z - 0.7, z + 0.7, 13, '#e8e4da');
+  // palácio: colunata na fachada sul (voltada para o gramado), varanda coberta e claraboia bege no teto
+  for (let x = 108; x <= 130; x += 4.4) {
+    wallsBy.palace!.push(boxWalls(x - 0.7, x + 0.7, -82.7, -81.3, 0, 14, 16, 8));
+    addBox(x - 0.7, x + 0.7, -82.7, -81.3, 14, '#e8e4da');
   }
-  roofAt(96, 102, -26, 30, 14);
-  wallsBy.palace!.push(boxWalls(96, 102, -26, 30, 13, 14, 16, 8));
+  wallsBy.palace!.push(boxWalls(104, 132, -84, -78, 14, 15, 16, 8));
+  roofAt(104, 132, -84, -78, 15);
+  wallsBy.plain!.push(boxWalls(113, 123, -64, -52, 16, 18.5, 16, 8));
+  roofAt(113, 123, -64, -52, 18.5);
+  // pontos de ônibus (abrigo com cobertura e fundo) nas calçadas externas das avenidas
+  for (const [sx, z] of [[-1, -122], [1, -122], [-1, 30], [1, 30]] as const) {
+    const xa = sx * 91.2;
+    wallsBy.plain!.push(boxWalls(xa - 1.2, xa + 1.2, z - 3.5, z + 3.5, 2.5, 2.7, 16, 8));
+    roofAt(xa - 1.2, xa + 1.2, z - 3.5, z + 3.5, 2.7);
+    addBox(xa + sx * 1.0 - 0.1, xa + sx * 1.0 + 0.1, z - 3.5, z + 3.5, 2.5, '#9aa3a8');
+  }
   for (const k of Object.keys(wallsBy)) {
     if (!wallsBy[k]!.length) continue;
     const mesh = new THREE.Mesh(mergeGeometries(wallsBy[k]!, false)!, new THREE.MeshStandardMaterial({ map: T[k]!, roughness: 0.9 }));
@@ -324,6 +387,8 @@ export function createEsplanada(): THREE.Group {
   const roofMesh = new THREE.Mesh(mergeGeometries(roofs, false)!, mats.roof);
   roofMesh.receiveShadow = true;
   city.add(roofMesh);
+  if (ribRoofs.length) { const m = new THREE.Mesh(mergeGeometries(ribRoofs, false)!, mats.ribRoof); m.receiveShadow = true; city.add(m); }
+  if (gables.length) { const m = new THREE.Mesh(mergeGeometries(gables, false)!, mats.gable); m.castShadow = true; city.add(m); }
 
   // ---- muro em volta (limite do mapa) ----
   const wallGeo: THREE.BufferGeometry[] = [];
@@ -338,6 +403,7 @@ export function createEsplanada(): THREE.Group {
   const poles: [number, number][] = [];
   for (let z = -165; z <= 180; z += 28) for (const x of [-86.5, -53.5, 56.5, 86.5]) {
     if (CROSS.some((c) => z > c.z0 - 3 && z < c.z1 + 3 && Math.abs(x) < 60)) continue;
+    if (OUTER.some((c) => z > c.z0 - 3 && z < c.z1 + 3 && Math.abs(x) > 80)) continue;
     poles.push([x, z]);
   }
   const poleMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.12, 0.16, 8, 6).translate(0, 4, 0), new THREE.MeshStandardMaterial({ color: 0x6b7178, roughness: 0.6 }), poles.length);
@@ -359,20 +425,24 @@ export function createEsplanada(): THREE.Group {
   const inCross = (z: number): boolean => CROSS.some((c) => z > c.z0 - 5 && z < c.z1 + 5);
   for (let z = -165; z <= 38; z += 9) {
     if (inCross(z)) continue;
-    for (const x of [-48, 48]) spot(x, z + rnd() * 2, rnd() < 0.6 ? 'oak' : 'maple'); // fileiras no limite do gramado, junto às avenidas
-    if (z > -34) for (const x of [-34, 34]) spot(x, z, 'maple'); // as duas fileiras do gramado central (como na maquete)
+    // fileiras: no gramado central ficam fora dos caminhos (x ±43), como na maquete; ao sul, junto às avenidas
+    for (const x of z > -34 ? [-43, 43] : [-48, 48]) spot(x, z + rnd() * 2, z > -34 ? 'maple' : rnd() < 0.6 ? 'oak' : 'maple');
   }
-  for (let z = -170; z <= 175; z += 12) for (const x of [-92, 92]) if (rnd() < 0.8) spot(x + (rnd() - 0.5), z, rnd() < 0.5 ? 'birch' : 'maple');
-  // algumas árvores soltas nos gramados e nos pátios dos ministérios
-  for (let i = 0; i < 26; i++) {
+  for (let z = -170; z <= 175; z += 8) for (const x of [-92, 92]) if (rnd() < 0.92) spot(x + (rnd() - 0.5), z, rnd() < 0.5 ? 'birch' : 'maple');
+  // algumas árvores soltas e bosques nos pátios e gramados dos ministérios
+  for (let i = 0; i < 70; i++) {
     const side = rnd() < 0.5 ? -1 : 1;
     spot(side * (100 + rnd() * 44), -176 + rnd() * 350, rnd() < 0.5 ? 'oak' : 'birch');
+  }
+  for (const [gx, gz] of [[-120, -125], [120, -125], [100, -70], [118, -45], [-118, -98], [118, -98], [-122, 66], [118, 90], [-120, 124], [128, 146], [-100, 150], [100, 150]] as const) {
+    for (let i = 0; i < 9; i++) spot(gx + (rnd() - 0.5) * 16, gz + (rnd() - 0.5) * 16, rnd() < 0.5 ? 'oak' : 'maple');
   }
   for (const [x, z] of [[-24, -150], [24, -150], [0, -128], [-20, -70], [22, -60], [-26, -52], [28, -78], [0, -62]] as const) spot(x, z, 'oak');
   for (let i = 0; i < 40; i++) trees.push({ x: -50 + rnd() * 100, z: -170 + rnd() * 62, h: HEIGHT.bush[0] + rnd() * (HEIGHT.bush[1] - HEIGHT.bush[0]), species: 'bush' });
   const nearBuilding = (x: number, z: number, m: number): boolean => B.some((b) => x > b.x0 - m && x < b.x1 + m && z > b.z0 - m && z < b.z1 + m);
   const crown: Record<string, number> = { oak: 0.4, pine: 0.2, maple: 0.3, birch: 0.2, bush: 0 };
-  const placed = trees.filter((t) => t.species === 'bush' || !nearBuilding(t.x, t.z, crown[t.species]! * t.h + 0.4));
+  const blocked = (x: number, z: number): boolean => [...ROADS, ...lots].some((r) => x > r.x0 - 1.5 && x < r.x1 + 1.5 && z > r.z0 - 1.5 && z < r.z1 + 1.5);
+  const placed = trees.filter((t) => t.species === 'bush' || (!nearBuilding(t.x, t.z, crown[t.species]! * t.h + 0.4) && !blocked(t.x, t.z)));
   const treeGroup = makeTrees(placed);
   city.add(treeGroup);
   registerCullChildren(treeGroup, FAR_TREES);
@@ -421,3 +491,5 @@ export function createEsplanada(): THREE.Group {
 
   return city;
 }
+
+
