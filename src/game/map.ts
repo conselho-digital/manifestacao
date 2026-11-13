@@ -9,10 +9,30 @@ export interface Box {
 
 export interface Rect { x0: number; x1: number; z0: number; z1: number }
 
+export type MapId = 'paulista' | 'esplanada';
+/** Mapas do jogo: Paulista (cidade da Av. Paulista) e Esplanada (Esplanada dos Ministérios e Congresso Nacional). */
+export const MAPS: { id: MapId; name: string; desc: string }[] = [
+  { id: 'paulista', name: 'Paulista', desc: 'Av. Paulista e o MASP' },
+  { id: 'esplanada', name: 'Esplanada', desc: 'Ministérios e Congresso Nacional' },
+];
+function readMapId(): MapId {
+  const q = new URLSearchParams(location.search).get('mapa');
+  if (q === 'esplanada' || q === 'paulista') return q;
+  try { const v = localStorage.getItem('arena-map'); if (v === 'esplanada') return v; } catch { /* sem armazenamento */ }
+  return 'paulista';
+}
+/** Mapa desta sessão do navegador (escolhido no menu; trocar recarrega a página). */
+export const MAP_ID: MapId = readMapId();
+export function saveMapChoice(id: MapId): void {
+  try { localStorage.setItem('arena-map', id); } catch { /* sem armazenamento */ }
+}
+
 /** Quadras e prédios da cidade (metros a partir do centro). */
-export const CITY = { halfX: 110, halfZ: 84 };
-/** Largura da rua que contorna a cidade. */
-export const RING = 12;
+export const CITY = MAP_ID === 'esplanada' ? { halfX: 150, halfZ: 190 } : { halfX: 110, halfZ: 84 };
+/** Largura da rua que contorna a cidade (a Esplanada não tem: o limite é o muro). */
+export const RING = MAP_ID === 'esplanada' ? 0 : 12;
+/** Cor do chão no minimapa. */
+export const MAP_BASE = MAP_ID === 'esplanada' ? '#6c8f4f' : '#b9b3a2';
 /** Limites do mapa jogável: a cidade mais a rua em volta (o muro preto fica logo depois). */
 export const MAP = { halfX: CITY.halfX + RING, halfZ: CITY.halfZ + RING };
 
@@ -25,6 +45,7 @@ export function placeName(x: number, z: number): string {
     const r = p.rect;
     if (x >= r.x0 && x <= r.x1 && z >= r.z0 && z <= r.z1) return p.name;
   }
+  if (MAP_ID === 'esplanada') return 'ESPLANADA DOS MINISTÉRIOS';
   return z >= 0 ? 'QUARTEIRÃO NORTE' : 'QUARTEIRÃO SUL';
 }
 
@@ -37,6 +58,18 @@ export const PARKS: Rect[] = [];
 
 export function addBox(minX: number, maxX: number, minZ: number, maxZ: number, top: number, color = '#9a9a9a', bottom = 0): void {
   COLLIDERS.push({ minX, maxX, minZ, maxZ, top, color, bottom });
+}
+
+/** Ponto de partida: Paulista = na frente do MASP; Esplanada = no gramado central, de frente para o Congresso. */
+export function spawnPoint(): [number, number] {
+  if (MAP_ID !== 'esplanada') return museumSpawn();
+  for (let i = 0; i < 60; i++) {
+    const x = (Math.random() - 0.5) * 50;
+    const z = -82 + Math.random() * 38; // no gramado grande, entre as duas ruas transversais
+    const blocked = COLLIDERS.some((b) => b.top > 0.3 && x > b.minX - 1 && x < b.maxX + 1 && z > b.minZ - 1 && z < b.maxZ + 1);
+    if (!blocked) return [x, z];
+  }
+  return [0, -110];
 }
 
 /** Ponto aleatório na frente do MASP (entre a avenida e o prédio), longe de qualquer obstáculo. O personagem nasce de frente para o museu. */

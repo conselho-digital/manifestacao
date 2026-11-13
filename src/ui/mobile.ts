@@ -1,6 +1,6 @@
 import { ICON } from './icons';
 import { CARS } from '../game/vehicle';
-import { COLLIDERS, MAP, PARKS, placeName, ROADS } from '../game/map';
+import { COLLIDERS, MAP, MAP_BASE, PARKS, placeName, ROADS } from '../game/map';
 import { addLook, queueCrouch, queueLights, queueInteract, queueJump, queueReload, queueSwitch, queueWeaponPick, queueWeaponStep, setAim, setCrouchHeld, setFire, setHorn, setPedals, setSprint, setTouchVector, setWheelie } from '../game/input';
 
 /** Dados do jogo que o HUD mostra (preenchidos pelo main a cada quadro). */
@@ -273,7 +273,7 @@ function drawMap(canvas: HTMLCanvasElement, cssSize: number, s: HudState, v: Vie
   g.fillRect(0, 0, size, size);
   const rect = (r: { x0: number; x1: number; z0: number; z1: number }, fill: string, stroke?: string): void =>
     poly([proj(r.x0, r.z0), proj(r.x1, r.z0), proj(r.x1, r.z1), proj(r.x0, r.z1)], fill, stroke, 3 * dpr);
-  rect({ x0: -MAP.halfX, x1: MAP.halfX, z0: -MAP.halfZ, z1: MAP.halfZ }, '#b9b3a2', '#e8e8e8');
+  rect({ x0: -MAP.halfX, x1: MAP.halfX, z0: -MAP.halfZ, z1: MAP.halfZ }, MAP_BASE, '#e8e8e8');
   for (const r of PARKS) rect(r, '#5d9a52');
   for (const r of ROADS) rect(r, '#44484e');
   for (const b of COLLIDERS) {
@@ -664,7 +664,7 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
         }
       }
       drawMap(canvas, mapBox.clientWidth, s, { yaw: s.yaw, cx: s.x, cz: s.z, range: 32, labels: false, circle: true }, dpr);
-      if (mapOpen) drawMap(fullCanvas, fullCanvas.clientWidth, s, { yaw: 0, cx: 0, cz: 0, range: MAP.halfX * 1.06, labels: true, circle: false }, dpr);
+      if (mapOpen) drawMap(fullCanvas, fullCanvas.clientWidth, s, { yaw: 0, cx: 0, cz: 0, range: Math.max(MAP.halfX, MAP.halfZ) * 1.06, labels: true, circle: false }, dpr);
     },
   };
 }

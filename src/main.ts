@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import { createCamera, createRenderer, createScene, handleResize, pixelRatio } from './game/scene';
 import { createCity } from './game/city';
-import { museumSpawn } from './game/map';
+import { createEsplanada } from './game/esplanada';
+import { MAP_ID, spawnPoint } from './game/map';
 import { createCharacter, type CharacterName } from './game/characters';
 import { initMouse, readInput, takeLook, type InputState } from './game/input';
 import { Player } from './game/player';
@@ -37,8 +38,9 @@ if (['www.' + SITE, 'manifestacao-ten.vercel.app'].includes(location.hostname)) 
 const renderer = createRenderer();
 const scene = createScene();
 const camera = createCamera();
+const BASE_FAR = camera.far; // a câmera do menu (vista aérea) aumenta; o jogo volta a este valor
 handleResize(renderer, camera);
-const city = createCity();
+const city = MAP_ID === 'esplanada' ? createEsplanada() : createCity();
 scene.add(city);
 scene.add(createCars());
 scene.add(sparksObject);
@@ -73,7 +75,8 @@ function menuCamera(dt: number): void {
   const aspect = w / h;
   camera.aspect = aspect;
   const ang = menuT * 0.05; // uma volta em ~2 min
-  const dist = aspect < 1 ? 330 : 225; // cabe o mapa (244 x 192 m) inteiro
+  const dist = MAP_ID === 'esplanada' ? (aspect < 1 ? 600 : 430) : aspect < 1 ? 330 : 225; // cabe o mapa inteiro (Paulista 244 x 192 m; Esplanada 300 x 380 m)
+  camera.far = Math.max(camera.far, dist * 1.6);
   const elev = 1.2; // ~70° de cima: dá para ver as ruas e a avenida
   camera.position.set(Math.sin(ang) * dist * 0.4, dist * Math.sin(elev), Math.cos(ang) * dist * 0.4);
   camera.lookAt(0, 0, 0);
@@ -252,12 +255,12 @@ void showLobby().then(async (profile) => {
   renderer.shadowMap.autoUpdate = true;
   renderer.shadowMap.needsUpdate = true;
   renderer.setPixelRatio(GAME_PIXEL_RATIO);
-  if (intro) { scene.fog = null; } else { scene.fog = menuFog; camera.clearViewOffset(); camera.fov = BASE_FOV; camera.updateProjectionMatrix(); }
+  if (intro) { scene.fog = null; } else { scene.fog = menuFog; camera.clearViewOffset(); camera.fov = BASE_FOV; camera.far = BASE_FAR; camera.updateProjectionMatrix(); }
   hud = createHud({ onVoiceTalk: (on) => { void voice.talk(on); }, onPause: () => pauseMenu?.open(), onGarage: () => pauseMenu?.open('garage') });
   hud.addChat(`Sistema: bem-vindo, ${profile.name}!`);
   // Ponto de partida (?pos=x,z serve para inspecionar o mapa)
   const startQ = new URLSearchParams(location.search).get('pos')?.split(',').map(Number);
-  const spawn = museumSpawn(); // em frente ao museu, num ponto aleatório
+  const spawn = spawnPoint(); // Paulista: em frente ao museu; Esplanada: no gramado, de frente para o Congresso
   const first = await createCharacter(profile.character);
   first.position.set(startQ?.[0] ?? spawn[0], 0, startQ?.[1] ?? spawn[1]);
   scene.add(first);
@@ -379,6 +382,7 @@ function flyIntro(dt: number): void {
   if (u >= 1) {
     intro = null;
     camera.clearViewOffset();
+    camera.far = BASE_FAR;
     camera.updateProjectionMatrix();
     scene.fog = menuFog;
   }

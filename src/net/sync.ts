@@ -1,7 +1,7 @@
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { CHARACTERS, type CharacterName } from '../game/characters';
-import { MAP } from '../game/map';
+import { MAP, MAP_ID } from '../game/map';
 import { cleanRtc, type RtcKind } from './voice';
 import { cleanLook, HEX, type TeamLook } from '../game/teams';
 import { BIKE_MODELS, CAR_MODELS, POLICE_MODEL } from '../game/vehicle';
@@ -89,7 +89,7 @@ export interface NetHandlers {
 }
 
 /** Sala: arena:main; ?room=nome troca (para testes, sem misturar com os jogadores de verdade). */
-const CHANNEL = `arena:${(new URLSearchParams(location.search).get('room') ?? 'main').replace(/[^a-z0-9_-]/gi, '').slice(0, 24) || 'main'}`;
+const CHANNEL = `arena:${(new URLSearchParams(location.search).get('room') ?? (MAP_ID === 'esplanada' ? 'esplanada' : 'main')).replace(/[^a-z0-9_-]/gi, '').slice(0, 24) || 'main'}`;
 export const MAX_NAME = 16;
 export const MAX_CHAT = 80;
 /** máximo de jogadores no mapa ao mesmo tempo (contando você) */

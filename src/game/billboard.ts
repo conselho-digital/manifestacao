@@ -4,10 +4,10 @@
 // O telão no mapa mostra a miniatura do vídeo, e todos tocam na mesma posição (a posição esperada é calculada pela hora do servidor).
 import * as THREE from 'three';
 import { supabase } from '../net/supabase';
-import { addBox } from './map';
+import { addBox, MAP_ID } from './map';
 
-const POS = new THREE.Vector3(20.5, 0, -14.5); // calçada de pedras do outro lado da avenida, em frente ao Parque Trianon
-const FACE = new THREE.Vector3(0, 0, 1); // a frente do telão é virada para a rua (avenida) e para o museu
+const POS = MAP_ID === 'esplanada' ? new THREE.Vector3(-92, 0, -60) : new THREE.Vector3(20.5, 0, -14.5); // Paulista: calçada de pedras do outro lado da avenida, em frente ao Parque Trianon; Esplanada: gramado junto à avenida oeste
+const FACE = MAP_ID === 'esplanada' ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1); // a frente do telão é virada para a rua (avenida) e para o museu
 const W = 12;
 const H = 6.75; // 16:9
 const SCREEN_Y = 6.7; // centro do telão
