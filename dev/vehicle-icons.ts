@@ -1,7 +1,7 @@
 // Ferramenta de desenvolvimento: desenha cada veículo em vista 3/4, fundo transparente, para a Garagem e a Loja.
 // Uso: abrir /dev/vehicle-icons.html e ler window.ICONS (dataURL por modelo) — o script scratchpad/vicons.js salva em public/hud/v-<modelo>.png.
 import * as THREE from 'three';
-import { BIKE_MODELS, buildCarVisual, CAR_MODELS, loadModel } from '../src/game/vehicle';
+import { BIKE_MODELS, buildCarVisual, CAR_MODELS, loadModel, POLICE_MODEL } from '../src/game/vehicle';
 
 const W = 256;
 const H = 128;
@@ -19,9 +19,9 @@ const cam = new THREE.PerspectiveCamera(24, W / H, 0.1, 100);
 // cores neutras (prata e preto): na Garagem o veículo usa as cores da equipe de quem o chama
 const LOOK = new URLSearchParams(location.search).has('team') ? { c1: '#009c3b', c2: '#ffdf00' } : { c1: '#c8ccd2', c2: '#2b2e33' };
 const out: Record<string, string> = {};
-for (const m of [...CAR_MODELS, ...BIKE_MODELS]) {
+for (const m of [...CAR_MODELS, POLICE_MODEL, ...BIKE_MODELS]) {
   const bike = (BIKE_MODELS as readonly string[]).includes(m);
-  const v = buildCarVisual(await loadModel(m), 0xffffff, LOOK, bike).group;
+  const v = buildCarVisual(await loadModel(m), 0xffffff, LOOK, bike, m).group;
   const holder = new THREE.Group();
   holder.add(v);
   holder.rotation.y = -0.75; // vista 3/4 da frente

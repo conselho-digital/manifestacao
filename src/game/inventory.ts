@@ -52,6 +52,7 @@ export const SHOP: ShopItem[] = [
   { id: 'v-blistac', name: 'Blista', desc: 'Carro esportivo compacto.', price: 30, kind: 'vehicle', model: 'blistac', img: '/hud/v-blistac.png' },
   { id: 'v-buffalo', name: 'Buffalo', desc: 'Sedã esportivo potente.', price: 30, kind: 'vehicle', model: 'buffalo', img: '/hud/v-buffalo.png' },
   { id: 'v-clover', name: 'Clover', desc: 'Muscle car clássico.', price: 30, kind: 'vehicle', model: 'clover', img: '/hud/v-clover.png' },
+  { id: 'v-duster', name: 'Viatura PM', desc: 'Renault Duster da Polícia Militar: sirene (segure a buzina) e luzes.', price: 30, kind: 'vehicle', model: 'duster', img: '/hud/v-duster.png' },
   { id: 'v-harley', name: 'Harley', desc: 'Moto custom.', price: 30, kind: 'vehicle', model: 'harley', img: '/hud/v-harley.png' },
   { id: 'v-triumph', name: 'Triumph', desc: 'Moto clássica.', price: 30, kind: 'vehicle', model: 'triumph', img: '/hud/v-triumph.png' },
   { id: 'v-bmw', name: 'BMW S1000', desc: 'Moto esportiva.', price: 30, kind: 'vehicle', model: 'bmw', img: '/hud/v-bmw.png' },

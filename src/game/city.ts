@@ -7,7 +7,7 @@ import { registerCullChildren, FAR_TREES } from './culling';
 import { placeSafraSign } from './safra';
 import { placeTotem } from './totem';
 import { HEIGHT, makeTrees, type Species, type TreeSpec } from './trees';
-import { CAR_MODELS, colorForModel, COMMON_COLORS, loadCarVisual, TRAFFIC } from './vehicle';
+import { CAR_MODELS, COMMON_COLORS, TRAFFIC } from './vehicle';
 
 // Cidade inspirada na maquete da Av. Paulista (SP). O layout é escrito "como na foto" (x para a direita,
 // z para o norte) e convertido para o mundo espelhando o eixo X (R(): x_mundo = -x_foto).
@@ -463,13 +463,6 @@ const flatRect = (r: Rect, y: number, tex: THREE.Texture | null, color = 0xfffff
 // ---------- trânsito ao fundo (decorativo, sem colisão) ----------
 
 
-/** Carro decorativo: os mesmos modelos dos carros dirigíveis (Blista, Buffalo e Clover). */
-function ambientVehicle(color: number, model: string): THREE.Group {
-  const g = new THREE.Group();
-  void loadCarVisual(model, colorForModel(model, color)).then((v) => g.add(v));
-  return g;
-}
-
 // ---------- a cidade ----------
 
 export function createCity(): THREE.Group {
@@ -679,11 +672,8 @@ export function createCity(): THREE.Group {
   const pk = new THREE.Group();
   for (let i = 0; i < 4; i++) for (let j = 0; j < 2; j++) {
     if (rand() < 0.25) continue;
-    const car = ambientVehicle(pick(colors), pick(CAR_MODELS));
-    car.position.set((PARKING.x0 + PARKING.x1) / 2 - 3 + j * 6, 0, PARKING.z0 + 3 + i * 5.4);
-    car.rotation.y = j === 0 ? 0 : Math.PI;
-    pk.add(car);
-    addBox(car.position.x - 1.1, car.position.x + 1.1, car.position.z - 2.5, car.position.z + 2.5, 1.5, '#8a8f95');
+    // sem carros parados no mapa (só aparecem os que alguém chamar na Garagem); os sorteios continuam para o resto da cidade não mudar
+    pick(colors); pick(CAR_MODELS); void j; void i;
   }
   city.add(pk);
 
@@ -695,29 +685,19 @@ export function createCity(): THREE.Group {
     for (let z = north ? 30 : -30; north ? z < HZ - 8 : z > -HZ + 8; z += north ? 17 : -17) {
       side = -side;
       if (rand() < 0.3) continue;
-      const cx = side > 0 ? st.x1 - 1.7 : st.x0 + 1.7;
-      const car = ambientVehicle(pick(colors), pick(CAR_MODELS));
-      car.position.set(cx, 0, z);
-      car.rotation.y = rand() < 0.5 ? 0 : Math.PI;
-      parked.add(car);
-      addBox(cx - 1.1, cx + 1.1, z - 2.5, z + 2.5, 1.5, '#8a8f95');
+      pick(colors); pick(CAR_MODELS); rand(); // sem carros estacionados (sorteios mantidos)
     }
   }
   city.add(parked);
 
-  // Trânsito na avenida (só carros, dos 3 modelos): pista sul vai para +X (π/2), pista norte para -X
+  // (Sem trânsito: o mapa Paulista não tem carros, só os chamados pela Garagem)
+  // Trânsito antigo na avenida (só carros, dos 3 modelos): pista sul vai para +X (π/2), pista norte para -X
   const lane = 4;
   const veh: [number, number, 1 | -1, number][] = [
     [-90, -lane, 1, 9], [-30, -lane, 1, 10], [70, -lane, 1, 8],
     [90, lane, -1, 9], [20, lane, -1, 10], [-80, lane, -1, 8],
   ];
-  for (const [x, z, dir, speed] of veh) {
-    const o = ambientVehicle(pick(colors), pick(CAR_MODELS));
-    o.position.set(x, 0, z);
-    o.rotation.y = dir === 1 ? Math.PI / 2 : -Math.PI / 2;
-    city.add(o);
-    TRAFFIC.push({ obj: o, dir, speed, stopT: 0, wobble: 0, lane: z, off: 0 });
-  }
+  for (const [, , , speed] of veh) { pick(colors); pick(CAR_MODELS); void speed; } // sem trânsito (sorteios mantidos)
 
   // Árvores: parque denso (carvalhos, pinheiros, bordos, bétulas), calçadas, ruas e praça. Alturas reais.
   const trees: TreeSpec[] = [];

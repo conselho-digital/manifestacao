@@ -222,3 +222,6 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 - Buzina com a sirene ligada = buzina de caminhão de bombeiros (acorde grave 138/174/277/349 Hz com vibrato, 1 s, ouve-se a 120 m; kind 4 na rede).
 - Roda da viatura: pneu preto com aro grafite (antes cinza claro).
 - Tela cheia (`orientation.ts`): o aviso "Gire o celular" agora pede tela cheia + paisagem travada ao ser tocado (gira onde o Chrome/Android deixa travar), e ao girar para a horizontal tenta tela cheia na hora e, se o navegador negar sem toque, no primeiro toque seguinte. iPhone não tem a API: segue só o aviso.
+
+## Mapa Paulista sem carros
+- O mapa Paulista (a cidade da Av. Paulista) não tem mais NENHUM carro: sem viaturas, sem trânsito e sem carros estacionados (`createCars` só cria o grupo; `city.ts` mantém os sorteios aleatórios para o resto da cidade não mudar). Só aparecem veículos chamados na Garagem. A viatura PM virou item da loja/garagem (`v-duster`, `model: 'duster'`, R$ 30, ícone `public/hud/v-duster.png` gerado por `dev/vehicle-icons.html`); sem adesivo de equipe; sirene e luzes funcionam igual. `cleanVeh` (sync.ts) aceita `duster`.

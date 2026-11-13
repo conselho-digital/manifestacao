@@ -4,7 +4,7 @@ import { CHARACTERS, type CharacterName } from '../game/characters';
 import { MAP } from '../game/map';
 import { cleanRtc, type RtcKind } from './voice';
 import { cleanLook, HEX, type TeamLook } from '../game/teams';
-import { BIKE_MODELS, CAR_MODELS } from '../game/vehicle';
+import { BIKE_MODELS, CAR_MODELS, POLICE_MODEL } from '../game/vehicle';
 import type { SprayMsg } from '../game/graffiti';
 
 export interface PlayerInfo {
@@ -23,7 +23,7 @@ export interface VehInfo { m: string; c1: string; c2: string; t: string; x: numb
 export function cleanVeh(v: unknown): VehInfo | null {
   if (typeof v !== 'object' || v === null) return null;
   const o = v as Record<string, unknown>;
-  const models = [...CAR_MODELS, ...BIKE_MODELS] as readonly string[];
+  const models = [...CAR_MODELS, POLICE_MODEL, ...BIKE_MODELS] as readonly string[];
   const x = finite(o.x, LIMIT);
   const z = finite(o.z, LIMIT);
   const h = finite(o.h, 100);

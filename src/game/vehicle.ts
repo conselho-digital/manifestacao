@@ -292,7 +292,7 @@ export function buildCarVisual(src: THREE.Object3D, colorHex: number, look?: Pai
     });
   }
   if (look?.police) addPoliceDetails(group);
-  else if (look && !bike) addTeamStickers(group, wheels, look);
+  else if (look && !bike && modelName !== POLICE_MODEL) addTeamStickers(group, wheels, look);
   const lights = modelName === POLICE_MODEL ? addLightBar(group) : undefined;
   return { group, wheels, lights };
 }
@@ -987,22 +987,6 @@ export function createCars(): THREE.Group {
   PERSONAL.clear();
   const group = new THREE.Group();
   carsGroup = group;
-  // Viaturas da PM (Buffalo pintado de polícia, `POLICE_LOOK`): sem equipe, paradas e abertas a todos. 4 nas pistas da avenida (pista sul vai para leste, heading π/2;
-  // pista norte para oeste, -π/2) e 4 nas calçadas das saídas da cidade, nas pontas da avenida.
-  const spawn: [number, number, number][] = [
-    [34, -9, Math.PI / 2],
-    [-26, -9, Math.PI / 2],
-    [10, 9, -Math.PI / 2],
-    [-40, 9, -Math.PI / 2],
-    [98, -16, Math.PI / 2],
-    [98, 16, -Math.PI / 2],
-    [-98, -16, Math.PI / 2],
-    [-98, 16, -Math.PI / 2],
-  ];
-  spawn.forEach(([x, z, h], i) => {
-    const car = new Car(i, x, z, h, 0xffffff, POLICE_MODEL, null);
-    CARS.push(car);
-    group.add(car.root);
-  });
+  // Sem veículos no mapa: só aparecem os pessoais, chamados pela Garagem (inclusive a viatura da PM)
   return group;
 }
