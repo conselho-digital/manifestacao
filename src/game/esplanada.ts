@@ -22,7 +22,7 @@ const CROSS: Rect[] = [
 const OUTER: Rect[] = [{ x0: -HX, x1: -85, z0: -105, z1: -90 }, { x0: 85, x1: HX, z0: -105, z1: -90 }];
 // estacionamentos: margens, e dois estreitos ao lado das torres do Congresso
 const lots: Rect[] = [
-  { x0: 104, x1: 146, z0: -34, z1: -12 }, { x0: 102, x1: 118, z0: 100, z1: 136 }, { x0: -146, x1: -114, z0: 114, z1: 140 },
+  { x0: 104, x1: 146, z0: -34, z1: -12 }, { x0: 102, x1: 118, z0: 100, z1: 136 },
   { x0: 24.2, x1: 46.1, z0: 156.9, z1: 188 }, { x0: -42, x1: -25.3, z0: 143.4, z1: 188 }, // atrás do Congresso (como na foto aérea)
 ];
 const CONG_FRONT = 70; // z da frente do Congresso
@@ -337,8 +337,12 @@ export function createEsplanada(): THREE.Group {
   B.push({ x0: -146, x1: -130, z0: -30, z1: -6, h: 7, tex: 'warehouse' });
   B.push({ x0: -146, x1: -130, z0: -2, z1: 18, h: 9, tex: 'warehouse' });
   B.push({ x0: -146, x1: -130, z0: 22, z1: 44, h: 7, tex: 'warehouse' });
-  B.push({ x0: -146, x1: -112, z0: 56, z1: 74, h: 8, tex: 'warehouse' });
-  B.push({ x0: -140, x1: -108, z0: 80, z1: 108, h: 16, tex: 'plain' });
+  // margem direita da foto aérea (a leste do Congresso; no jogo é o lado x < 0): galpão cinza, edifício creme em degraus, anexo e galpão de duas águas
+  B.push({ x0: -125, x1: -99, z0: 59.7, z1: 124, h: 12, tex: 'plain' });
+  B.push({ x0: -143, x1: -133, z0: 59.6, z1: 123.1, h: 10, tex: 'warehouse', roof: 'rib' });
+  B.push({ x0: -148, x1: -139.5, z0: 109.2, z1: 123.1, h: 8, tex: 'plain' });
+  B.push({ x0: -148, x1: -143, z0: 83.2, z1: 109.2, h: 8, tex: 'warehouse' });
+  B.push({ x0: -148, x1: -133.5, z0: 135.8, z1: 174.2, h: 12, tex: 'warehouse', roof: 'gable' });
   // margem leste: par ao sul, palácio com colunas, blocos cinza, edifício creme e galpão de duas águas
   pair(100, 146, -168, -138);
   B.push({ x0: 104, x1: 132, z0: -78, z1: -38, h: 16, tex: 'palace' });
@@ -383,6 +387,52 @@ export function createEsplanada(): THREE.Group {
   const armMesh = new THREE.Mesh(mergeGeometries(arms, false)!, new THREE.MeshStandardMaterial({ map: T.stripes!, roughness: 0.6 }));
   postMesh.castShadow = armMesh.castShadow = true;
   city.add(postMesh, armMesh);
+
+  // ---- margem direita (foto aérea do usuário): estacionamento diagonal, ruas de asfalto, praça de pedra com árvores ----
+  // A foto tem escala diferente da do jogo: x da foto vira |x| do jogo por trechos (avenida, calçada, gramado, prédios); z = 124,4 + (680 − y)·0,084.
+  const EXK: [number, number][] = [[305, 55], [390, 85], [418, 88], [495, 97], [765, 125], [815, 130], [850, 133], [1045, 148], [1079, 150]];
+  const EX = (px: number): number => {
+    for (let i = 1; i < EXK.length; i++) {
+      const [a, ga] = EXK[i - 1]!;
+      const [b, gb] = EXK[i]!;
+      if (px <= b) return ga + ((px - a) / (b - a)) * (gb - ga);
+    }
+    return 150;
+  };
+  const E = (px: number, py: number): [number, number] => [-EX(px), 124.4 + (680 - py) * 0.084];
+  const ph = (pts: [number, number][]): [number, number][] => pts.map(([px, py]) => E(px, py));
+  const flatPoly = (pts: [number, number][], y: number, tile: number): THREE.BufferGeometry => {
+    const g = new THREE.ShapeGeometry(new THREE.Shape(pts.map(([x, z]) => new THREE.Vector2(x, -z))));
+    g.rotateX(-Math.PI / 2);
+    g.translate(0, y, 0);
+    const pos = g.attributes.position!;
+    const uv = g.attributes.uv!;
+    for (let i = 0; i < pos.count; i++) uv.setXY(i, pos.getX(i) / tile, pos.getZ(i) / tile);
+    return g;
+  };
+  const LOT_D = ph([[440, 15], [695, 15], [530, 350], [440, 330]]);
+  const STREETS_E: [number, number][][] = [
+    ph([[435, 330], [472, 330], [472, 480], [435, 480]]), // corredor ao lado do estacionamento
+    ph([[762, 15], [803, 20], [800, 30], [740, 110], [705, 200], [660, 300], [600, 390], [565, 470], [545, 500], [515, 482], [600, 305], [650, 200], [700, 100]]), // rua em diagonal
+    ph([[802, 105], [860, 105], [860, 590], [802, 590]]), // faixa de serviço ao lado do galpão de duas águas
+    ph([[497, 502], [520, 503], [522, 560], [548, 588], [858, 590], [858, 548], [1079, 548], [1079, 640], [815, 640], [815, 690], [762, 690], [745, 665], [715, 645], [620, 643], [540, 640], [500, 630], [475, 595], [475, 520]]), // rua curva e horizontal
+    ph([[765, 640], [815, 640], [815, 1565], [765, 1565]]), // rua entre os prédios
+  ];
+  const PLAZA = ph([[763, 100], [807, 113], [807, 587], [520, 587], [520, 560]]);
+  addFlat(mats.lot, flatPoly(LOT_D, 0.045, 21));
+  for (const pts of STREETS_E) addFlat(mats.asp, flatPoly(pts, 0.047, 12));
+  addFlat(mats.concrete, flatPoly(PLAZA, 0.06, 4));
+  addFlat(mats.concrete, flatGeom(-101.7, -55, 141.1, 143.5, 0.06, 4)); // passeio que atravessa a avenida até a rua da margem
+  const PLAZA_TREES: [number, number][] = ([[680, 45], [600, 110], [535, 265], [600, 240], [440, 465], [500, 440], [580, 430], [565, 505], [340, 595], [390, 640], [460, 625], [535, 650], [615, 650], [335, 700], [345, 825], [420, 820], [495, 825], [565, 820], [645, 825]] as [number, number][]).map(([cx, cy]) => [400 + cx / 1.5, cy / 1.5] as [number, number]);
+  const inPoly = (x: number, z: number, pts: [number, number][]): boolean => {
+    let inside = false;
+    for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+      const [xi, zi] = pts[i]!;
+      const [xj, zj] = pts[j]!;
+      if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+    }
+    return inside;
+  };
 
   // pátio de concreto em volta de cada prédio das margens
   for (const b of B) {
@@ -516,6 +566,8 @@ export function createEsplanada(): THREE.Group {
     const side = rnd() < 0.5 ? -1 : 1;
     spot(side * (100 + rnd() * 44), -176 + rnd() * 350, rnd() < 0.5 ? 'oak' : 'birch');
   }
+  for (const [px, py] of PLAZA_TREES) { const [x, z] = E(px, py); spot(x, z, rnd() < 0.6 ? 'oak' : 'maple'); } // árvores da praça de pedra
+  for (let z = 61; z <= 124; z += 3.6) spot(-93.6, z + (rnd() - 0.5), rnd() < 0.5 ? 'maple' : 'oak'); // fileira densa junto à avenida, ao lado do galpão cinza
   for (const [gx, gz] of [[-120, -125], [120, -125], [100, -70], [118, -45], [-118, -98], [118, -98], [-122, 66], [118, 90], [-120, 124], [128, 146], [-100, 150], [100, 150]] as const) {
     for (let i = 0; i < 9; i++) spot(gx + (rnd() - 0.5) * 16, gz + (rnd() - 0.5) * 16, rnd() < 0.5 ? 'oak' : 'maple');
   }
@@ -523,7 +575,7 @@ export function createEsplanada(): THREE.Group {
   for (let i = 0; i < 40; i++) trees.push({ x: -50 + rnd() * 100, z: -170 + rnd() * 62, h: HEIGHT.bush[0] + rnd() * (HEIGHT.bush[1] - HEIGHT.bush[0]), species: 'bush' });
   const nearBuilding = (x: number, z: number, m: number): boolean => B.some((b) => x > b.x0 - m && x < b.x1 + m && z > b.z0 - m && z < b.z1 + m);
   const crown: Record<string, number> = { oak: 0.4, pine: 0.2, maple: 0.3, birch: 0.2, bush: 0 };
-  const blocked = (x: number, z: number): boolean => [...ROADS, ...lots].some((r) => x > r.x0 - 1.5 && x < r.x1 + 1.5 && z > r.z0 - 1.5 && z < r.z1 + 1.5);
+  const blocked = (x: number, z: number): boolean => [...ROADS, ...lots].some((r) => x > r.x0 - 1.5 && x < r.x1 + 1.5 && z > r.z0 - 1.5 && z < r.z1 + 1.5) || [LOT_D, ...STREETS_E].some((pts) => inPoly(x, z, pts));
   const placed = trees.filter((t) => t.species === 'bush' || (!nearBuilding(t.x, t.z, crown[t.species]! * t.h + 0.4) && !blocked(t.x, t.z)));
   const treeGroup = makeTrees(placed);
   city.add(treeGroup);
