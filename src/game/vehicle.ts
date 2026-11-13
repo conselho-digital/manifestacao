@@ -367,9 +367,14 @@ function addTeamStickers(group: THREE.Group, wheels: Record<string, THREE.Object
     if (!pivot) continue;
     const box = new THREE.Box3().setFromObject(pivot);
     const h = box.max.y - box.min.y;
-    const world = new THREE.Vector3(side > 0 ? box.max.x : box.min.x, box.min.y + h * 0.32, (box.min.z + box.max.z) / 2);
+    const y = box.min.y + h * 0.32;
+    const z = (box.min.z + box.max.z) / 2;
     const m = disc(Math.min(0.42, h * 0.55));
-    m.position.copy(pivot.worldToLocal(world.addScaledVector(new THREE.Vector3(side, 0, 0), 0.014)));
+    // raio de fora para dentro contra a porta: o adesivo cola na chapa de verdade (a caixa da porta não acompanha a curva da lataria)
+    const ray = new THREE.Raycaster(new THREE.Vector3(side * 3, y, z), new THREE.Vector3(-side, 0, 0), 0, 6);
+    const hit = ray.intersectObject(pivot, true)[0];
+    const world = hit ? hit.point.clone() : new THREE.Vector3(side > 0 ? box.max.x : box.min.x, y, z);
+    m.position.copy(pivot.worldToLocal(world.addScaledVector(new THREE.Vector3(side, 0, 0), 0.012)));
     m.rotation.y = side * (Math.PI / 2);
     pivot.add(m);
   }
@@ -455,6 +460,11 @@ export class Car {
   private lean = 0;
   /** relevo: altura do chão sob o veículo e inclinação (frente/trás e lados) que ele acompanha */
   groundY = 0;
+  /** velocidade vertical (m/s) e se está no ar: ao passar da crista de uma subida rápida o veículo voa em arco e cai com a gravidade */
+  vy = 0;
+  airborne = false;
+  /** velocidade vertical da queda ao pousar neste quadro (m/s), 0 se não pousou */
+  landed = 0;
   slopeP = 0;
   slopeR = 0;
   /** derrapagem: a velocidade segue heading + slip (freio de mão trava as rodas traseiras e a traseira sai) */
@@ -671,6 +681,7 @@ export class Car {
     if (hitVeh) { this.speed *= -0.25; this.slip = 0; }
     else if (hit) this.slideAlong(wallNx, wallNz, dt, radius); // parede, poste, prédio: desliza (raspa e solta faísca) em vez de travar e quicar
     this.apply(steer, dt);
+    if (this.landed > 4) { this.speed *= Math.max(0.8, 1 - this.landed * 0.012); if (this.landed > 7) { emitSparks(this.x, this.groundY + 0.2, this.z, 0, 2, 0, 8); playCrashAt(this.x, this.z, Math.min(1, this.landed / 14)); } } // pousou: perde velocidade; queda forte faz barulho e faísca
   }
 
   /**
@@ -839,7 +850,24 @@ export class Car {
     const hB = terrainHeight(this.x - sh * L, this.z - ch * L);
     const hL = terrainHeight(this.x + ch * W, this.z - sh * W); // +x local = esquerda
     const hR = terrainHeight(this.x - ch * W, this.z + sh * W);
-    this.groundY = (hF + hB + hL + hR) / 4;
+    const gMean = (hF + hB + hL + hR) / 4;
+    if (dt > 0) {
+      // gravidade: sem chão embaixo o veículo segue a trajetória (velocidade vertical que a rampa deu) e cai
+      const vyN = this.vy - 9.8 * dt;
+      const yN = this.groundY + vyN * dt;
+      this.landed = 0;
+      if (this.driver !== null && yN > gMean + 0.003) {
+        if (!this.airborne) { this.vy *= 0.6; this.airborne = true; } // ao decolar a suspensão guarda parte do impulso: salto menor que o físico puro
+        this.vy -= 9.8 * dt;
+        this.groundY += this.vy * dt;
+      }
+      else {
+        if (this.airborne) this.landed = -this.vy;
+        this.airborne = false;
+        this.vy = Math.max(-25, Math.min(25, (gMean - this.groundY) / dt));
+        this.groundY = gMean;
+      }
+    } else if (!this.airborne || this.driver === null) { this.airborne = false; this.vy = 0; this.groundY = gMean; }
     this.slopeP = Math.atan2(hB - hF, 2 * L);
     this.slopeR = Math.atan2(hL - hR, 2 * W);
     this.root.position.set(this.x, this.groundY, this.z);
