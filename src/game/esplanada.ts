@@ -284,7 +284,7 @@ export function createEsplanada(): THREE.Group {
   // calçada cinza-clara no fim da rampa, ligando as duas ruas
   addFlat(mats.pave, flatGeom(-26, 26, 65, 71, 0.1, 4));
   // duas ruas, mais juntas, que descem da fachada; sobre o lago (z > 49) ficam acima da água
-  for (const r of [{ x0: -31, x1: -26, z0: -37, z1: 92 }, { x0: 26, x1: 31, z0: -37, z1: 92 }]) {
+  for (const r of [{ x0: -31, x1: -26, z0: -37, z1: 112 }, { x0: 26, x1: 31, z0: -37, z1: 112 }]) {
     addFlat(mats.street, flatGeom(r.x0, r.x1, r.z0, 49, 0.05, 12, 'road-z'));
     addFlat(mats.streetBr, flatGeom(r.x0, r.x1, 49, r.z1, 0.1, 12, 'road-z'));
     ROADS.push(r);
@@ -506,7 +506,9 @@ export function createEsplanada(): THREE.Group {
     // a laje (a peça branca de maior área) vira uma caixa de ~6 m; as cúpulas ficam em cima dela (não bloqueiam)
     const whites = parts.filter((p) => !p.dark && p.box.max.y > 1).sort((x, y) => y.area - x.area);
     const slab = whites[0];
-    if (slab) addBox(slab.box.min.x, slab.box.max.x, slab.box.min.z, slab.box.max.z, Math.min(slab.box.max.y, 7), '#cfcfcf');
+    // a rampa (a ponta da peça maior, na frente) não bloqueia: a caixa começa na fachada de vidro
+    const facadeZ = Math.min(...whites.slice(1).filter((p) => p.area > 200).map((p) => p.box.min.z));
+    if (slab) addBox(slab.box.min.x, slab.box.max.x, Number.isFinite(facadeZ) ? Math.max(slab.box.min.z, facadeZ) : slab.box.min.z, slab.box.max.z, Math.min(slab.box.max.y, 7), '#cfcfcf');
   }).catch((e) => console.warn('Congresso não carregou:', e));
 
   return city;
