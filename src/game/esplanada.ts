@@ -411,7 +411,6 @@ export function createEsplanada(): THREE.Group {
   };
   const LOT_D = ph([[440, 15], [695, 15], [530, 350], [440, 330]]);
   const STREETS_E: [number, number][][] = [
-    ph([[435, 330], [472, 330], [472, 480], [435, 480]]), // corredor ao lado do estacionamento
     ph([[802, 105], [860, 105], [860, 590], [802, 590]]), // faixa de serviço ao lado do galpão de duas águas
     ph([[765, 640], [815, 640], [815, 1565], [765, 1565]]), // rua entre os prédios
   ];
@@ -419,7 +418,7 @@ export function createEsplanada(): THREE.Group {
   addFlat(mats.lot, flatPoly(LOT_D, 0.045, 21));
   for (const pts of STREETS_E) addFlat(mats.asp, flatPoly(pts, 0.047, 12));
   addFlat(mats.concrete, flatPoly(PLAZA, 0.06, 4));
-  addFlat(mats.concrete, flatGeom(-101.7, -55, 141.1, 143.5, 0.06, 4)); // passeio que atravessa a avenida até a rua da margem
+  addFlat(mats.concrete, flatGeom(-101.7, -85, 141.1, 143.5, 0.06, 4)); // passeio da calçada da avenida até a rua da margem (sem cruzar a avenida)
   // ---- 2ª foto aérea (mais ao sul na mesma margem): rua entre prédios, praça de pedra, rua horizontal, caminhos, estacionamento e árvores ----
   // x_foto2 → x_foto1: 495 + (x − 518)·1,04; y_foto2 → y_foto1: y + 515 (mesma escala em z).
   const E2 = (px: number, py: number): [number, number] => E(495 + (px - 518) * 1.04, py + 515);
@@ -441,8 +440,6 @@ export function createEsplanada(): THREE.Group {
   // Entrada de carros do estacionamento da esquerda: sai da avenida, atravessa a calçada e entra pelo lado direito do estacionamento (a calçada da esquerda é a entrada de pedestres)
   const ASPH: [number, number][][] = [
     crect(151, 184, 210, 199), // faixa da avenida até o estacionamento
-    crect(305, 184, 345, 198), // faixa da avenida até a rua da margem
-    crect(353, 150, 361, 190), // rua da margem um pouco mais larga
   ];
   for (const pts of ASPH) { addFlat(mats.asp, flatPoly(pts, 0.07, 12)); STREETS_E.push(pts); }
   // Rua em volta da praça: da rua em diagonal faz uma curva suave e segue reta até a margem (faixa de 7 m em volta de uma linha central suave)
