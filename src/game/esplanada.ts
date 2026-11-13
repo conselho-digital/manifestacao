@@ -298,6 +298,9 @@ export function createEsplanada(): THREE.Group {
     const zs = pts.map((v) => v[1]);
     PARKS.push({ x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs) });
   }
+  // rua de asfalto entre as duas ruas, colada na calçada (onde antes havia grama), como na foto
+  addFlat(mats.street, flatGeom(-26, 26, 61.6, 65, 0.05, 12, 'road-x'));
+  ROADS.push({ x0: -26, x1: 26, z0: 61.6, z1: 65 });
   // calçada cinza-clara no fim da rampa, ligando as duas ruas
   addFlat(mats.pave, flatGeom(-26, 26, 65, 71, 0.1, 4));
   // duas ruas, mais juntas, que descem da fachada; sobre o lago (z > 49) ficam acima da água
