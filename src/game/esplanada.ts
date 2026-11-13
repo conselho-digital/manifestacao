@@ -370,8 +370,10 @@ export function createEsplanada(): THREE.Group {
   back(mats.asp, -38.5, -29.2, 124.8, 141.2, 0.047); // via do lado direito
   const WALKS: [number, number, number, number][] = [
     [41.7, 46.1, 124.8, 156.9], [33.9, 46.1, 141.2, 152.3], [23.9, 28.8, 147, 156.9], [2.9, 28.6, 124.8, 147], // 1, 2, 3 e a praça das torres (4)
-    [-55, 2.3, 141.7, 143.9], // 5: passeio até a avenida
-    [-29, -26, 124.8, 147.4], [-45.9, -38.5, 124.8, 141.2], [-46.1, -42, 159.4, 188], [-46.1, -38.9, 141.2, 159.4], // 6, 7, 8, 9
+    [-25.3, 2.3, 141.7, 143.9], // 5: passeio de pedestres, da calçada do estacionamento até a praça das torres
+    [-25.3, -22.3, 124.8, 188], // 6: calçada da esquerda do estacionamento = entrada de pedestres
+    [-46, -42, 128.2, 188], // 7-9: calçada do lado da avenida, ao longo de todo o estacionamento
+    [-42, -38.5, 128.2, 141.2], [-29.2, -25.3, 128.2, 141.2], // calçadas dos dois lados da via de serviço
     [46.1, 55, 100.5, 103.2], // 10: passeio curto da avenida até o prédio
   ];
   for (const [x0, x1, z0, z1] of WALKS) back(mats.concrete, x0, x1, z0, z1, 0.06);
@@ -394,7 +396,23 @@ export function createEsplanada(): THREE.Group {
     addBox(Math.min(xa, xb), Math.max(xa, xb), z - 0.1, z + 0.1, 1.15, '#d22a2a');
   };
   gate(36, 28.4, 147); // esquerda: poste no lado de fora
-  gate(-39.7, -28.8, 142.8); // direita
+  // cancela da entrada de carros do estacionamento da esquerda: atravessa a faixa que vem da avenida (poste do lado de fora da pista)
+  {
+    const gx = -44.2;
+    const za = 145.7;
+    const zb = 141.5;
+    const len = Math.abs(za - zb);
+    const arm = new THREE.BoxGeometry(len, 0.14, 0.14);
+    const uv = arm.attributes.uv!;
+    for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * len);
+    arm.rotateY(Math.PI / 2);
+    arm.translate(gx, 1.05, (za + zb) / 2);
+    arms.push(arm);
+    posts.push(new THREE.BoxGeometry(0.4, 1.3, 0.4).translate(gx, 0.65, za));
+    posts.push(new THREE.BoxGeometry(0.44, 0.12, 0.44).translate(gx, 1.36, za));
+    addBox(gx - 0.25, gx + 0.25, za - 0.25, za + 0.25, 1.3, '#30343a');
+    addBox(gx - 0.1, gx + 0.1, zb, za, 1.15, '#d22a2a');
+  }
   const postMesh = new THREE.Mesh(mergeGeometries(posts, false)!, new THREE.MeshStandardMaterial({ color: 0xf2c200, roughness: 0.7 }));
   const armMesh = new THREE.Mesh(mergeGeometries(arms, false)!, new THREE.MeshStandardMaterial({ map: T.stripes!, roughness: 0.6 }));
   postMesh.castShadow = armMesh.castShadow = true;
@@ -452,7 +470,7 @@ export function createEsplanada(): THREE.Group {
   const crect = (x0: number, y0: number, x1: number, y1: number): [number, number][] => cpoly([[x0, y0], [x1, y0], [x1, y1], [x0, y1]]);
   // Entrada de carros do estacionamento da esquerda: sai da avenida, atravessa a calçada e entra pelo lado direito do estacionamento (a calçada da esquerda é a entrada de pedestres)
   const ASPH: [number, number][][] = [
-    crect(151, 184, 210, 199), // faixa da avenida até o estacionamento
+    crect(163, 184, 210, 199), // faixa da avenida até o estacionamento (entrada de carros)
   ];
   for (const pts of ASPH) { addFlat(mats.asp, flatPoly(pts, 0.07, 12)); STREETS_E.push(pts); }
   // Rua em volta da praça: da rua em diagonal faz uma curva suave e segue reta até a margem (faixa de 7 m em volta de uma linha central suave)
@@ -620,6 +638,7 @@ export function createEsplanada(): THREE.Group {
   for (let z = -165; z <= 180; z += 28) for (const x of [-86.5, -53.5, 56.5, 86.5]) {
     if (CROSS.some((c) => z > c.z0 - 3 && z < c.z1 + 3 && Math.abs(x) < 60)) continue;
     if (OUTER.some((c) => z > c.z0 - 3 && z < c.z1 + 3 && Math.abs(x) > 80)) continue;
+    if (x === -53.5 && Math.abs(z - 143.2) < 10) continue; // sem poste de luz na entrada de carros do estacionamento da esquerda
     poles.push([x, z]);
   }
   const poleMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.12, 0.16, 8, 6).translate(0, 4, 0), new THREE.MeshStandardMaterial({ color: 0x6b7178, roughness: 0.6 }), poles.length);
