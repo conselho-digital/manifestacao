@@ -26,7 +26,7 @@ const lots: Rect[] = [
   { x0: -52, x1: -26, z0: 146, z1: 178 }, { x0: 26, x1: 52, z0: 146, z1: 178 },
 ];
 const CONG_FRONT = 70; // z da frente do Congresso
-const CONG_SCALE = 2.5; // o modelo do usuário tem ~44 unidades de comprimento: vira ~111 m
+const CONG_SCALE = 2; // o modelo do usuário tem ~44 unidades de comprimento: vira ~89 m (20% menor que os 111 m de antes)
 
 function rng(seed: number): () => number {
   let a = seed >>> 0;
