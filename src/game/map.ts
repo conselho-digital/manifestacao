@@ -28,7 +28,7 @@ export function saveMapChoice(id: MapId): void {
 }
 
 /** Quadras e prédios da cidade (metros a partir do centro). */
-export const CITY = MAP_ID === 'esplanada' ? { halfX: 150, halfZ: 190 } : { halfX: 110, halfZ: 84 };
+export const CITY = MAP_ID === 'esplanada' ? { halfX: 162, halfZ: 202 } : { halfX: 110, halfZ: 84 };
 /** Largura da rua que contorna a cidade (a Esplanada não tem: o limite é o muro). */
 export const RING = MAP_ID === 'esplanada' ? 0 : 12;
 /** Cor do chão no minimapa. */

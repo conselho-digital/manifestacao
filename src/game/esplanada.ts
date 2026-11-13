@@ -9,17 +9,24 @@ import { HEIGHT, makeTrees, type Species, type TreeSpec } from './trees';
 // Eixo no sentido norte (+z): o Congresso fica no fim do eixo, de frente para o sul. Duas avenidas (Eixo Monumental) ladeiam o gramado
 // central e, fora delas, as duas fileiras de ministérios. Sem carros: só aparecem os chamados na Garagem.
 
-const HX = 150; // meio-largura do mapa (m)
-const HZ = 190; // meio-comprimento
-const AV_L: Rect = { x0: -85, x1: -55, z0: -175, z1: HZ }; // avenida oeste (3 faixas para cada lado)
-const AV_R: Rect = { x0: 55, x1: 85, z0: -175, z1: HZ };
-const PERIM_S: Rect = { x0: -HX, x1: HX, z0: -HZ, z1: -175 }; // rua do fim sul, liga as duas avenidas
+const IX = 150; // meio-largura da área interna (m); em volta dela há a rua perimetral de 10 m e 2 m de grama até o muro
+const IZ = 190; // meio-comprimento da área interna
+const HX = 162; // meio-largura do mapa (até o muro)
+const HZ = 202; // meio-comprimento do mapa
+const RING_W = 10; // largura da rua perimetral
+const AV_L: Rect = { x0: -85, x1: -55, z0: -175, z1: IZ }; // avenida oeste (3 faixas para cada lado)
+const AV_R: Rect = { x0: 55, x1: 85, z0: -175, z1: IZ };
+const PERIM_S: Rect = { x0: -IX - RING_W, x1: IX + RING_W, z0: -IZ, z1: -175 }; // rua do fim sul, liga as duas avenidas
 const CROSS: Rect[] = [
   { x0: -55, x1: 55, z0: -105, z1: -90 }, // 1ª transversal (cruza o gramado)
   { x0: -55, x1: 55, z0: -35, z1: -20 }, // 2ª transversal
 ];
 // ruas que saem das avenidas entre os ministérios (alinhadas com a 1ª transversal)
-const OUTER: Rect[] = [{ x0: -HX, x1: -85, z0: -105, z1: -90 }, { x0: 85, x1: HX, z0: -105, z1: -90 }];
+const OUTER: Rect[] = [{ x0: -IX, x1: -85, z0: -105, z1: -90 }, { x0: 85, x1: IX, z0: -105, z1: -90 }];
+// rua perimetral: leste, oeste e norte (o sul é a PERIM_S); liga as ruas que antes acabavam no muro
+const RING_E: Rect = { x0: IX, x1: IX + RING_W, z0: -IZ, z1: IZ };
+const RING_W_: Rect = { x0: -IX - RING_W, x1: -IX, z0: -IZ, z1: IZ };
+const RING_N: Rect = { x0: -IX, x1: IX, z0: IZ, z1: IZ + RING_W };
 // estacionamentos: margens, e dois estreitos ao lado das torres do Congresso
 const lots: Rect[] = [
   { x0: 104, x1: 146, z0: -34, z1: -12 }, { x0: 102, x1: 118, z0: 100, z1: 136 },
@@ -239,13 +246,13 @@ export function createEsplanada(): THREE.Group {
   ];
   for (const r of lawns) { addFlat(mats.lawn, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.015, 12)); PARKS.push(r); }
   // faixas de gramado ao lado das avenidas (lado de fora)
-  for (const r of [{ x0: -97, x1: -88, z0: -172, z1: 188 }, { x0: 88, x1: 97, z0: -172, z1: 188 }, { x0: 97, x1: HX - 4, z0: -90, z1: -36 }]) { addFlat(mats.lawn, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.015, 12)); PARKS.push(r); }
+  for (const r of [{ x0: -97, x1: -88, z0: -172, z1: 188 }, { x0: 88, x1: 97, z0: -172, z1: 188 }, { x0: 97, x1: IX - 4, z0: -90, z1: -36 }]) { addFlat(mats.lawn, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.015, 12)); PARKS.push(r); }
   // ladrilho dos ministérios: o pátio (concreto) das duas margens
-  for (const r of [{ x0: -HX, x1: -97, z0: -175, z1: HZ }, { x0: 97, x1: HX, z0: -175, z1: HZ }]) addFlat(mats.lawn, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.015, 12)); // margens: gramado, com pátio de concreto em volta de cada prédio
+  for (const r of [{ x0: -IX, x1: -97, z0: -175, z1: IZ }, { x0: 97, x1: IX, z0: -175, z1: IZ }]) addFlat(mats.lawn, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.015, 12)); // margens: gramado, com pátio de concreto em volta de cada prédio
   // calçadas ao longo das avenidas (3 m) e em volta dos gramados (caminhos de 3 m)
   const walk: Rect[] = [
-    { x0: -88, x1: -85, z0: -175, z1: HZ }, { x0: -55, x1: -52, z0: -175, z1: HZ },
-    { x0: 55, x1: 58, z0: -175, z1: HZ }, { x0: 85, x1: 88, z0: -175, z1: HZ },
+    { x0: -88, x1: -85, z0: -175, z1: IZ }, { x0: -55, x1: -52, z0: -175, z1: IZ },
+    { x0: 55, x1: 58, z0: -175, z1: IZ }, { x0: 85, x1: 88, z0: -175, z1: IZ },
     // caminhos laterais do gramado central e do gramado do meio
         { x0: -52, x1: 52, z0: -175, z1: -172 }, { x0: -52, x1: 52, z0: -108, z1: -105 },
     { x0: -52, x1: 52, z0: -90, z1: -88 }, { x0: -52, x1: 52, z0: -37, z1: -35 },
@@ -318,6 +325,12 @@ export function createEsplanada(): THREE.Group {
   for (const r of [AV_L, AV_R]) { addFlat(mats.avenue, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.05, 12, 'road-z')); ROADS.push(r); }
   addFlat(mats.street, flatGeom(PERIM_S.x0, PERIM_S.x1, PERIM_S.z0, PERIM_S.z1, 0.05, 12, 'road-x'));
   ROADS.push(PERIM_S);
+  // rua perimetral em volta da cidade (liga as ruas que antes acabavam no muro)
+  addFlat(mats.street, flatGeom(RING_E.x0, RING_E.x1, RING_E.z0, RING_E.z1, 0.05, 12, 'road-z'));
+  addFlat(mats.street, flatGeom(RING_W_.x0, RING_W_.x1, RING_W_.z0, RING_W_.z1, 0.05, 12, 'road-z'));
+  addFlat(mats.street, flatGeom(RING_N.x0, RING_N.x1, RING_N.z0, RING_N.z1, 0.05, 12, 'road-x'));
+  for (const sx of [-1, 1]) addFlat(mats.asp, flatGeom(sx > 0 ? IX : -IX - RING_W, sx > 0 ? IX + RING_W : -IX, IZ, IZ + RING_W, 0.05, 12)); // cantos
+  ROADS.push(RING_E, RING_W_, RING_N, { x0: -IX - RING_W, x1: -IX, z0: IZ, z1: IZ + RING_W }, { x0: IX, x1: IX + RING_W, z0: IZ, z1: IZ + RING_W });
   for (const r of [...CROSS, ...OUTER]) { addFlat(mats.street, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.05, 12, 'road-x')); ROADS.push(r); }
   // pátios de terracota entre os ministérios de cada par (como na maquete)
   for (const r of [{ x0: -112, x1: -102, z0: -146, z1: -138 }, { x0: 103, x1: 110, z0: -146, z1: -138 }]) addFlat(mats.terra, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.055, 4));
@@ -478,7 +491,7 @@ export function createEsplanada(): THREE.Group {
     addFlat(mats.asp, g);
     return [...L, ...R.reverse()];
   };
-  const loop = ribbon(ph([[782, 25], [690, 170], [610, 320], [552, 440], [515, 510], [497, 548], [503, 580], [532, 594], [600, 594], [850, 594], [1079, 594]]), 7, 0.071);
+  const loop = ribbon([[-130.5, IZ + 0.5], ...ph([[782, 25], [690, 170], [610, 320], [552, 440], [515, 510], [497, 548], [503, 580], [532, 594], [600, 594], [850, 594], [1079, 594]])], 7, 0.071);
   STREETS_E.push(loop);
   // Entrada e saída de carros do estacionamento diagonal: um acesso curto ligando a lateral dele (lado direito, perto da praça) à rua em diagonal
   const driveway = ph([[560, 246], [650, 238], [650, 292], [552, 288]]);
@@ -504,9 +517,9 @@ export function createEsplanada(): THREE.Group {
 
   // pátio de concreto em volta de cada prédio das margens
   for (const b of B) {
-    const x0 = Math.max(b.x0 - 5, b.x0 < 0 ? -HX : 97);
-    const x1 = Math.min(b.x1 + 5, b.x1 < 0 ? -97 : HX);
-    addFlat(mats.concrete, flatGeom(x0, x1, Math.max(b.z0 - 5, -175), Math.min(b.z1 + 5, HZ), 0.03, 4));
+    const x0 = Math.max(b.x0 - 5, b.x0 < 0 ? -IX : 97);
+    const x1 = Math.min(b.x1 + 5, b.x1 < 0 ? -97 : IX);
+    addFlat(mats.concrete, flatGeom(x0, x1, Math.max(b.z0 - 5, -175), Math.min(b.z1 + 5, IZ), 0.03, 4));
   }
   for (const [m, list] of flats) {
     const mesh = new THREE.Mesh(mergeGeometries(list, false)!, m);
@@ -656,11 +669,14 @@ export function createEsplanada(): THREE.Group {
   // ---- nomes dos lugares (barra de cima do jogo, mapa grande) ----
   PLACES.push(
     { name: 'LAGO DO CONGRESSO', rect: { x0: -42, x1: 42, z0: 48, z1: 92 } },
-    { name: 'CONGRESSO NACIONAL', rect: { x0: -60, x1: 60, z0: 44, z1: HZ } },
-    { name: 'EIXO MONUMENTAL OESTE', rect: { x0: -88, x1: -52, z0: -HZ, z1: HZ } },
-    { name: 'EIXO MONUMENTAL LESTE', rect: { x0: 52, x1: 88, z0: -HZ, z1: HZ } },
-    { name: 'MINISTÉRIOS (OESTE)', rect: { x0: -HX, x1: -88, z0: -HZ, z1: HZ } },
-    { name: 'MINISTÉRIOS (LESTE)', rect: { x0: 88, x1: HX, z0: -HZ, z1: HZ } },
+    { name: 'CONGRESSO NACIONAL', rect: { x0: -60, x1: 60, z0: 44, z1: IZ } },
+    { name: 'EIXO MONUMENTAL OESTE', rect: { x0: -88, x1: -52, z0: -IZ, z1: IZ } },
+    { name: 'EIXO MONUMENTAL LESTE', rect: { x0: 52, x1: 88, z0: -IZ, z1: IZ } },
+    { name: 'MINISTÉRIOS (OESTE)', rect: { x0: -IX, x1: -88, z0: -IZ, z1: IZ } },
+    { name: 'AV. PERIMETRAL', rect: { x0: -HX, x1: -IX, z0: -HZ, z1: HZ } },
+    { name: 'AV. PERIMETRAL', rect: { x0: IX, x1: HX, z0: -HZ, z1: HZ } },
+    { name: 'AV. PERIMETRAL', rect: { x0: -HX, x1: HX, z0: IZ, z1: HZ } },
+    { name: 'MINISTÉRIOS (LESTE)', rect: { x0: 88, x1: IX, z0: -IZ, z1: IZ } },
   );
 
   // ---- Congresso Nacional: o modelo do usuário (laje com as duas cúpulas, rampa e as duas torres) ----
