@@ -23,7 +23,7 @@ const OUTER: Rect[] = [{ x0: -HX, x1: -85, z0: -105, z1: -90 }, { x0: 85, x1: HX
 // estacionamentos: margens, e dois estreitos ao lado das torres do Congresso
 const lots: Rect[] = [
   { x0: 104, x1: 146, z0: -34, z1: -12 }, { x0: 102, x1: 118, z0: 100, z1: 136 },
-  { x0: 24.2, x1: 46.1, z0: 156.9, z1: 188 }, { x0: -42, x1: -25.3, z0: 143.4, z1: 188 }, // atrás do Congresso (como na foto aérea)
+  { x0: 24.2, x1: 46.1, z0: 156.9, z1: 188 }, { x0: -42, x1: -25.3, z0: 141.2, z1: 188 }, // atrás do Congresso (como na foto aérea)
 ];
 const CONG_FRONT = 70; // z da frente do Congresso
 const CONG_SCALE = 2; // o modelo do usuário tem ~44 unidades de comprimento: vira ~89 m (20% menor que os 111 m de antes)
@@ -412,9 +412,7 @@ export function createEsplanada(): THREE.Group {
   const LOT_D = ph([[440, 15], [695, 15], [530, 350], [440, 330]]);
   const STREETS_E: [number, number][][] = [
     ph([[435, 330], [472, 330], [472, 480], [435, 480]]), // corredor ao lado do estacionamento
-    ph([[762, 15], [803, 20], [800, 30], [740, 110], [705, 200], [660, 300], [600, 390], [565, 470], [545, 500], [515, 482], [600, 305], [650, 200], [700, 100]]), // rua em diagonal
     ph([[802, 105], [860, 105], [860, 590], [802, 590]]), // faixa de serviço ao lado do galpão de duas águas
-    ph([[497, 502], [520, 503], [522, 560], [548, 588], [858, 590], [858, 548], [1079, 548], [1079, 640], [815, 640], [815, 690], [762, 690], [745, 665], [715, 645], [620, 643], [540, 640], [500, 630], [475, 595], [475, 520]]), // rua curva e horizontal
     ph([[765, 640], [815, 640], [815, 1565], [765, 1565]]), // rua entre os prédios
   ];
   const PLAZA = ph([[763, 100], [807, 113], [807, 587], [520, 587], [520, 560]]);
@@ -440,18 +438,57 @@ export function createEsplanada(): THREE.Group {
   const CW = (cx: number, cy: number): [number, number] => [-(cx - 3) / 3.71, 194.7 - cy / 3.71];
   const cpoly = (pts: [number, number][]): [number, number][] => pts.map(([cx, cy]) => CW(cx, cy));
   const crect = (x0: number, y0: number, x1: number, y1: number): [number, number][] => cpoly([[x0, y0], [x1, y0], [x1, y1], [x0, y1]]);
+  // Entrada de carros do estacionamento da esquerda: sai da avenida, atravessa a calçada e entra pelo lado direito do estacionamento (a calçada da esquerda é a entrada de pedestres)
   const ASPH: [number, number][][] = [
-    crect(96, 186, 178, 249), // atrás do Congresso: via larga (a antiga e as calçadas dos lados viram asfalto)
-    crect(100, 184, 210, 199), // faixa até a avenida
-    crect(98, 174, 108, 186),
+    crect(151, 184, 210, 199), // faixa da avenida até o estacionamento
     crect(305, 184, 345, 198), // faixa da avenida até a rua da margem
     crect(353, 150, 361, 190), // rua da margem um pouco mais larga
-    cpoly([[335, 205], [385, 180], [412, 195], [395, 225], [345, 235]]), // liga a rua em diagonal à rua curva
   ];
   for (const pts of ASPH) { addFlat(mats.asp, flatPoly(pts, 0.07, 12)); STREETS_E.push(pts); }
+  // Rua em volta da praça: da rua em diagonal faz uma curva suave e segue reta até a margem (faixa de 7 m em volta de uma linha central suave)
+  const ribbon = (center: [number, number][], width: number, y: number): [number, number][] => {
+    const curve = new THREE.CatmullRomCurve3(center.map(([x, z]) => new THREE.Vector3(x, 0, z)), false, 'catmullrom', 0.5);
+    const pts = curve.getSpacedPoints(90);
+    const L: [number, number][] = [];
+    const R: [number, number][] = [];
+    pts.forEach((p, i) => {
+      const a = pts[Math.max(0, i - 1)]!;
+      const b = pts[Math.min(pts.length - 1, i + 1)]!;
+      const dx = b.x - a.x;
+      const dz = b.z - a.z;
+      const l = Math.hypot(dx, dz) || 1;
+      L.push([p.x - (dz / l) * (width / 2), p.z + (dx / l) * (width / 2)]);
+      R.push([p.x + (dz / l) * (width / 2), p.z - (dx / l) * (width / 2)]);
+    });
+    const pos: number[] = [];
+    for (let i = 0; i < pts.length - 1; i++) {
+      const q = [L[i]!, R[i]!, L[i + 1]!, R[i]!, R[i + 1]!, L[i + 1]!];
+      for (const [x, z] of q) pos.push(x, y, z);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    const uv: number[] = [];
+    for (let i = 0; i < pos.length; i += 3) uv.push(pos[i]! / 12, pos[i + 2]! / 12);
+    g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+    g.computeVertexNormals();
+    // garante a face voltada para cima
+    if (g.attributes.normal!.getY(0) < 0) {
+      const idx = new Uint32Array(pos.length / 3);
+      for (let i = 0; i < idx.length; i += 3) { idx[i] = i; idx[i + 1] = i + 2; idx[i + 2] = i + 1; }
+      g.setIndex(new THREE.BufferAttribute(idx, 1));
+      g.computeVertexNormals();
+    }
+    addFlat(mats.asp, g);
+    return [...L, ...R.reverse()];
+  };
+  const loop = ribbon(ph([[782, 25], [690, 170], [610, 320], [552, 440], [515, 510], [497, 548], [503, 580], [532, 594], [600, 594], [850, 594], [1079, 594]]), 7, 0.071);
+  STREETS_E.push(loop);
+  // Entrada e saída de carros do estacionamento diagonal: um acesso curto ligando a lateral dele (lado direito, perto da praça) à rua em diagonal
+  const driveway = ph([[560, 246], [650, 238], [650, 292], [552, 288]]);
+  addFlat(mats.asp, flatPoly(driveway, 0.08, 12));
+  STREETS_E.push(driveway);
   const GRASS: [number, number][][] = [
     [[-48.5, 128.2], [-23.5, 128.2], [-23.5, 124.4], [-48.5, 124.4]], // faixa de grama entre a via e a laje
-    cpoly([[372, 165], [381, 171], [364, 205], [354, 223], [342, 216], [350, 200]]), // grama ao lado da rua em diagonal
   ];
   for (const pts of GRASS) addFlat(mats.lawn, flatPoly(pts, 0.075, 12));
   const lotS: Rect = { x0: -146, x1: -137, z0: -23.8, z1: 16.1 };
