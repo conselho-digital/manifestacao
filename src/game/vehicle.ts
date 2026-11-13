@@ -6,6 +6,8 @@ import { emitSparks } from './sparks';
 
 /** Ganchos do jogo para eventos dos carros (o main avisa os outros jogadores de uma batida). */
 export const carEvents: { onCrash?: (x: number, z: number, k: number) => void } = {};
+/** gravidade dos veículos (m/s²): maior que a real (9,8) para o salto durar pouco e o carro cair com peso */
+const CAR_GRAVITY = 22;
 export const CAR_MODELS = ['blistac', 'buffalo', 'clover'] as const;
 /** modelo das viaturas da PM (só as viaturas; fora do sorteio do trânsito e da garagem) */
 export const POLICE_MODEL = 'duster';
@@ -854,12 +856,12 @@ export class Car {
     const gMean = (hF + hB + hL + hR) / 4;
     if (dt > 0) {
       // gravidade: sem chão embaixo o veículo segue a trajetória (velocidade vertical que a rampa deu) e cai
-      const vyN = this.vy - 9.8 * dt;
+      const vyN = this.vy - CAR_GRAVITY * dt;
       const yN = this.groundY + vyN * dt;
       this.landed = 0;
       if (this.driver !== null && yN > gMean + 0.003) {
         if (!this.airborne) { this.vy *= 0.6; this.airborne = true; } // ao decolar a suspensão guarda parte do impulso: salto menor que o físico puro
-        this.vy -= 9.8 * dt;
+        this.vy -= CAR_GRAVITY * dt;
         this.groundY += this.vy * dt;
       }
       else {

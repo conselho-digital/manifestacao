@@ -375,10 +375,10 @@ function terrainPieces(src: THREE.BufferGeometry): THREE.BufferGeometry[] {
       return [uvA.getX(a) + (uvA.getX(b) - uvA.getX(a)) * tx + (uvA.getX(c) - uvA.getX(a)) * tz, uvA.getY(a) + (uvA.getY(b) - uvA.getY(a)) * tx + (uvA.getY(c) - uvA.getY(a)) * tz];
     };
     const y = bb.min.y;
-    const piece = (x0: number, x1: number, z0: number, z1: number, fine: boolean): THREE.BufferGeometry | null => {
+    const piece = (x0: number, x1: number, z0: number, z1: number, fine: boolean, cell = CELL): THREE.BufferGeometry | null => {
       if (x1 - x0 < 1e-4 || z1 - z0 < 1e-4) return null;
-      const sx = fine ? Math.max(1, Math.ceil((x1 - x0) / CELL)) : 1;
-      const sz = fine ? Math.max(1, Math.ceil((z1 - z0) / CELL)) : 1;
+      const sx = fine ? Math.max(1, Math.ceil((x1 - x0) / cell)) : 1;
+      const sz = fine ? Math.max(1, Math.ceil((z1 - z0) / cell)) : 1;
       const p = new THREE.PlaneGeometry(x1 - x0, z1 - z0, sx, sz);
       p.rotateX(-Math.PI / 2);
       p.translate((x0 + x1) / 2, y, (z0 + z1) / 2);
@@ -392,7 +392,11 @@ function terrainPieces(src: THREE.BufferGeometry): THREE.BufferGeometry[] {
     const cx1 = Math.min(bb.max.x, R.x1);
     const cz0 = Math.max(bb.min.z, R.z0);
     const cz1 = Math.min(bb.max.z, R.z1);
-    const out = [piece(cx0, cx1, cz0, cz1, true), piece(bb.min.x, cx0, bb.min.z, bb.max.z, false), piece(cx1, bb.max.x, bb.min.z, bb.max.z, false), piece(cx0, cx1, bb.min.z, cz0, false), piece(cx0, cx1, cz1, bb.max.z, false)];
+    // malha fina (1,25 m) só na faixa dos lagos; no resto do rebaixo 3 m bastam (curvas suaves de 7 a 28 m)
+    const LB0 = Math.max(cz0, 44);
+    const LB1 = Math.min(cz1, 95);
+    const center = LB1 > LB0 ? [piece(cx0, cx1, cz0, LB0, true, 3), piece(cx0, cx1, LB0, LB1, true, CELL), piece(cx0, cx1, LB1, cz1, true, 3)] : [piece(cx0, cx1, cz0, cz1, true, 3)];
+    const out = [...center, piece(bb.min.x, cx0, bb.min.z, bb.max.z, false), piece(cx1, bb.max.x, bb.min.z, bb.max.z, false), piece(cx0, cx1, bb.min.z, cz0, false), piece(cx0, cx1, cz1, bb.max.z, false)];
     return out.filter((o): o is THREE.BufferGeometry => !!o).map((o) => { if (!o.attributes.normal) o.computeVertexNormals(); return o; });
   }
   // polígono qualquer: subdivide até as arestas ficarem com ~1,25 m
@@ -433,7 +437,7 @@ export function createEsplanada(): THREE.Group {
     pave: new THREE.MeshStandardMaterial({ color: 0xdcdcd6, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }),
     terra: new THREE.MeshStandardMaterial({ color: 0xa65a3c, roughness: 0.95 }),
     ribRoof: std(T.rib!),
-    gable: new THREE.MeshStandardMaterial({ color: 0x9a968c, roughness: 0.9, side: THREE.DoubleSide }),
+    gable: new THREE.MeshStandardMaterial({ color: 0x9a968c, roughness: 0.9 }),
     stone: new THREE.MeshStandardMaterial({ color: 0xb8b2a4, roughness: 0.9 }),
     roof: new THREE.MeshStandardMaterial({ color: 0xc7c3b9, roughness: 0.9 }),
     wall: new THREE.MeshStandardMaterial({ color: 0x3a3d3a, roughness: 1 }),
@@ -483,6 +487,42 @@ export function createEsplanada(): THREE.Group {
   diag(50, -110, 0, -140, 3);
   // água em frente ao Congresso, no formato da foto de satélite (x, z em metros; quem olha para o Congresso (norte, +z) vê +x à ESQUERDA, então x da foto está invertido): dois retângulos fora das ruas, uma peça de cada lado da
   // rampa (borda curva) e um lago ondulado logo abaixo da calçada; as ruas e a calçada ficam POR CIMA
+  const stoneRing = (pts: [number, number][], grow: number, y: number): THREE.BufferGeometry => {
+    // reamostra o contorno a cada ~1,2 m e liga cada ponto ao mesmo ponto deslocado para fora (grow m)
+    let area = 0;
+    pts.forEach(([x, z], i) => { const [x2, z2] = pts[(i + 1) % pts.length]!; area += x * z2 - x2 * z; });
+    const sg = area > 0 ? 1 : -1;
+    const rs: [number, number][] = [];
+    for (let i = 0; i < pts.length; i++) {
+      const [ax, az] = pts[i]!;
+      const [bx, bz] = pts[(i + 1) % pts.length]!;
+      const n = Math.max(1, Math.round(Math.hypot(bx - ax, bz - az) / 1.2));
+      for (let k = 0; k < n; k++) rs.push([ax + ((bx - ax) * k) / n, az + ((bz - az) * k) / n]);
+    }
+    const out: [number, number][] = rs.map(([x, z], i) => {
+      const [px, pz] = rs[(i + rs.length - 1) % rs.length]!;
+      const [nx, nz] = rs[(i + 1) % rs.length]!;
+      const ox = sg * (nz - pz);
+      const oz = sg * -(nx - px);
+      const l = Math.hypot(ox, oz) || 1;
+      return [x + (ox / l) * grow, z + (oz / l) * grow];
+    });
+    const pos: number[] = [];
+    for (let i = 0; i < rs.length; i++) {
+      const j = (i + 1) % rs.length;
+      const a = rs[i]!;
+      const b = rs[j]!;
+      const c = out[i]!;
+      const d = out[j]!;
+      // as faces precisam apontar para cima: o sentido do contorno muda de um lago para o outro
+      const up = (c[0] - a[0]) * (b[1] - a[1]) - (c[1] - a[1]) * (b[0] - a[0]);
+      const tri = up < 0 ? [a, c, b, b, c, d] : [a, b, c, b, d, c];
+      for (const [x, z] of tri as [number, number][]) pos.push(x, y, z);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    return g;
+  };
   const polyGeom = (pts: [number, number][], y: number, grow: number): THREE.BufferGeometry => {
     // margem de pedra = o mesmo contorno deslocado para fora (grow metros, pela média das normais dos dois lados de cada ponto)
     let area = 0;
@@ -504,7 +544,7 @@ export function createEsplanada(): THREE.Group {
     return g;
   };
   for (const pts of LAKE_POLYS) {
-    addFlat(mats.stone, polyGeom(pts, 0.045, 0.9));
+    city.add(new THREE.Mesh(applyTerrain(stoneRing(pts, 0.9, 0.045)), mats.stone)); // margem de pedra: só o anel (antes era o polígono inteiro, 54 mil triângulos)
     // a água é uma superfície plana, num nível absoluto (não segue o terreno): o chão do lago fica abaixo dela
     const wg = polyGeom(pts, WATER_Y, 0);
     const water = new THREE.Mesh(wg, mats.water);

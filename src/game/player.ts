@@ -797,6 +797,7 @@ export class Player {
     this.car = null;
     this.object.visible = true;
     this.animator?.setRide(null);
+    this.weaponVis?.setHidden(false); // entrar no veículo esconde a arma: ao sair ela volta (antes ficava escondida para sempre)
     this.mode = 'ground';
     this.animator?.play('idle');
   }
