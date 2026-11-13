@@ -230,7 +230,7 @@ export function createEsplanada(): THREE.Group {
   const lawns: Rect[] = [
     { x0: -52, x1: 52, z0: -172, z1: -108 }, // gramado sul (com caminhos em diagonal)
     { x0: -52, x1: 52, z0: -88, z1: -37 }, // gramado grande do meio
-    { x0: -52, x1: 52, z0: -18, z1: 50 }, // gramado central, até a margem do lago
+    { x0: -52, x1: 52, z0: -18, z1: 65 }, // gramado central, até a calçada do fim da rampa
   ];
   for (const r of lawns) { addFlat(mats.lawn, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.015, 12)); PARKS.push(r); }
   // faixas de gramado ao lado das avenidas (lado de fora)
@@ -262,25 +262,42 @@ export function createEsplanada(): THREE.Group {
   diag(50, -170, 0, -140, 3);
   diag(-50, -110, 0, -140, 3);
   diag(50, -110, 0, -140, 3);
-  // lago em frente ao Congresso (um de cada lado da rampa, margem irregular e cinza-azulada, como na maquete) e um lago estreito na ponta do gramado central
-  const lake = (cx: number, cz: number, hw: number, hh: number, y: number, phase: number, n = 4): THREE.BufferGeometry => {
-    const pts: THREE.Vector2[] = [];
-    for (let i = 0; i < 72; i++) {
-      const t = (i / 72) * Math.PI * 2;
-      const c = Math.cos(t);
-      const sn = Math.sin(t);
-      const w = 1 + 0.05 * Math.sin(5 * t + phase) + 0.03 * Math.sin(9 * t + phase * 2);
-      pts.push(new THREE.Vector2(cx + hw * w * Math.sign(c) * Math.abs(c) ** (2 / n), -(cz + hh * w * Math.sign(sn) * Math.abs(sn) ** (2 / n))));
-    }
-    const g = new THREE.ShapeGeometry(new THREE.Shape(pts));
+  // água em frente ao Congresso, no formato da foto de satélite (x, z em metros): dois retângulos fora das ruas, uma peça de cada lado da
+  // rampa (borda curva) e um lago ondulado logo abaixo da calçada; as ruas e a calçada ficam POR CIMA
+  const LAKES: [number, number][][] = [
+    [[-39.8, 90.4], [-29.8, 90.4], [-29.8, 62.6], [-39.8, 62.6]],
+    [[-25.5, 90.4], [-21.4, 90.4], [-19.2, 86.3], [-17.3, 81.9], [-15.5, 76.2], [-13.6, 71.8], [-25.5, 71.3]],
+    [[-6.1, 71.1], [26.7, 71.1], [26.7, 90.1], [21.1, 90.1], [17.8, 86.3], [13.1, 82.8], [4.7, 79.7], [-1.9, 77.5], [-5.6, 73.7]],
+    [[30.9, 90.4], [41.1, 90.4], [41.1, 62.6], [30.9, 62.6]],
+    [[-25.5, 61.2], [26.7, 61.2], [26.7, 54.6], [17.8, 56.9], [12.2, 57.4], [8.4, 55.1], [5.6, 49.9], [2.8, 48.5], [-4.7, 49.0], [-12.2, 49.9], [-18.8, 53.2], [-25.5, 54.6]],
+  ];
+  const polyGeom = (pts: [number, number][], y: number, grow: number): THREE.BufferGeometry => {
+    // margem de pedra = o mesmo contorno deslocado para fora (grow metros, pela média das normais dos dois lados de cada ponto)
+    let area = 0;
+    pts.forEach(([x, z], i) => { const [x2, z2] = pts[(i + 1) % pts.length]!; area += x * z2 - x2 * z; });
+    const sg = area > 0 ? 1 : -1;
+    const q = pts.map(([x, z], i) => {
+      const [px, pz] = pts[(i + pts.length - 1) % pts.length]!;
+      const [nx, nz] = pts[(i + 1) % pts.length]!;
+      const e1 = Math.hypot(x - px, z - pz) || 1;
+      const e2 = Math.hypot(nx - x, nz - z) || 1;
+      const ox = sg * ((z - pz) / e1 + (nz - z) / e2);
+      const oz = sg * (-(x - px) / e1 - (nx - x) / e2);
+      const l = Math.hypot(ox, oz) || 1;
+      return new THREE.Vector2(x + (ox / l) * grow, -(z + (oz / l) * grow));
+    });
+    const g = new THREE.ShapeGeometry(new THREE.Shape(q));
     g.rotateX(-Math.PI / 2);
     g.translate(0, y, 0);
     return g;
   };
-  // UM só lago, grande: do fim do gramado até a fachada, de um lado ao outro do prédio; as duas ruas e a calçada do fim da rampa passam POR CIMA dele
-  addFlat(mats.stone, lake(0, 70.5, 51, 21.4, 0.045, 0.9, 5));
-  addFlat(mats.water, lake(0, 70.5, 49.6, 20, 0.07, 0.9, 5));
-  PARKS.push({ x0: -48, x1: 48, z0: 52, z1: 89 });
+  for (const pts of LAKES) {
+    addFlat(mats.stone, polyGeom(pts, 0.045, 0.9));
+    addFlat(mats.water, polyGeom(pts, 0.07, 0));
+    const xs = pts.map((v) => v[0]);
+    const zs = pts.map((v) => v[1]);
+    PARKS.push({ x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs) });
+  }
   // calçada cinza-clara no fim da rampa, ligando as duas ruas
   addFlat(mats.pave, flatGeom(-26, 26, 65, 71, 0.1, 4));
   // duas ruas, mais juntas, que descem da fachada; sobre o lago (z > 49) ficam acima da água
@@ -469,7 +486,7 @@ export function createEsplanada(): THREE.Group {
 
   // ---- nomes dos lugares (barra de cima do jogo, mapa grande) ----
   PLACES.push(
-    { name: 'LAGO DO CONGRESSO', rect: { x0: -52, x1: 52, z0: 49, z1: 92 } },
+    { name: 'LAGO DO CONGRESSO', rect: { x0: -42, x1: 42, z0: 48, z1: 92 } },
     { name: 'CONGRESSO NACIONAL', rect: { x0: -60, x1: 60, z0: 44, z1: HZ } },
     { name: 'EIXO MONUMENTAL OESTE', rect: { x0: -88, x1: -52, z0: -HZ, z1: HZ } },
     { name: 'EIXO MONUMENTAL LESTE', rect: { x0: 52, x1: 88, z0: -HZ, z1: HZ } },
