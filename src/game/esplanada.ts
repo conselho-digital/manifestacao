@@ -396,23 +396,7 @@ export function createEsplanada(): THREE.Group {
     addBox(Math.min(xa, xb), Math.max(xa, xb), z - 0.1, z + 0.1, 1.15, '#d22a2a');
   };
   gate(36, 28.4, 147); // esquerda: poste no lado de fora
-  // cancela da entrada de carros do estacionamento da esquerda: atravessa a faixa que vem da avenida (poste do lado de fora da pista)
-  {
-    const gx = -44.2;
-    const za = 145.7;
-    const zb = 141.5;
-    const len = Math.abs(za - zb);
-    const arm = new THREE.BoxGeometry(len, 0.14, 0.14);
-    const uv = arm.attributes.uv!;
-    for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * len);
-    arm.rotateY(Math.PI / 2);
-    arm.translate(gx, 1.05, (za + zb) / 2);
-    arms.push(arm);
-    posts.push(new THREE.BoxGeometry(0.4, 1.3, 0.4).translate(gx, 0.65, za));
-    posts.push(new THREE.BoxGeometry(0.44, 0.12, 0.44).translate(gx, 1.36, za));
-    addBox(gx - 0.25, gx + 0.25, za - 0.25, za + 0.25, 1.3, '#30343a');
-    addBox(gx - 0.1, gx + 0.1, zb, za, 1.15, '#d22a2a');
-  }
+  // (a entrada de carros do estacionamento da esquerda ficou sem cancela e sem poste, a pedido)
   const postMesh = new THREE.Mesh(mergeGeometries(posts, false)!, new THREE.MeshStandardMaterial({ color: 0xf2c200, roughness: 0.7 }));
   const armMesh = new THREE.Mesh(mergeGeometries(arms, false)!, new THREE.MeshStandardMaterial({ map: T.stripes!, roughness: 0.6 }));
   postMesh.castShadow = armMesh.castShadow = true;
