@@ -104,6 +104,18 @@ function makeTextures(): Record<string, THREE.CanvasTexture> {
     g.fillRect(0, 6, 128, 2);
     g.fillRect(0, 120, 128, 2);
   });
+  // estacionamento organizado: a largura do lote vira u (0..1): vaga (30%) + corredor (40%) + vaga (30%); v = 5,2 m (2 vagas de 2,6 m)
+  const lotBays = canvasTex(128, 64, (g) => {
+    noiseFill(g, 128, 64, [88, 90, 95], 12, r, 400);
+    g.fillStyle = 'rgba(238,238,238,.92)';
+    for (const [x0, x1] of [[0, 38], [90, 128]] as const) {
+      for (const y of [0, 32]) g.fillRect(x0, y, x1 - x0, 2);
+    }
+    g.fillRect(38, 0, 2, 64); // limite do fundo da vaga, lado esquerdo
+    g.fillRect(88, 0, 2, 64);
+    g.fillRect(0, 0, 2, 64);
+    g.fillRect(126, 0, 2, 64);
+  });
   // telhado de galpão com nervuras (ladrilho de 8 m, nervuras a cada 1 m)
   const rib = canvasTex(64, 64, (g) => {
     g.fillStyle = '#c4c5c0';
@@ -156,7 +168,7 @@ function makeTextures(): Record<string, THREE.CanvasTexture> {
   const stripes = canvasTex(64, 8, (g) => { // cancela: listras vermelhas e brancas (1 m = 4 listras)
     for (let i = 0; i < 4; i++) { g.fillStyle = i % 2 ? '#f2f2f2' : '#d22a2a'; g.fillRect(i * 16, 0, 16, 8); }
   });
-  return { grass, lawn, concrete, avenue, street, lot, rib, asphalt, stripes, ministry, warehouse, plain, palace };
+  return { grass, lawn, concrete, avenue, street, lot, lotBays, rib, asphalt, stripes, ministry, warehouse, plain, palace };
 }
 
 interface Bld { x0: number; x1: number; z0: number; z1: number; h: number; tex: 'ministry' | 'warehouse' | 'plain' | 'palace'; core?: boolean; roof?: 'rib' | 'gable' }
@@ -223,6 +235,7 @@ export function createEsplanada(): THREE.Group {
     avenue: std(T.avenue!, 0xffffff, 0.9),
     street: std(T.street!, 0xffffff, 0.9),
     lot: std(T.lot!, 0xffffff, 0.9),
+    lotBays: std(T.lotBays!, 0xffffff, 0.9),
     water: new THREE.MeshStandardMaterial({ color: 0x61797a, roughness: 0.15, metalness: 0.15, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
     asp: std(T.asphalt!, 0xffffff, 0.9),
     streetBr: ((): THREE.MeshStandardMaterial => { const m = std(T.street!, 0xffffff, 0.9); m.polygonOffset = true; m.polygonOffsetFactor = -4; m.polygonOffsetUnits = -4; return m; })(),
@@ -335,7 +348,25 @@ export function createEsplanada(): THREE.Group {
   // pátios de terracota entre os ministérios de cada par (como na maquete)
   for (const r of [{ x0: -112, x1: -102, z0: -146, z1: -138 }, { x0: 103, x1: 110, z0: -146, z1: -138 }]) addFlat(mats.terra, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.055, 4));
   // estacionamentos (margem leste e oeste)
-  for (const r of lots) addFlat(mats.lot, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.045, 21));
+  // estacionamentos de 14 m ou mais de largura: todo o lote pintado com vagas dos dois lados e corredor no meio (o sentido segue o lado maior)
+  const lotGeom = (r: Rect): THREE.BufferGeometry => {
+    const g = flatGeom(r.x0, r.x1, r.z0, r.z1, 0.045, 21);
+    const pos = g.attributes.position!;
+    const uv = g.attributes.uv!;
+    const alongZ = r.z1 - r.z0 >= r.x1 - r.x0;
+    for (let i = 0; i < pos.count; i++) {
+      const x = pos.getX(i);
+      const z = pos.getZ(i);
+      if (alongZ) uv.setXY(i, (x - r.x0) / (r.x1 - r.x0), (z - r.z0) / 5.2);
+      else uv.setXY(i, (z - r.z0) / (r.z1 - r.z0), (x - r.x0) / 5.2);
+    }
+    return g;
+  };
+  for (const r of lots) {
+    const w = Math.min(r.x1 - r.x0, r.z1 - r.z0);
+    if (w >= 14) addFlat(mats.lotBays, lotGeom(r));
+    else addFlat(mats.lot, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.045, 21));
+  }
 
   // ---- ministérios e demais prédios ----
   const B: Bld[] = [];
@@ -454,7 +485,7 @@ export function createEsplanada(): THREE.Group {
   const crect = (x0: number, y0: number, x1: number, y1: number): [number, number][] => cpoly([[x0, y0], [x1, y0], [x1, y1], [x0, y1]]);
   // Entrada de carros do estacionamento da esquerda: sai da avenida, atravessa a calçada e entra pelo lado direito do estacionamento (a calçada da esquerda é a entrada de pedestres)
   const ASPH: [number, number][][] = [
-    crect(163, 184, 210, 199), // faixa da avenida até o estacionamento (entrada de carros)
+    crect(127, 184, 210, 199), // faixa da avenida até o corredor do estacionamento (entrada de carros)
   ];
   for (const pts of ASPH) { addFlat(mats.asp, flatPoly(pts, 0.07, 12)); STREETS_E.push(pts); }
   // Rua em volta da praça: da rua em diagonal faz uma curva suave e segue reta até a margem (faixa de 7 m em volta de uma linha central suave)
