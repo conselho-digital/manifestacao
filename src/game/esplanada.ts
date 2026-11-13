@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { addBox, COLLIDERS, PARKS, PLACES, ROADS, TREES, type Rect } from './map';
+import { addBox, COLLIDERS, PARKS, PLACES, ROADS, setTerrainHeight, TREES, type Rect } from './map';
 import { FAR_TREES, registerCullChildren } from './culling';
 import { HEIGHT, makeTrees, type Species, type TreeSpec } from './trees';
 
@@ -217,7 +217,136 @@ function flatGeom(x0: number, x1: number, z0: number, z1: number, y: number, til
   return g;
 }
 
+// ---- terreno rebaixado em volta do Congresso (a laje fica com o teto na altura das avenidas) ----
+const PIT_D = 4.6; // profundidade: o teto da laje tem 4,6 m
+const PIT_X = 52; // começa na calçada interna das avenidas (|x| = 52)
+const PIT_XB = 45; // talude lateral: do |x| 52 ao 45 (7 m) chega ao fundo
+const PIT_Z0 = 3; // rampa do sul: z 3 → 28 (25 m)
+const PIT_Z1 = 28;
+const PIT_Z2 = 126; // fundo: z 28 → 126 (logo depois da laje, que termina em z 124); rampa do norte: z 126 → 141 (as torres de trás ficam no nível da avenida)
+const PIT_Z3 = 141;
+const smooth = (t: number): number => { const c = Math.min(1, Math.max(0, t)); return c * c * (3 - 2 * c); };
+export function pitHeight(x: number, z: number): number {
+  const ax = Math.abs(x);
+  if (ax >= PIT_X || z <= PIT_Z0 || z >= PIT_Z3) return 0;
+  return -PIT_D * smooth((PIT_X - ax) / (PIT_X - PIT_XB)) * smooth((z - PIT_Z0) / (PIT_Z1 - PIT_Z0)) * smooth((PIT_Z3 - z) / (PIT_Z3 - PIT_Z2));
+}
+const PIT_REGION = { x0: -53, x1: 53, z0: 2, z1: 142 };
+
+/** Divide cada triângulo em 4, k vezes (o mesmo k para todos: sem rachaduras entre vizinhos da mesma peça). */
+function subdivide(g: THREE.BufferGeometry, k: number): THREE.BufferGeometry {
+  let pos = Array.from((g.attributes.position as THREE.BufferAttribute).array);
+  let uv = g.attributes.uv ? Array.from((g.attributes.uv as THREE.BufferAttribute).array) : null;
+  for (let it = 0; it < k; it++) {
+    const np: number[] = [];
+    const nu: number[] | null = uv ? [] : null;
+    for (let t = 0; t < pos.length / 9; t++) {
+      const P = [0, 1, 2].map((i) => [pos[t * 9 + i * 3]!, pos[t * 9 + i * 3 + 1]!, pos[t * 9 + i * 3 + 2]!]);
+      const U = uv ? [0, 1, 2].map((i) => [uv![t * 6 + i * 2]!, uv![t * 6 + i * 2 + 1]!]) : null;
+      const mid = (a: number[], b: number[]): number[] => a.map((v, i) => (v + b[i]!) / 2);
+      const pm = [mid(P[0]!, P[1]!), mid(P[1]!, P[2]!), mid(P[2]!, P[0]!)];
+      const um = U ? [mid(U[0]!, U[1]!), mid(U[1]!, U[2]!), mid(U[2]!, U[0]!)] : null;
+      // vértices dos 4 triângulos filhos: cantos 0,1,2 e meios m0 (0-1), m1 (1-2), m2 (2-0)
+      const V = [P[0]!, P[1]!, P[2]!, pm[0]!, pm[1]!, pm[2]!];
+      const W = U ? [U[0]!, U[1]!, U[2]!, um![0]!, um![1]!, um![2]!] : null;
+      for (const idx of [[0, 3, 5], [3, 1, 4], [5, 4, 2], [3, 4, 5]]) {
+        for (const i of idx) { np.push(...V[i]!); if (nu && W) nu.push(...W[i]!); }
+      }
+    }
+    pos = np;
+    if (uv && nu) uv = nu;
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  if (uv) out.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  return out;
+}
+
+/** Aplica o terreno (altura e normal) a uma geometria sem índice. */
+function applyTerrain(g: THREE.BufferGeometry): THREE.BufferGeometry {
+  const pos = g.attributes.position as THREE.BufferAttribute;
+  const nor = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i);
+    const z = pos.getZ(i);
+    pos.setY(i, pos.getY(i) + pitHeight(x, z));
+    const e = 0.4;
+    const hx = (pitHeight(x + e, z) - pitHeight(x - e, z)) / (2 * e);
+    const hz = (pitHeight(x, z + e) - pitHeight(x, z - e)) / (2 * e);
+    const l = Math.hypot(hx, 1, hz);
+    nor[i * 3] = -hx / l;
+    nor[i * 3 + 1] = 1 / l;
+    nor[i * 3 + 2] = -hz / l;
+  }
+  g.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  return g;
+}
+
+/** Prepara uma peça de chão: se toca a área rebaixada, é cortada em retângulos (o do meio com malha fina) ou subdividida e recebe o terreno. */
+function terrainPieces(src: THREE.BufferGeometry): THREE.BufferGeometry[] {
+  const g0 = src.index ? src.toNonIndexed() : src;
+  g0.computeBoundingBox();
+  const bb = g0.boundingBox!;
+  const R = PIT_REGION;
+  if (bb.max.x <= R.x0 || bb.min.x >= R.x1 || bb.max.z <= R.z0 || bb.min.z >= R.z1) return [g0];
+  const pos = g0.attributes.position as THREE.BufferAttribute;
+  const uvA = g0.attributes.uv as THREE.BufferAttribute | undefined;
+  // retângulo alinhado aos eixos com uv afim (quase todo o chão): corta na área rebaixada
+  let rect = false;
+  if (uvA && pos.count === 6 && Math.abs(bb.max.y - bb.min.y) < 1e-6) {
+    const xs = new Set<number>();
+    const zs = new Set<number>();
+    for (let i = 0; i < 6; i++) { xs.add(Math.round(pos.getX(i) * 1000)); zs.add(Math.round(pos.getZ(i) * 1000)); }
+    rect = xs.size === 2 && zs.size === 2;
+  }
+  if (rect && uvA) {
+    const at = (x: number, z: number): [number, number] => {
+      let a = -1, b = -1, c = -1;
+      for (let i = 0; i < 6; i++) {
+        const px = pos.getX(i);
+        const pz = pos.getZ(i);
+        if (Math.abs(px - bb.min.x) < 1e-4 && Math.abs(pz - bb.min.z) < 1e-4) a = i;
+        if (Math.abs(px - bb.max.x) < 1e-4 && Math.abs(pz - bb.min.z) < 1e-4) b = i;
+        if (Math.abs(px - bb.min.x) < 1e-4 && Math.abs(pz - bb.max.z) < 1e-4) c = i;
+      }
+      const tx = (x - bb.min.x) / (bb.max.x - bb.min.x);
+      const tz = (z - bb.min.z) / (bb.max.z - bb.min.z);
+      return [uvA.getX(a) + (uvA.getX(b) - uvA.getX(a)) * tx + (uvA.getX(c) - uvA.getX(a)) * tz, uvA.getY(a) + (uvA.getY(b) - uvA.getY(a)) * tx + (uvA.getY(c) - uvA.getY(a)) * tz];
+    };
+    const y = bb.min.y;
+    const piece = (x0: number, x1: number, z0: number, z1: number, fine: boolean): THREE.BufferGeometry | null => {
+      if (x1 - x0 < 1e-4 || z1 - z0 < 1e-4) return null;
+      const sx = fine ? Math.max(1, Math.ceil((x1 - x0) / 1.75)) : 1;
+      const sz = fine ? Math.max(1, Math.ceil((z1 - z0) / 1.75)) : 1;
+      const p = new THREE.PlaneGeometry(x1 - x0, z1 - z0, sx, sz);
+      p.rotateX(-Math.PI / 2);
+      p.translate((x0 + x1) / 2, y, (z0 + z1) / 2);
+      const pp = p.attributes.position as THREE.BufferAttribute;
+      const uu = p.attributes.uv as THREE.BufferAttribute;
+      for (let i = 0; i < pp.count; i++) { const [u, v] = at(pp.getX(i), pp.getZ(i)); uu.setXY(i, u, v); }
+      const ng = p.toNonIndexed();
+      return fine ? applyTerrain(ng) : ng;
+    };
+    const cx0 = Math.max(bb.min.x, R.x0);
+    const cx1 = Math.min(bb.max.x, R.x1);
+    const cz0 = Math.max(bb.min.z, R.z0);
+    const cz1 = Math.min(bb.max.z, R.z1);
+    const out = [piece(cx0, cx1, cz0, cz1, true), piece(bb.min.x, cx0, bb.min.z, bb.max.z, false), piece(cx1, bb.max.x, bb.min.z, bb.max.z, false), piece(cx0, cx1, bb.min.z, cz0, false), piece(cx0, cx1, cz1, bb.max.z, false)];
+    return out.filter((o): o is THREE.BufferGeometry => !!o).map((o) => { if (!o.attributes.normal) o.computeVertexNormals(); return o; });
+  }
+  // polígono qualquer: subdivide até as arestas ficarem com ~1,75 m
+  let maxE = 0;
+  for (let t = 0; t < pos.count / 3; t++) for (let e = 0; e < 3; e++) {
+    const a = t * 3 + e;
+    const b = t * 3 + ((e + 1) % 3);
+    maxE = Math.max(maxE, Math.hypot(pos.getX(a) - pos.getX(b), pos.getZ(a) - pos.getZ(b)));
+  }
+  const k = Math.min(6, Math.max(0, Math.ceil(Math.log2(maxE / 1.75))));
+  return [applyTerrain(subdivide(g0, k))];
+}
+
 export function createEsplanada(): THREE.Group {
+  setTerrainHeight(pitHeight);
   const city = new THREE.Group();
   COLLIDERS.length = 0;
   ROADS.length = 0;
@@ -571,7 +700,8 @@ export function createEsplanada(): THREE.Group {
     addFlat(mats.concrete, flatGeom(x0, x1, Math.max(b.z0 - 5, -175), Math.min(b.z1 + 5, IZ), 0.03, 4));
   }
   for (const [m, list] of flats) {
-    const mesh = new THREE.Mesh(mergeGeometries(list, false)!, m);
+    const pieces = list.flatMap((g) => terrainPieces(g)).map((g) => { if (!g.attributes.normal) g.computeVertexNormals(); return g; });
+    const mesh = new THREE.Mesh(mergeGeometries(pieces, false)!, m);
     mesh.receiveShadow = true;
     city.add(mesh);
   }
@@ -710,7 +840,7 @@ export function createEsplanada(): THREE.Group {
   for (let i = 0; i < 40; i++) trees.push({ x: -50 + rnd() * 100, z: -170 + rnd() * 62, h: HEIGHT.bush[0] + rnd() * (HEIGHT.bush[1] - HEIGHT.bush[0]), species: 'bush' });
   const nearBuilding = (x: number, z: number, m: number): boolean => B.some((b) => x > b.x0 - m && x < b.x1 + m && z > b.z0 - m && z < b.z1 + m);
   const crown: Record<string, number> = { oak: 0.4, pine: 0.2, maple: 0.3, birch: 0.2, bush: 0 };
-  const blocked = (x: number, z: number): boolean => [...ROADS, ...lots].some((r) => x > r.x0 - 1.5 && x < r.x1 + 1.5 && z > r.z0 - 1.5 && z < r.z1 + 1.5) || [LOT_D, ...STREETS_E].some((pts) => inPoly(x, z, pts));
+  const blocked = (x: number, z: number): boolean => pitHeight(x, z) < -0.1 || [...ROADS, ...lots].some((r) => x > r.x0 - 1.5 && x < r.x1 + 1.5 && z > r.z0 - 1.5 && z < r.z1 + 1.5) || [LOT_D, ...STREETS_E].some((pts) => inPoly(x, z, pts));
   const placed = trees.filter((t) => t.species === 'bush' || (!nearBuilding(t.x, t.z, crown[t.species]! * t.h + 0.4) && !blocked(t.x, t.z)));
   const treeGroup = makeTrees(placed);
   city.add(treeGroup);
@@ -752,8 +882,8 @@ export function createEsplanada(): THREE.Group {
     for (const m of meshes) {
       const g = m.geometry.clone();
       g.applyMatrix4(m.matrixWorld);
-      if (isTower(wbox.get(m)!)) g.scale(1, 0.5, 1);
-      else g.translate(0, -drop, 0);
+      if (isTower(wbox.get(m)!)) g.scale(1, 0.5, 1); // as torres de trás ficam no nível da avenida
+      else g.translate(0, -drop - PIT_D, 0); // a laje desce até o chão rebaixado: o teto fica na altura das avenidas
       m.geometry = g;
       m.removeFromParent();
       m.position.set(0, 0, 0);
@@ -774,11 +904,11 @@ export function createEsplanada(): THREE.Group {
     const dark = parts.filter((p) => p.dark);
     for (const p of dark) addBox(p.box.min.x, p.box.max.x, p.box.min.z, p.box.max.z, p.box.max.y, '#8a8d8d');
     // a laje (a peça branca de maior área) vira uma caixa de ~6 m; as cúpulas ficam em cima dela (não bloqueiam)
-    const whites = parts.filter((p) => !p.dark && p.box.max.y > 1).sort((x, y) => y.area - x.area);
+    const whites = parts.filter((p) => !p.dark && p.box.max.y > 1 - PIT_D).sort((x, y) => y.area - x.area);
     const slab = whites[0];
     // a rampa (a ponta da peça maior, na frente) não bloqueia: a caixa começa na fachada de vidro
     const facadeZ = Math.min(...whites.slice(1).filter((p) => p.area > 200).map((p) => p.box.min.z));
-    if (slab) addBox(slab.box.min.x, slab.box.max.x, Number.isFinite(facadeZ) ? Math.max(slab.box.min.z, facadeZ) : slab.box.min.z, slab.box.max.z, Math.min(slab.box.max.y, 7), '#cfcfcf');
+    if (slab) addBox(slab.box.min.x, slab.box.max.x, Number.isFinite(facadeZ) ? Math.max(slab.box.min.z, facadeZ) : slab.box.min.z, slab.box.max.z, 0, '#cfcfcf', -PIT_D); // teto da laje na altura das avenidas: dá para andar em cima
   }).catch((e) => console.warn('Congresso não carregou:', e));
 
   return city;

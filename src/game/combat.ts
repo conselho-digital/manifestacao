@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COLLIDERS, rayBox } from './map';
+import { COLLIDERS, rayBox, terrainHeight } from './map';
 import { playClick, playShotAt } from './audio';
 import { Tracers } from './weapons';
 import { hittables } from './vehicle';
@@ -329,7 +329,7 @@ export class Combat {
     let best = maxT;
     let id: string | null = null;
     let head = false;
-    if (d.y < -1e-4) { const tg = -o.y / d.y; if (tg > 0 && tg < best) best = tg; }
+    if (d.y < -1e-4) { const tg = (terrainHeight(o.x, o.z) - o.y) / d.y; if (tg > 0 && tg < best) best = tg; } // chão (acompanha o terreno rebaixado)
     for (const b of COLLIDERS) {
       const t = rayBox(o.x, o.y, o.z, d.x, d.y, d.z, b.minX, b.bottom ?? 0, b.minZ, b.maxX, b.top, b.maxZ);
       if (t !== null && t < best) best = t;

@@ -49,6 +49,10 @@ export function placeName(x: number, z: number): string {
   return z >= 0 ? 'QUARTEIRÃO NORTE' : 'QUARTEIRÃO SUL';
 }
 
+/** Altura do chão em (x, z): 0 em todo lugar, menos onde o mapa tem um terreno rebaixado (Esplanada: a área do Congresso). */
+export let terrainHeight: (x: number, z: number) => number = () => 0;
+export function setTerrainHeight(f: (x: number, z: number) => number): void { terrainHeight = f; }
+
 export const COLLIDERS: Box[] = [];
 /** Copas das árvores (esferas), só para a câmera não entrar nelas. */
 export const TREES: { x: number; y: number; z: number; r: number }[] = [];

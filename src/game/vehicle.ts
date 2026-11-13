@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { COLLIDERS, MAP } from './map';
+import { COLLIDERS, MAP, terrainHeight } from './map';
 import { EngineSound, ScrapeSound, SirenSound, playCrashAt } from './audio';
 import { emitSparks } from './sparks';
 
@@ -769,7 +769,7 @@ export class Car {
       const k = Math.exp(-dt * 3);
       this.pushX *= k;
       this.pushZ *= k;
-      this.root.position.set(this.x, 0, this.z);
+      this.root.position.set(this.x, terrainHeight(this.x, this.z), this.z);
     }
     if (this.wobble > 0) {
       this.wobble = Math.max(0, this.wobble - dt * 2.5);
@@ -829,7 +829,7 @@ export class Car {
   }
 
   private apply(steer: number, dt = 0): void {
-    this.root.position.set(this.x, 0, this.z);
+    this.root.position.set(this.x, terrainHeight(this.x, this.z), this.z);
     this.root.rotation.y = this.heading;
     this.spin += (this.speed * dt) / (this.bike ? 0.33 : 0.36);
     if (!this.rearLocked) this.rearSpin = this.spin; // freio de mão: as rodas traseiras ficam travadas

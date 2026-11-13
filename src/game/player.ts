@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COLLIDERS, MAP, rayBox, TREES, type Box } from './map';
+import { COLLIDERS, MAP, rayBox, terrainHeight, TREES, type Box } from './map';
 import type { InputState } from './input';
 import { CARS, hittables, type Car } from './vehicle';
 import { ARMED_CODE, facesAim, isBatLike, isKnifeLike, type Animator, type Armed } from './anim';
@@ -419,7 +419,8 @@ export class Player {
     // Vertical
     const support = supportHeight(pos.x, pos.z, pos.y);
     if (this.mode === 'ground') {
-      if (pos.y > support + 0.05) { this.mode = 'air'; this.vy = 0; } // saiu de uma borda
+      // em ladeira (terreno rebaixado) o pé acompanha o chão ao descer; só vira queda numa borda de caixa
+      if (pos.y > support + 0.05 + (support <= terrainHeight(pos.x, pos.z) + 1e-6 ? 0.7 : 0)) { this.mode = 'air'; this.vy = 0; } // saiu de uma borda
       else pos.y = support;
     }
     if (this.mode === 'air') {
@@ -749,15 +750,16 @@ export class Player {
     if (this.koFront) {
       // voo em arco; no chão desliza e o corpo vai ficando mole
       this.koVy += GRAVITY * dt;
-      pos.y = Math.max(0, pos.y + this.koVy * dt);
-      const ground = pos.y <= 0;
+      const gy = terrainHeight(pos.x, pos.z);
+      pos.y = Math.max(gy, pos.y + this.koVy * dt);
+      const ground = pos.y <= gy;
       if (ground) { this.koVy = 0; this.koVel.multiplyScalar(Math.exp(-dt * 3.5)); }
       this.animator?.setFlail(ground ? Math.max(0, 1 - (this.koT - 0.6) * 1.2) : 1);
       if (this.koT > 2.2 && this.animator?.name !== 'getup_front') { this.animator?.setFlail(0); this.animator?.play('getup_front'); }
       if (this.koT > 3.5) this.endKo();
     } else {
       this.koVel.multiplyScalar(Math.exp(-dt * 2.4));
-      pos.y = Math.max(0, pos.y - 20 * dt);
+      pos.y = Math.max(terrainHeight(pos.x, pos.z), pos.y - 20 * dt);
       const lie = this.koFace ? 1.5 : 1.3; // fica caído um instante antes de levantar
       if (this.koT > lie) this.animator?.play(this.koFace ? 'getup_front' : 'getup');
       if (this.koT > lie + this.clipLen(this.koFace ? 'getup_front' : 'getup', 1.3)) this.endKo();
@@ -965,7 +967,7 @@ export class Player {
       if (t > 0 && t < d) d = Math.max(1.6, t - 0.1);
     }
     const desired = from.clone().addScaledVector(back, d);
-    desired.y = Math.max(desired.y, 0.35);
+    desired.y = Math.max(desired.y, terrainHeight(desired.x, desired.z) + 0.35);
     // segue rápido (a câmera acompanha o dedo sem "atraso" perceptível)
     if (snap) camera.position.copy(desired); // voo de entrada: o main mistura com a câmera do menu
     else camera.position.lerp(desired, 1 - Math.exp(-dt * 22));
@@ -981,7 +983,7 @@ export class Player {
 
 /** Altura do chão sob (x, z): 0 ou o topo de uma caixa que está abaixo dos pés. */
 function supportHeight(x: number, z: number, feetY: number): number {
-  let h = 0;
+  let h = terrainHeight(x, z);
   for (const b of COLLIDERS) {
     if ((b.bottom ?? 0) <= feetY + STEP && x >= b.minX - 0.1 && x <= b.maxX + 0.1 && z >= b.minZ - 0.1 && z <= b.maxZ + 0.1 && b.top <= feetY + STEP) {
       h = Math.max(h, b.top);
