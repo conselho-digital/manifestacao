@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { COLLIDERS, MAP, rayBox, terrainHeight, TREES, type Box } from './map';
+import { COLLIDERS, MAP, rayBox, terrainHeight, TREES, waterDepth, type Box } from './map';
 import type { InputState } from './input';
 import { CARS, hittables, type Car } from './vehicle';
 import { ARMED_CODE, facesAim, isBatLike, isKnifeLike, type Animator, type Armed } from './anim';
@@ -407,7 +407,8 @@ export class Player {
         : this.armed === 'aim' || this.armed === 'pistol_aim' ? AIM_SPEED
           : input.sprint ? SPRINT_SPEED : facesAim(this.armed) ? AIM_SPEED : WALK_SPEED;
       const dir = move.clone().normalize();
-      this.moveHoriz(dir.x * speed * dt, dir.z * speed * dt);
+      const wade = waterDepth(pos.x, pos.z) > 0.05 ? 0.6 : 1; // dentro da água rasa anda mais devagar
+      this.moveHoriz(dir.x * speed * wade * dt, dir.z * speed * wade * dt);
       this.heading = Math.atan2(dir.x, dir.z);
       // direção em relação ao corpo quando ele olha para onde a câmera aponta
       this.moveF = dir.x * Math.sin(yaw) + dir.z * Math.cos(yaw);

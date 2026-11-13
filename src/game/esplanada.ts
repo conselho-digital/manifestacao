@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { addBox, COLLIDERS, PARKS, PLACES, ROADS, setTerrainHeight, TREES, type Rect } from './map';
+import { addBox, COLLIDERS, PARKS, PLACES, ROADS, setTerrainHeight, setWaterDepth, TREES, type Rect } from './map';
 import { FAR_TREES, registerCullChildren } from './culling';
 import { HEIGHT, makeTrees, type Species, type TreeSpec } from './trees';
 
@@ -226,18 +226,72 @@ const PIT_Z1 = 28;
 const PIT_Z2 = 160; // fundo: z 28 → 160 (passa pelas torres de trás); a rampa de subida só começa depois delas: z 160 → 188 (28 m)
 const PIT_Z3 = 188;
 const smooth = (t: number): number => { const c = Math.min(1, Math.max(0, t)); return c * c * (3 - 2 * c); };
+// lagos rasos em frente ao Congresso (x, z em metros; quem olha para o Congresso vê +x à ESQUERDA, então o x da foto está invertido)
+const LAKE_POLYS: [number, number][][] = [
+  [[39.8, 90.4], [29.8, 90.4], [29.8, 62.6], [39.8, 62.6]],
+  [[25.5, 90.4], [21.4, 90.4], [19.2, 86.3], [17.3, 81.9], [15.5, 76.2], [13.6, 71.8], [25.5, 71.3]],
+  [[6.1, 71.1], [-26.7, 71.1], [-26.7, 90.1], [-21.1, 90.1], [-17.8, 86.3], [-13.1, 82.8], [-4.7, 79.7], [1.9, 77.5], [5.6, 73.7]],
+  [[-30.9, 90.4], [-41.1, 90.4], [-41.1, 62.6], [-30.9, 62.6]],
+  [[25.5, 61.2], [-26.7, 61.2], [-26.7, 54.6], [-17.8, 56.9], [-12.2, 57.4], [-8.4, 55.1], [-5.6, 49.9], [-2.8, 48.5], [4.7, 49.0], [12.2, 49.9], [18.8, 53.2], [25.5, 54.6]],
+];
+const WATER_Y = -PIT_D - 0.25; // superfície da água: 25 cm abaixo da margem
+const LAKE_DEPTH = 0.5; // profundidade máxima (m) abaixo da superfície: dá para andar dentro
+const LAKE_IN = 3; // caimento de dentro (da borda da água ao fundo)
+const LAKE_OUT = 1.3; // caimento de fora (da margem à borda da água)
+// faixas onde o chão fica seco, na altura da margem: as duas ruas, a rua e a calçada do fim da rampa (passam por cima da água, como pontes)
+const DRY: Rect[] = [{ x0: -31, x1: -26, z0: 40, z1: 95 }, { x0: 26, x1: 31, z0: 40, z1: 95 }, { x0: -26, x1: 26, z0: 61.2, z1: 71.5 }];
+function segDist(x: number, z: number, ax: number, az: number, bx: number, bz: number): number {
+  const dx = bx - ax;
+  const dz = bz - az;
+  const t = Math.max(0, Math.min(1, ((x - ax) * dx + (z - az) * dz) / (dx * dx + dz * dz || 1)));
+  return Math.hypot(x - (ax + t * dx), z - (az + t * dz));
+}
+/** Distância assinada até a borda de um lago (positiva dentro). */
+function lakeSigned(pts: [number, number][], x: number, z: number): number {
+  let d = Infinity;
+  let inside = false;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const [xi, zi] = pts[i]!;
+    const [xj, zj] = pts[j]!;
+    d = Math.min(d, segDist(x, z, xi, zi, xj, zj));
+    if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+  }
+  return inside ? d : -d;
+}
+const LAKE_BOX = { x0: -43, x1: 42.5, z0: 46, z1: 93 };
+/** Quanto o chão afunda por causa dos lagos em (x, z): 0 fora, -0,25 na borda da água, até -0,75 no fundo. */
+function lakeOffset(x: number, z: number): number {
+  if (x < LAKE_BOX.x0 || x > LAKE_BOX.x1 || z < LAKE_BOX.z0 || z > LAKE_BOX.z1) return 0;
+  let best = 0;
+  for (const pts of LAKE_POLYS) {
+    const sd = lakeSigned(pts, x, z);
+    let o = 0;
+    if (sd > 0) o = -0.25 - LAKE_DEPTH * smooth(sd / LAKE_IN);
+    else if (sd > -LAKE_OUT) o = -0.25 * smooth((sd + LAKE_OUT) / LAKE_OUT);
+    best = Math.min(best, o);
+  }
+  if (best === 0) return 0;
+  let dry = 1;
+  for (const r of DRY) {
+    const d = Math.hypot(Math.max(0, r.x0 - x, x - r.x1), Math.max(0, r.z0 - z, z - r.z1));
+    dry = Math.min(dry, smooth(d / 0.8));
+  }
+  return best * dry;
+}
 // plataforma do estacionamento do lado direito, atrás do Congresso: fica na altura das avenidas (y = 0); a borda sul e a leste são taludes curtos
 const PLAT = { x1: -21.8, z0: 141.2, band: 2.5 };
 export function pitHeight(x: number, z: number): number {
   const ax = Math.abs(x);
   if (ax >= PIT_X || z <= PIT_Z0 || z >= PIT_Z3) return 0;
+  const lake = lakeOffset(x, z);
   const base = -PIT_D * smooth((PIT_X - ax) / (PIT_X - PIT_XB)) * smooth((z - PIT_Z0) / (PIT_Z1 - PIT_Z0)) * smooth((PIT_Z3 - z) / (PIT_Z3 - PIT_Z2));
   {
     const d = Math.hypot(Math.max(0, -PLAT.x1 - ax), Math.max(0, PLAT.z0 - z)); // os dois estacionamentos de trás ficam em plataformas (simétricas)
-    if (d < PLAT.band) return base * smooth(d / PLAT.band);
+    if (d < PLAT.band) return base * smooth(d / PLAT.band) + lake;
   }
-  return base;
+  return base + lake;
 }
+const CELL = 1.25; // lado da malha fina do terreno (m): os caimentos dos lagos têm 1,3 e 3 m
 const PIT_REGION = { x0: -53, x1: 53, z0: 2, z1: 189 };
 
 /** Divide cada triângulo em 4, k vezes (o mesmo k para todos: sem rachaduras entre vizinhos da mesma peça). */
@@ -323,8 +377,8 @@ function terrainPieces(src: THREE.BufferGeometry): THREE.BufferGeometry[] {
     const y = bb.min.y;
     const piece = (x0: number, x1: number, z0: number, z1: number, fine: boolean): THREE.BufferGeometry | null => {
       if (x1 - x0 < 1e-4 || z1 - z0 < 1e-4) return null;
-      const sx = fine ? Math.max(1, Math.ceil((x1 - x0) / 1.75)) : 1;
-      const sz = fine ? Math.max(1, Math.ceil((z1 - z0) / 1.75)) : 1;
+      const sx = fine ? Math.max(1, Math.ceil((x1 - x0) / CELL)) : 1;
+      const sz = fine ? Math.max(1, Math.ceil((z1 - z0) / CELL)) : 1;
       const p = new THREE.PlaneGeometry(x1 - x0, z1 - z0, sx, sz);
       p.rotateX(-Math.PI / 2);
       p.translate((x0 + x1) / 2, y, (z0 + z1) / 2);
@@ -341,19 +395,20 @@ function terrainPieces(src: THREE.BufferGeometry): THREE.BufferGeometry[] {
     const out = [piece(cx0, cx1, cz0, cz1, true), piece(bb.min.x, cx0, bb.min.z, bb.max.z, false), piece(cx1, bb.max.x, bb.min.z, bb.max.z, false), piece(cx0, cx1, bb.min.z, cz0, false), piece(cx0, cx1, cz1, bb.max.z, false)];
     return out.filter((o): o is THREE.BufferGeometry => !!o).map((o) => { if (!o.attributes.normal) o.computeVertexNormals(); return o; });
   }
-  // polígono qualquer: subdivide até as arestas ficarem com ~1,75 m
+  // polígono qualquer: subdivide até as arestas ficarem com ~1,25 m
   let maxE = 0;
   for (let t = 0; t < pos.count / 3; t++) for (let e = 0; e < 3; e++) {
     const a = t * 3 + e;
     const b = t * 3 + ((e + 1) % 3);
     maxE = Math.max(maxE, Math.hypot(pos.getX(a) - pos.getX(b), pos.getZ(a) - pos.getZ(b)));
   }
-  const k = Math.min(6, Math.max(0, Math.ceil(Math.log2(maxE / 1.75))));
+  const k = Math.min(6, Math.max(0, Math.ceil(Math.log2(maxE / CELL))));
   return [applyTerrain(subdivide(g0, k))];
 }
 
 export function createEsplanada(): THREE.Group {
   setTerrainHeight(pitHeight);
+  setWaterDepth((x, z) => (x < LAKE_BOX.x0 || x > LAKE_BOX.x1 || z < LAKE_BOX.z0 || z > LAKE_BOX.z1 ? 0 : Math.max(0, WATER_Y - pitHeight(x, z))));
   const city = new THREE.Group();
   COLLIDERS.length = 0;
   ROADS.length = 0;
@@ -372,7 +427,7 @@ export function createEsplanada(): THREE.Group {
     street: std(T.street!, 0xffffff, 0.9),
     lot: std(T.lot!, 0xffffff, 0.9),
     lotBays: std(T.lotBays!, 0xffffff, 0.9),
-    water: new THREE.MeshStandardMaterial({ color: 0x61797a, roughness: 0.15, metalness: 0.15, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+    water: new THREE.MeshStandardMaterial({ color: 0x6fa3a8, roughness: 0.1, metalness: 0.1, transparent: true, opacity: 0.72, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
     asp: std(T.asphalt!, 0xffffff, 0.9),
     streetBr: ((): THREE.MeshStandardMaterial => { const m = std(T.street!, 0xffffff, 0.9); m.polygonOffset = true; m.polygonOffsetFactor = -4; m.polygonOffsetUnits = -4; return m; })(),
     pave: new THREE.MeshStandardMaterial({ color: 0xdcdcd6, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }),
@@ -428,13 +483,6 @@ export function createEsplanada(): THREE.Group {
   diag(50, -110, 0, -140, 3);
   // água em frente ao Congresso, no formato da foto de satélite (x, z em metros; quem olha para o Congresso (norte, +z) vê +x à ESQUERDA, então x da foto está invertido): dois retângulos fora das ruas, uma peça de cada lado da
   // rampa (borda curva) e um lago ondulado logo abaixo da calçada; as ruas e a calçada ficam POR CIMA
-  const LAKES: [number, number][][] = [
-    [[39.8, 90.4], [29.8, 90.4], [29.8, 62.6], [39.8, 62.6]],
-    [[25.5, 90.4], [21.4, 90.4], [19.2, 86.3], [17.3, 81.9], [15.5, 76.2], [13.6, 71.8], [25.5, 71.3]],
-    [[6.1, 71.1], [-26.7, 71.1], [-26.7, 90.1], [-21.1, 90.1], [-17.8, 86.3], [-13.1, 82.8], [-4.7, 79.7], [1.9, 77.5], [5.6, 73.7]],
-    [[-30.9, 90.4], [-41.1, 90.4], [-41.1, 62.6], [-30.9, 62.6]],
-    [[25.5, 61.2], [-26.7, 61.2], [-26.7, 54.6], [-17.8, 56.9], [-12.2, 57.4], [-8.4, 55.1], [-5.6, 49.9], [-2.8, 48.5], [4.7, 49.0], [12.2, 49.9], [18.8, 53.2], [25.5, 54.6]],
-  ];
   const polyGeom = (pts: [number, number][], y: number, grow: number): THREE.BufferGeometry => {
     // margem de pedra = o mesmo contorno deslocado para fora (grow metros, pela média das normais dos dois lados de cada ponto)
     let area = 0;
@@ -455,9 +503,13 @@ export function createEsplanada(): THREE.Group {
     g.translate(0, y, 0);
     return g;
   };
-  for (const pts of LAKES) {
+  for (const pts of LAKE_POLYS) {
     addFlat(mats.stone, polyGeom(pts, 0.045, 0.9));
-    addFlat(mats.water, polyGeom(pts, 0.07, 0));
+    // a água é uma superfície plana, num nível absoluto (não segue o terreno): o chão do lago fica abaixo dela
+    const wg = polyGeom(pts, WATER_Y, 0);
+    const water = new THREE.Mesh(wg, mats.water);
+    water.receiveShadow = true;
+    city.add(water);
     const xs = pts.map((v) => v[0]);
     const zs = pts.map((v) => v[1]);
     PARKS.push({ x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs) });
@@ -538,16 +590,12 @@ export function createEsplanada(): THREE.Group {
   // ---- área atrás do Congresso (foto aérea do usuário): gramado, estacionamentos, calçadas, ruas de asfalto e duas cancelas ----
   addFlat(mats.lawn, flatGeom(-55, 55, 124, 188, 0.015, 12));
   const back = (m: THREE.Material, x0: number, x1: number, z0: number, z1: number, y: number, tile = 4): void => { addFlat(m, flatGeom(x0, x1, z0, z1, y, tile)); };
-  back(mats.asp, 29.2, 38.5, 124.8, 138.7, 0.047); // via de serviço até a laje (espelho da outra)
-  back(mats.asp, -38.5, -29.2, 124.8, 138.7, 0.047); // via do lado direito
   const WALKS: [number, number, number, number][] = [
     [22.3, 25.3, 141.2, 188], // calçada de pedestres do lado das torres (espelho da outra)
     [42, 46, 141.2, 188], // calçada do lado da avenida, ao longo de todo o estacionamento
-    [25.3, 29.2, 128.2, 138.7], [38.5, 42, 128.2, 138.7], // calçadas dos dois lados da via de serviço
     [2.9, 22.3, 124.8, 147], // praça das torres
     [-25.3, -22.3, 141.2, 188], // 6: calçada da esquerda do estacionamento = entrada de pedestres
     [-46, -42, 141.2, 188], // 7-9: calçada do lado da avenida, ao longo de todo o estacionamento
-    [-42, -38.5, 128.2, 138.7], [-29.2, -25.3, 128.2, 138.7], // calçadas dos dois lados da via de serviço
     [46.1, 55, 100.5, 103.2], // 10: passeio curto da avenida até o prédio
   ];
   for (const [x0, x1, z0, z1] of WALKS) back(mats.concrete, x0, x1, z0, z1, 0.06);
@@ -572,16 +620,14 @@ export function createEsplanada(): THREE.Group {
     addBox(gx - 0.1, gx + 0.1, zb, za, 1.15 + dy, '#d22a2a', dy);
   }
   // ponte de pedestres: sai da calçada do estacionamento (na altura da avenida, y 0) e desce suave até a praça das torres (y −4,5), sobre o rebaixo
-  {
-    const bx0 = -22.3;
-    const bx1 = 2.3;
+  for (const [bx0, bx1] of [[-22.3, 2.3], [22.3, 2.3]] as const) {
     const bz0 = 141.7;
     const bz1 = 143.9;
     const y0 = 0;
     const y1 = -PIT_D + 0.1;
     const N = 20;
     const deckAt = (x: number): number => y0 + ((x - bx0) / (bx1 - bx0)) * (y1 - y0);
-    const ang = Math.atan2(y1 - y0, bx1 - bx0);
+    const ang = bx1 > bx0 ? Math.atan2(y1 - y0, bx1 - bx0) : Math.atan2(y0 - y1, bx0 - bx1);
     const len = Math.hypot(bx1 - bx0, y1 - y0);
     const cx = (bx0 + bx1) / 2;
     const cy = (y0 + y1) / 2;
@@ -596,7 +642,8 @@ export function createEsplanada(): THREE.Group {
     part(0.3, bz1 - bz0, 0, -0.15); // tabuleiro
     part(0.9, 0.12, -(bz1 - bz0) / 2 + 0.06, 0.45); // guarda-corpo (lado sul)
     part(0.9, 0.12, (bz1 - bz0) / 2 - 0.06, 0.45); // guarda-corpo (lado norte)
-    for (let x = bx0 + 4; x < bx1 - 2; x += 6) { // pilares até o chão
+    for (let t = 4; t < Math.abs(bx1 - bx0) - 2; t += 6) { // pilares até o chão
+      const x = bx0 + Math.sign(bx1 - bx0) * t;
       const top = deckAt(x) - 0.3;
       const ground = pitHeight(x, cz);
       if (top - ground > 0.4) parts.push(new THREE.BoxGeometry(0.7, top - ground, 1.2).translate(x, (top + ground) / 2, cz));
@@ -607,8 +654,8 @@ export function createEsplanada(): THREE.Group {
     city.add(bridge);
     // colisão em degraus de 1,2 m (queda de 0,22 m cada: dá para subir e descer andando); o guarda-corpo bloqueia as laterais
     for (let i = 0; i < N; i++) {
-      const xa = bx0 + (i / N) * (bx1 - bx0);
-      const xb = bx0 + ((i + 1) / N) * (bx1 - bx0);
+      const xa = Math.min(bx0 + (i / N) * (bx1 - bx0), bx0 + ((i + 1) / N) * (bx1 - bx0));
+      const xb = Math.max(bx0 + (i / N) * (bx1 - bx0), bx0 + ((i + 1) / N) * (bx1 - bx0));
       const top = deckAt((xa + xb) / 2);
       addBox(xa, xb, bz0, bz1, top, '#c9c5b8', top - 0.5);
       addBox(xa, xb, bz0 - 0.1, bz0, top + 0.9, '#c9c5b8', top);

@@ -51,6 +51,9 @@ export function placeName(x: number, z: number): string {
 
 /** Altura do chão em (x, z): 0 em todo lugar, menos onde o mapa tem um terreno rebaixado (Esplanada: a área do Congresso). */
 export let terrainHeight: (x: number, z: number) => number = () => 0;
+/** Profundidade da água (m) sobre o chão em (x, z): 0 fora de lagos (Esplanada: os lagos em frente ao Congresso são rasos e dá para andar dentro). */
+export let waterDepth: (x: number, z: number) => number = () => 0;
+export function setWaterDepth(f: (x: number, z: number) => number): void { waterDepth = f; }
 export function setTerrainHeight(f: (x: number, z: number) => number): void { terrainHeight = f; }
 
 export const COLLIDERS: Box[] = [];

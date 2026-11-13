@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { COLLIDERS, MAP, terrainHeight } from './map';
+import { COLLIDERS, MAP, terrainHeight, waterDepth } from './map';
 import { EngineSound, ScrapeSound, SirenSound, playCrashAt } from './audio';
 import { emitSparks } from './sparks';
 
@@ -680,6 +680,7 @@ export class Car {
     this.impact = hit ? speedBefore : 0;
     if (hitVeh) { this.speed *= -0.25; this.slip = 0; }
     else if (hit) this.slideAlong(wallNx, wallNz, dt, radius); // parede, poste, prédio: desliza (raspa e solta faísca) em vez de travar e quicar
+    if (!this.airborne && waterDepth(this.x, this.z) > 0.05) this.speed *= Math.exp(-1.6 * dt); // dentro da água o veículo é freado (o arrasto segura até quem entra a toda)
     this.apply(steer, dt);
     if (this.landed > 4) { this.speed *= Math.max(0.8, 1 - this.landed * 0.012); if (this.landed > 7) { emitSparks(this.x, this.groundY + 0.2, this.z, 0, 2, 0, 8); playCrashAt(this.x, this.z, Math.min(1, this.landed / 14)); } } // pousou: perde velocidade; queda forte faz barulho e faísca
   }
