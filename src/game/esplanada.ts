@@ -30,7 +30,7 @@ const RING_N: Rect = { x0: -IX, x1: IX, z0: IZ, z1: IZ + RING_W };
 // estacionamentos: margens, e dois estreitos ao lado das torres do Congresso
 const lots: Rect[] = [
   { x0: 104, x1: 146, z0: -34, z1: -12 }, { x0: 102, x1: 118, z0: 100, z1: 136 },
-  { x0: 24.2, x1: 46.1, z0: 156.9, z1: 188 }, { x0: -42, x1: -25.3, z0: 141.2, z1: 188 }, // atrás do Congresso (como na foto aérea)
+  { x0: 25.3, x1: 42, z0: 141.2, z1: 188 }, { x0: -42, x1: -25.3, z0: 141.2, z1: 188 }, // atrás do Congresso (como na foto aérea)
 ];
 const CONG_FRONT = 70; // z da frente do Congresso
 const CONG_SCALE = 2; // o modelo do usuário tem ~44 unidades de comprimento: vira ~89 m (20% menor que os 111 m de antes)
@@ -232,8 +232,8 @@ export function pitHeight(x: number, z: number): number {
   const ax = Math.abs(x);
   if (ax >= PIT_X || z <= PIT_Z0 || z >= PIT_Z3) return 0;
   const base = -PIT_D * smooth((PIT_X - ax) / (PIT_X - PIT_XB)) * smooth((z - PIT_Z0) / (PIT_Z1 - PIT_Z0)) * smooth((PIT_Z3 - z) / (PIT_Z3 - PIT_Z2));
-  if (x < 0) {
-    const d = Math.hypot(Math.max(0, x - PLAT.x1), Math.max(0, PLAT.z0 - z));
+  {
+    const d = Math.hypot(Math.max(0, -PLAT.x1 - ax), Math.max(0, PLAT.z0 - z)); // os dois estacionamentos de trás ficam em plataformas (simétricas)
     if (d < PLAT.band) return base * smooth(d / PLAT.band);
   }
   return base;
@@ -538,39 +538,24 @@ export function createEsplanada(): THREE.Group {
   // ---- área atrás do Congresso (foto aérea do usuário): gramado, estacionamentos, calçadas, ruas de asfalto e duas cancelas ----
   addFlat(mats.lawn, flatGeom(-55, 55, 124, 188, 0.015, 12));
   const back = (m: THREE.Material, x0: number, x1: number, z0: number, z1: number, y: number, tile = 4): void => { addFlat(m, flatGeom(x0, x1, z0, z1, y, tile)); };
-  back(mats.asp, 28.6, 41.7, 124.8, 152.3, 0.047); // via que sai do estacionamento esquerdo e desce até o prédio
+  back(mats.asp, 29.2, 38.5, 124.8, 138.7, 0.047); // via de serviço até a laje (espelho da outra)
   back(mats.asp, -38.5, -29.2, 124.8, 138.7, 0.047); // via do lado direito
   const WALKS: [number, number, number, number][] = [
-    [41.7, 46.1, 124.8, 156.9], [33.9, 46.1, 141.2, 152.3], [23.9, 28.8, 147, 156.9], [2.9, 28.6, 124.8, 147], // 1, 2, 3 e a praça das torres (4)
+    [22.3, 25.3, 141.2, 188], // calçada de pedestres do lado das torres (espelho da outra)
+    [42, 46, 141.2, 188], // calçada do lado da avenida, ao longo de todo o estacionamento
+    [25.3, 29.2, 128.2, 138.7], [38.5, 42, 128.2, 138.7], // calçadas dos dois lados da via de serviço
+    [2.9, 22.3, 124.8, 147], // praça das torres
     [-25.3, -22.3, 141.2, 188], // 6: calçada da esquerda do estacionamento = entrada de pedestres
     [-46, -42, 141.2, 188], // 7-9: calçada do lado da avenida, ao longo de todo o estacionamento
     [-42, -38.5, 128.2, 138.7], [-29.2, -25.3, 128.2, 138.7], // calçadas dos dois lados da via de serviço
     [46.1, 55, 100.5, 103.2], // 10: passeio curto da avenida até o prédio
   ];
   for (const [x0, x1, z0, z1] of WALKS) back(mats.concrete, x0, x1, z0, z1, 0.06);
-  back(mats.lawn, 35, 42.6, 147.4, 151.4, 0.07, 12); // canteiro verde no pátio da esquerda
   // cancelas de estacionamento (poste + braço listrado a 1 m): uma na via da esquerda e uma na da direita
   const posts: THREE.BufferGeometry[] = [];
   const arms: THREE.BufferGeometry[] = [];
-  const gate = (xa: number, xb: number, z: number): void => {
-    const len = Math.abs(xb - xa);
-    const cx = (xa + xb) / 2;
-    const arm = new THREE.BoxGeometry(len, 0.14, 0.14);
-    const uv = arm.attributes.uv!;
-    for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * len);
-    const dy = pitHeight(xa, z);
-    arm.translate(cx, 1.05 + dy, z);
-    arms.push(arm);
-    const px = xa;
-    posts.push(new THREE.BoxGeometry(0.4, 1.3, 0.4).translate(px, 0.65 + dy, z));
-    posts.push(new THREE.BoxGeometry(0.44, 0.12, 0.44).translate(px, 1.36 + dy, z));
-    addBox(px - 0.25, px + 0.25, z - 0.25, z + 0.25, 1.3 + dy, '#30343a', dy);
-    addBox(Math.min(xa, xb), Math.max(xa, xb), z - 0.1, z + 0.1, 1.15 + dy, '#d22a2a', dy);
-  };
-  gate(36, 28.4, 147); // esquerda: poste no lado de fora
   // cancela da entrada de carros do estacionamento da esquerda: serve aos carros que vêm da avenida e atravessa a faixa (poste do lado de fora da pista)
-  {
-    const gx = -47.5;
+  for (const gx of [-47.5, 47.5]) {
     const za = 145.7;
     const zb = 141.5;
     const len = Math.abs(za - zb);
@@ -688,6 +673,7 @@ export function createEsplanada(): THREE.Group {
   // Entrada de carros do estacionamento da esquerda: sai da avenida, atravessa a calçada e entra pelo lado direito do estacionamento (a calçada da esquerda é a entrada de pedestres)
   const ASPH: [number, number][][] = [
     crect(127, 184, 210, 199), // faixa da avenida até o corredor do estacionamento (entrada de carros)
+    cpoly([[-121, 184], [-204, 184], [-204, 199], [-121, 199]]), // o mesmo, espelhado, para o estacionamento de frente para as torres
   ];
   for (const pts of ASPH) { addFlat(mats.asp, flatPoly(pts, 0.07, 12)); STREETS_E.push(pts); }
   // Rua em volta da praça: da rua em diagonal faz uma curva suave e segue reta até a margem (faixa de 7 m em volta de uma linha central suave)
@@ -856,7 +842,7 @@ export function createEsplanada(): THREE.Group {
   for (let z = -165; z <= 180; z += 28) for (const x of [-86.5, -53.5, 56.5, 86.5]) {
     if (CROSS.some((c) => z > c.z0 - 3 && z < c.z1 + 3 && Math.abs(x) < 60)) continue;
     if (OUTER.some((c) => z > c.z0 - 3 && z < c.z1 + 3 && Math.abs(x) > 80)) continue;
-    if (x === -53.5 && Math.abs(z - 143.2) < 10) continue; // sem poste de luz na entrada de carros do estacionamento da esquerda
+    if ((x === -53.5 || x === 56.5) && Math.abs(z - 143.2) < 10) continue; // sem poste de luz nas entradas de carros dos estacionamentos de trás // sem poste de luz na entrada de carros do estacionamento da esquerda
     poles.push([x, z]);
   }
   const poleMesh = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.12, 0.16, 8, 6).translate(0, 4, 0), new THREE.MeshStandardMaterial({ color: 0x6b7178, roughness: 0.6 }), poles.length);
