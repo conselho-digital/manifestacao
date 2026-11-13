@@ -23,7 +23,7 @@ const OUTER: Rect[] = [{ x0: -HX, x1: -85, z0: -105, z1: -90 }, { x0: 85, x1: HX
 // estacionamentos: margens, e dois estreitos ao lado das torres do Congresso
 const lots: Rect[] = [
   { x0: 104, x1: 146, z0: -34, z1: -12 }, { x0: 102, x1: 118, z0: 100, z1: 136 }, { x0: -146, x1: -114, z0: 114, z1: 140 },
-  { x0: -52, x1: -26, z0: 146, z1: 178 }, { x0: 26, x1: 52, z0: 146, z1: 178 },
+  { x0: 24.2, x1: 46.1, z0: 156.9, z1: 188 }, { x0: -42, x1: -25.3, z0: 143.4, z1: 188 }, // atrás do Congresso (como na foto aérea)
 ];
 const CONG_FRONT = 70; // z da frente do Congresso
 const CONG_SCALE = 2; // o modelo do usuário tem ~44 unidades de comprimento: vira ~89 m (20% menor que os 111 m de antes)
@@ -145,7 +145,11 @@ function makeTextures(): Record<string, THREE.CanvasTexture> {
     g.fillStyle = '#35495a';
     for (let x = 12; x < 256; x += 64) g.fillRect(x, 20, 40, 216);
   });
-  return { grass, lawn, concrete, avenue, street, lot, rib, ministry, warehouse, plain, palace };
+  const asphalt = canvasTex(128, 128, (g) => noiseFill(g, 128, 128, [78, 80, 85], 14, r, 700));
+  const stripes = canvasTex(64, 8, (g) => { // cancela: listras vermelhas e brancas (1 m = 4 listras)
+    for (let i = 0; i < 4; i++) { g.fillStyle = i % 2 ? '#f2f2f2' : '#d22a2a'; g.fillRect(i * 16, 0, 16, 8); }
+  });
+  return { grass, lawn, concrete, avenue, street, lot, rib, asphalt, stripes, ministry, warehouse, plain, palace };
 }
 
 interface Bld { x0: number; x1: number; z0: number; z1: number; h: number; tex: 'ministry' | 'warehouse' | 'plain' | 'palace'; core?: boolean; roof?: 'rib' | 'gable' }
@@ -213,6 +217,7 @@ export function createEsplanada(): THREE.Group {
     street: std(T.street!, 0xffffff, 0.9),
     lot: std(T.lot!, 0xffffff, 0.9),
     water: new THREE.MeshStandardMaterial({ color: 0x61797a, roughness: 0.15, metalness: 0.15, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
+    asp: std(T.asphalt!, 0xffffff, 0.9),
     streetBr: ((): THREE.MeshStandardMaterial => { const m = std(T.street!, 0xffffff, 0.9); m.polygonOffset = true; m.polygonOffsetFactor = -4; m.polygonOffsetUnits = -4; return m; })(),
     pave: new THREE.MeshStandardMaterial({ color: 0xdcdcd6, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }),
     terra: new THREE.MeshStandardMaterial({ color: 0xa65a3c, roughness: 0.95 }),
@@ -342,6 +347,43 @@ export function createEsplanada(): THREE.Group {
   B.push({ x0: 124, x1: 146, z0: 96, z1: 150, h: 10, tex: 'warehouse', roof: 'rib' });
   B.push({ x0: 126, x1: 146, z0: 152, z1: 168, h: 7, tex: 'warehouse' });
   B.push({ x0: 112, x1: 146, z0: 170, z1: 188, h: 12, tex: 'warehouse', roof: 'gable' });
+  // ---- área atrás do Congresso (foto aérea do usuário): gramado, estacionamentos, calçadas, ruas de asfalto e duas cancelas ----
+  addFlat(mats.lawn, flatGeom(-55, 55, 124, 188, 0.015, 12));
+  const back = (m: THREE.Material, x0: number, x1: number, z0: number, z1: number, y: number, tile = 4): void => { addFlat(m, flatGeom(x0, x1, z0, z1, y, tile)); };
+  back(mats.asp, 28.6, 41.7, 124.8, 152.3, 0.047); // via que sai do estacionamento esquerdo e desce até o prédio
+  back(mats.asp, -38.5, -29.2, 124.8, 141.2, 0.047); // via do lado direito
+  const WALKS: [number, number, number, number][] = [
+    [41.7, 46.1, 124.8, 156.9], [33.9, 46.1, 141.2, 152.3], [23.9, 28.8, 147, 156.9], [2.9, 28.6, 124.8, 147], // 1, 2, 3 e a praça das torres (4)
+    [-55, 2.3, 141.7, 143.9], // 5: passeio até a avenida
+    [-29, -26, 124.8, 147.4], [-45.9, -38.5, 124.8, 141.2], [-46.1, -42, 159.4, 188], [-46.1, -38.9, 141.2, 159.4], // 6, 7, 8, 9
+    [46.1, 55, 100.5, 103.2], // 10: passeio curto da avenida até o prédio
+  ];
+  for (const [x0, x1, z0, z1] of WALKS) back(mats.concrete, x0, x1, z0, z1, 0.06);
+  back(mats.lawn, 35, 42.6, 147.4, 151.4, 0.07, 12); // canteiro verde no pátio da esquerda
+  // cancelas de estacionamento (poste + braço listrado a 1 m): uma na via da esquerda e uma na da direita
+  const posts: THREE.BufferGeometry[] = [];
+  const arms: THREE.BufferGeometry[] = [];
+  const gate = (xa: number, xb: number, z: number): void => {
+    const len = Math.abs(xb - xa);
+    const cx = (xa + xb) / 2;
+    const arm = new THREE.BoxGeometry(len, 0.14, 0.14);
+    const uv = arm.attributes.uv!;
+    for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * len);
+    arm.translate(cx, 1.05, z);
+    arms.push(arm);
+    const px = xa;
+    posts.push(new THREE.BoxGeometry(0.4, 1.3, 0.4).translate(px, 0.65, z));
+    posts.push(new THREE.BoxGeometry(0.44, 0.12, 0.44).translate(px, 1.36, z));
+    addBox(px - 0.25, px + 0.25, z - 0.25, z + 0.25, 1.3, '#30343a');
+    addBox(Math.min(xa, xb), Math.max(xa, xb), z - 0.1, z + 0.1, 1.15, '#d22a2a');
+  };
+  gate(36, 28.4, 147); // esquerda: poste no lado de fora
+  gate(-39.7, -28.8, 142.8); // direita
+  const postMesh = new THREE.Mesh(mergeGeometries(posts, false)!, new THREE.MeshStandardMaterial({ color: 0xf2c200, roughness: 0.7 }));
+  const armMesh = new THREE.Mesh(mergeGeometries(arms, false)!, new THREE.MeshStandardMaterial({ map: T.stripes!, roughness: 0.6 }));
+  postMesh.castShadow = armMesh.castShadow = true;
+  city.add(postMesh, armMesh);
+
   // pátio de concreto em volta de cada prédio das margens
   for (const b of B) {
     const x0 = Math.max(b.x0 - 5, b.x0 < 0 ? -HX : 97);
