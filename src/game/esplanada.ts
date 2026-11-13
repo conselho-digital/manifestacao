@@ -223,15 +223,15 @@ const PIT_X = 52; // começa na calçada interna das avenidas (|x| = 52)
 const PIT_XB = 45; // talude lateral: do |x| 52 ao 45 (7 m) chega ao fundo
 const PIT_Z0 = 3; // rampa do sul: z 3 → 28 (25 m)
 const PIT_Z1 = 28;
-const PIT_Z2 = 126; // fundo: z 28 → 126 (logo depois da laje, que termina em z 124); rampa do norte: z 126 → 141 (as torres de trás ficam no nível da avenida)
-const PIT_Z3 = 141;
+const PIT_Z2 = 149; // fundo: z 28 → 149 (até o fim do quadrado vermelho do usuário); rampa do norte, bem suave: z 149 → 180 (31 m)
+const PIT_Z3 = 180;
 const smooth = (t: number): number => { const c = Math.min(1, Math.max(0, t)); return c * c * (3 - 2 * c); };
 export function pitHeight(x: number, z: number): number {
   const ax = Math.abs(x);
   if (ax >= PIT_X || z <= PIT_Z0 || z >= PIT_Z3) return 0;
   return -PIT_D * smooth((PIT_X - ax) / (PIT_X - PIT_XB)) * smooth((z - PIT_Z0) / (PIT_Z1 - PIT_Z0)) * smooth((PIT_Z3 - z) / (PIT_Z3 - PIT_Z2));
 }
-const PIT_REGION = { x0: -53, x1: 53, z0: 2, z1: 142 };
+const PIT_REGION = { x0: -53, x1: 53, z0: 2, z1: 181 };
 
 /** Divide cada triângulo em 4, k vezes (o mesmo k para todos: sem rachaduras entre vizinhos da mesma peça). */
 function subdivide(g: THREE.BufferGeometry, k: number): THREE.BufferGeometry {
@@ -547,13 +547,14 @@ export function createEsplanada(): THREE.Group {
     const arm = new THREE.BoxGeometry(len, 0.14, 0.14);
     const uv = arm.attributes.uv!;
     for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * len);
-    arm.translate(cx, 1.05, z);
+    const dy = pitHeight(xa, z);
+    arm.translate(cx, 1.05 + dy, z);
     arms.push(arm);
     const px = xa;
-    posts.push(new THREE.BoxGeometry(0.4, 1.3, 0.4).translate(px, 0.65, z));
-    posts.push(new THREE.BoxGeometry(0.44, 0.12, 0.44).translate(px, 1.36, z));
-    addBox(px - 0.25, px + 0.25, z - 0.25, z + 0.25, 1.3, '#30343a');
-    addBox(Math.min(xa, xb), Math.max(xa, xb), z - 0.1, z + 0.1, 1.15, '#d22a2a');
+    posts.push(new THREE.BoxGeometry(0.4, 1.3, 0.4).translate(px, 0.65 + dy, z));
+    posts.push(new THREE.BoxGeometry(0.44, 0.12, 0.44).translate(px, 1.36 + dy, z));
+    addBox(px - 0.25, px + 0.25, z - 0.25, z + 0.25, 1.3 + dy, '#30343a', dy);
+    addBox(Math.min(xa, xb), Math.max(xa, xb), z - 0.1, z + 0.1, 1.15 + dy, '#d22a2a', dy);
   };
   gate(36, 28.4, 147); // esquerda: poste no lado de fora
   // cancela da entrada de carros do estacionamento da esquerda: serve aos carros que vêm da avenida e atravessa a faixa (poste do lado de fora da pista)
@@ -566,12 +567,13 @@ export function createEsplanada(): THREE.Group {
     const uv = arm.attributes.uv!;
     for (let i = 0; i < uv.count; i++) uv.setX(i, uv.getX(i) * len);
     arm.rotateY(Math.PI / 2);
-    arm.translate(gx, 1.05, (za + zb) / 2);
+    const dy = pitHeight(gx, za);
+    arm.translate(gx, 1.05 + dy, (za + zb) / 2);
     arms.push(arm);
-    posts.push(new THREE.BoxGeometry(0.4, 1.3, 0.4).translate(gx, 0.65, za));
-    posts.push(new THREE.BoxGeometry(0.44, 0.12, 0.44).translate(gx, 1.36, za));
-    addBox(gx - 0.25, gx + 0.25, za - 0.25, za + 0.25, 1.3, '#30343a');
-    addBox(gx - 0.1, gx + 0.1, zb, za, 1.15, '#d22a2a');
+    posts.push(new THREE.BoxGeometry(0.4, 1.3, 0.4).translate(gx, 0.65 + dy, za));
+    posts.push(new THREE.BoxGeometry(0.44, 0.12, 0.44).translate(gx, 1.36 + dy, za));
+    addBox(gx - 0.25, gx + 0.25, za - 0.25, za + 0.25, 1.3 + dy, '#30343a', dy);
+    addBox(gx - 0.1, gx + 0.1, zb, za, 1.15 + dy, '#d22a2a', dy);
   }
   const postMesh = new THREE.Mesh(mergeGeometries(posts, false)!, new THREE.MeshStandardMaterial({ color: 0xf2c200, roughness: 0.7 }));
   const armMesh = new THREE.Mesh(mergeGeometries(arms, false)!, new THREE.MeshStandardMaterial({ map: T.stripes!, roughness: 0.6 }));
@@ -882,7 +884,12 @@ export function createEsplanada(): THREE.Group {
     for (const m of meshes) {
       const g = m.geometry.clone();
       g.applyMatrix4(m.matrixWorld);
-      if (isTower(wbox.get(m)!)) g.scale(1, 0.5, 1); // as torres de trás ficam no nível da avenida
+      if (isTower(wbox.get(m)!)) {
+        g.scale(1, 0.5, 1); // as torres de trás: metade da altura
+        const tp = g.attributes.position as THREE.BufferAttribute;
+        for (let i = 0; i < tp.count; i++) if (tp.getY(i) < 0.5) tp.setY(i, pitHeight(tp.getX(i), tp.getZ(i))); // a base acompanha o terreno (a rampa passa por baixo delas)
+        g.computeBoundingBox();
+      }
       else g.translate(0, -drop - PIT_D, 0); // a laje desce até o chão rebaixado: o teto fica na altura das avenidas
       m.geometry = g;
       m.removeFromParent();
@@ -902,7 +909,7 @@ export function createEsplanada(): THREE.Group {
       parts.push({ box: b, area: sz.x * sz.z, dark: mat.color.r < 0.6 && mat.color.r > 0.3 && sz.y > 20 });
     }
     const dark = parts.filter((p) => p.dark);
-    for (const p of dark) addBox(p.box.min.x, p.box.max.x, p.box.min.z, p.box.max.z, p.box.max.y, '#8a8d8d');
+    for (const p of dark) addBox(p.box.min.x, p.box.max.x, p.box.min.z, p.box.max.z, p.box.max.y, '#8a8d8d', Math.min(0, p.box.min.y));
     // a laje (a peça branca de maior área) vira uma caixa de ~6 m; as cúpulas ficam em cima dela (não bloqueiam)
     const whites = parts.filter((p) => !p.dark && p.box.max.y > 1 - PIT_D).sort((x, y) => y.area - x.area);
     const slab = whites[0];
