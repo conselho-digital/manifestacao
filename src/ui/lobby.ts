@@ -34,14 +34,12 @@ const saveProfile = (p: { name: string; character: CharacterName }): void => {
 
 const CSS = `
 .lobby{position:fixed;inset:0;z-index:10;font-family:system-ui,sans-serif;color:#fff;box-sizing:border-box;
-  background:linear-gradient(rgba(10,16,28,.55),rgba(10,16,28,.15) 40%,rgba(10,16,28,.6));overflow:hidden}
+  background:radial-gradient(ellipse at 30% 20%,#1b2b46,#0f1724 55%,#0a0f18);overflow:hidden}
 .lobby *{box-sizing:border-box}
 .lobby button{font-family:inherit;cursor:pointer}
 .lb-maps{display:flex;gap:8px}.lb-map{flex:1;display:flex;flex-direction:column;gap:2px;padding:8px 10px;border-radius:10px;border:2px solid rgba(255,255,255,.18);background:rgba(255,255,255,.06);color:#fff;text-align:left;cursor:pointer;font:inherit}
 .lb-map b{font-size:15px}.lb-map small{opacity:.7;font-size:11px}.lb-map.on{border-color:#4cc2ff;background:rgba(76,194,255,.18)}
 .lb-home,.lb-select{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:12px}
-/* tela larga: cartão à esquerda, a cidade aparece à direita */
-@media (min-aspect-ratio:13/10){.lb-home{align-items:flex-start;padding-left:max(24px,7vw)}}
 .lb-select{display:none;justify-content:flex-start;background:rgba(14,20,32,.9);backdrop-filter:blur(6px);padding:0}
 .lobby.picking .lb-home{display:none}
 .lobby.picking .lb-select{display:flex}
@@ -71,7 +69,7 @@ const CSS = `
 `;
 
 /**
- * Tela inicial: a cidade vista de cima ao fundo (o main desenha), foto do rosto do personagem, nome, equipe e login Google.
+ * Tela inicial (fundo liso: nenhum mapa é carregado nem desenhado aqui), foto do rosto do personagem, nome, equipe e login Google.
  * O personagem é escolhido numa tela própria, em carrosséis por categoria. Resolve quando o jogador entra no jogo.
  */
 export function showLobby(): Promise<Profile> {

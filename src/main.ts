@@ -27,6 +27,7 @@ import { isAdmin, lookOf, makeTeamRing, saveTeamId, teamById, validTeamId } from
 import { loadPrices, loadPurchases } from './game/shop';
 import type { PlayerInfo, VehInfo } from './net/sync';
 import { createPauseMenu, type PauseMenu } from './ui/pause';
+import { nextPaint, showLoading } from './ui/loading';
 
 // Endereço oficial: https://gameprotesto.com.br (sem www). Os outros endereços de produção redirecionam para ele
 // (o login do Google só vale nele). localhost e prévias da Vercel não são afetados.
@@ -40,8 +41,7 @@ const scene = createScene();
 const camera = createCamera();
 const BASE_FAR = camera.far; // a câmera do menu (vista aérea) aumenta; o jogo volta a este valor
 handleResize(renderer, camera);
-const city = MAP_ID === 'esplanada' ? createEsplanada() : createCity();
-scene.add(city);
+// A cidade só é montada depois do menu (tela de carregamento): no menu não há mapa carregado nem desenhado
 scene.add(createCars());
 scene.add(sparksObject);
 initMouse(renderer.domElement);
@@ -89,14 +89,11 @@ function menuCamera(dt: number): void {
   sun.target.position.set(0, 0, 0);
 }
 
-// No menu: pré-carrega e aquece o mapa, os veículos e as armas para o jogo não engasgar
-// No menu a cidade é desenhada sem recalcular sombras e com resolução 1x (mais leve); o jogo volta ao normal ao entrar
+// No menu NÃO se desenha mapa nenhum (fundo liso). Só se pré-carregam, sem mostrar, os modelos (veículos, armas, personagens, animações);
+// a cidade é criada e os gráficos compilados na tela de carregamento, depois de clicar em Entrar.
 const GAME_PIXEL_RATIO = pixelRatio();
-void warmUp(renderer, scene, camera, menuFog).then(() => {
-  if (!inMenu) return;
-  renderer.shadowMap.autoUpdate = false;
-  renderer.setPixelRatio(1);
-});
+const warm = warmUp(renderer, scene, camera, menuFog);
+let loadingScreen = false; // true enquanto a tela de carregamento cobre o jogo: não desenha a cena
 
 const clock = new THREE.Clock();
 let player: Player | null = null;
@@ -107,8 +104,7 @@ const net = new Net();
 const remotes = new Map<string, RemotePlayer>();
 let cullT = 0;
 const graffiti = new Graffiti(scene);
-const billboard = new Billboard(scene);
-void billboard.start();
+const billboard = new Billboard(scene); // só começa (billboard.start) depois da cidade: a cidade zera as colisões ao ser criada
 if (import.meta.env.DEV) (window as unknown as { __net: Net; __game: { ready: () => boolean } }).__net = net;
 if (import.meta.env.DEV) (window as unknown as { __game: { ready: () => boolean; camera: THREE.PerspectiveCamera; scene: THREE.Scene; renderer: THREE.WebGLRenderer; combat: () => Combat | null; player: () => Player | null; sim: { TRAFFIC: typeof TRAFFIC; CARS: typeof CARS; updateTraffic: typeof updateTraffic; spawnPersonal: typeof spawnPersonal } } }).__game = { ready: () => !!player, camera, scene, renderer, combat: () => combat, player: () => player, sim: { TRAFFIC, CARS, updateTraffic, spawnPersonal } };
 let profileName = 'Jogador';
@@ -246,6 +242,10 @@ async function setMyCharacter(name: CharacterName): Promise<void> {
 }
 
 void showLobby().then(async (profile) => {
+  // tela de carregamento: foto da cidade de cima em preto e branco que ganha cor conforme carrega
+  const loading = showLoading();
+  loadingScreen = true;
+  await nextPaint();
   profileName = profile.name;
   character = profile.character;
   teamId = validTeamId(profile.team);
@@ -256,6 +256,28 @@ void showLobby().then(async (profile) => {
   renderer.shadowMap.needsUpdate = true;
   renderer.setPixelRatio(GAME_PIXEL_RATIO);
   if (intro) { scene.fog = null; } else { scene.fog = menuFog; camera.clearViewOffset(); camera.fov = BASE_FOV; camera.far = BASE_FAR; camera.updateProjectionMatrix(); }
+  // monta a cidade só agora (antes de qualquer outra coisa que dependa das colisões dela)
+  loading.set(0.08, 'Montando a cidade...');
+  await nextPaint();
+  const city = MAP_ID === 'esplanada' ? createEsplanada() : createCity();
+  scene.add(city);
+  void billboard.start();
+  loading.set(0.3, 'Carregando modelos...');
+  await warm;
+  loading.set(0.5, 'Preparando os gráficos...');
+  await nextPaint();
+  try {
+    // compila os materiais da cidade com e sem neblina (o voo de entrada não tem neblina; o jogo tem): sem engasgos depois
+    const fogNow = scene.fog;
+    scene.fog = menuFog;
+    await renderer.compileAsync(scene, camera);
+    scene.fog = null;
+    await renderer.compileAsync(scene, camera);
+    scene.fog = fogNow;
+  } catch (e) {
+    console.warn('Compilação dos gráficos falhou (segue sem ela):', e);
+  }
+  loading.set(0.62, 'Criando seu personagem...');
   hud = createHud({ onVoiceTalk: (on) => { void voice.talk(on); }, onPause: () => pauseMenu?.open(), onGarage: () => pauseMenu?.open('garage') });
   hud.addChat(`Sistema: bem-vindo, ${profile.name}!`);
   // Ponto de partida (?pos=x,z serve para inspecionar o mapa)
@@ -268,7 +290,9 @@ void showLobby().then(async (profile) => {
   player.attachWeapon(new WeaponVisual(first));
   myRing = makeTeamRing(myLook());
   first.add(myRing);
+  loading.set(0.78, 'Carregando sua conta...');
   await Promise.all([loadPrices(), isAdmin().then((a) => loadPurchases(inv, a))]);
+  loading.set(0.88, 'Entrando na arena...');
   if (import.meta.env.DEV && new URLSearchParams(location.search).has('admin')) inv.admin = true; // só para testar no npm run dev
   combat = new Combat({ scene, camera, net, name: profile.name, remotes, log: (t) => hud?.addChat(t), inv, graffiti, city, myTeam: () => ({ id: teamId, c1: teamById(teamId)?.c1 ?? '#ffffff' }) });
   wirePlayer(player);
@@ -365,6 +389,8 @@ void showLobby().then(async (profile) => {
       document.body.appendChild(box);
     } else console.warn('Multiplayer indisponível, jogando offline:', e);
   }
+  // a foto ganha a cor toda; quando ela começa a sumir, o voo de entrada começa
+  await loading.finish(() => { loadingScreen = false; });
 });
 
 /** Mistura a câmera do jogo (já no ponto final) com a do menu: primeiro desliza por cima da praça, depois desce e vira para o museu. */
@@ -390,7 +416,9 @@ function flyIntro(dt: number): void {
 
 function loop(): void {
   const dt = Math.min(clock.getDelta(), 0.05);
-  if (inMenu || (intro && !intro.started)) menuCamera(dt); // enquanto o personagem carrega, a cidade segue girando
+  if (inMenu) { requestAnimationFrame(loop); return; } // menu: nada é desenhado (fundo liso)
+  if (intro && !intro.started) menuCamera(dt); // o voo de entrada começa da vista aérea do menu
+  if (loadingScreen) { requestAnimationFrame(loop); return; } // tela de carregamento cobre tudo: sem simulação nem desenho
   if (player && combat) {
     if (intro && !intro.started) {
       intro.started = true; // o voo começa de onde a câmera do menu parou
