@@ -265,10 +265,10 @@ export function createEsplanada(): THREE.Group {
   // água em frente ao Congresso, no formato da foto de satélite (x, z em metros; quem olha para o Congresso (norte, +z) vê +x à ESQUERDA, então x da foto está invertido): dois retângulos fora das ruas, uma peça de cada lado da
   // rampa (borda curva) e um lago ondulado logo abaixo da calçada; as ruas e a calçada ficam POR CIMA
   const LAKES: [number, number][][] = [
-    [[39.8, 122], [29.8, 122], [29.8, 62.6], [39.8, 62.6]],
-    [[25.5, 122], [21.4, 122], [21.4, 90.4], [19.2, 86.3], [17.3, 81.9], [15.5, 76.2], [13.6, 71.8], [25.5, 71.3]],
-    [[6.1, 71.1], [-26.7, 71.1], [-26.7, 122], [-21.1, 122], [-21.1, 90.1], [-17.8, 86.3], [-13.1, 82.8], [-4.7, 79.7], [1.9, 77.5], [5.6, 73.7]],
-    [[-30.9, 122], [-41.1, 122], [-41.1, 62.6], [-30.9, 62.6]],
+    [[39.8, 90.4], [29.8, 90.4], [29.8, 62.6], [39.8, 62.6]],
+    [[25.5, 90.4], [21.4, 90.4], [19.2, 86.3], [17.3, 81.9], [15.5, 76.2], [13.6, 71.8], [25.5, 71.3]],
+    [[6.1, 71.1], [-26.7, 71.1], [-26.7, 90.1], [-21.1, 90.1], [-17.8, 86.3], [-13.1, 82.8], [-4.7, 79.7], [1.9, 77.5], [5.6, 73.7]],
+    [[-30.9, 90.4], [-41.1, 90.4], [-41.1, 62.6], [-30.9, 62.6]],
     [[25.5, 61.2], [-26.7, 61.2], [-26.7, 54.6], [-17.8, 56.9], [-12.2, 57.4], [-8.4, 55.1], [-5.6, 49.9], [-2.8, 48.5], [4.7, 49.0], [12.2, 49.9], [18.8, 53.2], [25.5, 54.6]],
   ];
   const polyGeom = (pts: [number, number][], y: number, grow: number): THREE.BufferGeometry => {
@@ -304,7 +304,7 @@ export function createEsplanada(): THREE.Group {
   // calçada cinza-clara no fim da rampa, ligando as duas ruas
   addFlat(mats.pave, flatGeom(-26, 26, 65, 71, 0.1, 4));
   // duas ruas, mais juntas, que descem da fachada; sobre o lago (z > 49) ficam acima da água
-  for (const r of [{ x0: -31, x1: -26, z0: -37, z1: 112 }, { x0: 26, x1: 31, z0: -37, z1: 112 }]) {
+  for (const r of [{ x0: -31, x1: -26, z0: -37, z1: 92 }, { x0: 26, x1: 31, z0: -37, z1: 92 }]) {
     addFlat(mats.street, flatGeom(r.x0, r.x1, r.z0, 49, 0.05, 12, 'road-z'));
     addFlat(mats.streetBr, flatGeom(r.x0, r.x1, 49, r.z1, 0.1, 12, 'road-z'));
     ROADS.push(r);
@@ -510,17 +510,35 @@ export function createEsplanada(): THREE.Group {
     root.updateMatrixWorld(true);
     root.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     city.add(root);
+    // Ajustes no modelo (em coordenadas do mundo): a laje desce até o chão (o modelo a deixava ~8 m no ar) e as duas torres
+    // de trás perdem metade da altura. Cada malha vira geometria em coordenadas do mundo, solta na cidade.
+    const meshes: THREE.Mesh[] = [];
+    root.traverse((o) => { if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh); });
+    const wbox = new Map(meshes.map((m) => [m, new THREE.Box3().setFromObject(m)] as const));
+    const isTower = (b: THREE.Box3): boolean => (b.min.y < 1 && b.max.y > 20) || b.min.y > 20; // corpo das torres e a passarela de vidro entre elas
+    const drop = Math.min(...meshes.filter((m) => !isTower(wbox.get(m)!)).map((m) => wbox.get(m)!.min.y));
+    for (const m of meshes) {
+      const g = m.geometry.clone();
+      g.applyMatrix4(m.matrixWorld);
+      if (isTower(wbox.get(m)!)) g.scale(1, 0.5, 1);
+      else g.translate(0, -drop, 0);
+      m.geometry = g;
+      m.removeFromParent();
+      m.position.set(0, 0, 0);
+      m.rotation.set(0, 0, 0);
+      m.scale.set(1, 1, 1);
+      m.updateMatrixWorld(true);
+      city.add(m);
+    }
     // colisão: a laje (a maior peça branca), as duas cúpulas e as torres, medidas no próprio modelo
     const parts: { box: THREE.Box3; area: number; dark: boolean }[] = [];
-    root.traverse((o) => {
-      const m = o as THREE.Mesh;
-      if (!m.isMesh) return;
+    for (const m of meshes) {
       const b = new THREE.Box3().setFromObject(m);
       const mat = (Array.isArray(m.material) ? m.material[0] : m.material) as THREE.MeshStandardMaterial;
       const sz = b.getSize(new THREE.Vector3());
-      if (sz.x < 1 || sz.z < 1) return;
+      if (sz.x < 1 || sz.z < 1) continue;
       parts.push({ box: b, area: sz.x * sz.z, dark: mat.color.r < 0.6 && mat.color.r > 0.3 && sz.y > 20 });
-    });
+    }
     const dark = parts.filter((p) => p.dark);
     for (const p of dark) addBox(p.box.min.x, p.box.max.x, p.box.min.z, p.box.max.z, p.box.max.y, '#8a8d8d');
     // a laje (a peça branca de maior área) vira uma caixa de ~6 m; as cúpulas ficam em cima dela (não bloqueiam)
