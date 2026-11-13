@@ -17,6 +17,7 @@ const PERIM_S: Rect = { x0: -HX, x1: HX, z0: -HZ, z1: -175 }; // rua do fim sul,
 const CROSS: Rect[] = [
   { x0: -55, x1: 55, z0: -105, z1: -90 }, // 1ª transversal (cruza o gramado)
   { x0: -55, x1: 55, z0: -35, z1: -20 }, // 2ª transversal
+  { x0: -55, x1: 55, z0: 36, z1: 48 }, // rua em frente ao Congresso e ao lago
 ];
 // ruas que saem das avenidas entre os ministérios (alinhadas com a 1ª transversal)
 const OUTER: Rect[] = [{ x0: -HX, x1: -85, z0: -105, z1: -90 }, { x0: 85, x1: HX, z0: -105, z1: -90 }];
@@ -212,7 +213,7 @@ export function createEsplanada(): THREE.Group {
     avenue: std(T.avenue!, 0xffffff, 0.9),
     street: std(T.street!, 0xffffff, 0.9),
     lot: std(T.lot!, 0xffffff, 0.9),
-    water: new THREE.MeshStandardMaterial({ color: 0x5f7f92, roughness: 0.15, metalness: 0.15 }),
+    water: new THREE.MeshStandardMaterial({ color: 0x61797a, roughness: 0.15, metalness: 0.15, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
     terra: new THREE.MeshStandardMaterial({ color: 0xa65a3c, roughness: 0.95 }),
     ribRoof: std(T.rib!),
     gable: new THREE.MeshStandardMaterial({ color: 0x9a968c, roughness: 0.9, side: THREE.DoubleSide }),
@@ -228,7 +229,7 @@ export function createEsplanada(): THREE.Group {
   const lawns: Rect[] = [
     { x0: -52, x1: 52, z0: -172, z1: -108 }, // gramado sul (com caminhos em diagonal)
     { x0: -52, x1: 52, z0: -88, z1: -37 }, // gramado grande do meio
-    { x0: -52, x1: 52, z0: -18, z1: 44 }, // gramado central, em frente aos espelhos d'água
+    { x0: -52, x1: 52, z0: -18, z1: 36 }, // gramado central, entre a transversal e a rua do Congresso
   ];
   for (const r of lawns) { addFlat(mats.lawn, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.015, 12)); PARKS.push(r); }
   // faixas de gramado ao lado das avenidas (lado de fora)
@@ -240,9 +241,7 @@ export function createEsplanada(): THREE.Group {
     { x0: -88, x1: -85, z0: -175, z1: HZ }, { x0: -55, x1: -52, z0: -175, z1: HZ },
     { x0: 55, x1: 58, z0: -175, z1: HZ }, { x0: 85, x1: 88, z0: -175, z1: HZ },
     // caminhos laterais do gramado central e do gramado do meio
-    { x0: -40, x1: -37, z0: -37, z1: 44 }, { x0: 37, x1: 40, z0: -37, z1: 44 },
-    { x0: -3, x1: 3, z0: 44, z1: CONG_FRONT }, // rampa/passeio central até o Congresso
-    { x0: -46, x1: 46, z0: 64, z1: 67 }, // beira dos espelhos d'água
+        { x0: -3, x1: 3, z0: 48, z1: CONG_FRONT }, // rampa/passeio central até o Congresso (cruza o lago)
     { x0: -52, x1: 52, z0: -175, z1: -172 }, { x0: -52, x1: 52, z0: -108, z1: -105 },
     { x0: -52, x1: 52, z0: -90, z1: -88 }, { x0: -52, x1: 52, z0: -37, z1: -35 },
     { x0: 88, x1: 104, z0: -62, z1: -59 }, { x0: 112, x1: 124, z0: -90, z1: -80 }, // caminho até o palácio e rampa de entrada
@@ -263,12 +262,30 @@ export function createEsplanada(): THREE.Group {
   diag(50, -170, 0, -140, 3);
   diag(-50, -110, 0, -140, 3);
   diag(50, -110, 0, -140, 3);
-  // espelhos d'água em frente ao Congresso
-  for (const r of [{ x0: -46, x1: -8, z0: 47, z1: 63 }, { x0: 8, x1: 46, z0: 47, z1: 63 }]) {
-    addFlat(mats.water, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.06, 12));
-    addFlat(mats.stone, flatGeom(r.x0 - 1, r.x1 + 1, r.z0 - 1, r.z1 + 1, 0.045, 4));
-    PARKS.push(r);
+  // lago em frente ao Congresso (um de cada lado da rampa, margem irregular e cinza-azulada, como na maquete) e um lago estreito na ponta do gramado central
+  const lake = (cx: number, cz: number, hw: number, hh: number, y: number, phase: number, n = 4): THREE.BufferGeometry => {
+    const pts: THREE.Vector2[] = [];
+    for (let i = 0; i < 72; i++) {
+      const t = (i / 72) * Math.PI * 2;
+      const c = Math.cos(t);
+      const sn = Math.sin(t);
+      const w = 1 + 0.05 * Math.sin(5 * t + phase) + 0.03 * Math.sin(9 * t + phase * 2);
+      pts.push(new THREE.Vector2(cx + hw * w * Math.sign(c) * Math.abs(c) ** (2 / n), -(cz + hh * w * Math.sign(sn) * Math.abs(sn) ** (2 / n))));
+    }
+    const g = new THREE.ShapeGeometry(new THREE.Shape(pts));
+    g.rotateX(-Math.PI / 2);
+    g.translate(0, y, 0);
+    return g;
+  };
+  for (const [cx, ph] of [[-27, 0.6], [27, 2.4]] as const) {
+    addFlat(mats.stone, lake(cx, 60, 24, 10.6, 0.045, ph));
+    addFlat(mats.water, lake(cx, 60, 22.6, 9.4, 0.07, ph));
+    PARKS.push({ x0: cx - 22, x1: cx + 22, z0: 51, z1: 69 });
   }
+  addFlat(mats.stone, lake(0, 30, 45, 6.4, 0.045, 1.3, 6));
+  addFlat(mats.water, lake(0, 30, 44, 5.4, 0.07, 1.3, 6));
+  // ruas estreitas dos dois lados do gramado central (como na foto de satélite)
+  for (const r of [{ x0: -43, x1: -38, z0: -37, z1: 36 }, { x0: 38, x1: 43, z0: -37, z1: 36 }]) { addFlat(mats.street, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.05, 12, 'road-z')); ROADS.push(r); }
   // ruas: asfalto com as faixas pintadas na textura
   for (const r of [AV_L, AV_R]) { addFlat(mats.avenue, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.05, 12, 'road-z')); ROADS.push(r); }
   addFlat(mats.street, flatGeom(PERIM_S.x0, PERIM_S.x1, PERIM_S.z0, PERIM_S.z1, 0.05, 12, 'road-x'));
@@ -425,8 +442,8 @@ export function createEsplanada(): THREE.Group {
   const inCross = (z: number): boolean => CROSS.some((c) => z > c.z0 - 5 && z < c.z1 + 5);
   for (let z = -165; z <= 38; z += 9) {
     if (inCross(z)) continue;
-    // fileiras: no gramado central ficam fora dos caminhos (x ±43), como na maquete; ao sul, junto às avenidas
-    for (const x of z > -34 ? [-43, 43] : [-48, 48]) spot(x, z + rnd() * 2, z > -34 ? 'maple' : rnd() < 0.6 ? 'oak' : 'maple');
+    // fileiras entre as ruas estreitas do gramado central e as avenidas (x ±48), como na maquete
+    for (const x of [-48, 48]) spot(x, z + rnd() * 2, z > -34 ? 'maple' : rnd() < 0.6 ? 'oak' : 'maple');
   }
   for (let z = -170; z <= 175; z += 8) for (const x of [-92, 92]) if (rnd() < 0.92) spot(x + (rnd() - 0.5), z, rnd() < 0.5 ? 'birch' : 'maple');
   // algumas árvores soltas e bosques nos pátios e gramados dos ministérios
@@ -449,7 +466,7 @@ export function createEsplanada(): THREE.Group {
 
   // ---- nomes dos lugares (barra de cima do jogo, mapa grande) ----
   PLACES.push(
-    { name: 'ESPELHOS D\'ÁGUA', rect: { x0: -48, x1: 48, z0: 44, z1: 68 } },
+    { name: 'LAGO DO CONGRESSO', rect: { x0: -48, x1: 48, z0: 36, z1: 70 } },
     { name: 'CONGRESSO NACIONAL', rect: { x0: -60, x1: 60, z0: 44, z1: HZ } },
     { name: 'EIXO MONUMENTAL OESTE', rect: { x0: -88, x1: -52, z0: -HZ, z1: HZ } },
     { name: 'EIXO MONUMENTAL LESTE', rect: { x0: 52, x1: 88, z0: -HZ, z1: HZ } },
