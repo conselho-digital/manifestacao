@@ -947,10 +947,10 @@ export function createEsplanada(): THREE.Group {
 
   // ---- árvores: fileiras ao longo das avenidas e do gramado, grupos nas margens ----
   const trees: TreeSpec[] = [];
-  const spot = (x: number, z: number, sp: Species): void => { trees.push({ x, z, h: HEIGHT[sp][0] + rnd() * (HEIGHT[sp][1] - HEIGHT[sp][0]), species: sp }); };
+  const spot = (x: number, z: number, sp: Species): void => { trees.push({ x, y: pitHeight(x, z), z, h: HEIGHT[sp][0] + rnd() * (HEIGHT[sp][1] - HEIGHT[sp][0]), species: sp }); };
   const inCross = (z: number): boolean => CROSS.some((c) => z > c.z0 - 5 && z < c.z1 + 5);
   for (let z = -165; z <= 38; z += 9) {
-    if (inCross(z)) continue;
+    if (inCross(z) || z > -90) continue; // na frente do Congresso só há a fileira ao longo das duas ruas (abaixo)
     // fileiras entre as ruas estreitas do gramado central e as avenidas (x ±48), como na maquete
     for (const x of [-48.5, 48.5]) spot(x, z + rnd() * 2, z > -34 ? 'maple' : rnd() < 0.6 ? 'oak' : 'maple');
   }
@@ -966,11 +966,42 @@ export function createEsplanada(): THREE.Group {
   for (const [gx, gz] of [[-120, -125], [120, -125], [100, -70], [118, -45], [-118, -98], [118, -98], [-122, 66], [118, 90], [-120, 124], [128, 146], [-100, 150], [100, 150]] as const) {
     for (let i = 0; i < 9; i++) spot(gx + (rnd() - 0.5) * 16, gz + (rnd() - 0.5) * 16, rnd() < 0.5 ? 'oak' : 'maple');
   }
-  for (const [x, z] of [[-24, -150], [24, -150], [0, -128], [-20, -70], [22, -60], [-26, -52], [28, -78], [0, -62]] as const) spot(x, z, 'oak');
-  for (let i = 0; i < 40; i++) trees.push({ x: -50 + rnd() * 100, z: -170 + rnd() * 62, h: HEIGHT.bush[0] + rnd() * (HEIGHT.bush[1] - HEIGHT.bush[0]), species: 'bush' });
+  for (const [x, z] of [[-24, -150], [24, -150], [0, -128]] as const) spot(x, z, 'oak');
+  // na frente do Congresso: UMA fileira de árvores paralela a cada uma das duas ruas (3,5 m para fora da pista), acompanhando-as até o lago
+  for (let z = -86; z <= 47; z += 7) for (const x of [-34.5, 34.5]) spot(x, z + (rnd() - 0.5) * 0.6, rnd() < 0.5 ? 'oak' : 'maple');
   const nearBuilding = (x: number, z: number, m: number): boolean => B.some((b) => x > b.x0 - m && x < b.x1 + m && z > b.z0 - m && z < b.z1 + m);
+  // gramados das margens e de trás do Congresso: muitas árvores (menos na frente do Palácio, o gramado x 97..150, z −92..−34, e na frente do Congresso)
+  {
+    const poleXZ = poles;
+    const free = (x: number, z: number): boolean => {
+      if (nearBuilding(x, z, 6)) return false;
+      if (ROADS.some((r) => x > r.x0 - 2 && x < r.x1 + 2 && z > r.z0 - 2 && z < r.z1 + 2) || lots.some((r) => x > r.x0 - 2 && x < r.x1 + 2 && z > r.z0 - 2 && z < r.z1 + 2)) return false;
+      if ([LOT_D, ...STREETS_E, PLAZA, ...PLAZA2].some((pts) => inPoly(x, z, pts))) return false;
+      if (WALKS.some(([x0, x1, z0, z1]) => x > x0 - 1.5 && x < x1 + 1.5 && z > z0 - 1.5 && z < z1 + 1.5)) return false;
+      if (poleXZ.some(([px, pz]) => Math.hypot(px - x, pz - z) < 2)) return false;
+      if (Math.abs(x) > 97 && x > 0 && z > -94 && z < -32) return false; // gramado em frente ao Palácio (colunata): sem árvores
+      if (Math.abs(x - 10) < 14 && z > 155 && z < 185) return false; // as duas torres
+      if (Math.abs(x) < 26 && z > 139 && z < 147) return false; // pontes de pedestres
+      if (Math.abs(x + 92) < 9 && Math.abs(z + 60) < 10) return false; // em frente ao outdoor
+      if (Math.abs(Math.abs(x) - 91.2) < 4.5 && (Math.abs(z + 122) < 6 || Math.abs(z - 30) < 6)) return false; // pontos de ônibus
+      return true;
+    };
+    const pick = (): Species => { const r = rnd(); return r < 0.35 ? 'oak' : r < 0.65 ? 'maple' : r < 0.9 ? 'birch' : 'pine'; };
+    const taken: [number, number][] = [];
+    const tryPlant = (x: number, z: number, gap: number): void => {
+      if (!free(x, z) || taken.some(([tx, tz]) => Math.hypot(tx - x, tz - z) < gap)) return;
+      taken.push([x, z]);
+      spot(x, z, pick());
+    };
+    for (let i = 0; i < 9000; i++) {
+      const side = rnd() < 0.5 ? -1 : 1;
+      tryPlant(side * (88 + rnd() * 60), -172 + rnd() * 358, 6.5); // margens oeste e leste (inclui o gramado junto às avenidas)
+    }
+    for (let i = 0; i < 1500; i++) tryPlant(-52 + rnd() * 104, 126 + rnd() * 62, 7); // atrás do Congresso (no rebaixo, em cima do fundo)
+  }
+  for (let i = 0; i < 40; i++) trees.push({ x: -50 + rnd() * 100, z: -170 + rnd() * 62, h: HEIGHT.bush[0] + rnd() * (HEIGHT.bush[1] - HEIGHT.bush[0]), species: 'bush' });
   const crown: Record<string, number> = { oak: 0.4, pine: 0.2, maple: 0.3, birch: 0.2, bush: 0 };
-  const blocked = (x: number, z: number): boolean => pitHeight(x, z) < -0.1 || [...ROADS, ...lots].some((r) => x > r.x0 - 1.5 && x < r.x1 + 1.5 && z > r.z0 - 1.5 && z < r.z1 + 1.5) || [LOT_D, ...STREETS_E].some((pts) => inPoly(x, z, pts));
+  const blocked = (x: number, z: number): boolean => [...ROADS, ...lots].some((r) => x > r.x0 - 1.5 && x < r.x1 + 1.5 && z > r.z0 - 1.5 && z < r.z1 + 1.5) || [LOT_D, ...STREETS_E].some((pts) => inPoly(x, z, pts));
   const placed = trees.filter((t) => t.species === 'bush' || (!nearBuilding(t.x, t.z, crown[t.species]! * t.h + 0.4) && !blocked(t.x, t.z)));
   const treeGroup = makeTrees(placed);
   city.add(treeGroup);

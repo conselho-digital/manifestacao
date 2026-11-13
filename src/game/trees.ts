@@ -127,7 +127,7 @@ const Y = new THREE.Vector3(0, 1, 0);
 function limb(a: THREE.Vector3, b: THREE.Vector3, r0: number, r1: number, seg = 6): THREE.BufferGeometry {
   const dir = b.clone().sub(a);
   const len = dir.length();
-  const g = new THREE.CylinderGeometry(r1, r0, len, seg, 1);
+  const g = new THREE.CylinderGeometry(r1, r0, len, seg, 1, true); // sem tampas: as pontas ficam escondidas na folhagem e no chão (menos ~40% de triângulos no tronco)
   g.translate(0, len / 2, 0);
   g.applyQuaternion(new THREE.Quaternion().setFromUnitVectors(Y, dir.normalize()));
   g.translate(a.x, a.y, a.z);
