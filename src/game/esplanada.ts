@@ -333,16 +333,15 @@ export function createEsplanada(): THREE.Group {
   // margem oeste: par de ministérios ao sul; par empilhado ao norte da rua; galpão com telhado nervurado, galpões baixos e prédio quadrado
   pair(-146, -100, -168, -138);
   pair(-146, -100, -88, -60);
-  B.push({ x0: -126, x1: -100, z0: -32, z1: 50, h: 12, tex: 'warehouse', roof: 'rib' });
-  B.push({ x0: -146, x1: -130, z0: -30, z1: -6, h: 7, tex: 'warehouse' });
-  B.push({ x0: -146, x1: -130, z0: -2, z1: 18, h: 9, tex: 'warehouse' });
-  B.push({ x0: -146, x1: -130, z0: 22, z1: 44, h: 7, tex: 'warehouse' });
   // margem direita da foto aérea (a leste do Congresso; no jogo é o lado x < 0): galpão cinza, edifício creme em degraus, anexo e galpão de duas águas
   B.push({ x0: -125, x1: -99, z0: 59.7, z1: 124, h: 12, tex: 'plain' });
   B.push({ x0: -143, x1: -133, z0: 59.6, z1: 123.1, h: 10, tex: 'warehouse', roof: 'rib' });
   B.push({ x0: -148, x1: -139.5, z0: 109.2, z1: 123.1, h: 8, tex: 'plain' });
   B.push({ x0: -148, x1: -143, z0: 83.2, z1: 109.2, h: 8, tex: 'warehouse' });
   B.push({ x0: -148, x1: -133.5, z0: 135.8, z1: 174.2, h: 12, tex: 'warehouse', roof: 'gable' });
+  B.push({ x0: -125, x1: -97, z0: 36.3, z1: 51.8, h: 9, tex: 'plain' }); // galpão menor, abaixo do grande
+  B.push({ x0: -148, x1: -133, z0: 48.7, z1: 64, h: 12, tex: 'plain' }); // bloco creme de baixo
+  B.push({ x0: -136.2, x1: -104.2, z0: -21.3, z1: 11.9, h: 14, tex: 'plain' }); // prédio quadrado com telhado bege
   // margem leste: par ao sul, palácio com colunas, blocos cinza, edifício creme e galpão de duas águas
   pair(100, 146, -168, -138);
   B.push({ x0: 104, x1: 132, z0: -78, z1: -38, h: 16, tex: 'palace' });
@@ -423,6 +422,23 @@ export function createEsplanada(): THREE.Group {
   for (const pts of STREETS_E) addFlat(mats.asp, flatPoly(pts, 0.047, 12));
   addFlat(mats.concrete, flatPoly(PLAZA, 0.06, 4));
   addFlat(mats.concrete, flatGeom(-101.7, -55, 141.1, 143.5, 0.06, 4)); // passeio que atravessa a avenida até a rua da margem
+  // ---- 2ª foto aérea (mais ao sul na mesma margem): rua entre prédios, praça de pedra, rua horizontal, caminhos, estacionamento e árvores ----
+  // x_foto2 → x_foto1: 495 + (x − 518)·1,04; y_foto2 → y_foto1: y + 515 (mesma escala em z).
+  const E2 = (px: number, py: number): [number, number] => E(495 + (px - 518) * 1.04, py + 515);
+  const rectE2 = (x0: number, y0: number, x1: number, y1: number): [number, number][] => [E2(x0, y0), E2(x1, y0), E2(x1, y1), E2(x0, y1)];
+  STREETS_E.push(
+    rectE2(780, 950, 830, 1385), // rua entre os prédios, continuação
+    rectE2(410, 1350, 1100, 1400), // rua horizontal abaixo da praça
+  );
+  addFlat(mats.asp, flatPoly(STREETS_E[STREETS_E.length - 2]!, 0.047, 12));
+  addFlat(mats.asp, flatPoly(STREETS_E[STREETS_E.length - 1]!, 0.047, 12));
+  const PLAZA2 = [rectE2(405, 1215, 780, 1345), rectE2(830, 1285, 1100, 1350)];
+  for (const pts of PLAZA2) addFlat(mats.concrete, flatPoly(pts, 0.06, 4));
+  for (const pts of [rectE2(410, 1660, 585, 1700), rectE2(410, 1760, 585, 1780), rectE2(708, 1405, 748, 1505), rectE2(708, 1900, 748, 2150)]) addFlat(mats.concrete, flatPoly(pts, 0.06, 4));
+  const TREES2: [number, number][] = ([[480, 1295], [555, 1300], [615, 1310], [665, 1305], [740, 1315], [860, 1260], [915, 1265], [985, 1260], [1030, 1255], [500, 1500], [500, 1925], [575, 2010], [520, 2060], [640, 2090], [860, 2090], [930, 2030], [1000, 2090]] as [number, number][]).map(([px, py]) => E2(px, py));
+  const lotS: Rect = { x0: -146, x1: -137, z0: -23.8, z1: 16.1 };
+  lots.push(lotS);
+  addFlat(mats.lot, flatGeom(lotS.x0, lotS.x1, lotS.z0, lotS.z1, 0.045, 21));
   const PLAZA_TREES: [number, number][] = ([[680, 45], [600, 110], [535, 265], [600, 240], [440, 465], [500, 440], [580, 430], [565, 505], [340, 595], [390, 640], [460, 625], [535, 650], [615, 650], [335, 700], [345, 825], [420, 820], [495, 825], [565, 820], [645, 825]] as [number, number][]).map(([cx, cy]) => [400 + cx / 1.5, cy / 1.5] as [number, number]);
   const inPoly = (x: number, z: number, pts: [number, number][]): boolean => {
     let inside = false;
@@ -502,6 +518,9 @@ export function createEsplanada(): THREE.Group {
   roofAt(104, 132, -84, -78, 15);
   wallsBy.plain!.push(boxWalls(113, 123, -64, -52, 16, 18.5, 16, 8));
   roofAt(113, 123, -64, -52, 18.5);
+  // telhado bege no centro do prédio quadrado (foto)
+  wallsBy.warehouse!.push(boxWalls(-130.5, -115, -8.3, -1.3, 14, 15.3, 16, 8));
+  roofAt(-130.5, -115, -8.3, -1.3, 15.3);
   // pontos de ônibus (abrigo com cobertura e fundo) nas calçadas externas das avenidas
   for (const [sx, z] of [[-1, -122], [1, -122], [-1, 30], [1, 30]] as const) {
     const xa = sx * 91.2;
@@ -567,7 +586,8 @@ export function createEsplanada(): THREE.Group {
     spot(side * (100 + rnd() * 44), -176 + rnd() * 350, rnd() < 0.5 ? 'oak' : 'birch');
   }
   for (const [px, py] of PLAZA_TREES) { const [x, z] = E(px, py); spot(x, z, rnd() < 0.6 ? 'oak' : 'maple'); } // árvores da praça de pedra
-  for (let z = 61; z <= 124; z += 3.6) spot(-93.6, z + (rnd() - 0.5), rnd() < 0.5 ? 'maple' : 'oak'); // fileira densa junto à avenida, ao lado do galpão cinza
+  for (const [x, z] of TREES2) { spot(x, z, rnd() < 0.6 ? 'oak' : 'maple'); } // árvores soltas e bosque da 2ª foto
+  for (let z = 34; z <= 124; z += 3.6) spot(-93.6, z + (rnd() - 0.5), rnd() < 0.5 ? 'maple' : 'oak'); // fileira densa junto à avenida, ao lado do galpão cinza
   for (const [gx, gz] of [[-120, -125], [120, -125], [100, -70], [118, -45], [-118, -98], [118, -98], [-122, 66], [118, 90], [-120, 124], [128, 146], [-100, 150], [100, 150]] as const) {
     for (let i = 0; i < 9; i++) spot(gx + (rnd() - 0.5) * 16, gz + (rnd() - 0.5) * 16, rnd() < 0.5 ? 'oak' : 'maple');
   }
