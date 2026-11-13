@@ -223,15 +223,15 @@ const PIT_X = 52; // começa na calçada interna das avenidas (|x| = 52)
 const PIT_XB = 45; // talude lateral: do |x| 52 ao 45 (7 m) chega ao fundo
 const PIT_Z0 = 3; // rampa do sul: z 3 → 28 (25 m)
 const PIT_Z1 = 28;
-const PIT_Z2 = 149; // fundo: z 28 → 149 (até o fim do quadrado vermelho do usuário); rampa do norte, bem suave: z 149 → 180 (31 m)
-const PIT_Z3 = 180;
+const PIT_Z2 = 160; // fundo: z 28 → 160 (passa pelas torres de trás); a rampa de subida só começa depois delas: z 160 → 188 (28 m)
+const PIT_Z3 = 188;
 const smooth = (t: number): number => { const c = Math.min(1, Math.max(0, t)); return c * c * (3 - 2 * c); };
 export function pitHeight(x: number, z: number): number {
   const ax = Math.abs(x);
   if (ax >= PIT_X || z <= PIT_Z0 || z >= PIT_Z3) return 0;
   return -PIT_D * smooth((PIT_X - ax) / (PIT_X - PIT_XB)) * smooth((z - PIT_Z0) / (PIT_Z1 - PIT_Z0)) * smooth((PIT_Z3 - z) / (PIT_Z3 - PIT_Z2));
 }
-const PIT_REGION = { x0: -53, x1: 53, z0: 2, z1: 181 };
+const PIT_REGION = { x0: -53, x1: 53, z0: 2, z1: 189 };
 
 /** Divide cada triângulo em 4, k vezes (o mesmo k para todos: sem rachaduras entre vizinhos da mesma peça). */
 function subdivide(g: THREE.BufferGeometry, k: number): THREE.BufferGeometry {
