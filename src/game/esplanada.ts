@@ -436,6 +436,24 @@ export function createEsplanada(): THREE.Group {
   for (const pts of PLAZA2) addFlat(mats.concrete, flatPoly(pts, 0.06, 4));
   for (const pts of [rectE2(410, 1660, 585, 1700), rectE2(410, 1760, 585, 1780), rectE2(708, 1405, 748, 1505), rectE2(708, 1900, 748, 2150)]) addFlat(mats.concrete, flatPoly(pts, 0.06, 4));
   const TREES2: [number, number][] = ([[480, 1295], [555, 1300], [615, 1310], [665, 1305], [740, 1315], [860, 1260], [915, 1265], [985, 1260], [1030, 1255], [500, 1500], [500, 1925], [575, 2010], [520, 2060], [640, 2090], [860, 2090], [930, 2030], [1000, 2090]] as [number, number][]).map(([px, py]) => E2(px, py));
+  // ---- retoques pedidos sobre uma captura de cima (asfalto em cinza, grama em verde): coordenadas medidas na captura (3,71 px/m) ----
+  const CW = (cx: number, cy: number): [number, number] => [-(cx - 3) / 3.71, 194.7 - cy / 3.71];
+  const cpoly = (pts: [number, number][]): [number, number][] => pts.map(([cx, cy]) => CW(cx, cy));
+  const crect = (x0: number, y0: number, x1: number, y1: number): [number, number][] => cpoly([[x0, y0], [x1, y0], [x1, y1], [x0, y1]]);
+  const ASPH: [number, number][][] = [
+    crect(96, 186, 178, 249), // atrás do Congresso: via larga (a antiga e as calçadas dos lados viram asfalto)
+    crect(100, 184, 210, 199), // faixa até a avenida
+    crect(98, 174, 108, 186),
+    crect(305, 184, 345, 198), // faixa da avenida até a rua da margem
+    crect(353, 150, 361, 190), // rua da margem um pouco mais larga
+    cpoly([[335, 205], [385, 180], [412, 195], [395, 225], [345, 235]]), // liga a rua em diagonal à rua curva
+  ];
+  for (const pts of ASPH) { addFlat(mats.asp, flatPoly(pts, 0.07, 12)); STREETS_E.push(pts); }
+  const GRASS: [number, number][][] = [
+    [[-48.5, 128.2], [-23.5, 128.2], [-23.5, 124.4], [-48.5, 124.4]], // faixa de grama entre a via e a laje
+    cpoly([[372, 165], [381, 171], [364, 205], [354, 223], [342, 216], [350, 200]]), // grama ao lado da rua em diagonal
+  ];
+  for (const pts of GRASS) addFlat(mats.lawn, flatPoly(pts, 0.075, 12));
   const lotS: Rect = { x0: -146, x1: -137, z0: -23.8, z1: 16.1 };
   lots.push(lotS);
   addFlat(mats.lot, flatGeom(lotS.x0, lotS.x1, lotS.z0, lotS.z1, 0.045, 21));
