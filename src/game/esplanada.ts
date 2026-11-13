@@ -213,7 +213,7 @@ export function createEsplanada(): THREE.Group {
     street: std(T.street!, 0xffffff, 0.9),
     lot: std(T.lot!, 0xffffff, 0.9),
     water: new THREE.MeshStandardMaterial({ color: 0x61797a, roughness: 0.15, metalness: 0.15, polygonOffset: true, polygonOffsetFactor: -2, polygonOffsetUnits: -2 }),
-    pave: new THREE.MeshStandardMaterial({ color: 0xdcdcd6, roughness: 0.95 }),
+    pave: new THREE.MeshStandardMaterial({ color: 0xdcdcd6, roughness: 0.95, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }),
     terra: new THREE.MeshStandardMaterial({ color: 0xa65a3c, roughness: 0.95 }),
     ribRoof: std(T.rib!),
     gable: new THREE.MeshStandardMaterial({ color: 0x9a968c, roughness: 0.9, side: THREE.DoubleSide }),
@@ -229,7 +229,7 @@ export function createEsplanada(): THREE.Group {
   const lawns: Rect[] = [
     { x0: -52, x1: 52, z0: -172, z1: -108 }, // gramado sul (com caminhos em diagonal)
     { x0: -52, x1: 52, z0: -88, z1: -37 }, // gramado grande do meio
-    { x0: -52, x1: 52, z0: -18, z1: 44 }, // gramado central, até a calçada no fim da rampa
+    { x0: -52, x1: 52, z0: -18, z1: 52 }, // gramado central, até a margem do lago
   ];
   for (const r of lawns) { addFlat(mats.lawn, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.015, 12)); PARKS.push(r); }
   // faixas de gramado ao lado das avenidas (lado de fora)
@@ -241,8 +241,7 @@ export function createEsplanada(): THREE.Group {
     { x0: -88, x1: -85, z0: -175, z1: HZ }, { x0: -55, x1: -52, z0: -175, z1: HZ },
     { x0: 55, x1: 58, z0: -175, z1: HZ }, { x0: 85, x1: 88, z0: -175, z1: HZ },
     // caminhos laterais do gramado central e do gramado do meio
-        { x0: -3, x1: 3, z0: 44, z1: CONG_FRONT }, // rampa/passeio central até o Congresso (cruza o lago)
-    { x0: -52, x1: 52, z0: -175, z1: -172 }, { x0: -52, x1: 52, z0: -108, z1: -105 },
+        { x0: -52, x1: 52, z0: -175, z1: -172 }, { x0: -52, x1: 52, z0: -108, z1: -105 },
     { x0: -52, x1: 52, z0: -90, z1: -88 }, { x0: -52, x1: 52, z0: -37, z1: -35 },
     { x0: 88, x1: 104, z0: -62, z1: -59 }, { x0: 112, x1: 124, z0: -90, z1: -80 }, // caminho até o palácio e rampa de entrada
   ];
@@ -277,17 +276,14 @@ export function createEsplanada(): THREE.Group {
     g.translate(0, y, 0);
     return g;
   };
-  for (const [cx, ph] of [[-22, 0.6], [22, 2.4]] as const) {
-    addFlat(mats.stone, lake(cx, 60, 18.4, 10.6, 0.045, ph));
-    addFlat(mats.water, lake(cx, 60, 17, 9.4, 0.07, ph));
-    PARKS.push({ x0: cx - 17, x1: cx + 17, z0: 51, z1: 69 });
-  }
-  addFlat(mats.stone, lake(0, 30, 39, 6.4, 0.045, 1.3, 6));
-  addFlat(mats.water, lake(0, 30, 38, 5.4, 0.07, 1.3, 6));
-  // calçada cinza-clara no fim da rampa, de uma rua à outra (como na maquete)
-  addFlat(mats.pave, flatGeom(-45, 45, 44, 50, 0.055, 4));
+  // UM só lago, de uma rua à outra: começa na ponta do gramado, passa por baixo da calçada que une as duas ruas (no fim da rampa) e segue por baixo da rampa até a fachada
+  addFlat(mats.stone, lake(0, 71, 39.5, 20.2, 0.045, 0.9, 5));
+  addFlat(mats.water, lake(0, 71, 38, 18.8, 0.07, 0.9, 5));
+  PARKS.push({ x0: -37, x1: 37, z0: 53, z1: 89 });
+  // calçada cinza-clara no fim da rampa, ligando as duas ruas, por cima do lago
+  addFlat(mats.pave, flatGeom(-45, 45, 65, 71, 0.1, 4));
   // duas ruas que descem da frente do Congresso e seguem pelos dois lados do lago e do gramado central
-  for (const r of [{ x0: -45, x1: -40, z0: -37, z1: CONG_FRONT }, { x0: 40, x1: 45, z0: -37, z1: CONG_FRONT }]) { addFlat(mats.street, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.05, 12, 'road-z')); ROADS.push(r); }
+  for (const r of [{ x0: -45, x1: -40, z0: -37, z1: 92 }, { x0: 40, x1: 45, z0: -37, z1: 92 }]) { addFlat(mats.street, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.05, 12, 'road-z')); ROADS.push(r); }
   // ruas: asfalto com as faixas pintadas na textura
   for (const r of [AV_L, AV_R]) { addFlat(mats.avenue, flatGeom(r.x0, r.x1, r.z0, r.z1, 0.05, 12, 'road-z')); ROADS.push(r); }
   addFlat(mats.street, flatGeom(PERIM_S.x0, PERIM_S.x1, PERIM_S.z0, PERIM_S.z1, 0.05, 12, 'road-x'));
@@ -468,7 +464,7 @@ export function createEsplanada(): THREE.Group {
 
   // ---- nomes dos lugares (barra de cima do jogo, mapa grande) ----
   PLACES.push(
-    { name: 'LAGO DO CONGRESSO', rect: { x0: -48, x1: 48, z0: 36, z1: 70 } },
+    { name: 'LAGO DO CONGRESSO', rect: { x0: -48, x1: 48, z0: 50, z1: 92 } },
     { name: 'CONGRESSO NACIONAL', rect: { x0: -60, x1: 60, z0: 44, z1: HZ } },
     { name: 'EIXO MONUMENTAL OESTE', rect: { x0: -88, x1: -52, z0: -HZ, z1: HZ } },
     { name: 'EIXO MONUMENTAL LESTE', rect: { x0: 52, x1: 88, z0: -HZ, z1: HZ } },
