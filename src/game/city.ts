@@ -4,6 +4,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { addBox, COLLIDERS, PARKS, PLACES, ROADS, TREES, type Rect } from './map';
 import { buildGrayTower, TOWER } from './tower';
 import { registerCullChildren, FAR_TREES } from './culling';
+import { addShops } from './shops';
 import { placeSafraSign } from './safra';
 import { placeTotem } from './totem';
 import { HEIGHT, makeTrees, type Species, type TreeSpec } from './trees';
@@ -310,7 +311,7 @@ function widenSidewalks(sx0: number, sx1: number, sz0: number, sz1: number): { s
   return { sx0: mx(sx0), sx1: mx(sx1), sz0: mz(sz0), sz1: mz(sz1) };
 }
 
-const footprints: { name: string; r: Rect; allowWalk?: boolean }[] = [];
+const footprints: { name: string; r: Rect; allowWalk?: boolean; off?: number }[] = [];
 /** postes e abrigos (para a verificação de desenvolvimento: nada no meio da rua) */
 const propSpots: [string, number, number][] = [];
 
@@ -359,7 +360,7 @@ function addBuilding(b: Batch, s: Spec, helipads: THREE.Mesh[], hpTex: THREE.Tex
   const w = r.x1 - r.x0;
   const d = r.z1 - r.z0;
   const { h, kind } = s;
-  footprints.push({ name, r });
+  footprints.push({ name, r, off: s.plinth || kind === 'copper' ? 0.7 : 0 }); // off: quanto o térreo sai da caixa (lojas)
   addBox(r.x0, r.x1, r.z0, r.z1, h, kind === 'house' ? '#a8a08e' : kind === 'glass' || kind === 'dark' ? '#6b7f94' : kind === 'copper' ? '#7a4a34' : '#b4ab98');
 
   if (kind === 'copper') { addCopperTower(b, x, z, w, d, h); return; }
@@ -793,6 +794,9 @@ export function createCity(): THREE.Group {
 
   // Escultura "Safra" na calçada em frente ao prédio de cobre (NT), girada 90°: as letras ficam dos dois lados, de frente para quem anda pela calçada
   placeSafraSign(city, -23, 15.6, Math.PI / 2);
+
+  // Lojas no térreo de cada prédio (vitrine com cartaz, porta, letreiro e toldo); sem colisão
+  addShops(city, footprints.map((f) => ({ name: f.name, r: f.r, off: f.off ?? 0 })), { hx: HX, hz: HZ });
 
   validate();
   void loadMasp(city);
