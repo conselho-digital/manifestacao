@@ -38,10 +38,11 @@ export const loadModel = (name: string): Promise<THREE.Object3D> => {
 };
 
 const MAX_SPEED = 33.3; // 120 km/h
-const BIKE_MAX_SPEED = 41.7; // 150 km/h
+const BIKE_MAX_SPEED = 36.1; // 130 km/h
 const MAX_REVERSE = 10; // dobro da ré anterior (5)
 const ACCEL = 9; // carros demoram mais para pegar velocidade (era 18)
-const BIKE_ACCEL = 8;
+const BIKE_ACCEL = 6.5; // com a perda de força perto do topo (BIKE_TAPER) leva ~12 s para chegar aos 130 km/h
+const BIKE_TAPER = 0.97; // quanto a aceleração da moto cai até o topo (carro: 0,55)
 const BRAKE = 30;
 const DRAG = 3;
 const HAND_BRAKE = 24;
@@ -659,7 +660,7 @@ export class Car {
     // empinar: só com velocidade; a roda da frente sobe até ~40° e volta ao soltar
     const wantTilt = bike && wheelie && this.speed > 3 ? 0.72 : 0; // como antes: basta segurar empinar com a moto andando (sem precisar acelerar)
     this.tilt += (wantTilt - this.tilt) * Math.min(1, dt * (wantTilt > this.tilt ? 3 : (gas ? 7 : 12)));
-    if (gas) this.speed += (f < -0.5 ? BRAKE : accel * (this.tilt > 0.3 ? 1.5 : 1) * (1 - 0.55 * Math.min(1, Math.max(0, f) / maxSpeed) ** 2)) * dt; // empinada dá um arranque extra
+    if (gas) this.speed += (f < -0.5 ? BRAKE : accel * (this.tilt > 0.3 ? 1.5 : 1) * (1 - (bike ? BIKE_TAPER : 0.55) * Math.min(1, Math.max(0, f) / maxSpeed) ** 2)) * dt; // empinada dá um arranque extra
     else if (brake) this.speed -= (f > 0.5 ? BRAKE : ACCEL * 0.6) * dt; // freia e depois dá ré
     else this.speed -= Math.sign(f) * Math.min(Math.abs(f), DRAG * dt);
     // freio de mão: em velocidade trava as traseiras e derrapa (perde menos velocidade); parado/devagar segura firme

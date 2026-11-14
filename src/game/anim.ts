@@ -103,6 +103,8 @@ interface Arm {
 interface Hand { fingers: THREE.Bone[]; side: 1 | -1 }
 interface Leg { thigh: THREE.Bone; calf: THREE.Bone; foot: THREE.Bone }
 
+/** Para onde o piloto olha na moto: levemente para baixo (graus abaixo da horizontal). */
+const RIDER_GAZE = 9;
 /** Postura do piloto de moto esportiva: costas retas a `torso` graus acima da horizontal, coxas na horizontal e canelas para trás, como no desenho do dono. */
 export interface RiderPose { torso: number; thigh: number; shin: number }
 interface Spine { mid: THREE.Bone; chest: THREE.Bone; neck: THREE.Bone; head: THREE.Bone }
@@ -699,6 +701,7 @@ export class Animator {
         this.rotateBone(this.spine.neck, new THREE.Quaternion().setFromAxisAngle(X, -lean * 0.3));
         this.rotateBone(this.spine.head, new THREE.Quaternion().setFromAxisAngle(X, -lean * 0.3));
         this.updateRoot();
+        if (this.clipName === 'bike_ride') { this.faceTo(RIDER_GAZE); this.updateRoot(); } // moto (cruiser): também olha um pouco para baixo
       }
       for (const arm of this.arms) this.solveArm(arm, arm.side > 0 ? this.ride.grips[0] : this.ride.grips[1], 1, dt);
       this.curlHand(1, 1);
@@ -1056,8 +1059,7 @@ export class Animator {
     this.aimBone(sp.chest, sp.neck, back);
     // pescoço levanta; a cabeça gira até o rosto olhar para a FRENTE (horizontal), não importa a inclinação do tronco
     this.aimBone(sp.neck, sp.head, dirAt(pose.torso + 38));
-    const face = new THREE.Vector3(0, 0, 1).applyQuaternion(this.quatIn(sp.head, new THREE.Quaternion()).multiply(this.headRest.clone().invert()));
-    this.rotateBone(sp.head, new THREE.Quaternion().setFromUnitVectors(face, new THREE.Vector3(0, 0, 1)));
+    this.faceTo(RIDER_GAZE);
     this.updateRoot();
     for (const l of this.legs) {
       const knee = this.posIn(l.calf, new THREE.Vector3());
@@ -1069,6 +1071,14 @@ export class Animator {
       this.rotateBone(l.foot, qShin.clone().invert());
     }
     this.updateRoot();
+  }
+
+  /** Gira a cabeça até o rosto apontar para a frente, `pitchDeg` graus para baixo (0 = horizontal). */
+  private faceTo(pitchDeg: number): void {
+    const sp = this.spine!;
+    const face = new THREE.Vector3(0, 0, 1).applyQuaternion(this.quatIn(sp.head, new THREE.Quaternion()).multiply(this.headRest.clone().invert()));
+    const r = THREE.MathUtils.degToRad(pitchDeg);
+    this.rotateBone(sp.head, new THREE.Quaternion().setFromUnitVectors(face, new THREE.Vector3(0, -Math.sin(r), Math.cos(r))));
   }
 
   private rotateBone(bone: THREE.Bone, r: THREE.Quaternion): void {

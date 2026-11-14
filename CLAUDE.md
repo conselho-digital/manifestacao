@@ -476,3 +476,7 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 
 ## Rodada: dano ao bater a moto e cair
 - Quando a moto bate acima de `CRASH_SPEED` (11 m/s, ~40 km/h) e o piloto cai, `Player.crashBike` chama `onBikeCrash(speed)` → `Combat.bikeCrash` (combat.ts): dano = `min(380, (velocidade da batida − 8) × 9)` de 400 de vida (40 km/h ≈ 27, 100 km/h ≈ 170, 150 km/h ≈ 300); o colete segura 60% como nos outros danos e a pausa/proteção após renascer impede o dano (a queda continua). Causa no placar: "ACIDENTE DE MOTO". Dá para morrer em batida muito forte com pouca vida. Testado: batida real no muro a ~25 m/s tirou ~106 de 400 (com 50 de colete).
+
+## Rodada: motos até 130 km/h (mais difícil) e piloto olhando um pouco para baixo
+- Moto: `BIKE_MAX_SPEED` 36,1 m/s (130 km/h), `BIKE_ACCEL` 6,5 e `BIKE_TAPER` 0,97 (a aceleração cai quase a zero perto do topo; carro segue com 0,55): ~8 s para 90% da velocidade e ~12 s para chegar nos 130 (antes ~6 s). `topSpeed` das motos em audio.ts = 36,1 (as marchas do som usam a fração dessa velocidade).
+- Olhar do piloto (`RIDER_GAZE` 9° em anim.ts, `faceTo(pitchDeg)`): a cabeça aponta 9° abaixo da horizontal em todas as motos (esportivas em `poseRider`; Harley/cruiser no caminho antigo do `lean`).

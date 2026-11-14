@@ -64,10 +64,10 @@ const PROFILES: Record<string, EngineProfile> = {
   blistac: { a: 'sawtooth', b: 'square', idle: 52, top: 130, ratio: 0.5, cutIdle: 330, cutTop: 900, lope: 0, lopeDepth: 0, vol: 1, topSpeed: 33.3, sample: 'harley' },
   buffalo: { a: 'sawtooth', b: 'sawtooth', idle: 30, top: 78, ratio: 0.5, cutIdle: 220, cutTop: 520, lope: 13, lopeDepth: 0.35, vol: 1.15, topSpeed: 33.3 },
   clover: { a: 'square', b: 'triangle', idle: 36, top: 96, ratio: 0.5, cutIdle: 260, cutTop: 620, lope: 9, lopeDepth: 0.25, vol: 1.05, topSpeed: 33.3 },
-  harley: { a: 'sawtooth', b: 'square', idle: 26, top: 90, ratio: 0.5, cutIdle: 260, cutTop: 700, lope: 7, lopeDepth: 0.55, vol: 1.2, topSpeed: 41.7, bike: true, sample: 'harley' },
-  triumph: { a: 'sawtooth', b: 'square', idle: 58, top: 210, ratio: 0.5, cutIdle: 520, cutTop: 1500, lope: 0, lopeDepth: 0, vol: 1, topSpeed: 41.7, bike: true },
-  bmw: { a: 'sawtooth', b: 'sawtooth', idle: 84, top: 330, ratio: 1.005, cutIdle: 800, cutTop: 2400, lope: 0, lopeDepth: 0, vol: 0.95, topSpeed: 41.7, bike: true, sample: 'sport' },
-  suzuki: { a: 'square', b: 'sawtooth', idle: 96, top: 380, ratio: 1.003, cutIdle: 900, cutTop: 2800, lope: 0, lopeDepth: 0, vol: 0.95, topSpeed: 41.7, bike: true, sample: 'sport' },
+  harley: { a: 'sawtooth', b: 'square', idle: 26, top: 90, ratio: 0.5, cutIdle: 260, cutTop: 700, lope: 7, lopeDepth: 0.55, vol: 1.2, topSpeed: 36.1, bike: true, sample: 'harley' },
+  triumph: { a: 'sawtooth', b: 'square', idle: 58, top: 210, ratio: 0.5, cutIdle: 520, cutTop: 1500, lope: 0, lopeDepth: 0, vol: 1, topSpeed: 36.1, bike: true },
+  bmw: { a: 'sawtooth', b: 'sawtooth', idle: 84, top: 330, ratio: 1.005, cutIdle: 800, cutTop: 2400, lope: 0, lopeDepth: 0, vol: 0.95, topSpeed: 36.1, bike: true, sample: 'sport' },
+  suzuki: { a: 'square', b: 'sawtooth', idle: 96, top: 380, ratio: 1.003, cutIdle: 900, cutTop: 2800, lope: 0, lopeDepth: 0, vol: 0.95, topSpeed: 36.1, bike: true, sample: 'sport' },
 };
 const FALLBACK: EngineProfile = PROFILES.blistac!;
 const ENGINE_RANGE = 70; // metros até sumir
