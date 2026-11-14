@@ -77,7 +77,7 @@ const CSS = `
 .m-keys .free{grid-column:1/-1;color:#ffd84d;text-align:center;display:none}
 .m-keys.unlocked .free{display:block}
 .m-hud.driving .m-keys .foot-k,.m-hud:not(.driving) .m-keys .car-k{display:none}
-.m-hud:not(.desktop) .m-keys{display:none}
+.m-hud:not(.desktop) .m-keys,.m-keys.hidden{display:none}
 .m-hud.driving .foot,.m-hud.driving .m-stick{display:none!important}
 .m-steerL,.m-steerR{bottom:calc(var(--u)*10);width:calc(var(--u)*23.8);height:calc(var(--u)*23.8);}
 .m-wheelie{left:calc(var(--u)*58);bottom:calc(var(--u)*10);width:calc(var(--u)*17);height:calc(var(--u)*17)}
@@ -411,7 +411,7 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   const KEYS_FOOT: [string, string][] = [
     ['W A S D', 'Mover'], ['Shift / Q', 'Correr'], ['Espaço', 'Pular'], ['E', 'Escalar'], ['Z / Ctrl', 'Agachar'], ['F', 'Entrar no carro'],
     ['Clique', 'Atirar / bater'], ['Botão direito', 'Mirar'], ['R', 'Recarregar'], ['Scroll', 'Trocar de arma'], ['B', 'Loja'], ['C', 'Veículos'],
-    ['T', 'Falar (segure)'], ['M', 'Mapa'], ['P', 'Menu'],
+    ['T', 'Falar (segure)'], ['M', 'Mapa'], ['L', 'Esconder esta legenda'], ['P', 'Menu / configurações'],
   ];
   const KEYS_CAR: [string, string][] = [
     ['W / S', 'Acelerar / freio'], ['A / D', 'Virar'], ['Espaço', 'Freio de mão'], ['H', 'Buzina'], ['V', 'Empinar (moto)'], ['L', 'Luzes da viatura'],
@@ -428,6 +428,11 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   esc.textContent = 'Esc';
   make('', keys, 'span').textContent = 'Mostrar o mouse';
   make('free', keys).textContent = 'Mouse livre: clique no jogo para voltar';
+  // L mostra/esconde a legenda das teclas (dirigindo, L continua sendo as luzes da viatura)
+  window.addEventListener('keydown', (e) => {
+    if (e.target instanceof HTMLInputElement || e.repeat || e.code !== 'KeyL' || hud.classList.contains('driving')) return;
+    keys.classList.toggle('hidden', !keys.classList.contains('hidden'));
+  });
   const syncLock = (): void => { keys.classList.toggle('unlocked', !document.pointerLockElement); };
   document.addEventListener('pointerlockchange', syncLock);
   syncLock();

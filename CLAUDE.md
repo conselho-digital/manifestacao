@@ -284,3 +284,9 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 - Agachado parado (crouch_idle): `openHips` abre 0,3 rad o ângulo da coxa; o quadril dobrado demais deformava as nádegas.
 - Giro do celular (`orientation.ts`): não há mais tela cheia nem giro automáticos (nem ao girar, nem no 1º toque); o aviso "Gire o celular" tem o botão "Girar e tela cheia" e só ele aplica.
 - Ferramenta: `dev/anim-viewer.ts` expõe `V.obj` (modelo) para medir posições de ossos no mundo.
+
+## Rodada: configurações, legenda com L, limite de FPS
+- Configurações: aba "Configurações" no menu de pausa (P / engrenagem, `pause.ts` `renderSettings`): sensibilidade da câmera (0,2x a 3x, multiplica o giro do mouse e do toque em main.ts), limite de FPS e "Voltar ao menu principal" (2 toques; recarrega a página). Guardado no navegador em `arena-settings` (`src/game/settings.ts`).
+- Limite de FPS: LIGADO por padrão em 30 (opções 30/45/60; desligado o jogo roda a cada quadro do navegador, sem limite). O corte fica no início de `loop()` em main.ts (pula quadros que chegam cedo demais, antes de ler o relógio).
+- Tecla L esconde/mostra a legenda das teclas no PC (a pé; dirigindo, L continua sendo as luzes da viatura).
+- load-animation.html só REGISTRA as trocas (Copiar/Baixar JSON): aplicar no jogo exige rodar o bake (`scripts/bake-carlos-ifp.cjs`) com o .ifp e o JSON.

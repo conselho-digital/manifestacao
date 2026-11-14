@@ -1,4 +1,5 @@
 // Menu de pausa (engrenagem): equipe, personagem, armas que o jogador já tem, loja e (só para o admin) gerenciar equipes.
+import { FPS_CAPS, saveSettings, settings } from '../game/settings';
 import type { CharacterName } from '../game/characters';
 import { ALL_WEAPONS, GARAGE_ITEMS, isGunId, SHOP, WEAPON_IMG, WEAPON_NAMES, type Inventory, type ShopItem, type WeaponId } from '../game/inventory';
 import { brl, isReal, loadPrices, loadPurchases, payUrlOf, priceOf, REAL_ITEMS, safeUrl, savePrice } from '../game/shop';
@@ -8,7 +9,7 @@ import { checkYoutube, type Billboard } from '../game/billboard';
 import { ICON } from './icons';
 import { createCharacterPicker, createTeamPicker, el, PICKER_CSS, swatchStyle } from './pickers';
 
-export type PauseTab = 'team' | 'char' | 'weapons' | 'garage' | 'shop' | 'admin' | 'prices' | 'outdoor';
+export type PauseTab = 'team' | 'char' | 'weapons' | 'garage' | 'shop' | 'settings' | 'admin' | 'prices' | 'outdoor';
 
 export interface PauseDeps {
   inv: Inventory;
@@ -127,6 +128,7 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     { id: 'weapons', label: 'Armas' },
     { id: 'garage', label: 'Garagem' },
     { id: 'shop', label: 'Loja' },
+    { id: 'settings', label: 'Configurações' },
     { id: 'admin', label: 'Gerenciar equipes', adm: true },
     { id: 'prices', label: 'Preços', adm: true },
     { id: 'outdoor', label: 'Outdoor', adm: true },
@@ -486,6 +488,36 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     list.appendChild(add);
   }
 
+  function renderSettings(): void {
+    body.append(el('h3', 'ps-h3', 'Mouse e câmera'));
+    const val = el('b', '', `${settings.sens.toFixed(1)}x`);
+    const sens = el('input') as HTMLInputElement;
+    sens.type = 'range'; sens.min = '0.2'; sens.max = '3'; sens.step = '0.1'; sens.value = String(settings.sens);
+    sens.style.cssText = 'flex:1;min-width:140px';
+    sens.oninput = () => { settings.sens = Number(sens.value); val.textContent = `${settings.sens.toFixed(1)}x`; saveSettings(); };
+    body.append(el('div', 'ps-row', el('span', '', 'Sensibilidade'), sens, val));
+    body.append(el('h3', 'ps-h3', 'Desempenho'));
+    const on = el('input') as HTMLInputElement;
+    on.type = 'checkbox'; on.checked = settings.fpsCapOn;
+    const cap = el('select') as HTMLSelectElement;
+    for (const c of FPS_CAPS) { const o = el('option', '', `${c} FPS`) as HTMLOptionElement; o.value = String(c); cap.appendChild(o); }
+    cap.value = String(settings.fpsCap);
+    cap.disabled = !on.checked;
+    on.onchange = () => { settings.fpsCapOn = on.checked; cap.disabled = !on.checked; saveSettings(); };
+    cap.onchange = () => { settings.fpsCap = Number(cap.value); saveSettings(); };
+    body.append(el('label', 'ps-row', on, el('span', '', 'Limitar FPS'), cap));
+    body.append(el('p', 'ps-note', 'Ligado por padrão em 30 FPS (poupa bateria e esquenta menos). Desligue para o jogo rodar na velocidade da sua tela.'));
+    body.append(el('h3', 'ps-h3', 'Partida'));
+    const leave = el('button', 'ps-card', el('b', '', 'Voltar ao menu principal'), el('small', '', 'Sai da partida atual'));
+    leave.type = 'button';
+    let armed = false;
+    leave.onclick = () => {
+      if (!armed) { armed = true; (leave.querySelector('small') as HTMLElement).textContent = 'Toque de novo para confirmar'; return; }
+      location.reload(); // volta à tela inicial (login e escolha de personagem); sai do canal da partida
+    };
+    body.append(leave);
+  }
+
   function renderBody(): void {
     stopOutdoor();
     body.textContent = '';
@@ -494,6 +526,7 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     else if (tab === 'weapons') renderWeapons();
     else if (tab === 'garage') renderGarage();
     else if (tab === 'shop') renderShop();
+    else if (tab === 'settings') renderSettings();
     else if (admin && tab === 'prices') renderPrices();
     else if (admin && tab === 'outdoor') renderOutdoor();
     else if (admin) renderAdmin();

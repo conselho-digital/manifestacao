@@ -4,6 +4,7 @@ import { createCity } from './game/city';
 import { createEsplanada, esplanadaReady } from './game/esplanada';
 import { MAP_ID, spawnPoint } from './game/map';
 import { createCharacter, type CharacterName } from './game/characters';
+import { settings } from './game/settings';
 import { initMouse, readInput, takeLook, type InputState } from './game/input';
 import { Player } from './game/player';
 import { showLobby } from './ui/lobby';
@@ -415,7 +416,12 @@ function flyIntro(dt: number): void {
   }
 }
 
+let lastFrameMs = 0;
 function loop(): void {
+  // limite de FPS (opção nas configurações, ligada por padrão em 30): pula os quadros que chegam cedo demais
+  const nowMs = performance.now();
+  if (settings.fpsCapOn && nowMs - lastFrameMs < 1000 / settings.fpsCap - 2) { requestAnimationFrame(loop); return; }
+  lastFrameMs = nowMs;
   const dt = Math.min(clock.getDelta(), 0.05);
   if (inMenu) { requestAnimationFrame(loop); return; } // menu: nada é desenhado (fundo liso)
   if (intro && !intro.started) menuCamera(dt); // o voo de entrada começa da vista aérea do menu
@@ -437,8 +443,8 @@ function loop(): void {
     }
     lastInput = input;
     if (!paused) {
-      yaw -= look.dx * 0.006;
-      pitch = THREE.MathUtils.clamp(pitch + look.dy * 0.005, PITCH_MIN, PITCH_MAX);
+      yaw -= look.dx * 0.006 * settings.sens;
+      pitch = THREE.MathUtils.clamp(pitch + look.dy * 0.005 * settings.sens, PITCH_MIN, PITCH_MAX);
       const dh = player.driveHeading;
       if (dh !== null && Math.abs(player.carSpeed) > 0.8) {
         // Em movimento a câmera fica atrás do carro; parado, dá para olhar para todos os lados
