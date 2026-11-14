@@ -3,6 +3,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { COLLIDERS, MAP, terrainHeight, waterDepth } from './map';
 import { EngineSound, ScrapeSound, SirenSound, playCrashAt } from './audio';
 import { emitSparks } from './sparks';
+import type { RiderPose } from './anim';
 
 /** Ganchos do jogo para eventos dos carros (o main avisa os outros jogadores de uma batida). */
 export const carEvents: { onCrash?: (x: number, z: number, k: number) => void } = {};
@@ -19,7 +20,12 @@ const BARS: Record<string, [number, number, number]> = { harley: [0.37, 0.15, 0.
 /** quanto o piloto deita o tronco (0 ereto … 1,5 peito no tanque): custom/clássica quase ereto, esportiva deitado */
 const RIDER_LEAN: Record<string, number> = { harley: 0.35, triumph: 0.5, bmw: 1.0, suzuki: 1.1 };
 /** quanto o piloto escorrega para a frente no banco (m): ombros mais perto do guidão, costas mais retas e braços um pouco dobrados */
-const RIDER_SHIFT: Record<string, number> = { harley: 0, triumph: 0.05, bmw: 0.26, suzuki: 0.3 };
+const RIDER_POSE: Record<string, RiderPose> = {
+  bmw: { torso: 32, thigh: -6, shin: 50 },
+  suzuki: { torso: 28, thigh: -6, shin: 50 },
+  triumph: { torso: 55, thigh: -4, shin: 52 },
+};
+const RIDER_SHIFT: Record<string, number> = { harley: 0, triumph: 0, bmw: 0.13, suzuki: 0.17 };
 /** Banco do motorista dos carros (x para a esquerda, z para a frente, y para cima) e volante. */
 const CAR_SEATS: Record<string, [number, number, number]> = { blistac: [0.48, -0.25, -0.12], buffalo: [0.54, -0.35, -0.16], clover: [0.51, -0.15, -0.12], duster: [0.5, 0.15, -0.16] };
 const isBikeModel = (m?: string): boolean => (BIKE_MODELS as readonly string[]).includes(m ?? '');
@@ -588,6 +594,8 @@ export class Car {
   grips: [THREE.Vector3, THREE.Vector3] | null = null;
   /** inclinação do tronco do piloto (ver RIDER_LEAN); carros: 0 */
   get riderLean(): number { return this.bike ? RIDER_LEAN[this.model ?? ''] ?? 1.2 : 0; }
+  /** esportivas: postura de costas retas, coxas na horizontal e canelas para trás (desenho do dono); outras: null (usam `riderLean`) */
+  get riderPose(): RiderPose | null { return this.bike ? RIDER_POSE[this.model ?? ''] ?? null : null; }
   get riderShift(): number { return this.bike ? RIDER_SHIFT[this.model ?? ''] ?? 0 : 0; }
   private body: THREE.Group | null = null;
   private bodyBase = new THREE.Vector3();

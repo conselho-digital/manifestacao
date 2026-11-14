@@ -81,11 +81,12 @@ function noise(c: AudioContext): AudioBuffer {
 
 // Sons gravados (enviados pelo dono): partida (ao subir), marcha lenta (loop) e aceleração (loop). 'sport' = BMW e Suzuki; 'harley' = Harley.
 const SAMPLE_SETS = {
-  sport: { start: '/sounds/moto-start.wav', idle: '/sounds/moto-idle.wav', rev: '/sounds/moto-rev.wav', idleRate: [0.9, 0.35], revRate: [0.75, 0.6] },
+  // sport: a gravação tem uma SUBIDA de giro de verdade (o tom dobra em ~3 s): `rise` toca uma vez quando aperta o acelerador e vira o patamar `rev` (loop de tom achatado)
+  sport: { start: '/sounds/moto-start.wav', idle: '/sounds/moto-idle.wav', rev: '/sounds/moto-rev.wav', rise: '/sounds/moto-rise.wav', idleRate: [0.9, 0.35], revRate: [0.85, 0.25] },
   harley: { start: '/sounds/harley-start.wav', idle: '/sounds/harley-idle.wav', rev: '/sounds/harley-rev.wav', idleRate: [0.95, 0.2], revRate: [0.8, 0.45] },
-} as const;
+} as const satisfies Record<string, { start: string; idle: string; rev: string; rise?: string; idleRate: readonly number[]; revRate: readonly number[] }>;
 type SampleName = keyof typeof SAMPLE_SETS;
-type SampleSet = { start: AudioBuffer; idle: AudioBuffer; rev: AudioBuffer };
+type SampleSet = { start: AudioBuffer; idle: AudioBuffer; rev: AudioBuffer; rise?: AudioBuffer };
 const sampleBufs = new Map<SampleName, SampleSet>();
 const sampleLoading = new Set<SampleName>();
 /** Baixa e decodifica os 3 sons de um conjunto (uma vez). Até ficarem prontos, a moto usa o motor sintetizado. */
@@ -94,13 +95,20 @@ function loadSamples(name: SampleName): void {
   const c = audioCtx();
   if (!c) return;
   sampleLoading.add(name);
-  const keys = ['start', 'idle', 'rev'] as const;
-  Promise.all(keys.map((k) => fetch(SAMPLE_SETS[name][k]).then((r) => r.arrayBuffer()).then((b) => c.decodeAudioData(b))))
-    .then((bufs) => { sampleBufs.set(name, { start: bufs[0]!, idle: bufs[1]!, rev: bufs[2]! }); })
+  const urls = SAMPLE_SETS[name] as { start: string; idle: string; rev: string; rise?: string };
+  const keys = ['start', 'idle', 'rev', ...(urls.rise ? ['rise'] : [])] as ('start' | 'idle' | 'rev' | 'rise')[];
+  Promise.all(keys.map((k) => fetch(urls[k]!).then((r) => r.arrayBuffer()).then((b) => c.decodeAudioData(b))))
+    .then((bufs) => { sampleBufs.set(name, Object.fromEntries(keys.map((k, i) => [k, bufs[i]!])) as SampleSet); })
     .catch(() => { sampleLoading.delete(name); });
 }
 
-interface SampleVoice { mix: GainNode; pan: StereoPannerNode; idle: AudioBufferSourceNode; idleG: GainNode; rev: AudioBufferSourceNode; revG: GainNode }
+interface SampleVoice {
+  mix: GainNode; pan: StereoPannerNode; idle: AudioBufferSourceNode; idleG: GainNode; revG: GainNode;
+  /** conjuntos sem `rise`: loop contínuo da aceleração */
+  rev: AudioBufferSourceNode | null;
+  /** conjuntos com `rise`: a subida de giro de agora (uma por aperto do acelerador) e o patamar que entra no fim dela */
+  press: { rise: AudioBufferSourceNode; hold: AudioBufferSourceNode } | null;
+}
 
 /** Motor sintético por veículo + chiado de pneu ao derrapar. Um par por carro; o volume e o lado seguem a posição do veículo. */
 export class EngineSound {
@@ -186,7 +194,7 @@ export class EngineSound {
   dispose(): void {
     try {
       this.osc?.stop(); this.osc2?.stop(); this.lope?.stop(); this.skidSrc?.stop();
-      this.samp?.idle.stop(); this.samp?.rev.stop(); this.samp?.pan.disconnect();
+      this.samp?.idle.stop(); this.samp?.rev?.stop(); this.samp?.press?.rise.stop(); this.samp?.press?.hold.stop(); this.samp?.pan.disconnect();
       this.pan?.disconnect(); this.skidPan?.disconnect();
     } catch { /* já parado */ }
     this.osc = this.osc2 = this.lope = this.skidSrc = null;
@@ -215,8 +223,18 @@ export class EngineSound {
         return { s, g };
       };
       const i = layer(S.idle);
-      const r = layer(S.rev);
-      this.samp = { mix, pan, idle: i.s, idleG: i.g, rev: r.s, revG: r.g };
+      const revG = c.createGain();
+      revG.gain.value = 0;
+      revG.connect(mix);
+      let rev: AudioBufferSourceNode | null = null;
+      if (!S.rise) {
+        rev = c.createBufferSource();
+        rev.buffer = S.rev;
+        rev.loop = true;
+        rev.connect(revG);
+        rev.start(0, Math.random() * S.rev.duration);
+      }
+      this.samp = { mix, pan, idle: i.s, idleG: i.g, revG, rev, press: null };
     }
     const sv = this.samp;
     if (on && !this.wasOn) {
@@ -235,7 +253,41 @@ export class EngineSound {
     sv.idleG.gain.setTargetAtTime(1 - a * 0.85, t, 0.12);
     sv.revG.gain.setTargetAtTime(a, t, 0.1);
     sv.idle.playbackRate.setTargetAtTime(cfg.idleRate[0]! + rpm * cfg.idleRate[1]!, t, 0.1);
-    sv.rev.playbackRate.setTargetAtTime(cfg.revRate[0]! + rpm * cfg.revRate[1]!, t, 0.1);
+    const holdRate = cfg.revRate[0]! + rpm * cfg.revRate[1]!;
+    if (sv.rev) sv.rev.playbackRate.setTargetAtTime(holdRate, t, 0.1);
+    if (S.rise) {
+      if (a >= 0.5 && !sv.press && live) {
+        // apertou o acelerador: toca a subida de giro (a partir do ponto que combina com a velocidade de agora) e, no fim dela, entra o patamar
+        const off = Math.min(rpm, 1) * 0.85 * S.rise.duration;
+        const left = S.rise.duration - off;
+        const fade = Math.min(0.4, left);
+        const rise = c.createBufferSource();
+        rise.buffer = S.rise;
+        const riseG = c.createGain();
+        rise.connect(riseG).connect(sv.revG);
+        riseG.gain.setValueAtTime(1, t);
+        riseG.gain.setValueAtTime(1, t + left - fade);
+        riseG.gain.linearRampToValueAtTime(0, t + left);
+        rise.start(t, off);
+        const hold = c.createBufferSource();
+        hold.buffer = S.rev;
+        hold.loop = true;
+        hold.playbackRate.value = 1;
+        const holdG = c.createGain();
+        hold.connect(holdG).connect(sv.revG);
+        holdG.gain.setValueAtTime(0, t);
+        holdG.gain.setValueAtTime(0, t + left - fade);
+        holdG.gain.linearRampToValueAtTime(1, t + left);
+        hold.start(t + left - fade);
+        sv.press = { rise, hold };
+      } else if (a < 0.25 && sv.press) {
+        // soltou: some e para as fontes
+        sv.press.rise.stop(t + 0.6);
+        sv.press.hold.stop(t + 0.6);
+        sv.press = null;
+      }
+      sv.press?.hold.playbackRate.setTargetAtTime(holdRate, t, 0.3);
+    }
     sv.mix.gain.setTargetAtTime(live ? 0.9 * this.p.vol * prox.gain * (0.4 + 0.6 * a) : 0, t, live ? 0.25 : 0.08);
     sv.pan.pan.setTargetAtTime(prox.pan, t, 0.05);
   }

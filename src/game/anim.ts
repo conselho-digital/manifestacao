@@ -103,6 +103,8 @@ interface Arm {
 interface Hand { fingers: THREE.Bone[]; side: 1 | -1 }
 interface Leg { thigh: THREE.Bone; calf: THREE.Bone; foot: THREE.Bone }
 
+/** Postura do piloto de moto esportiva: costas retas a `torso` graus acima da horizontal, coxas na horizontal e canelas para trás, como no desenho do dono. */
+export interface RiderPose { torso: number; thigh: number; shin: number }
 interface Spine { mid: THREE.Bone; chest: THREE.Bone; neck: THREE.Bone; head: THREE.Bone }
 
 interface PoseCfg { pos: THREE.Vector3; pitch: number; yaw: number }
@@ -221,7 +223,8 @@ export class Animator {
   private modelZ0 = 0;
   private modelX0 = 0;
   /** piloto sentado: deslocamento do modelo (y já descontando a altura da pélvis) e z */
-  private ride: { x: number; y: number; z: number; grips: [THREE.Vector3, THREE.Vector3] | null; lean: number } | null = null;
+  private ride: { x: number; y: number; z: number; grips: [THREE.Vector3, THREE.Vector3] | null; lean: number; pose: RiderPose | null } | null = null;
+  private spineBase: THREE.Bone | null = null;
   private addClips: (file: Clips<never>) => void = () => undefined;
   /** cria `bike_mount_l/r` (subir na moto em pé: do repouso à pose sentada, sem pegar nada do chão) a partir dos clipes `idle` e `bike_ride` */
   private makeMount: () => void = () => undefined;
@@ -240,6 +243,17 @@ export class Animator {
     this.touched = [...arms.flatMap((a) => [a.u, a.f, a.h, ...(a.c ? [a.c] : [])])];
     if (spine) this.touched.push(spine.mid, spine.chest, spine.neck, spine.head);
     for (const l of legs) this.touched.push(l.thigh, l.calf, l.foot);
+    // base da coluna: o osso logo acima do quadril na linha da coluna (Carlos: spine_lower, filho de root_hips; Law: o próprio osso do meio)
+    if (spine && legs[0]) {
+      const anc = (o: THREE.Object3D): THREE.Object3D[] => { const r: THREE.Object3D[] = []; for (let n: THREE.Object3D | null = o; n; n = n.parent) r.push(n); return r; };
+      const up = anc(legs[0].thigh);
+      const chain = anc(spine.mid);
+      const hip = chain.find((n) => up.includes(n));
+      const idx = hip ? chain.indexOf(hip) : -1;
+      const base = idx > 0 ? chain[idx - 1] : null;
+      this.spineBase = base && (base as THREE.Bone).isBone ? (base as THREE.Bone) : null;
+      if (this.spineBase && !this.touched.includes(this.spineBase)) this.touched.push(this.spineBase);
+    }
     for (const h of hands) this.touched.push(...h.fingers);
     for (const b of this.touched) this.clean.set(b, b.quaternion.clone());
     this.updateRoot();
@@ -588,13 +602,13 @@ export class Animator {
    * Sentado na moto: a pélvis vai para o assento (seat, no espaço do personagem). null = em pé.
    * `lean` = quanto o tronco deita para alcançar o guidão (0 ereto, 1.5 peito no tanque): custom/cruiser pouco, esportiva muito.
    */
-  setRide(seat: THREE.Vector3 | null, grips: [THREE.Vector3, THREE.Vector3] | null = null, lean = 1.5, shift = 0): void {
-    this.ride = seat ? { x: seat.x, y: seat.y - 0.97, z: seat.z + shift, grips, lean } : null;
+  setRide(seat: THREE.Vector3 | null, grips: [THREE.Vector3, THREE.Vector3] | null = null, lean = 1.5, shift = 0, pose: RiderPose | null = null): void {
+    this.ride = seat ? { x: seat.x, y: seat.y - 0.97, z: seat.z + shift, grips, lean, pose } : null;
   }
 
   /** Desloca o modelo (entrando/saindo do carro): x para a esquerda, y para cima (pélvis), z para a frente. */
   setRideRaw(o: { x: number; y: number; z: number } | null): void {
-    this.ride = o ? { x: o.x, y: o.y, z: o.z, grips: null, lean: 0 } : null;
+    this.ride = o ? { x: o.x, y: o.y, z: o.z, grips: null, lean: 0, pose: null } : null;
   }
 
 
@@ -673,8 +687,9 @@ export class Animator {
       for (const b of this.touched) this.clean.get(b)!.copy(b.quaternion);
       this.dirty = true;
       this.updateRoot();
+      if (this.ride.pose && this.clipName === 'bike_ride' && this.spine && this.spineBase) this.poseRider(this.ride.pose);
       // deita o tronco para a frente para as mãos alcançarem o guidão (mais nas motos esportivas, onde o guidão é baixo)
-      if (this.spine) {
+      else if (this.spine) {
         const lean = this.clipName === 'bike_ride' ? this.ride.lean : 0; // esportiva: peito quase no tanque; custom: quase ereto
         this.rotateBone(this.spine.mid, new THREE.Quaternion().setFromAxisAngle(X, lean * 0.45));
         this.rotateBone(this.spine.chest, new THREE.Quaternion().setFromAxisAngle(X, lean * 0.4));
@@ -1015,6 +1030,44 @@ export class Animator {
   }
 
   /** Gira um osso por uma rotação dada no espaço do personagem (não depende dos eixos do osso). */
+  /** Gira `bone` (rotação no espaço do modelo) até a direção osso→filho ficar igual a `dir`; devolve o giro aplicado. */
+  private aimBone(bone: THREE.Object3D, child: THREE.Object3D, dir: THREE.Vector3): THREE.Quaternion {
+    const a = this.posIn(bone, new THREE.Vector3());
+    const cur = this.posIn(child, new THREE.Vector3()).sub(a).normalize();
+    const q = new THREE.Quaternion().setFromUnitVectors(cur, dir);
+    this.rotateBone(bone as THREE.Bone, q);
+    return q;
+  }
+
+  /**
+   * Piloto de moto esportiva (desenho do dono): a coluna vira UMA linha reta, `torso` graus acima da horizontal, do quadril ao ombro (a pélvis
+   * inclina para a frente), a cabeça levanta para olhar a rua, as coxas ficam quase horizontais para a frente e as canelas descem para trás até as pedaleiras.
+   */
+  private poseRider(pose: RiderPose): void {
+    const sp = this.spine!;
+    const base = this.spineBase!;
+    const dirAt = (deg: number, x = 0): THREE.Vector3 => { const r = THREE.MathUtils.degToRad(deg); return new THREE.Vector3(x, Math.sin(r), Math.cos(r)).normalize(); };
+    const back = dirAt(pose.torso);
+    if (base !== sp.mid) this.aimBone(base, sp.mid, back);
+    this.aimBone(sp.mid, sp.chest, back);
+    const qChest = this.aimBone(sp.chest, sp.neck, back);
+    // pescoço e cabeça: levantam para olhar para a frente (o tronco inclinado jogaria o rosto para baixo)
+    const qNeck = this.aimBone(sp.neck, sp.head, dirAt(pose.torso + 38));
+    const tilt = (qChest.angleTo(new THREE.Quaternion()) + qNeck.angleTo(new THREE.Quaternion())) * 0.5;
+    this.rotateBone(sp.head, new THREE.Quaternion().setFromAxisAngle(X, -tilt));
+    this.updateRoot();
+    for (const l of this.legs) {
+      const knee = this.posIn(l.calf, new THREE.Vector3());
+      const hip = this.posIn(l.thigh, new THREE.Vector3());
+      const side = Math.sign(hip.x) * 0.1; // joelhos um pouco para fora
+      this.aimBone(l.thigh, l.calf, dirAt(pose.thigh, side * 0.5 + (knee.x - hip.x) * 0.3));
+      const qShin = this.aimBone(l.calf, l.foot, new THREE.Vector3(0, -Math.sin(THREE.MathUtils.degToRad(pose.shin)), -Math.cos(THREE.MathUtils.degToRad(pose.shin))));
+      // pé: acompanha a canela ao contrário (a sola fica apoiada na pedaleira)
+      this.rotateBone(l.foot, qShin.clone().invert());
+    }
+    this.updateRoot();
+  }
+
   private rotateBone(bone: THREE.Bone, r: THREE.Quaternion): void {
     const q = this.quatIn(bone, new THREE.Quaternion());
     const parent = this.quatIn(bone.parent!, new THREE.Quaternion());

@@ -678,7 +678,7 @@ export class Player {
       this.object.position.add(d);
     }
     if (car.seat) {
-      this.animator?.setRide(car.seat, car.grips, car.riderLean, car.riderShift);
+      this.animator?.setRide(car.seat, car.grips, car.riderLean, car.riderShift, car.riderPose);
       this.animator?.setArmed('none');
       this.animator?.play(car.bike ? 'bike_ride' : 'car_sit');
       this.animator?.update(dt);
