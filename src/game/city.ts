@@ -368,7 +368,7 @@ function addBuilding(b: Batch, s: Spec, helipads: THREE.Mesh[], hpTex: THREE.Tex
   const d = r.z1 - r.z0;
   const { h, kind } = s;
   // off: quanto o térreo sai da caixa; bay/col: grade de colunas da parede do térreo (térreo escuro e cobre: baia 4,2 com pilar na esquerda; outros: a baia do tipo)
-  footprints.push({ name, r, off: s.plinth || kind === 'copper' ? 0.7 : 0, bay: s.plinth || kind === 'copper' ? 4.2 : KIND_CFG[kind].bay, col: s.plinth || kind === 'copper' ? 7 / 64 : 0, top: kind === 'house' ? houseShopTop(h) : 7, house: kind === 'house' });
+  footprints.push({ name, r, off: s.plinth || kind === 'copper' ? 0.7 : 0, bay: s.plinth || kind === 'copper' ? 4.2 : KIND_CFG[kind].bay, col: s.plinth || kind === 'copper' ? 7 / 64 : 0, top: kind === 'house' ? houseShopTop(h) : kind === 'white' && !s.plinth ? 7.8 : 7, house: kind === 'house' });
   addBox(r.x0, r.x1, r.z0, r.z1, h, kind === 'house' ? '#a8a08e' : kind === 'glass' || kind === 'dark' ? '#6b7f94' : kind === 'copper' ? '#7a4a34' : '#b4ab98');
 
   if (kind === 'copper') { addCopperTower(b, x, z, w, d, h); return; }

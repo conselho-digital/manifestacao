@@ -461,8 +461,13 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
       const c = b.col * bw;
       // lojas de 2 baias; nas casas, a baia que sobra (nb ímpar) vira uma loja pequena de 1 baia (aproveita o espaço)
       const cells: [number, number][] = [];
-      for (let i = 0; i < Math.floor(nb / 2); i++) cells.push([2 * i * bw + c, Math.min(L, (2 * i + 2) * bw + c)]);
-      if (house && nb >= 3 && nb % 2 === 1) cells.push([(nb - 1) * bw + c, Math.min(L, nb * bw + c)]);
+      if (!house && nb === 3) {
+        // parede de 3 baias: duas lojas iguais (50% cada), em vez de uma de 2 baias e um pedaço de parede sem loja
+        cells.push([c, c + 1.5 * bw], [c + 1.5 * bw, Math.min(L, c + 3 * bw)]);
+      } else {
+        for (let i = 0; i < Math.floor(nb / 2); i++) cells.push([2 * i * bw + c, Math.min(L, (2 * i + 2) * bw + c)]);
+        if (nb >= 3 && nb % 2 === 1) cells.push([(nb - 1) * bw + c, Math.min(L, nb * bw + c)]); // a baia que sobra vira uma loja de 1 baia
+      }
       if (cells.length < 1) continue;
       // sentido do eixo u da textura = eixo local da loja (zp +x, zn -x, xp -z, xn +z)
       const dir = s.k === 'zp' || s.k === 'xn' ? 1 : -1;
