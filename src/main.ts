@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createCamera, createRenderer, createScene, handleResize, pixelRatio } from './game/scene';
 import { createCity } from './game/city';
-import { createEsplanada } from './game/esplanada';
+import { createEsplanada, esplanadaReady } from './game/esplanada';
 import { MAP_ID, spawnPoint } from './game/map';
 import { createCharacter, type CharacterName } from './game/characters';
 import { initMouse, readInput, takeLook, type InputState } from './game/input';
@@ -261,6 +261,7 @@ void showLobby().then(async (profile) => {
   await nextPaint();
   const city = MAP_ID === 'esplanada' ? createEsplanada() : createCity();
   scene.add(city);
+  if (MAP_ID === 'esplanada') await esplanadaReady; // modelo e colisões do Congresso
   void billboard.start();
   loading.set(0.3, 'Carregando modelos...');
   await warm;

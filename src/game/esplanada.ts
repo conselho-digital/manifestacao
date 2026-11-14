@@ -32,8 +32,6 @@ const lots: Rect[] = [
   { x0: 104, x1: 146, z0: -34, z1: -12 }, { x0: 102, x1: 118, z0: 100, z1: 136 },
   { x0: 25.3, x1: 42, z0: 141.2, z1: 188 }, { x0: -42, x1: -25.3, z0: 141.2, z1: 188 }, // atrás do Congresso (como na foto aérea)
 ];
-const CONG_FRONT = 70; // z da frente do Congresso
-const CONG_SCALE = 2; // o modelo do usuário tem ~44 unidades de comprimento: vira ~89 m (20% menor que os 111 m de antes)
 
 function rng(seed: number): () => number {
   let a = seed >>> 0;
@@ -218,7 +216,7 @@ function flatGeom(x0: number, x1: number, z0: number, z1: number, y: number, til
 }
 
 // ---- terreno rebaixado em volta do Congresso (a laje fica com o teto na altura das avenidas) ----
-const PIT_D = 4.6; // profundidade: o teto da laje tem 4,6 m
+const PIT_D = 5.34; // profundidade: o teto da laje do Congresso (modelo do usuário) fica 5,34 m acima do chão do rebaixo
 const PIT_X = 52; // começa na calçada interna das avenidas (|x| = 52)
 const PIT_XB = 45; // talude lateral: do |x| 52 ao 45 (7 m) chega ao fundo
 const PIT_Z0 = 3; // rampa do sul: z 3 → 28 (25 m)
@@ -230,9 +228,9 @@ const smooth = (t: number): number => { const c = Math.min(1, Math.max(0, t)); r
 const LAKE_POLYS: [number, number][][] = [
   [[39.8, 90.4], [29.8, 90.4], [29.8, 62.6], [39.8, 62.6]],
   [[25.5, 90.4], [21.4, 90.4], [19.2, 86.3], [17.3, 81.9], [15.5, 76.2], [13.6, 71.8], [25.5, 71.3]],
-  [[6.1, 71.1], [-26.7, 71.1], [-26.7, 90.1], [-21.1, 90.1], [-17.8, 86.3], [-13.1, 82.8], [-4.7, 79.7], [1.9, 77.5], [5.6, 73.7]],
+  [[6.1, 71.1], [-12.6, 71.1], [-12.6, 81.9], [-4.7, 79.7], [1.9, 77.5], [5.6, 73.7]], // termina antes da rampa do novo Congresso (x −24..−14)
   [[-30.9, 90.4], [-41.1, 90.4], [-41.1, 62.6], [-30.9, 62.6]],
-  [[25.5, 61.2], [-26.7, 61.2], [-26.7, 54.6], [-17.8, 56.9], [-12.2, 57.4], [-8.4, 55.1], [-5.6, 49.9], [-2.8, 48.5], [4.7, 49.0], [12.2, 49.9], [18.8, 53.2], [25.5, 54.6]],
+  [[25.5, 61.2], [-12.6, 61.2], [-12.6, 57.4], [-8.4, 55.1], [-5.6, 49.9], [-2.8, 48.5], [4.7, 49.0], [12.2, 49.9], [18.8, 53.2], [25.5, 54.6]],
 ];
 const WATER_Y = -PIT_D - 0.25; // superfície da água: 25 cm abaixo da margem
 const LAKE_DEPTH = 0.5; // profundidade máxima (m) abaixo da superfície: dá para andar dentro
@@ -284,7 +282,9 @@ export function pitHeight(x: number, z: number): number {
   const ax = Math.abs(x);
   if (ax >= PIT_X || z <= PIT_Z0 || z >= PIT_Z3) return 0;
   const lake = lakeOffset(x, z);
-  const base = -PIT_D * smooth((PIT_X - ax) / (PIT_X - PIT_XB)) * smooth((z - PIT_Z0) / (PIT_Z1 - PIT_Z0)) * smooth((PIT_Z3 - z) / (PIT_Z3 - PIT_Z2));
+  let base = -PIT_D * smooth((PIT_X - ax) / (PIT_X - PIT_XB)) * smooth((z - PIT_Z0) / (PIT_Z1 - PIT_Z0)) * smooth((PIT_Z3 - z) / (PIT_Z3 - PIT_Z2));
+  // ao lado da laje (x ±44,4, z 88..131) o chão volta à altura das avenidas: o teto do Congresso emenda com o chão e dá para andar da avenida para cima dele
+  base *= 1 - smooth((z - 85) / 3) * smooth((131 - z) / 3) * smooth((ax - 43.4) / 1);
   {
     const d = Math.hypot(Math.max(0, -PLAT.x1 - ax), Math.max(0, PLAT.z0 - z)); // os dois estacionamentos de trás ficam em plataformas (simétricas)
     if (d < PLAT.band) return base * smooth(d / PLAT.band) + lake;
@@ -409,6 +409,9 @@ function terrainPieces(src: THREE.BufferGeometry): THREE.BufferGeometry[] {
   const k = Math.min(6, Math.max(0, Math.ceil(Math.log2(maxE / CELL))));
   return [applyTerrain(subdivide(g0, k))];
 }
+
+/** Resolve quando o Congresso (modelo e colisões) terminou de carregar: o jogo espera por isso na tela de carregamento. */
+export let esplanadaReady: Promise<void> = Promise.resolve();
 
 export function createEsplanada(): THREE.Group {
   setTerrainHeight(pitHeight);
@@ -980,7 +983,7 @@ export function createEsplanada(): THREE.Group {
       if (WALKS.some(([x0, x1, z0, z1]) => x > x0 - 1.5 && x < x1 + 1.5 && z > z0 - 1.5 && z < z1 + 1.5)) return false;
       if (poleXZ.some(([px, pz]) => Math.hypot(px - x, pz - z) < 2)) return false;
       if (Math.abs(x) > 97 && x > 0 && z > -94 && z < -32) return false; // gramado em frente ao Palácio (colunata): sem árvores
-      if (Math.abs(x - 10) < 14 && z > 155 && z < 185) return false; // as duas torres
+      if (x > -28 && x < 4 && z > 148 && z < 186) return false; // as duas torres
       if (Math.abs(x) < 26 && z > 139 && z < 147) return false; // pontes de pedestres
       if (Math.abs(x + 92) < 9 && Math.abs(z + 60) < 10) return false; // em frente ao outdoor
       if (Math.abs(Math.abs(x) - 91.2) < 4.5 && (Math.abs(z + 122) < 6 || Math.abs(z - 30) < 6)) return false; // pontos de ônibus
@@ -997,7 +1000,7 @@ export function createEsplanada(): THREE.Group {
       const side = rnd() < 0.5 ? -1 : 1;
       tryPlant(side * (88 + rnd() * 60), -172 + rnd() * 358, 6.5); // margens oeste e leste (inclui o gramado junto às avenidas)
     }
-    for (let i = 0; i < 1500; i++) tryPlant(-52 + rnd() * 104, 126 + rnd() * 62, 7); // atrás do Congresso (no rebaixo, em cima do fundo)
+    for (let i = 0; i < 1500; i++) tryPlant(-52 + rnd() * 104, 133 + rnd() * 55, 7); // atrás do Congresso (no rebaixo, em cima do fundo)
   }
   for (let i = 0; i < 40; i++) trees.push({ x: -50 + rnd() * 100, z: -170 + rnd() * 62, h: HEIGHT.bush[0] + rnd() * (HEIGHT.bush[1] - HEIGHT.bush[0]), species: 'bush' });
   const crown: Record<string, number> = { oak: 0.4, pine: 0.2, maple: 0.3, birch: 0.2, bush: 0 };
@@ -1020,62 +1023,17 @@ export function createEsplanada(): THREE.Group {
     { name: 'MINISTÉRIOS (LESTE)', rect: { x0: 88, x1: IX, z0: -IZ, z1: IZ } },
   );
 
-  // ---- Congresso Nacional: o modelo do usuário (laje com as duas cúpulas, rampa e as duas torres) ----
-  void new GLTFLoader().loadAsync('/models/map/congresso.glb').then((g) => {
-    const root = new THREE.Group();
-    root.add(g.scene);
-    root.scale.setScalar(CONG_SCALE);
-    root.rotation.y = Math.PI; // a rampa (frente) do modelo olha para +z: vira para o sul (-z), para quem vem do gramado
-    root.updateMatrixWorld(true);
-    const box = new THREE.Box3().setFromObject(root);
-    const c = box.getCenter(new THREE.Vector3());
-    root.position.set(-c.x, -box.min.y, CONG_FRONT - box.min.z);
-    root.updateMatrixWorld(true);
-    root.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-    city.add(root);
-    // Ajustes no modelo (em coordenadas do mundo): a laje desce até o chão (o modelo a deixava ~8 m no ar) e as duas torres
-    // de trás perdem metade da altura. Cada malha vira geometria em coordenadas do mundo, solta na cidade.
-    const meshes: THREE.Mesh[] = [];
-    root.traverse((o) => { if ((o as THREE.Mesh).isMesh) meshes.push(o as THREE.Mesh); });
-    const wbox = new Map(meshes.map((m) => [m, new THREE.Box3().setFromObject(m)] as const));
-    const isTower = (b: THREE.Box3): boolean => (b.min.y < 1 && b.max.y > 20) || b.min.y > 20; // corpo das torres e a passarela de vidro entre elas
-    const drop = Math.min(...meshes.filter((m) => !isTower(wbox.get(m)!)).map((m) => wbox.get(m)!.min.y));
-    for (const m of meshes) {
-      const g = m.geometry.clone();
-      g.applyMatrix4(m.matrixWorld);
-      if (isTower(wbox.get(m)!)) {
-        g.scale(1, 0.5, 1); // as torres de trás: metade da altura
-        const tp = g.attributes.position as THREE.BufferAttribute;
-        for (let i = 0; i < tp.count; i++) if (tp.getY(i) < 0.5) tp.setY(i, pitHeight(tp.getX(i), tp.getZ(i))); // a base acompanha o terreno (a rampa passa por baixo delas)
-        g.computeBoundingBox();
-      }
-      else g.translate(0, -drop - PIT_D, 0); // a laje desce até o chão rebaixado: o teto fica na altura das avenidas
-      m.geometry = g;
-      m.removeFromParent();
-      m.position.set(0, 0, 0);
-      m.rotation.set(0, 0, 0);
-      m.scale.set(1, 1, 1);
-      m.updateMatrixWorld(true);
-      city.add(m);
-    }
-    // colisão: a laje (a maior peça branca), as duas cúpulas e as torres, medidas no próprio modelo
-    const parts: { box: THREE.Box3; area: number; dark: boolean }[] = [];
-    for (const m of meshes) {
-      const b = new THREE.Box3().setFromObject(m);
-      const mat = (Array.isArray(m.material) ? m.material[0] : m.material) as THREE.MeshStandardMaterial;
-      const sz = b.getSize(new THREE.Vector3());
-      if (sz.x < 1 || sz.z < 1) continue;
-      parts.push({ box: b, area: sz.x * sz.z, dark: mat.color.r < 0.6 && mat.color.r > 0.3 && sz.y > 20 });
-    }
-    const dark = parts.filter((p) => p.dark);
-    for (const p of dark) addBox(p.box.min.x, p.box.max.x, p.box.min.z, p.box.max.z, p.box.max.y, '#8a8d8d', Math.min(0, p.box.min.y));
-    // a laje (a peça branca de maior área) vira uma caixa de ~6 m; as cúpulas ficam em cima dela (não bloqueiam)
-    const whites = parts.filter((p) => !p.dark && p.box.max.y > 1 - PIT_D).sort((x, y) => y.area - x.area);
-    const slab = whites[0];
-    // a rampa (a ponta da peça maior, na frente) não bloqueia: a caixa começa na fachada de vidro
-    const facadeZ = Math.min(...whites.slice(1).filter((p) => p.area > 200).map((p) => p.box.min.z));
-    if (slab) addBox(slab.box.min.x, slab.box.max.x, Number.isFinite(facadeZ) ? Math.max(slab.box.min.z, facadeZ) : slab.box.min.z, slab.box.max.z, 0, '#cfcfcf', -PIT_D); // teto da laje na altura das avenidas: dá para andar em cima
-  }).catch((e) => console.warn('Congresso não carregou:', e));
+  // ---- Congresso Nacional: modelo do usuário (SketchUp → GLB, ver scripts/models/congresso-skp/LEIA.md) + física ----
+  // O GLB já vem nas coordenadas do jogo (frente da laje em z 92, teto em y 0, chão do rebaixo em y −5,34). As caixas de colisão (laje, cúpulas,
+  // torres sólidas, rampa em degraus de 0,3 m, fachada) vêm do JSON gerado a partir da própria malha.
+  esplanadaReady = Promise.all([
+    new GLTFLoader().loadAsync('/models/map/congresso.glb'),
+    fetch('/models/map/congresso-colliders.json').then((r) => r.json() as Promise<number[][]>),
+  ]).then(([g, boxes]) => {
+    g.scene.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; } });
+    city.add(g.scene);
+    for (const [x0, x1, z0, z1, top, bottom] of boxes as [number, number, number, number, number, number][]) addBox(x0, x1, z0, z1, top, '#cfcfcf', bottom);
+  }).catch((e) => { console.warn('Congresso não carregou:', e); });
 
   return city;
 }
