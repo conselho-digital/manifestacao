@@ -311,7 +311,7 @@ function widenSidewalks(sx0: number, sx1: number, sz0: number, sz1: number): { s
   return { sx0: mx(sx0), sx1: mx(sx1), sz0: mz(sz0), sz1: mz(sz1) };
 }
 
-const footprints: { name: string; r: Rect; allowWalk?: boolean; off?: number; bay?: number; col?: number; shops?: boolean; top?: number }[] = [];
+const footprints: { name: string; r: Rect; allowWalk?: boolean; off?: number; bay?: number; col?: number; shops?: boolean; top?: number; house?: boolean }[] = [];
 /** postes e abrigos (para a verificação de desenvolvimento: nada no meio da rua) */
 const propSpots: [string, number, number][] = [];
 
@@ -353,6 +353,13 @@ function addCopperTower(b: Batch, x: number, z: number, w: number, d: number, h:
   b.box('metal', 1.4, 0.15, 1.4, x - bw * 0.2, roofY + 7, z + bd * 0.2);
 }
 
+/** Altura da loja numa casa: até a linha marrom (laje) do 1º andar, que é o fundo da 2ª fileira da textura (`wall()`: baias de 3 m, fileiras inteiras) menos a espessura da laje. */
+function houseShopTop(h: number): number {
+  const hw = h - 2.2 > 3 ? h - 2.2 : h;
+  const rows = Math.max(1, Math.round(hw / KIND_CFG.house.floor));
+  return Math.min(hw, (hw / rows) * 2) - 0.2;
+}
+
 function addBuilding(b: Batch, s: Spec, helipads: THREE.Mesh[], hpTex: THREE.Texture, name: string): void {
   const r = R(s.sx0, s.sx1, s.sz0, s.sz1);
   const x = (r.x0 + r.x1) / 2;
@@ -361,7 +368,7 @@ function addBuilding(b: Batch, s: Spec, helipads: THREE.Mesh[], hpTex: THREE.Tex
   const d = r.z1 - r.z0;
   const { h, kind } = s;
   // off: quanto o térreo sai da caixa; bay/col: grade de colunas da parede do térreo (térreo escuro e cobre: baia 4,2 com pilar na esquerda; outros: a baia do tipo)
-  footprints.push({ name, r, off: s.plinth || kind === 'copper' ? 0.7 : 0, bay: s.plinth || kind === 'copper' ? 4.2 : KIND_CFG[kind].bay, col: s.plinth || kind === 'copper' ? 7 / 64 : 0, top: kind === 'house' ? 4.5 : 7 });
+  footprints.push({ name, r, off: s.plinth || kind === 'copper' ? 0.7 : 0, bay: s.plinth || kind === 'copper' ? 4.2 : KIND_CFG[kind].bay, col: s.plinth || kind === 'copper' ? 7 / 64 : 0, top: kind === 'house' ? houseShopTop(h) : 7, house: kind === 'house' });
   addBox(r.x0, r.x1, r.z0, r.z1, h, kind === 'house' ? '#a8a08e' : kind === 'glass' || kind === 'dark' ? '#6b7f94' : kind === 'copper' ? '#7a4a34' : '#b4ab98');
 
   if (kind === 'copper') { addCopperTower(b, x, z, w, d, h); return; }
@@ -797,7 +804,7 @@ export function createCity(): THREE.Group {
   placeSafraSign(city, -23, 15.6, Math.PI / 2);
 
   // Lojas no térreo de cada prédio (vitrine com cartaz, porta, letreiro e toldo); sem colisão
-  addShops(city, footprints.map((f) => ({ name: f.name, r: f.r, off: f.off ?? 0, bay: f.bay ?? 4.2, col: f.col ?? 0, shops: f.shops, top: f.top })), { hx: HX, hz: HZ });
+  addShops(city, footprints.map((f) => ({ name: f.name, r: f.r, off: f.off ?? 0, bay: f.bay ?? 4.2, col: f.col ?? 0, shops: f.shops, top: f.top, house: f.house })), { hx: HX, hz: HZ });
 
   validate();
   void loadMasp(city);

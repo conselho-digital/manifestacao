@@ -7,7 +7,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { supabase } from '../net/supabase';
 
 /** `bay` = largura da baia da parede do térreo (a conta da textura em city.ts), `col` = onde fica o centro da coluna dentro da baia (0 = na divisa), `shops` false = sem lojas (casas) */
-export interface ShopBuilding { name: string; r: { x0: number; x1: number; z0: number; z1: number }; off: number; bay: number; col: number; shops?: boolean; /** altura da loja (m); padrão 7; casas: só o térreo (4,5) */ top?: number }
+export interface ShopBuilding { name: string; r: { x0: number; x1: number; z0: number; z1: number }; off: number; bay: number; col: number; shops?: boolean; /** altura da loja (m); padrão 7; casas: até a linha marrom (2 andares da textura) */ top?: number; house?: boolean }
 export interface PosterSlot { id: string; building: string; face: 'zp' | 'zn' | 'xp' | 'xn'; n: number; /** número do cartaz (1, 2, 3...): "Cartaz 01" */ num: number; x: number; z: number; nx: number; nz: number; page: number; cell: number; /** centro do cartaz no mundo (x, z) e altura */ cx: number; cz: number; cy: number; /** largura do cartaz (m) */ pw: number }
 
 const POSTER_W = 3.0;
@@ -434,10 +434,12 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
   for (const b of buildings) {
     if (b.shops === false) continue;
     const top = b.top ?? TOP;
-    const house = top < 6; // casas de 2 andares: loja só de vitrine e porta, sem a base cinza e sem o letreiro com o nome
+    const house = b.house === true; // casas de 2 andares: sem a base cinza e sem o letreiro com o nome; a loja sobe até a linha marrom (laje) do 1º andar
     const gy = house ? 0.1 : 0.6; // onde começa o vidro
     const gh = 3.4 - gy;
-    const pTop = house ? 3.6 : top;
+    const pTop = top;
+    const uy = house ? 3.6 : 4.7; // onde começa a vitrine de cima
+    const uh = top - uy - 0.1;
     for (const s of SIDES) {
       const alongX = s.nz !== 0;
       const L0 = alongX ? b.r.x1 - b.r.x0 : b.r.z1 - b.r.z0;
@@ -509,17 +511,17 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
         box('frame', dw, 0.1, 0.1, ud, 3.0, 0.4);
         box('metal', 0.05, 0.5, 0.06, ud - 0.1, 1.0, 0.46);
         box('metal', 0.05, 0.5, 0.06, ud + 0.1, 1.0, 0.46);
-        // vitrine de cima (1º andar): outro interior pintado, até embaixo da laje do térreo (top); casas (top baixo) ficam só com o térreo
-        if (top >= 6) {
-          const up = new THREE.PlaneGeometry(Wi, 2.2);
+        // vitrine de cima (1º andar): outro interior pintado, até embaixo da laje do térreo / a linha marrom da casa (top)
+        if (uh >= 0.7) {
+          const up = new THREE.PlaneGeometry(Wi, uh);
           const uk = (kind + 3) % KINDS;
           cellUV(up, uk % 2, Math.floor(uk / 2), INT_W, INT_H, INT_W * 2, INT_H * 4, 0.8);
-          interiorGeos.push(put(up, 0, 5.8, 0.1));
-          box('glass', Wi, 2.2, 0.04, 0, 4.7, 0.38);
-          box('frame', Wi, 0.2, 0.12, 0, 4.5, 0.4);
+          interiorGeos.push(put(up, 0, uy + uh / 2, 0.1));
+          box('glass', Wi, uh, 0.04, 0, uy, 0.38);
+          box('frame', Wi, 0.2, 0.12, 0, uy - 0.2, 0.4);
           box('frame', Wi, 0.12, 0.12, 0, top - 0.12, 0.4);
-          box('frame', 0.12, 2.2, 0.12, -Wi * 0.18, 4.7, 0.4);
-          box('frame', 0.12, 2.2, 0.12, Wi * 0.18, 4.7, 0.4);
+          box('frame', 0.12, uh, 0.12, -Wi * 0.18, uy, 0.4);
+          box('frame', 0.12, uh, 0.12, Wi * 0.18, uy, 0.4);
         }
         // letreiro branco com o nome e toldo fino colorido
         if (!house) {

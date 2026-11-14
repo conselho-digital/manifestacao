@@ -423,3 +423,6 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 
 ## Rodada: uma só distância para o cartaz
 - Só há UMA medida de distância no cartaz (`POSTER_REACH` = 1,05 m em shops.ts, metade dos 2,1 m de antes; `nearestPoster(x, z, stay)`): a menos de 1,05 m na frente da vitrine (e dentro da largura do cartaz, `pw / 2`) aparece o cartão com preço, prazo e "Escolher imagem (U)"; fora disso nada aparece. `stay` dá folga (+0,35 m na frente, +0,4 m dos lados) só para o cartão não piscar e para a prévia não cancelar na borda. Acabaram `CLOSE_REACH`, o aviso "chegue bem perto" e as duas zonas (4 m e 2 m) descritas nas rodadas anteriores. Testado: 3 m e 1,6 m escondido; 0,95 m mostra tudo; 1,3 m (já mostrando) continua; 3,5 m de lado esconde.
+
+## Rodada: lojas das casas até a linha marrom, com vitrine de cima
+- Nas casas (`kind: 'house'`) a loja sobe até a linha marrom (laje) do 1º andar: `houseShopTop(h)` em city.ts = 2 fileiras da textura (`wall()`: fileiras inteiras de 3 m de parede) menos 0,2 m da espessura da laje (SL4: 5,0 m); `ShopBuilding.house`/`top`. Continua SEM base cinza e SEM letreiro com o nome, mas agora tem a vitrine de cima com conteúdo (interior pintado, vidro e divisórias) de 3,6 m até a linha (`uy`/`uh` em shops.ts; nos outros prédios segue 4,7–6,9 m). Substitui a nota "casas só o térreo (4,5 m)".
