@@ -196,6 +196,7 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     const mine = GARAGE_ITEMS.filter((it) => d.inv.hasItem(it.id));
     if (mine.length === 0) { body.appendChild(el('p', 'ps-note', 'Você ainda não tem veículos. Compre na Loja.')); return; }
     const grid = el('div', 'ps-grid');
+    let closeOpen: (() => void) | null = null; // esconde as cores do veículo aberto antes
     for (const it of mine) {
       const pic = el('div', 'pic');
       let img: HTMLImageElement | null = null;
@@ -227,6 +228,7 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
       pic.onclick = () => {
         if (colors.length === 0) { go.click(); return; }
         if (sub.parentElement === null) return; // as cores já estão abertas
+        closeOpen?.(); // clicou em outro veículo: o menu de cores do anterior some
         const row = el('div', 'ps-sw');
         const mark = (): void => row.querySelectorAll('.ps-swb').forEach((b, i) => b.classList.toggle('on', colors[i]!.hex === chosen));
         for (const c of colors) {
@@ -245,6 +247,7 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
         }
         sub.replaceWith(row);
         mark();
+        closeOpen = () => { if (row.parentElement) row.replaceWith(sub); closeOpen = null; };
       };
       const card = el('div', `ps-card${here ? ' sel' : ''}`, pic, el('b', '', it.name), sub);
       if (here) card.appendChild(el('span', 'ps-tag', 'Perto de você'));
