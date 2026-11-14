@@ -429,3 +429,6 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 
 ## Rodada: lojas das casas até a linha marrom certa
 - A linha marrom é a laje desenhada no PÉ de cada fileira da textura (0,2 m: de `k*alturaDaFileira` a `+0,2`), por isso o topo da loja na casa é `k * fileira + 0,2` (`houseShopTop` em city.ts; antes ficava 0,2 m abaixo e a linha aparecia). Casa de 3 fileiras (SL4, linha em 5,2–5,4 m): loja de dois níveis com vitrine de cima e uma BARRA CINZA no topo (0,2 m) tampando a linha; nada passa dela. Casa de 2 fileiras (SH, H1, H2, SL3, SLONG; linha na 1ª laje, topo de 2,6 a 3,6 m): só o térreo, sem vitrine de cima, e o toldo colorido (agora 0,2 m) fica NA altura da linha marrom; a janela termina logo abaixo e o cartaz se ajusta (`py`, `PosterSlot.cy` por loja; `low` em shops.ts).
+
+## Rodada: duas lojas nas casas
+- Nas casas, quando a parede tem número ÍMPAR de baias (`nb`, ex.: 3), a baia que sobra vira uma loja pequena de 1 baia (~3,4 m, porta de ~1 m e cartaz de ~1,3 m) ao lado da de 2 baias (`cells` em `addShops`, só `house`); nos outros prédios a baia que sobra continua vazia. Agora são 217 vagas (os números mudaram de novo; `public/posters/LEIA.md` refeito).

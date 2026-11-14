@@ -458,15 +458,17 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
       const nb = Math.max(1, Math.round(L / b.bay));
       const bw = L / nb;
       const c = b.col * bw;
-      const count = Math.floor(nb / 2);
-      if (count < 1) continue;
+      // lojas de 2 baias; nas casas, a baia que sobra (nb ímpar) vira uma loja pequena de 1 baia (aproveita o espaço)
+      const cells: [number, number][] = [];
+      for (let i = 0; i < Math.floor(nb / 2); i++) cells.push([2 * i * bw + c, Math.min(L, (2 * i + 2) * bw + c)]);
+      if (house && nb >= 3 && nb % 2 === 1) cells.push([(nb - 1) * bw + c, Math.min(L, nb * bw + c)]);
+      if (cells.length < 1) continue;
       // sentido do eixo u da textura = eixo local da loja (zp +x, zn -x, xp -z, xn +z)
       const dir = s.k === 'zp' || s.k === 'xn' ? 1 : -1;
       const start = alongX ? (dir > 0 ? cx - L / 2 : cx + L / 2) : (dir > 0 ? cz - L / 2 : cz + L / 2);
       const theta = Math.atan2(s.nx, s.nz);
-      for (let i = 0; i < count; i++) {
-        const uA = 2 * i * bw + c;
-        const uB = Math.min(L, (2 * i + 2) * bw + c);
+      for (let i = 0; i < cells.length; i++) {
+        const [uA, uB] = cells[i]!;
         const W = uB - uA; // largura desta loja
         const along = start + dir * ((uA + uB) / 2);
         const px = alongX ? along : face;
@@ -502,7 +504,7 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
         const inL = Math.max(0, 0.2 - uA);
         const inR = Math.max(0, 0.2 - (L - uB));
         box('frame', 0.4, pTop - gy, 0.5, -W / 2 + inL, gy, 0.27);
-        if (i === count - 1) box('frame', 0.4, pTop - gy, 0.5, W / 2 - inR, gy, 0.27);
+        if (i === cells.length - 1) box('frame', 0.4, pTop - gy, 0.5, W / 2 - inR, gy, 0.27);
         // interior pintado atrás do vidro
         const ip = new THREE.PlaneGeometry(Wi, gh);
         cellUV(ip, kind % 2, Math.floor(kind / 2), INT_W, INT_H, INT_W * 2, INT_H * 4);
