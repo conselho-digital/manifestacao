@@ -32,7 +32,7 @@ const kindOf = (a: Armed): Kind3 | null => (a === 'rifle' || a === 'aim' ? 'rifl
 /** Clipes em que o corpo cai ou levanta do chão: o corpo é apoiado pelo osso mais baixo (os dados do IFP não têm a altura certa de cada instante). */
 const GROUNDED = new Set(['getup', 'getup_front', 'ko', 'ko_front', 'ko_skid_back', 'ko_skid_front', 'hitk_2']);
 const LIE_CONTACT = 0.08; // altura do osso mais baixo quando o corpo está deitado (a pele tem ~10 cm de espessura)
-const ONCE = new Set(['roll_f', 'roll_fl', 'roll_fr', 'roll_l', 'roll_r', 'roll_b', 'roll_bl', 'roll_br', 'bat_swing4', 'arrestgun', 'knife_1', 'knife_2', 'knife_3', 'knife_4', 'knife_g', 'kill_player', 'kill_ped_damage', 'kill_ped_die', 'kick_1', 'kick_2', 'hitk_1', 'hitk_2', 'hit_1', 'hit_2', 'hit_3', 'block', 'punch_1', 'punch_2', 'punch_3', 'punch_4', 'bat_swing', 'bat_swing2', 'bat_swing3', 'bat_hit_1', 'bat_hit_2', 'bat_hit_3', 'car_getin_l', 'car_getout_l', 'car_open_l', 'car_closedoor_l', 'car_close_l', 'bike_pickup_l', 'bike_pickup_r', 'bike_pullup_l', 'bike_pullup_r', 'bike_fall', 'ko_front', 'getup_front', 'getup', 'ko_skid_back', 'ko_skid_front', 'hitr_front', 'hitr_back', 'hitr_l', 'hitr_r', 'hitr_behind', 'jump_launch', 'jump_land', 'climb_jump', 'climb_pull', 'climb_stand', 'roll', 'dive']);
+const ONCE = new Set(['roll_f', 'roll_fl', 'roll_fr', 'roll_l', 'roll_r', 'roll_b', 'roll_bl', 'roll_br', 'bat_swing4', 'arrestgun', 'knife_1', 'knife_2', 'knife_3', 'knife_4', 'knife_g', 'kill_player', 'kill_ped_damage', 'kill_ped_die', 'kick_1', 'kick_2', 'hitk_1', 'hitk_2', 'hit_1', 'hit_2', 'hit_3', 'block', 'punch_1', 'punch_2', 'punch_3', 'punch_4', 'bat_swing', 'bat_swing2', 'bat_swing3', 'bat_hit_1', 'bat_hit_2', 'bat_hit_3', 'car_getin_l', 'car_getout_l', 'car_open_l', 'car_closedoor_l', 'car_close_l', 'bike_pickup_l', 'bike_pickup_r', 'bike_pullup_l', 'bike_pullup_r', 'bike_mount_l', 'bike_mount_r', 'bike_fall', 'ko_front', 'getup_front', 'getup', 'ko_skid_back', 'ko_skid_front', 'hitr_front', 'hitr_back', 'hitr_l', 'hitr_r', 'hitr_behind', 'jump_launch', 'jump_land', 'climb_jump', 'climb_pull', 'climb_stand', 'roll', 'dive']);
 export const isOnceClip = (name: string): boolean => ONCE.has(name);
 
 /** Clipes em que o personagem não segura o fuzil (escalar, rolar, mergulhar, emotes). */
@@ -223,6 +223,8 @@ export class Animator {
   /** piloto sentado: deslocamento do modelo (y já descontando a altura da pélvis) e z */
   private ride: { x: number; y: number; z: number; grips: [THREE.Vector3, THREE.Vector3] | null; lean: number } | null = null;
   private addClips: (file: Clips<never>) => void = () => undefined;
+  /** cria `bike_mount_l/r` (subir na moto em pé: do repouso à pose sentada, sem pegar nada do chão) a partir dos clipes `idle` e `bike_ride` */
+  private makeMount: () => void = () => undefined;
 
   private constructor(
     private root: THREE.Object3D,
@@ -396,10 +398,33 @@ export class Animator {
       }
     };
     const base = kind === 'gta' ? '/anims/ped' : '/anims/carlos';
+    a.makeMount = () => {
+      const idle = a.actions.get('idle')?.getClip();
+      const ride = a.actions.get('bike_ride')?.getClip();
+      if (!idle || !ride || a.actions.has('bike_mount_l')) return;
+      const D = 1.0; // = STAGE_DUR.pullup em player.ts
+      const q0 = new THREE.Quaternion();
+      const q1 = new THREE.Quaternion();
+      for (const name of ['bike_mount_l', 'bike_mount_r']) {
+        const tracks: THREE.KeyframeTrack[] = [];
+        for (const rt of ride.tracks) {
+          const it = idle.tracks.find((t) => t.name === rt.name);
+          if (!it) continue;
+          q0.fromArray(it.values, 0);
+          q1.fromArray(rt.values, 0);
+          // em pé ao lado da moto até 0,3 s; depois a perna passa por cima e ele senta (o corpo sobe e anda até o banco em seatBlend)
+          tracks.push(new THREE.QuaternionKeyframeTrack(rt.name, [0, 0.3, D], [...q0.toArray(), ...q0.toArray(), ...q1.toArray()]));
+        }
+        const action = mixer.clipAction(new THREE.AnimationClip(name, D, tracks));
+        action.setLoop(THREE.LoopOnce, 1);
+        action.clampWhenFinished = true;
+        a.actions.set(name, action);
+      }
+    };
     a.addClips(await fetchJson(`${base}.json`));
     a.play('idle');
     // Animações extras (emotes, estilos de andar) carregam em segundo plano
-    void fetchJson(`${base}-extra.json`).then((f) => a.addClips(f)).catch(() => undefined);
+    void fetchJson(`${base}-extra.json`).then((f) => { a.addClips(f); a.makeMount(); }).catch(() => undefined);
     return a;
   }
 

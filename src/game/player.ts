@@ -67,7 +67,7 @@ export const stageClip = (st: SeqStage, side: number): string => {
     case 'getin': return 'car_getin_l';
     case 'close': return 'car_closedoor_l';
     case 'pickup': return 'bike_pickup' + r;
-    case 'pullup': return 'bike_pullup' + r;
+    case 'pullup': return 'bike_mount' + r; // subir na moto: de pé ao lado até sentado (o antigo bike_pullup do GTA é abaixar para levantar a moto do chão)
     case 'getout': return side < 0 ? 'car_getout_r' : 'car_getout_l';
     default: return 'car_close_l';
   }
@@ -79,6 +79,8 @@ export function stageOfClip(name: string): { u: number | null; entering: boolean
     case 'bike_pickup_l': return { u: 0, entering: true, side: 1 };
     case 'bike_pickup_r': return { u: 0, entering: true, side: -1 };
     case 'car_getin_l': return { u: null, entering: true, side: 1 };
+    case 'bike_mount_l': return { u: null, entering: true, side: 1 };
+    case 'bike_mount_r': return { u: null, entering: true, side: -1 };
     case 'bike_pullup_l': return { u: null, entering: true, side: 1 };
     case 'bike_pullup_r': return { u: null, entering: true, side: -1 };
     case 'car_closedoor_l': return { u: 1, entering: true, side: 1 };
@@ -99,9 +101,10 @@ export function seatBlend(car: Car, u: number, entering: boolean, side = 1): { x
   const f = entering ? k * k * (3 - 2 * k) : 1 - k * k * (3 - 2 * k); // 1 = sentado
   const seat = car.seat ?? new THREE.Vector3(0.48, 0.7, -0.2);
   const out = { x: (car.bike ? DOOR_SIDE.bike : DOOR_SIDE.car) * side, y: 0, z: seat.z - (car.bike ? 0 : 0.1) };
+  const hop = car.bike && entering ? Math.sin(Math.PI * f) * 0.14 : 0; // pulinho ao passar a perna por cima da moto
   return {
     x: THREE.MathUtils.lerp(out.x, seat.x, f),
-    y: THREE.MathUtils.lerp(out.y, seat.y - 0.97, f),
+    y: THREE.MathUtils.lerp(out.y, seat.y - 0.97, f) + hop,
     z: THREE.MathUtils.lerp(out.z, seat.z, f),
     turn: -(Math.PI / 2) * (1 - f) * side,
   };
