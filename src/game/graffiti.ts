@@ -35,6 +35,8 @@ export function wallAt(city: THREE.Object3D, o: THREE.Vector3, d: THREE.Vector3)
   for (const h of ray.intersectObject(city, true)) {
     const m = h.object as THREE.Mesh;
     if (!m.isMesh || (m as THREE.InstancedMesh).isInstancedMesh) continue;
+    if (!m.visible) continue;
+    if (m.userData.noSpray) return null; // lojas e cartazes: a pichação não vale (nem na parede atrás deles)
     const mat = Array.isArray(m.material) ? m.material[0] : m.material;
     if (mat && (mat.transparent || mat.alphaTest > 0)) continue;
     if (!h.face) continue;

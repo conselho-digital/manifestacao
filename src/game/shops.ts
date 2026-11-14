@@ -279,6 +279,7 @@ export function updatePosterOverlays(dt: number, px: number, pz: number): void {
     if (!o) {
       const mat = new THREE.MeshBasicMaterial({ transparent: false });
       const mesh = new THREE.Mesh(new THREE.PlaneGeometry(POSTER_W, POSTER_H), mat);
+      mesh.userData.noSpray = true;
       mesh.visible = false;
       cityRef.add(mesh);
       o = { mesh, mat };
@@ -575,6 +576,7 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
       : mat(colors[k] ?? 0x888888);
     const m = new THREE.Mesh(geo, material);
     m.receiveShadow = k !== 'glass';
+    m.userData.noSpray = true; // não dá para pichar a loja
     if (k === 'glass') m.renderOrder = 2;
     city.add(m);
   }
@@ -592,7 +594,7 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
   NAMES.forEach((nm, k) => drawSign(sg, (k % 2) * SIGN_W, Math.floor(k / 2) * SIGN_H, nm, ACCENT[Math.floor(k / 2)]));
   for (const [list, canvas] of [[interiorGeos, intCanvas], [signGeos, signCanvas]] as const) {
     const geo = mergeGeometries(list as THREE.BufferGeometry[], false);
-    if (geo) city.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: atlasTexture(canvas) })));
+    if (geo) { const am = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: atlasTexture(canvas) })); am.userData.noSpray = true; city.add(am); }
   }
 
   // atlas de cartazes: cartaz de exemplo em todas as vagas (as imagens publicadas entram por cima)
@@ -614,6 +616,7 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
     const geo = mergeGeometries(list, false);
     if (!geo) return;
     const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex }));
+    m.userData.noSpray = true;
     city.add(m);
   });
   pagesRef = pages;
