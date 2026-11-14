@@ -17,6 +17,8 @@ const POSTER_H = 2.0;
 const PU = -1.0;
 const PW = 0.4;
 const PY = 2.0;
+/** altura da loja: até embaixo da laje do térreo dos prédios (o térreo `plinth` tem 7 m) */
+const TOP = 7.0;
 const CELL_W = 256;
 const CELL_H = 171; // 3:2, como o cartaz
 const COLS = 8;
@@ -403,11 +405,11 @@ function atlasTexture(canvas: HTMLCanvasElement): THREE.CanvasTexture {
 }
 
 /** põe o UV de um plano na célula (col, row) de um atlas */
-function cellUV(pg: THREE.BufferGeometry, col: number, row: number, cw: number, ch: number, W: number, H: number): void {
+function cellUV(pg: THREE.BufferGeometry, col: number, row: number, cw: number, ch: number, W: number, H: number, vBot = 1): void {
   const uv = pg.getAttribute('uv') as THREE.BufferAttribute;
   const eps = 0.5;
   for (let k = 0; k < uv.count; k++) {
-    uv.setXY(k, (col * cw + eps + uv.getX(k) * (cw - 2 * eps)) / W, 1 - (row * ch + eps + (1 - uv.getY(k)) * (ch - 2 * eps)) / H);
+    uv.setXY(k, (col * cw + eps + uv.getX(k) * (cw - 2 * eps)) / W, 1 - (row * ch + eps + (1 - uv.getY(k)) * (ch * vBot - 2 * eps)) / H);
   }
 }
 
@@ -465,9 +467,9 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
         const more = i < n - 1 ? GAP : 0; // entre duas lojas a pilastra e o letreiro continuam
         // base de pedra, pilastras escuras nas pontas e entre as lojas
         box('plinth', SHOP_W + more, 0.6, 0.5, more / 2, 0, 0.27);
-        box('frame', 0.3, 3.55, 0.5, -SHOP_W / 2 + 0.15, 0.6, 0.27);
-        box('frame', 0.3, 3.55, 0.5, SHOP_W / 2 - 0.15, 0.6, 0.27);
-        if (more) box('frame', more + 0.02, 3.95, 0.5, SHOP_W / 2 + more / 2, 0.6, 0.27);
+        box('frame', 0.3, TOP - 0.6, 0.5, -SHOP_W / 2 + 0.15, 0.6, 0.27);
+        box('frame', 0.3, TOP - 0.6, 0.5, SHOP_W / 2 - 0.15, 0.6, 0.27);
+        if (more) box('frame', more + 0.02, TOP - 0.6, 0.5, SHOP_W / 2 + more / 2, 0.6, 0.27);
         // interior pintado atrás do vidro
         const ip = new THREE.PlaneGeometry(5.6, 2.8);
         cellUV(ip, kind % 2, Math.floor(kind / 2), INT_W, INT_H, INT_W * 2, INT_H * 4);
@@ -480,6 +482,16 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
         box('frame', 2.2, 0.1, 0.1, 1.9, 3.0, 0.4);
         box('metal', 0.05, 0.5, 0.06, 1.8, 1.0, 0.46);
         box('metal', 0.05, 0.5, 0.06, 2.0, 1.0, 0.46);
+        // vitrine de cima (1º andar): outro interior pintado, até embaixo da laje do térreo (TOP)
+        const up = new THREE.PlaneGeometry(5.6, 2.2);
+        const uk = (kind + 3) % KINDS;
+        cellUV(up, uk % 2, Math.floor(uk / 2), INT_W, INT_H, INT_W * 2, INT_H * 4, 0.8);
+        interiorGeos.push(put(up, 0, 5.8, 0.1));
+        box('glass', 5.6, 2.2, 0.04, 0, 4.7, 0.38);
+        box('frame', 5.6, 0.2, 0.12, 0, 4.5, 0.4);
+        box('frame', 5.6, 0.12, 0.12, 0, TOP - 0.12, 0.4);
+        box('frame', 0.12, 2.2, 0.12, -1.0, 4.7, 0.4);
+        box('frame', 0.12, 2.2, 0.12, 1.0, 4.7, 0.4);
         // letreiro branco com o nome e toldo fino colorido
         box('signbox', SHOP_W + more, 0.95, 0.34, more / 2, 3.55, 0.3);
         const sp = new THREE.PlaneGeometry(SHOP_W - 0.4, (SHOP_W - 0.4) * (SIGN_H / SIGN_W));

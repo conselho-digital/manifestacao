@@ -403,3 +403,6 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 
 ## Rodada: aba "Ferramentas" no menu de pausa
 - Aba **Ferramentas** (só para o admin, roxa como as outras do admin; `renderTools`/`TOOLS` em `src/ui/pause.ts`, `PauseTab` ganhou `'tools'`): lista as páginas de ferramentas com uma frase cada e o botão "Abrir" (nova aba do navegador): Criar personagens (`/personagens`), Armas nas mãos (`/armas`) e Animações (`/load-animation`). Para listar uma ferramenta nova, acrescente em `TOOLS`. As páginas de `dev/` (só no `npm run dev`) não entram.
+
+## Rodada: lojas até o 1º andar (altura de 7 m)
+- A loja agora sobe até embaixo da laje do térreo dos prédios (`TOP` = 7 m em shops.ts; o térreo `plinth` de city.ts tem 7 m): pilastras e pilastra entre lojas de 0,6 a 7 m, e acima do letreiro (3,55–4,5 m) há uma SEGUNDA vitrine (4,7–6,9 m) com outro interior pintado (`(tipo+3) % 8`, `cellUV` com `vBot` = 0,8 usa só a parte de cima da imagem), vidro, travessa e divisórias. O térreo da loja (vitrine, porta, cartaz, toldo) não mudou. Em prédios sem térreo alto (`off` 0) a loja também tem 7 m.
