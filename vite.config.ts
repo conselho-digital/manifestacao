@@ -1,8 +1,8 @@
 import { defineConfig } from 'vite';
 
-// Duas páginas: o jogo (index.html) e o editor de armas nas mãos (armas.html, aberto também pela aba "Armas nas mãos" da página de animações).
+// Três páginas: o jogo (index.html), o editor de armas nas mãos (armas.html) e a ferramenta de criar personagens (personagens.html); os dois editores abrem também por abas da página de animações.
 export default defineConfig({
   build: {
-    rollupOptions: { input: { main: 'index.html', armas: 'armas.html' } },
+    rollupOptions: { input: { main: 'index.html', armas: 'armas.html', personagens: 'personagens.html' } },
   },
 });

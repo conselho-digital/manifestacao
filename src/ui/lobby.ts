@@ -1,5 +1,6 @@
 import { enterLandscape } from './orientation';
 import { CHARACTERS, labelOf, type CharacterName } from '../game/characters';
+import { customOf, isCustomId, onCustomChange } from '../game/customChars';
 import { authAvailable, currentUser, renderGoogleButton, signOut, type AuthUser } from '../net/auth';
 import { createCharacterPicker, createTeamPicker, el, faceUrl, PICKER_CSS } from './pickers';
 import { MAP_ID, MAPS, setMapId } from '../game/map';
@@ -21,7 +22,7 @@ const DEFAULT_CHARACTER: CharacterName = 'Carlos';
 function loadSaved(): { name: string; character: CharacterName } {
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as { name?: string; character?: string };
-    const character = CHARACTERS.includes(raw.character as CharacterName) ? (raw.character as CharacterName) : DEFAULT_CHARACTER;
+    const character = CHARACTERS.includes(raw.character as never) || isCustomId(raw.character) ? (raw.character as CharacterName) : DEFAULT_CHARACTER;
     return { name: (raw.name ?? '').slice(0, MAX_NAME), character };
   } catch {
     return { name: '', character: DEFAULT_CHARACTER };
@@ -150,6 +151,13 @@ export function showLobby(): Promise<Profile> {
     goBtn.disabled = !hasName;
     saveProfile({ name: nameInput.value.trim().slice(0, MAX_NAME), character: selected });
   }
+
+  // a lista de personagens novos chega do servidor depois do menu abrir: atualiza foto e nome (e troca o que foi apagado)
+  const offCustom = onCustomChange(() => {
+    if (!root.isConnected) { offCustom(); return; }
+    if (isCustomId(selected) && !customOf(selected)) selected = DEFAULT_CHARACTER;
+    refresh();
+  });
 
   function renderUser(): void {
     who.textContent = '';

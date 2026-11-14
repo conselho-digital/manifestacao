@@ -51,6 +51,10 @@
     {
       "source": "/armas",
       "destination": "/armas.html"
+    },
+    {
+      "source": "/personagens",
+      "destination": "/personagens.html"
     }
   ]
 }

@@ -80,8 +80,8 @@
   .tabs { position: sticky; top: 0; z-index: 20; display: flex; gap: 4px; padding: 8px 16px 0; background: var(--bg); border-bottom: 1px solid var(--line); }
   .tabs button { border-radius: 8px 8px 0 0; border-bottom: 0; padding: 9px 18px; background: transparent; color: var(--muted); }
   .tabs button.on { background: var(--panel2); color: var(--text); border-color: var(--line); font-weight: 650; }
-  #gripTab { height: calc(100vh - 47px); min-height: 520px; }
-  #gripTab iframe { width: 100%; height: 100%; border: 0; display: block; background: var(--bg); }
+  #gripTab, #charTab { height: calc(100vh - 47px); min-height: 520px; }
+  #gripTab iframe, #charTab iframe { width: 100%; height: 100%; border: 0; display: block; background: var(--bg); }
 </style>
 
 </head>
@@ -89,8 +89,10 @@
 <nav class="tabs" role="tablist">
   <button id="tabAnim" class="on" role="tab" aria-selected="true">Animações</button>
   <button id="tabGrip" role="tab" aria-selected="false">Armas nas mãos</button>
+  <button id="tabChar" role="tab" aria-selected="false">Criar personagens</button>
 </nav>
 <div id="gripTab" hidden></div>
+<div id="charTab" hidden></div>
 <div class="page" id="animTab">
   <!-- 1. arquivo -->
   <section id="drop">
@@ -1431,19 +1433,23 @@ const CarlosRetarget = (function () {
 </script>
 <script id="tabs">
 (function () {
-  var a = document.getElementById('tabAnim'), g = document.getElementById('tabGrip');
-  var animTab = document.getElementById('animTab'), gripTab = document.getElementById('gripTab');
-  function show(grip) {
-    animTab.hidden = grip; gripTab.hidden = !grip;
-    a.classList.toggle('on', !grip); g.classList.toggle('on', grip);
-    a.setAttribute('aria-selected', String(!grip)); g.setAttribute('aria-selected', String(grip));
-    document.body.style.overflow = grip ? 'hidden' : '';
-    if (grip && !gripTab.firstChild) { var f = document.createElement('iframe'); f.src = '/armas.html'; f.title = 'Armas nas mãos'; gripTab.appendChild(f); }
-    if (location.hash !== (grip ? '#armas' : '')) history.replaceState(null, '', grip ? '#armas' : location.pathname + location.search);
+  var tabs = [
+    { btn: document.getElementById('tabAnim'), box: document.getElementById('animTab'), hash: '', src: '', title: '' },
+    { btn: document.getElementById('tabGrip'), box: document.getElementById('gripTab'), hash: '#armas', src: '/armas.html', title: 'Armas nas mãos' },
+    { btn: document.getElementById('tabChar'), box: document.getElementById('charTab'), hash: '#personagens', src: '/personagens.html', title: 'Criar personagens' }
+  ];
+  function show(i) {
+    tabs.forEach(function (t, k) {
+      var on = k === i;
+      t.box.hidden = !on; t.btn.classList.toggle('on', on); t.btn.setAttribute('aria-selected', String(on));
+      if (on && t.src && !t.box.firstChild) { var f = document.createElement('iframe'); f.src = t.src; f.title = t.title; t.box.appendChild(f); }
+    });
+    document.body.style.overflow = i ? 'hidden' : '';
+    if (location.hash !== tabs[i].hash) history.replaceState(null, '', tabs[i].hash || location.pathname + location.search);
   }
-  a.onclick = function () { show(false); };
-  g.onclick = function () { show(true); };
-  if (location.hash === '#armas') show(true);
+  tabs.forEach(function (t, k) { t.btn.onclick = function () { show(k); }; });
+  var start = tabs.findIndex(function (t) { return t.hash && t.hash === location.hash; });
+  if (start > 0) show(start);
 })();
 </script>
 </body>

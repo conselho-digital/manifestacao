@@ -1,5 +1,6 @@
 // Seletores reutilizados no menu inicial e no menu de pausa: personagem (carrosséis por categoria) e equipe (duas cores).
 import { CATEGORIES, labelOf, type CharacterName } from '../game/characters';
+import { customList, customOf, isCustomId, onCustomChange } from '../game/customChars';
 import type { Team } from '../game/teams';
 
 type Kids = (Node | string)[];
@@ -10,7 +11,7 @@ export function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', ...k
   return e;
 }
 
-export const faceUrl = (n: CharacterName): string => `/faces/${n}.webp`;
+export const faceUrl = (n: CharacterName): string => (isCustomId(n) ? customOf(n)?.face ?? '' : `/faces/${n}.webp`);
 
 export const PICKER_CSS = `
 .pk-cats{width:100%;padding:8px 0 24px}
@@ -66,6 +67,38 @@ export function createCharacterPicker(initial: CharacterName, onPick: (n: Charac
     };
     root.appendChild(el('div', 'pk-cat', el('h3', '', cat.title), el('div', 'pk-row', arrow('l', '‹', -1), track, arrow('r', '›', 1))));
   }
+  // categoria "Novos": personagens criados na ferramenta /personagens (vêm do servidor; aparece quando há algum)
+  const novos = el('div', 'pk-cats-novos');
+  root.appendChild(novos);
+  const renderNovos = (): void => {
+    for (const [k, b] of [...items]) if (isCustomId(k)) { items.delete(k); b.remove(); }
+    novos.textContent = '';
+    const list = customList();
+    if (!list.length) return;
+    const track = el('div', 'pk-track');
+    for (const c of list) {
+      const img = el('img');
+      img.src = faceUrl(c.id as CharacterName);
+      img.alt = '';
+      img.loading = 'lazy';
+      img.draggable = false;
+      const b = el('button', 'pk-item', img, el('span', '', c.name));
+      b.type = 'button';
+      b.onclick = () => { current = c.id as CharacterName; mark(); onPick(current); };
+      items.set(c.id as CharacterName, b);
+      track.appendChild(b);
+    }
+    const arrow = (cls: 'l' | 'r', txt: string, dir: number): HTMLButtonElement => {
+      const a = el('button', `pk-arrow ${cls}`, txt);
+      a.type = 'button';
+      a.onclick = () => track.scrollBy({ left: dir * track.clientWidth * 0.8 });
+      return a;
+    };
+    novos.appendChild(el('div', 'pk-cat', el('h3', '', 'Novos'), el('div', 'pk-row', arrow('l', '‹', -1), track, arrow('r', '›', 1))));
+    mark();
+  };
+  renderNovos();
+  const off = onCustomChange(() => { if (!root.isConnected) { off(); return; } renderNovos(); });
   mark();
   return {
     root,

@@ -4,6 +4,7 @@ import { createCity } from './game/city';
 import { createEsplanada, esplanadaReady } from './game/esplanada';
 import { MAP_ID, onMapChange, spawnPoint } from './game/map';
 import { createCharacter, type CharacterName } from './game/characters';
+import { loadCustom } from './game/customChars';
 import { settings, view } from './game/settings';
 import { initMouse, readInput, takeLook, type InputState } from './game/input';
 import { Player } from './game/player';
@@ -106,6 +107,7 @@ function menuCamera(dt: number): void {
 // a cidade é criada e os gráficos compilados na tela de carregamento, depois de clicar em Entrar.
 const GAME_PIXEL_RATIO = pixelRatio();
 void loadGrips(); // ajustes finos da posição das armas nas mãos (public/weapon-grips.json)
+void loadCustom(); // personagens e cabeças criados na ferramenta /personagens
 const warm = warmUp(renderer, scene, camera, menuFog);
 let loadingScreen = false; // true enquanto a tela de carregamento cobre o jogo: não desenha a cena
 
@@ -303,6 +305,7 @@ void showLobby().then(async (profile) => {
   // Ponto de partida (?pos=x,z serve para inspecionar o mapa)
   const startQ = new URLSearchParams(location.search).get('pos')?.split(',').map(Number);
   const spawn = spawnPoint(); // Paulista: em frente ao museu; Esplanada: no gramado, de frente para o Congresso
+  await Promise.race([loadCustom(), new Promise((r) => setTimeout(r, 2500))]); // personagens criados na ferramenta (precisa da lista para montar o seu)
   const first = await createCharacter(profile.character);
   first.position.set(startQ?.[0] ?? spawn[0], 0, startQ?.[1] ?? spawn[1]);
   scene.add(first);

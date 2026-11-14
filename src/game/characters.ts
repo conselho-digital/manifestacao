@@ -1,16 +1,19 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
+import { buildCustom, customOf, isCustomId } from './customChars';
 
 export const CHARACTERS = [
   'Helena', 'Stewart', 'Bennyse', 'Amanda', 'Garota1', 'Carlos', 'Gordao', 'Cesar',
   'Akiyama',
   'Law1', 'Law2', 'Law3', 'Law4', 'Law5', 'Law6', 'Law7', 'Law8', 'Law9',
 ] as const;
-export type CharacterName = (typeof CHARACTERS)[number];
+export type BuiltinName = (typeof CHARACTERS)[number];
+/** personagem do jogo (`Carlos`...) ou criado na ferramenta /personagens (`c_xxxx`, ver customChars.ts) */
+export type CharacterName = BuiltinName | `c_${string}`;
 
 /** Categorias da tela de seleção (um carrossel por categoria). Todo personagem aparece em exatamente uma. */
-export const CATEGORIES: { title: string; names: CharacterName[] }[] = [
+export const CATEGORIES: { title: string; names: BuiltinName[] }[] = [
   { title: 'Rua', names: ['Carlos', 'Cesar', 'Gordao', 'Garota1', 'Amanda'] },
   { title: 'Civis', names: ['Akiyama', 'Helena', 'Stewart', 'Bennyse'] },
   { title: 'Polícia', names: ['Law1', 'Law2', 'Law3', 'Law4', 'Law6', 'Law7'] },
@@ -18,18 +21,19 @@ export const CATEGORIES: { title: string; names: CharacterName[] }[] = [
 ];
 
 /** Nome mostrado na seleção (os modelos Law não têm nome próprio). */
-export const LABELS: Partial<Record<CharacterName, string>> = {
+export const LABELS: Partial<Record<BuiltinName, string>> = {
   Garota1: 'Garota', Law1: 'Policial', Law2: 'Delegado', Law3: 'Patrulheiro', Law4: 'Oficial',
   Law5: 'Agente', Law6: 'Xerife', Law7: 'Xerife 2', Law8: 'Tático', Law9: 'Soldado',
 };
-export const labelOf = (n: CharacterName): string => LABELS[n] ?? n;
+export const labelOf = (n: CharacterName): string => (isCustomId(n) ? customOf(n)?.name ?? 'Personagem' : LABELS[n as BuiltinName] ?? n);
 
 export const CHARACTER_HEIGHT = 1.8;
 
 const loader = new GLTFLoader();
-const cache = new Map<CharacterName, Promise<THREE.Object3D>>();
+const cache = new Map<string, Promise<THREE.Object3D>>();
 
-function load(name: CharacterName): Promise<THREE.Object3D> {
+/** Cena original (sem clonar) de um modelo de `public/models/characters`. */
+export function loadBase(name: string): Promise<THREE.Object3D> {
   let p = cache.get(name);
   if (!p) {
     p = loader.loadAsync(`/models/characters/${name}.glb`).then((gltf) => gltf.scene);
@@ -49,7 +53,12 @@ function measure(model: THREE.Object3D, out = new THREE.Box3()): THREE.Box3 {
 
 /** Retorna um clone com altura de 1,8 m e origem nos pés. */
 export async function createCharacter(name: CharacterName): Promise<THREE.Group> {
-  const source = await load(name);
+  if (isCustomId(name)) {
+    const rec = customOf(name);
+    if (rec) return buildCustom(rec.recipe);
+    return createCharacter('Carlos'); // personagem novo que não está na lista (ainda não carregou ou foi apagado)
+  }
+  const source = await loadBase(name);
   const model = SkeletonUtils.clone(source);
   model.traverse((o) => {
     if ((o as THREE.Mesh).isMesh) {

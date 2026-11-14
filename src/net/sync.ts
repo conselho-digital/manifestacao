@@ -1,6 +1,7 @@
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import { supabase } from './supabase';
 import { CHARACTERS, type CharacterName } from '../game/characters';
+import { isCustomId } from '../game/customChars';
 import { MAP, MAP_ID } from '../game/map';
 import { cleanRtc, type RtcKind } from './voice';
 import { cleanLook, HEX, type TeamLook } from '../game/teams';
@@ -119,6 +120,7 @@ export function cleanChat(v: unknown): string {
 }
 
 function cleanCharacter(v: unknown): CharacterName | null {
+  if (isCustomId(v)) return v; // personagem criado na ferramenta (quem não o tem na lista vê o Carlos)
   return typeof v === 'string' && (CHARACTERS as readonly string[]).includes(v) ? (v as CharacterName) : null;
 }
 
