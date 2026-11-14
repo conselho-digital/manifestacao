@@ -6,15 +6,13 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { supabase } from '../net/supabase';
 
-export interface ShopBuilding { name: string; r: { x0: number; x1: number; z0: number; z1: number }; off: number }
-export interface PosterSlot { id: string; building: string; face: 'zp' | 'zn' | 'xp' | 'xn'; n: number; /** número do cartaz (1, 2, 3...): "Cartaz 01" */ num: number; x: number; z: number; nx: number; nz: number; page: number; cell: number; /** centro do cartaz no mundo (x, z) e altura */ cx: number; cz: number; cy: number }
+/** `bay` = largura da baia da parede do térreo (a conta da textura em city.ts), `col` = onde fica o centro da coluna dentro da baia (0 = na divisa), `shops` false = sem lojas (casas) */
+export interface ShopBuilding { name: string; r: { x0: number; x1: number; z0: number; z1: number }; off: number; bay: number; col: number; shops?: boolean }
+export interface PosterSlot { id: string; building: string; face: 'zp' | 'zn' | 'xp' | 'xn'; n: number; /** número do cartaz (1, 2, 3...): "Cartaz 01" */ num: number; x: number; z: number; nx: number; nz: number; page: number; cell: number; /** centro do cartaz no mundo (x, z) e altura */ cx: number; cz: number; cy: number; /** largura do cartaz (m) */ pw: number }
 
-const SHOP_W = 6.2; // largura de cada loja (pilastras, vitrine e porta)
-const GAP = 0.4;
 const POSTER_W = 3.0;
 const POSTER_H = 2.0;
-/** posição do cartaz no módulo da loja: u = ao longo da fachada, w = para fora, y = centro */
-const PU = -1.0;
+/** posição do cartaz no módulo da loja: w = para fora, y = centro (o centro ao longo da fachada, `pu`, depende da largura da loja) */
 const PW = 0.4;
 const PY = 2.0;
 /** altura da loja: até embaixo da laje do térreo dos prédios (o térreo `plinth` tem 7 m) */
@@ -293,6 +291,7 @@ export function updatePosterOverlays(dt: number, px: number, pz: number): void {
     overlayKey.set(i, key);
     o.mesh.position.set(e.s.cx + 0.01 * e.s.nx, e.s.cy, e.s.cz + 0.01 * e.s.nz);
     o.mesh.rotation.y = Math.atan2(e.s.nx, e.s.nz);
+    o.mesh.scale.setScalar(e.s.pw / POSTER_W);
     o.mesh.visible = false;
     overlayTexture(url, (t) => {
       if (overlayKey.get(i) !== key) return;
@@ -432,30 +431,52 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
   const signGeos: THREE.BufferGeometry[] = [];
 
   for (const b of buildings) {
+    if (b.shops === false) continue;
     for (const s of SIDES) {
       const alongX = s.nz !== 0;
-      const L = alongX ? b.r.x1 - b.r.x0 : b.r.z1 - b.r.z0;
+      const L0 = alongX ? b.r.x1 - b.r.x0 : b.r.z1 - b.r.z0;
+      const L = L0 + 2 * b.off; // comprimento da parede do térreo (a que tem as colunas)
       const cx = (b.r.x0 + b.r.x1) / 2;
       const cz = (b.r.z0 + b.r.z1) / 2;
       const face = alongX ? (s.nz > 0 ? b.r.z1 : b.r.z0) + s.nz * b.off : (s.nx > 0 ? b.r.x1 : b.r.x0) + s.nx * b.off;
       // o lado tem de dar para um espaço livre (3 m à frente, em 3 pontos)
       const probe = (t: number): boolean => (alongX ? free(cx + t, face + s.nz * 3, b) : free(face + s.nx * 3, cz + t, b));
-      if (!(probe(0) && probe(-L * 0.3) && probe(L * 0.3))) continue;
-      const n = Math.min(4, Math.floor((L - 2 + GAP) / (SHOP_W + GAP)));
-      if (n < 1) continue;
+      if (!(probe(0) && probe(-L0 * 0.3) && probe(L0 * 0.3))) continue;
+      // GRADE DE COLUNAS (como células de planilha): a parede tem `nb` baias iguais (mesma conta da textura em city.ts: round(L / baia)) e cada loja
+      // ocupa DUAS baias, de uma coluna do prédio até duas colunas depois. `c` = onde fica o centro da coluna dentro da baia (0 = na divisa).
+      const nb = Math.max(1, Math.round(L / b.bay));
+      const bw = L / nb;
+      const c = b.col * bw;
+      const count = Math.floor(nb / 2);
+      if (count < 1) continue;
+      // sentido do eixo u da textura = eixo local da loja (zp +x, zn -x, xp -z, xn +z)
+      const dir = s.k === 'zp' || s.k === 'xn' ? 1 : -1;
+      const start = alongX ? (dir > 0 ? cx - L / 2 : cx + L / 2) : (dir > 0 ? cz - L / 2 : cz + L / 2);
       const theta = Math.atan2(s.nx, s.nz);
-      for (let i = 0; i < n; i++) {
-        const u0 = (i - (n - 1) / 2) * (SHOP_W + GAP); // centro da loja ao longo da fachada
-        const px = alongX ? cx + u0 : face;
-        const pz = alongX ? face : cz + u0;
+      for (let i = 0; i < count; i++) {
+        const uA = 2 * i * bw + c;
+        const uB = Math.min(L, (2 * i + 2) * bw + c);
+        const W = uB - uA; // largura desta loja
+        const along = start + dir * ((uA + uB) / 2);
+        const px = alongX ? along : face;
+        const pz = alongX ? face : along;
         const id = `${b.name}_${s.k}${i + 1}`;
         const hh = hash(id);
         const kind = hh % KINDS;
         const nameIdx = kind * 2 + ((hh >>> 8) & 1);
+        // medidas da loja: Wi = vão entre as pilastras; porta dupla à direita, vitrine (com o cartaz) à esquerda
+        const Wi = W - 0.6;
+        const dw = Math.min(2.4, Wi * 0.36);
+        const ww = Wi - dw - 0.12;
+        const um = -Wi / 2 + ww + 0.06; // divisória janela/porta
+        const ud = um + 0.06 + dw / 2; // centro da porta
+        const pu = -Wi / 2 + ww / 2; // centro do cartaz
+        const pw = Math.min(3.75, ww - 0.5);
+        const ph = pw / 1.5;
         const slotIndex = POSTER_SLOTS.length;
         const page = Math.floor(slotIndex / PER_PAGE);
         const cell = slotIndex % PER_PAGE;
-        POSTER_SLOTS.push({ id, building: b.name, face: s.k, n: i + 1, num: slotIndex + 1, x: px, z: pz, nx: s.nx, nz: s.nz, page, cell, cx: px + PU * s.nz + PW * s.nx, cz: pz - PU * s.nx + PW * s.nz, cy: PY });
+        POSTER_SLOTS.push({ id, building: b.name, face: s.k, n: i + 1, num: slotIndex + 1, x: px, z: pz, nx: s.nx, nz: s.nz, page, cell, cx: px + pu * s.nz + PW * s.nx, cz: pz - pu * s.nx + PW * s.nz, cy: PY, pw });
         // peça no espaço da loja (u ao longo da fachada, y para cima, w para fora) → mundo
         const put = (g: THREE.BufferGeometry, u: number, y: number, w: number): THREE.BufferGeometry => {
           g.translate(u, y, w);
@@ -463,45 +484,46 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
           g.translate(px, 0, pz);
           return g;
         };
-        const box = (k: string, bw: number, bh: number, bd: number, u: number, y: number, w: number): void => { push(k, put(new THREE.BoxGeometry(bw, bh, bd), u, y + bh / 2, w)); };
-        const more = i < n - 1 ? GAP : 0; // entre duas lojas a pilastra e o letreiro continuam
-        // base de pedra, pilastras escuras nas pontas e entre as lojas
-        box('plinth', SHOP_W + more, 0.6, 0.5, more / 2, 0, 0.27);
-        box('frame', 0.3, TOP - 0.6, 0.5, -SHOP_W / 2 + 0.15, 0.6, 0.27);
-        box('frame', 0.3, TOP - 0.6, 0.5, SHOP_W / 2 - 0.15, 0.6, 0.27);
-        if (more) box('frame', more + 0.02, TOP - 0.6, 0.5, SHOP_W / 2 + more / 2, 0.6, 0.27);
+        const box = (k: string, bw2: number, bh: number, bd: number, u: number, y: number, w: number): void => { push(k, put(new THREE.BoxGeometry(bw2, bh, bd), u, y + bh / 2, w)); };
+        // base de pedra e pilastras escuras: a da esquerda fica em cima da coluna do prédio; a da direita só na última loja (nas outras é a da vizinha)
+        box('plinth', W, 0.6, 0.5, 0, 0, 0.27);
+        const inL = Math.max(0, 0.2 - uA);
+        const inR = Math.max(0, 0.2 - (L - uB));
+        box('frame', 0.4, TOP - 0.6, 0.5, -W / 2 + inL, 0.6, 0.27);
+        if (i === count - 1) box('frame', 0.4, TOP - 0.6, 0.5, W / 2 - inR, 0.6, 0.27);
         // interior pintado atrás do vidro
-        const ip = new THREE.PlaneGeometry(5.6, 2.8);
+        const ip = new THREE.PlaneGeometry(Wi, 2.8);
         cellUV(ip, kind % 2, Math.floor(kind / 2), INT_W, INT_H, INT_W * 2, INT_H * 4);
         interiorGeos.push(put(ip, 0, 2.0, 0.1));
         // vidro (janela e porta), travessa do alto, divisória entre janela e porta e porta dupla
-        box('glass', 5.6, 2.8, 0.04, 0, 0.6, 0.38);
-        box('frame', 5.6, 0.16, 0.12, 0, 3.4, 0.4);
-        box('frame', 0.12, 2.8, 0.12, 0.8, 0.6, 0.4);
-        box('frame', 0.1, 2.5, 0.1, 1.9, 0.6, 0.4);
-        box('frame', 2.2, 0.1, 0.1, 1.9, 3.0, 0.4);
-        box('metal', 0.05, 0.5, 0.06, 1.8, 1.0, 0.46);
-        box('metal', 0.05, 0.5, 0.06, 2.0, 1.0, 0.46);
+        box('glass', Wi, 2.8, 0.04, 0, 0.6, 0.38);
+        box('frame', Wi, 0.16, 0.12, 0, 3.4, 0.4);
+        box('frame', 0.12, 2.8, 0.12, um, 0.6, 0.4);
+        box('frame', 0.1, 2.5, 0.1, ud, 0.6, 0.4);
+        box('frame', dw, 0.1, 0.1, ud, 3.0, 0.4);
+        box('metal', 0.05, 0.5, 0.06, ud - 0.1, 1.0, 0.46);
+        box('metal', 0.05, 0.5, 0.06, ud + 0.1, 1.0, 0.46);
         // vitrine de cima (1º andar): outro interior pintado, até embaixo da laje do térreo (TOP)
-        const up = new THREE.PlaneGeometry(5.6, 2.2);
+        const up = new THREE.PlaneGeometry(Wi, 2.2);
         const uk = (kind + 3) % KINDS;
         cellUV(up, uk % 2, Math.floor(uk / 2), INT_W, INT_H, INT_W * 2, INT_H * 4, 0.8);
         interiorGeos.push(put(up, 0, 5.8, 0.1));
-        box('glass', 5.6, 2.2, 0.04, 0, 4.7, 0.38);
-        box('frame', 5.6, 0.2, 0.12, 0, 4.5, 0.4);
-        box('frame', 5.6, 0.12, 0.12, 0, TOP - 0.12, 0.4);
-        box('frame', 0.12, 2.2, 0.12, -1.0, 4.7, 0.4);
-        box('frame', 0.12, 2.2, 0.12, 1.0, 4.7, 0.4);
+        box('glass', Wi, 2.2, 0.04, 0, 4.7, 0.38);
+        box('frame', Wi, 0.2, 0.12, 0, 4.5, 0.4);
+        box('frame', Wi, 0.12, 0.12, 0, TOP - 0.12, 0.4);
+        box('frame', 0.12, 2.2, 0.12, -Wi * 0.18, 4.7, 0.4);
+        box('frame', 0.12, 2.2, 0.12, Wi * 0.18, 4.7, 0.4);
         // letreiro branco com o nome e toldo fino colorido
-        box('signbox', SHOP_W + more, 0.95, 0.34, more / 2, 3.55, 0.3);
-        const sp = new THREE.PlaneGeometry(SHOP_W - 0.4, (SHOP_W - 0.4) * (SIGN_H / SIGN_W));
+        box('signbox', W, 0.95, 0.34, 0, 3.55, 0.3);
+        const sw = Math.min(W - 0.6, 7.0);
+        const sp = new THREE.PlaneGeometry(sw, sw * (SIGN_H / SIGN_W));
         cellUV(sp, nameIdx % 2, Math.floor(nameIdx / 2), SIGN_W, SIGN_H, SIGN_W * 2, SIGN_H * 8);
         signGeos.push(put(sp, 0, 4.03, 0.48));
-        box(`awn${hh % AWNINGS.length}`, SHOP_W - 0.5, 0.1, 0.75, 0, 3.42, 0.7);
+        box(`awn${hh % AWNINGS.length}`, W - 0.5, 0.1, 0.75, 0, 3.42, 0.7);
         // cartaz (atlas) na vitrine
-        const pg = new THREE.PlaneGeometry(POSTER_W, POSTER_H);
+        const pg = new THREE.PlaneGeometry(pw, ph);
         cellUV(pg, cell % COLS, Math.floor(cell / COLS), CELL_W, CELL_H, COLS * CELL_W, ROWS * CELL_H);
-        put(pg, PU, PY, PW);
+        put(pg, pu, PY, PW);
         (posterGeos[page] ??= []).push(pg);
       }
     }
