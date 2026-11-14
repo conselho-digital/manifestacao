@@ -4,7 +4,7 @@ import { createCity } from './game/city';
 import { createEsplanada, esplanadaReady } from './game/esplanada';
 import { MAP_ID, spawnPoint } from './game/map';
 import { createCharacter, type CharacterName } from './game/characters';
-import { settings } from './game/settings';
+import { settings, view } from './game/settings';
 import { initMouse, readInput, takeLook, type InputState } from './game/input';
 import { Player } from './game/player';
 import { showLobby } from './ui/lobby';
@@ -437,6 +437,7 @@ function loop(): void {
     }
     const look = takeLook();
     const input = readInput();
+    if (view.mode === 2 && combat.isGun && !player.isDriving && !intro) input.aim = true; // primeira pessoa: a arma de fogo fica sempre levantada à frente (aparece na tela)
     if (intro) { // durante o voo o jogador espera (sem comandos)
       look.dx = 0; look.dy = 0;
       Object.assign(input, { x: 0, y: 0, mag: 0, fire: false, aim: false, jump: false, climb: false, crouch: false, interact: false, reload: false, switchWeapon: false, weaponStep: 0, weaponPick: null, sprint: false, gas: false, brake: false, handbrake: false, wheelie: false });
@@ -517,7 +518,7 @@ function loop(): void {
       }, dt);
     }
     // Mira: aproxima a câmera suavemente
-    const fov = lastInput?.aim && combat.isGun ? BASE_FOV * 0.7 : BASE_FOV;
+    const fov = lastInput?.aim && combat.isGun && view.mode !== 2 ? BASE_FOV * 0.7 : BASE_FOV; // em primeira pessoa a mira levantada não dá zoom
     if (Math.abs(camera.fov - fov) > 0.05) {
       camera.fov += (fov - camera.fov) * Math.min(1, dt * 10);
       camera.updateProjectionMatrix();

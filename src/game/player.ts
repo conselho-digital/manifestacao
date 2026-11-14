@@ -994,9 +994,9 @@ export class Player {
     if (fp) {
       const eye = new THREE.Vector3();
       const fpDir = new THREE.Vector3(Math.sin(yaw) * Math.cos(pitch), -Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
-      if (this.animator?.firstPerson(true, eye)) eye.y += 0.06; else eye.set(p.x, p.y + 1.65 - 0.5 * this.crouchK, p.z);
-      eye.x += Math.sin(yaw) * 0.12;
-      eye.z += Math.cos(yaw) * 0.12;
+      if (this.animator?.firstPerson(true, eye)) eye.y += 0.22; else eye.set(p.x, p.y + 1.35 - 0.4 * this.crouchK, p.z); // altura do peito: a arma aparece na tela
+      eye.x += Math.sin(yaw) * 0.25;
+      eye.z += Math.cos(yaw) * 0.25;
       camera.position.copy(eye);
       camera.lookAt(eye.x + fpDir.x, eye.y + fpDir.y, eye.z + fpDir.z);
       return;

@@ -464,14 +464,16 @@ export class Animator {
     this.aimPitch = p;
   }
 
-  /** Primeira pessoa: esconde a cabeça (a câmera fica dentro dela) e devolve onde ela está no mundo; false se o modelo não tem esqueleto. */
+  /** Primeira pessoa: esconde a cabeça (a câmera fica na altura do peito) e devolve a posição do peito no mundo; false se o modelo não tem esqueleto. */
   firstPerson(on: boolean, out: THREE.Vector3): boolean {
     const head = this.spine?.head;
     if (!head) return false;
     head.scale.setScalar(on ? 0.001 : 1);
     if (!on) return false;
-    head.updateWorldMatrix(true, false);
-    head.getWorldPosition(out);
+    // a câmera fica na altura do peito (e não dos olhos), para a arma aparecer na tela
+    const chest = this.spine!.chest;
+    chest.updateWorldMatrix(true, false);
+    chest.getWorldPosition(out);
     return true;
   }
 
