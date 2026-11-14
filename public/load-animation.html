@@ -126,6 +126,18 @@
       <span class="grow"></span>
       <button class="primary" id="btnUse" disabled>Usar esta animação</button>
     </div>
+    <div class="controls" id="walkopts" title="Só para conferir a animação aqui na página (não muda o jogo)">
+      <label class="muted">Direção do passo
+        <select id="walkDir" aria-label="Direção do passo">
+          <option value="0" selected>Frente</option><option value="45">Frente + esquerda</option><option value="-45">Frente + direita</option>
+          <option value="90">Esquerda</option><option value="-90">Direita</option>
+          <option value="135">Trás + esquerda</option><option value="-135">Trás + direita</option><option value="180">Trás</option>
+        </select>
+      </label>
+      <label class="muted">Ângulo <input type="range" id="walkYaw" min="-180" max="180" step="1" value="0" style="width:140px"> <b id="walkYawV">0°</b></label>
+      <label class="muted">Inclinação do corpo <input type="range" id="walkLean" min="-30" max="30" step="1" value="0" style="width:140px"> <b id="walkLeanV">0°</b></label>
+      <button type="button" id="walkReset">Zerar</button>
+    </div>
   </section>
 
   <!-- 4. animações do jogo -->
@@ -668,6 +680,7 @@ const CarlosRetarget = (function () {
    * contado a partir do 1º quadro, sai à parte em clip.move = { t, f (frente), l (esquerda), u (cima) } em metros, no sistema do corpo (frente = para onde o jogo olha).
    * opt.fingers === false: sem trilhas de dedos (o jogo fecha a mão por conta própria).
    */
+  const Y_UP = new THREE.Vector3(0, 1, 0); // espaço do Carlos: x esquerda, y cima, z frente (o ângulo da direção do passo gira em torno de y)
   function bake(anim, rootMode, moveBody, opt) {
     opt = opt || {};
     if (!C) throw new Error('Carlos ainda não preparado.');
@@ -806,7 +819,7 @@ const CarlosRetarget = (function () {
       for (const t of times) {
         const p = interpPos(rootNode.keys, t);
         v.set(M[0][0] * p.x + M[0][1] * p.y + M[0][2] * p.z, M[1][0] * p.x + M[1][1] * p.y + M[1][2] * p.z, M[2][0] * p.x + M[2][1] * p.y + M[2][2] * p.z)
-          .multiplyScalar(m.scale * motionCfg.scale).applyMatrix3(m.inv).add(m.rest);
+          .multiplyScalar(m.scale * motionCfg.scale).applyAxisAngle(Y_UP, window.__moveYaw || 0).applyMatrix3(m.inv).add(m.rest);
         vals.push(v.x, v.y, v.z);
       }
       tracks.push(new THREE.VectorKeyframeTrack(m.bone.name + '.position', times, vals));
@@ -913,6 +926,7 @@ const CarlosRetarget = (function () {
     repl: new Map(),         // animação do jogo → animação do arquivo
     speed: 1, moveBody: true, follow: true, who: ''
   };
+  window.__LA = S; // para conferir pelo console
 
   /* ---------- Carlos ---------- */
   function loadCarlos() {
@@ -1310,6 +1324,24 @@ const CarlosRetarget = (function () {
       controls.update();
     };
   });
+
+
+  /* ---------- Direção do passo e inclinação (só para conferir aqui) ---------- */
+  (function walkOptions() {
+    const dir = $('#walkDir'), yaw = $('#walkYaw'), lean = $('#walkLean');
+    const apply = () => {
+      window.__moveYaw = (+yaw.value) * Math.PI / 180;
+      $('#walkYawV').textContent = yaw.value + '°';
+      $('#walkLeanV').textContent = lean.value + '°';
+      if (S.rig && S.rig.children[0]) S.rig.children[0].rotation.z = (+lean.value) * Math.PI / 180; // inclina o corpo para o lado (em torno do eixo de frente)
+      S.clips.clear();
+      if (S.who === 'Nova') playNew();
+    };
+    dir.onchange = () => { yaw.value = dir.value; apply(); };
+    yaw.oninput = () => { dir.value = [...dir.options].some((o) => o.value === yaw.value) ? yaw.value : dir.value; apply(); };
+    lean.oninput = apply;
+    $('#walkReset').onclick = () => { yaw.value = 0; lean.value = 0; dir.value = '0'; apply(); };
+  })();
 
   /* ---------- Laço ---------- */
   let hipsBone = null, hipsPrev = null;
