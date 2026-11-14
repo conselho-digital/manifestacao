@@ -420,3 +420,6 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 
 ## Rodada: lojas das casas sem base cinza e sem letreiro
 - Nas casas de 2 andares (`kind: 'house'`, `top` 4,5 → `house` em `addShops`) a loja não tem mais a base cinza de pedra (`plinth`) nem o letreiro branco com o nome (livraria, farmácia...); o vidro desce até 0,1 m do chão e as pilastras vão só até 3,6 m (a travessa e o toldo fino ficam). Os outros prédios não mudaram.
+
+## Rodada: uma só distância para o cartaz
+- Só há UMA medida de distância no cartaz (`POSTER_REACH` = 1,05 m em shops.ts, metade dos 2,1 m de antes; `nearestPoster(x, z, stay)`): a menos de 1,05 m na frente da vitrine (e dentro da largura do cartaz, `pw / 2`) aparece o cartão com preço, prazo e "Escolher imagem (U)"; fora disso nada aparece. `stay` dá folga (+0,35 m na frente, +0,4 m dos lados) só para o cartão não piscar e para a prévia não cancelar na borda. Acabaram `CLOSE_REACH`, o aviso "chegue bem perto" e as duas zonas (4 m e 2 m) descritas nas rodadas anteriores. Testado: 3 m e 1,6 m escondido; 0,95 m mostra tudo; 1,3 m (já mostrando) continua; 3,5 m de lado esconde.

@@ -165,8 +165,11 @@ async function loadPosters(): Promise<void> {
   setInterval(() => { for (const id of dbRow.keys()) syncSaved(id); }, 10000);
 }
 
-/** Vaga de cartaz na frente da qual o jogador está (a menos de 4 m, de frente para a vitrine), ou null. `reach` > 1 alarga a zona (para não cancelar na borda). */
-export function nearestPoster(x: number, z: number, reach = 1): PosterSlot | null {
+/** A ÚNICA medida de distância do cartaz (m): até aqui na frente da vitrine e dentro da largura do cartaz o jogador vê o preço e pode enviar a imagem. */
+export const POSTER_REACH = 1.05;
+
+/** Vaga de cartaz na frente da qual o jogador está (a menos de `POSTER_REACH`, na largura do cartaz), ou null. `stay` dá uma folga na borda (para a janela não piscar nem cancelar). */
+export function nearestPoster(x: number, z: number, stay = false): PosterSlot | null {
   let best: PosterSlot | null = null;
   let bd = Infinity;
   for (const s of POSTER_SLOTS) {
@@ -174,7 +177,7 @@ export function nearestPoster(x: number, z: number, reach = 1): PosterSlot | nul
     const dz = z - s.cz;
     const d = dx * s.nx + dz * s.nz; // distância à frente do cartaz
     const lat = dx * s.nz - dz * s.nx; // ao longo da fachada
-    if (d < 0.2 || d > 4.2 * reach || Math.abs(lat) > 2.6 * reach) continue;
+    if (d < 0.2 || d > POSTER_REACH + (stay ? 0.35 : 0) || Math.abs(lat) > s.pw / 2 + (stay ? 0.4 : 0)) continue;
     const dist = Math.hypot(d, lat);
     if (dist < bd) { bd = dist; best = s; }
   }
@@ -194,8 +197,6 @@ export function setPosterPreview(id: string, blob: Blob | null): void {
 export const hasPosterPreview = (id: string): boolean => previewUrl.has(id);
 export const posterHasImage = (id: string): boolean => liveRow(id) !== undefined;
 
-/** `reach` pequeno = "bem perto" (só aí aparece o preço): a ~2 m da vitrine, no meio do cartaz. */
-export const CLOSE_REACH = 0.5;
 
 /**
  * Envia a imagem (webp) com um nome novo e pede ao servidor a vaga (`claim_poster`): o servidor só aceita se `price` for maior que o valor

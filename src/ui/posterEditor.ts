@@ -1,7 +1,7 @@
 // Cartazes das vitrines: chegue na frente do cartaz (a menos de 4 m aparece o cartão; só BEM perto aparece o preço e o botão), escolha uma imagem,
 // veja a prévia (só você vê) e pague para publicar. A 1ª imagem custa $2 e fica 24 h; antes disso só sai se alguém pagar mais.
 // Se você se afastar antes de salvar, a prévia some, nada é salvo e nada é cobrado. O administrador não paga.
-import { CLOSE_REACH, FIRST_PRICE, clearPoster, hasPosterPreview, nearestPoster, posterHasImage, posterInfo, posterMinPrice, posterName, savePoster, setPosterPreview } from '../game/shops';
+import { FIRST_PRICE, clearPoster, hasPosterPreview, nearestPoster, posterHasImage, posterInfo, posterMinPrice, posterName, savePoster, setPosterPreview } from '../game/shops';
 import { toPosterImage } from './image';
 
 export interface PosterEditor { setAdmin(a: boolean): void; update(dt: number): void }
@@ -58,27 +58,25 @@ export function initPosterEditor(deps: PosterDeps): PosterEditor {
     flash(why);
   }
 
-  const CLOSE_STAY = CLOSE_REACH + 0.15; // folga para não piscar na borda
-  let closeId = '';
   let bid = FIRST_PRICE;
   let lastKey = '';
 
   const left = (ms: number): string => { const m = Math.max(1, Math.ceil(ms / 60000)); return m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min` : `${m} min`; };
 
-  function chooseFile(): void { if (!busy && closeId && !pending) file.click(); }
+  function chooseFile(): void { if (!busy && shownFor && !pending) file.click(); }
 
   file.onchange = () => {
     const f = file.files?.[0];
     file.value = '';
     const pos = getPos();
-    const slot = pos ? nearestPoster(pos.x, pos.z, CLOSE_STAY) : null;
+    const slot = pos ? nearestPoster(pos.x, pos.z, true) : null;
     if (!f || !slot) return;
     busy = true;
     render();
     toPosterImage(f)
       .then((blob) => {
         const now = getPos();
-        if (!now || nearestPoster(now.x, now.z, 1.1)?.id !== slot.id) { flash('Você se afastou do cartaz.'); return; }
+        if (!now || nearestPoster(now.x, now.z, true)?.id !== slot.id) { flash('Você se afastou do cartaz.'); return; }
         pending = { id: slot.id, blob };
         bid = posterMinPrice(slot.id);
         setPosterPreview(slot.id, blob);
@@ -97,8 +95,6 @@ export function initPosterEditor(deps: PosterDeps): PosterEditor {
     card.append(el('b', posterName(id)));
     const info = posterInfo(id);
     const minp = posterMinPrice(id);
-    const near = !!pending || closeId === id;
-    if (!near) { card.append(el('small', 'Chegue bem perto da vitrine para ver o preço e pôr uma imagem.')); return; }
     if (info) card.append(el('small', `No ar: valor pago $${info.price} · sai em ${left(info.expires - Date.now())}. Para trocar, pague mais que isso.`));
     else card.append(el('small', `Cartaz livre. Primeira imagem: $${FIRST_PRICE} (fica 24 h no ar).`));
     const row = el('div', '', 'pe-row');
@@ -172,19 +168,17 @@ export function initPosterEditor(deps: PosterDeps): PosterEditor {
       if (!p) return;
       if (pending && !busy) {
         // a prévia só vale enquanto você está na frente do cartaz (um pouco de folga na borda)
-        if (nearestPoster(p.x, p.z, 1.1)?.id !== pending.id) { cancel('Você se afastou: a imagem não foi salva e nada foi cobrado.'); shownFor = ''; closeId = ''; lastKey = ''; }
+        if (nearestPoster(p.x, p.z, true)?.id !== pending.id) { cancel('Você se afastou: a imagem não foi salva e nada foi cobrado.'); shownFor = ''; lastKey = ''; }
       }
       if (!pending) {
-        const near = nearestPoster(p.x, p.z)?.id ?? '';
-        const close = near && nearestPoster(p.x, p.z, closeId === near ? CLOSE_STAY : CLOSE_REACH)?.id === near ? near : '';
+        const near = nearestPoster(p.x, p.z, shownFor !== '')?.id ?? '';
         if (near !== shownFor) msg = '';
         shownFor = near;
-        closeId = close;
       }
       const id = pending?.id ?? shownFor;
       const info = id ? posterInfo(id) : null;
       if (pending && bid < posterMinPrice(pending.id)) { bid = posterMinPrice(pending.id); msg = `Alguém pagou mais: o mínimo agora é $${bid}.`; lastKey = ''; }
-      const key = `${id}|${closeId}|${pending ? 1 : 0}|${busy ? 1 : 0}|${msg}|${info?.price ?? -1}|${info ? Math.ceil((info.expires - Date.now()) / 60000) : 0}|${admin ? 1 : 0}|${deps.money()}|${hasPosterPreview(id) ? 1 : 0}`;
+      const key = `${id}|${pending ? 1 : 0}|${busy ? 1 : 0}|${msg}|${info?.price ?? -1}|${info ? Math.ceil((info.expires - Date.now()) / 60000) : 0}|${admin ? 1 : 0}|${deps.money()}|${hasPosterPreview(id) ? 1 : 0}`;
       if (key !== lastKey) { lastKey = key; render(); }
     },
   };
