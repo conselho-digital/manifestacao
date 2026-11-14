@@ -50,25 +50,25 @@ export const CLOVER_BROWN = 0x4a2f22;
 /** cores do carro: as comuns; o Clover também pode ser marrom escuro (troca o grafite, para não mudar o sorteio da cidade) */
 export const colorForModel = (model: string, c: number): number => (model === 'clover' && c === 0x4a4f57 ? CLOVER_BROWN : c);
 export const DEFAULT_PAINT = '#b9bec5';
-/** Cor de cada veículo da loja/garagem (a mesma no ícone e no jogo): carros azul escuro, cinza escuro e marrom; motos vinho, amarela, laranja e verde. A viatura mantém a pintura do modelo. */
-export const VEHICLE_COLOR: Record<string, number> = {
-  blistac: 0x16234f, buffalo: 0x3a3d42, clover: 0x4a2f22,
-  harley: 0x6a1419, triumph: 0xf0c419, bmw: 0xe8731a, suzuki: 0x1f7a3a,
-};
-/** As 7 cores da loja, em ordem: azul escuro, cinza escuro, marrom, vinho, amarela, laranja, verde. */
+/** As 5 cores dos veículos (a viatura PM não tem escolha): azul escuro, vinho, branco fosco, cinza e amarelo. */
+export const MATTE_WHITE = 0xe6e6e1;
 export const PAINT_PALETTE: { name: string; hex: number }[] = [
-  { name: 'Azul escuro', hex: 0x16234f }, { name: 'Cinza escuro', hex: 0x3a3d42 }, { name: 'Marrom', hex: 0x4a2f22 }, { name: 'Vinho', hex: 0x6a1419 },
-  { name: 'Amarela', hex: 0xf0c419 }, { name: 'Laranja', hex: 0xe8731a }, { name: 'Verde', hex: 0x1f7a3a },
+  { name: 'Azul escuro', hex: 0x16234f }, { name: 'Vinho', hex: 0x6a1419 }, { name: 'Branco fosco', hex: MATTE_WHITE },
+  { name: 'Cinza', hex: 0x80838a }, { name: 'Amarelo', hex: 0xf0c419 },
 ];
-/** As 4 cores que cada veículo oferece (a padrão primeiro, depois as 3 seguintes da paleta). A viatura não tem escolha. */
+/** Cor inicial de cada modelo (antes de o jogador escolher): a mesma no ícone e no jogo. */
+export const VEHICLE_COLOR: Record<string, number> = {
+  blistac: 0x16234f, buffalo: 0x80838a, clover: 0x6a1419,
+  harley: 0x6a1419, triumph: 0xf0c419, bmw: MATTE_WHITE, suzuki: 0x16234f,
+};
+/** As cores que cada veículo oferece na garagem (as 5); a viatura não tem. */
 export function vehicleColors(model: string): { name: string; hex: number }[] {
-  const def = VEHICLE_COLOR[model];
-  if (def === undefined) return [];
-  const i = Math.max(0, PAINT_PALETTE.findIndex((c) => c.hex === def));
-  return [0, 1, 2, 3].map((k) => PAINT_PALETTE[(i + k) % PAINT_PALETTE.length]!);
+  return VEHICLE_COLOR[model] === undefined ? [] : PAINT_PALETTE;
 }
-/** materiais do GLB que formam a pintura (tanque, carenagem) de cada moto: recebem a cor de `VEHICLE_COLOR` */
+/** materiais do GLB que formam a pintura (tanque, carenagem) de cada moto: recebem a cor escolhida */
 const BIKE_BODY: Record<string, string[]> = { harley: ['m5'], triumph: ['paint'], bmw: ['m0'], suzuki: ['m0', 'm1'] };
+/** acabamento: branco fosco sem brilho, as outras cores com verniz */
+const finishOf = (hex: number): { roughness: number; metalness: number } => (hex === MATTE_WHITE ? { roughness: 0.95, metalness: 0 } : { roughness: 0.4, metalness: 0.3 });
 export const POLICE_LOOK: PaintLook = { c1: '#f1f2f4', c2: '#16181b', police: true };
 
 const BLACK = 0x161616;
@@ -174,7 +174,7 @@ function tintBike(model: THREE.Object3D, names: string[], hex: number): void {
     const fix = (mat: THREE.Material): THREE.Material => {
       if (!names.includes(mat.name)) return mat;
       let c = done.get(mat);
-      if (!c) { const std = mat.clone() as THREE.MeshStandardMaterial; std.map = null; std.color.setHex(hex); std.roughness = 0.4; std.metalness = 0.35; c = std; done.set(mat, c); }
+      if (!c) { const std = mat.clone() as THREE.MeshStandardMaterial; std.map = null; std.color.setHex(hex); Object.assign(std, finishOf(hex)); c = std; done.set(mat, c); }
       return c;
     };
     m.material = Array.isArray(m.material) ? m.material.map(fix) : fix(m.material);
@@ -288,7 +288,7 @@ export function buildCarVisual(src: THREE.Object3D, colorHex: number, look?: Pai
     const out = mats.map((mat) => {
       if (mat.name !== 'paint') return mat;
       let c = done.get(mat);
-      if (!c) { c = mat.clone(); (c as THREE.MeshStandardMaterial).color.copy(paint); done.set(mat, c); }
+      if (!c) { c = mat.clone(); (c as THREE.MeshStandardMaterial).color.copy(paint); Object.assign(c, finishOf(colorHex)); done.set(mat, c); }
       return c;
     });
     m.material = Array.isArray(m.material) ? out : out[0]!;

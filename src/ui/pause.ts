@@ -199,7 +199,7 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
       if (it.img) { const img = el('img'); img.src = it.img; img.alt = ''; pic.appendChild(img); }
       const here = cur === it.model;
       const colors = vehicleColors(it.model!);
-      const saved = (): number | undefined => { try { const v = localStorage.getItem(`arena-vcolor-${it.model}`); return v ? parseInt(v, 16) : undefined; } catch { return undefined; } };
+      const saved = (): number | undefined => { try { const v = localStorage.getItem(`arena-vcolor-${it.model}`); const n = v ? parseInt(v, 16) : NaN; return colors.some((c) => c.hex === n) ? n : undefined; } catch { return undefined; } };
       const finish = (): void => {
         api.close();
         // PC: esconde o mouse de novo para jogar (o clique é o gesto que o navegador exige)
