@@ -2,8 +2,8 @@ import * as THREE from 'three';
 
 /** neblina: começa em FOG_NEAR m e cobre tudo em FOG_FAR; o que passa de FOG_FAR + folga nem é desenhado (câmera) */
 export const FOG_COLOR = 0xe9eff5;
-export const FOG_NEAR = 70;
-export const FOG_FAR = 230;
+export const FOG_NEAR = 49; // 30% mais curta que os 70 m de antes
+export const FOG_FAR = 161; // 30% mais curta que os 230 m de antes
 
 const BLUR_KEY = 'arena:blur';
 const BLUR_DEFAULT = 0.45;

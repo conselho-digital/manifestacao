@@ -417,27 +417,24 @@ function flyIntro(dt: number): void {
   }
 }
 
-let lastFrameMs = 0;
-let lastCallMs = 0;
-let refreshMs = 16.7; // intervalo médio entre quadros da tela (estimado)
+// Limite de FPS (opção nas configurações, ligada por padrão em 30): o jogo NÃO descarta quadros; ele só demora a PEDIR o próximo (setTimeout e depois requestAnimationFrame),
+// então cada quadro pedido é desenhado e os intervalos ficam regulares (mais fluido que pular quadros). Os horários seguem uma grade fixa (`dueMs += intervalo`).
+let dueMs = 0;
+const REQUEST_AHEAD_MS = 6; // pede o quadro um pouco antes do horário, para cair no vsync certo
+function next(): void {
+  if (!settings.fpsCapOn || inMenu || loadingScreen) { dueMs = 0; requestAnimationFrame(loop); return; }
+  const gap = 1000 / settings.fpsCap;
+  const now = performance.now();
+  dueMs = dueMs === 0 || now - dueMs > gap * 2.5 ? now + gap : dueMs + gap; // atrasou muito (aba parada, carregamento): recomeça a grade
+  const wait = dueMs - now - REQUEST_AHEAD_MS;
+  if (wait > 1) window.setTimeout(() => requestAnimationFrame(loop), wait);
+  else requestAnimationFrame(loop);
+}
 function loop(): void {
-  // limite de FPS (opção nas configurações, ligada por padrão em 30): pula os quadros que chegam cedo demais.
-  // Os quadros seguem uma grade fixa (múltiplos do intervalo): medir só "tempo desde o último" fazia um quadro que chegava 1-2 ms cedo ser pulado e o FPS caía para 28-29 numa tela de 60 Hz.
-  const nowMs = performance.now();
-  const callGap = nowMs - lastCallMs;
-  lastCallMs = nowMs;
-  if (callGap > 2 && callGap < 60) refreshMs += (Math.min(callGap, 34) - refreshMs) * 0.05;
-  if (settings.fpsCapOn) {
-    const gap = 1000 / settings.fpsCap;
-    const since = nowMs - lastFrameMs;
-    const tol = Math.min(10, Math.max(2, refreshMs * 0.45)); // quadros que chegam até meio intervalo da tela mais cedo contam (o relógio dos quadros tem tremor)
-    if (since < gap - tol) { requestAnimationFrame(loop); return; }
-    lastFrameMs = since > gap * 2.5 ? nowMs : lastFrameMs + gap * Math.max(1, Math.round(since / gap)); // atrasou muito (aba parada, carregamento): recomeça a grade
-  } else lastFrameMs = nowMs;
   const dt = Math.min(clock.getDelta(), 0.05);
-  if (inMenu) { requestAnimationFrame(loop); return; } // menu: nada é desenhado (fundo liso)
+  if (inMenu) { next(); return; } // menu: nada é desenhado (fundo liso)
   if (intro && !intro.started) menuCamera(dt); // o voo de entrada começa da vista aérea do menu
-  if (loadingScreen) { requestAnimationFrame(loop); return; } // tela de carregamento cobre tudo: sem simulação nem desenho
+  if (loadingScreen) { next(); return; } // tela de carregamento cobre tudo: sem simulação nem desenho
   if (player && combat) {
     if (intro && !intro.started) {
       intro.started = true; // o voo começa de onde a câmera do menu parou
@@ -560,6 +557,6 @@ function loop(): void {
     voice.update(dt, { x: player.object.position.x, z: player.object.position.z }, others);
   }
   renderer.render(scene, camera);
-  requestAnimationFrame(loop);
+  next();
 }
 loop();
