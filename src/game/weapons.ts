@@ -41,8 +41,8 @@ export const EXTRA_MELEE: Record<ExtraMelee, { file: string; grip: number; scale
   bottle: { file: 'broken-bottle.glb', grip: -0.04, scale: 1 },
   pipe: { file: 'pipe.glb', grip: -0.1, scale: 1 },
   cleaver: { file: 'cleaver.glb', grip: -0.08, scale: 1, roll: 1.9 },
-  sickle: { file: 'sickle.glb', grip: 0, scale: 1, roll: 1.9 },
-  axe: { file: 'axe.glb', grip: -0.2, scale: 1, roll: 1.9 },
+  sickle: { file: 'sickle.glb', grip: 0.25, scale: 1, roll: 1.9 }, // segurada no meio do cabo (antes: na ponta, grip 0)
+  axe: { file: 'axe.glb', grip: 0.08, scale: 1, roll: 1.9 }, // segurado no meio do cabo (antes: na ponta, grip -0,2)
   knife: { file: 'knife.glb', grip: 0.02, scale: 1 },
 };
 const extraSrc = new Map<ExtraMelee, Promise<THREE.Object3D>>();

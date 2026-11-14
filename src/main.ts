@@ -315,7 +315,7 @@ void showLobby().then(async (profile) => {
     equip: (w) => combat?.equip(w),
     ammoOf: (w) => combat?.ammoOf(w) ?? { mag: 0, reserve: 0 },
     buy: (item) => combat?.buy(item) ?? { ok: false, msg: 'Indisponível.' },
-    garage: { current: () => PERSONAL.get(net.id)?.model ?? '', call: callVehicle, park: parkVehicle },
+    garage: { current: () => PERSONAL.get(net.id)?.model ?? '', currentColor: () => PERSONAL.get(net.id)?.color, call: callVehicle, park: parkVehicle },
     onToggle: (open) => {
       paused = open;
       if (combat) combat.paused = open;

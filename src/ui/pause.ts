@@ -1,5 +1,6 @@
 // Menu de pausa (engrenagem): equipe, personagem, armas que o jogador já tem, loja e (só para o admin) gerenciar equipes.
-import { vehicleColors } from '../game/vehicle';
+import { VEHICLE_COLOR, vehicleColors } from '../game/vehicle';
+import { vehiclePreview } from './vehiclePreview';
 import { FPS_CAPS, saveSettings, settings } from '../game/settings';
 import type { CharacterName } from '../game/characters';
 import { ALL_WEAPONS, GARAGE_ITEMS, isGunId, SHOP, WEAPON_IMG, WEAPON_NAMES, type Inventory, type ShopItem, type WeaponId } from '../game/inventory';
@@ -29,7 +30,7 @@ export interface PauseDeps {
   /** abriu/fechou (o main pausa e retoma o jogo) */
   onToggle(open: boolean): void;
   /** veículo pessoal: modelo chamado agora ('' = nenhum), chamar um modelo perto do jogador e guardar */
-  garage: { current(): string; call(model: string, color?: number): string; park(): void };
+  garage: { current(): string; /** cor da pintura do veículo chamado agora */ currentColor(): number | undefined; call(model: string, color?: number): string; park(): void };
   /** o admin mudou as equipes (o main reaplica a equipe do jogador) */
   onTeamsChanged(): void;
 }
@@ -76,6 +77,7 @@ const CSS = `
 .ps-buy:disabled{opacity:.4;cursor:default}
 .ps-sw{display:flex;gap:8px;margin:2px 0}
 .ps-swb{width:36px;height:36px;border-radius:8px;border:2px solid rgba(255,255,255,.55);cursor:pointer;padding:0}
+.ps-swb.on{border-color:#4cc2ff;box-shadow:0 0 0 2px #4cc2ff}
 .ps-swb:hover,.ps-swb:focus-visible{border-color:#4cc2ff;outline:none}
 .ps-tag{align-self:flex-start;font-size:11px;font-weight:800;padding:2px 8px;border-radius:99px;background:#4cc2ff;color:#10202e}
 .ps-adm{display:flex;flex-direction:column;gap:10px}
@@ -196,29 +198,37 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     const grid = el('div', 'ps-grid');
     for (const it of mine) {
       const pic = el('div', 'pic');
-      if (it.img) { const img = el('img'); img.src = it.img; img.alt = ''; pic.appendChild(img); }
+      let img: HTMLImageElement | null = null;
+      if (it.img) { img = el('img') as HTMLImageElement; img.src = it.img; img.alt = ''; pic.appendChild(img); }
       const here = cur === it.model;
       const colors = vehicleColors(it.model!);
       const saved = (): number | undefined => { try { const v = localStorage.getItem(`arena-vcolor-${it.model}`); const n = v ? parseInt(v, 16) : NaN; return colors.some((c) => c.hex === n) ? n : undefined; } catch { return undefined; } };
+      const inUse = here ? d.garage.currentColor() : undefined; // cor do veículo que já está perto de mim
+      let chosen: number | undefined = saved() ?? inUse;
       const finish = (): void => {
         api.close();
         // PC: esconde o mouse de novo para jogar (o clique é o gesto que o navegador exige)
         if (!('ontouchstart' in window) && navigator.maxTouchPoints === 0) document.querySelector('canvas')?.requestPointerLock?.();
       };
-      const callWith = (color?: number): void => {
-        const r = d.garage.call(it.model!, color);
-        if (r) { out.className = 'ps-msg err'; out.textContent = r; return; }
-        finish();
-      };
       const go = el('button', 'ps-buy', here ? 'Guardar' : 'Chamar');
       go.type = 'button';
-      go.onclick = () => { if (here) { d.garage.park(); finish(); } else callWith(saved()); };
+      const syncGo = (): void => { go.textContent = here && (chosen === undefined || chosen === inUse) ? 'Guardar' : 'Chamar'; };
+      go.onclick = () => {
+        if (here && (chosen === undefined || chosen === inUse)) { d.garage.park(); finish(); return; }
+        const r = d.garage.call(it.model!, chosen);
+        if (r) { out.className = 'ps-msg err'; out.textContent = r; return; }
+        if (chosen !== undefined) { try { localStorage.setItem(`arena-vcolor-${it.model}`, chosen.toString(16)); } catch { /* sem armazenamento */ } }
+        finish();
+      };
+      if (img && chosen !== undefined && colors.length && chosen !== VEHICLE_COLOR[it.model!]) void vehiclePreview(it.model!, chosen).then((url) => { if (img) img.src = url; }).catch(() => undefined); // a foto já mostra a cor escolhida antes
       pic.style.cursor = 'pointer';
-      // clicar na foto troca o subtítulo por 4 quadrados de cor; escolher uma cor chama o veículo naquela cor e fecha a janela (a viatura não tem cores: chama direto)
+      // clicar na foto troca o subtítulo por quadrados de cor; escolher uma cor só MUDA A PRÉ-VISUALIZAÇÃO (a foto), o veículo só vem para o jogo no botão Chamar
       const sub = el('small', '', it.desc);
       pic.onclick = () => {
         if (colors.length === 0) { go.click(); return; }
+        if (sub.parentElement === null) return; // as cores já estão abertas
         const row = el('div', 'ps-sw');
+        const mark = (): void => row.querySelectorAll('.ps-swb').forEach((b, i) => b.classList.toggle('on', colors[i]!.hex === chosen));
         for (const c of colors) {
           const sw = el('button', 'ps-swb') as HTMLButtonElement;
           sw.type = 'button';
@@ -226,12 +236,15 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
           sw.setAttribute('aria-label', c.name);
           sw.style.background = `#${c.hex.toString(16).padStart(6, '0')}`;
           sw.onclick = () => {
-            try { localStorage.setItem(`arena-vcolor-${it.model}`, c.hex.toString(16)); } catch { /* sem armazenamento */ }
-            callWith(c.hex);
+            chosen = c.hex;
+            mark();
+            syncGo();
+            if (img) void vehiclePreview(it.model!, c.hex).then((url) => { if (chosen === c.hex) img!.src = url; }).catch(() => undefined);
           };
           row.appendChild(sw);
         }
         sub.replaceWith(row);
+        mark();
       };
       const card = el('div', `ps-card${here ? ' sel' : ''}`, pic, el('b', '', it.name), sub);
       if (here) card.appendChild(el('span', 'ps-tag', 'Perto de você'));
