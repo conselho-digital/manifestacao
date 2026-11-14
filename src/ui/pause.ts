@@ -1,4 +1,5 @@
 // Menu de pausa (engrenagem): equipe, personagem, armas que o jogador já tem, loja e (só para o admin) gerenciar equipes.
+import { vehicleColors } from '../game/vehicle';
 import { FPS_CAPS, saveSettings, settings } from '../game/settings';
 import type { CharacterName } from '../game/characters';
 import { ALL_WEAPONS, GARAGE_ITEMS, isGunId, SHOP, WEAPON_IMG, WEAPON_NAMES, type Inventory, type ShopItem, type WeaponId } from '../game/inventory';
@@ -28,7 +29,7 @@ export interface PauseDeps {
   /** abriu/fechou (o main pausa e retoma o jogo) */
   onToggle(open: boolean): void;
   /** veículo pessoal: modelo chamado agora ('' = nenhum), chamar um modelo perto do jogador e guardar */
-  garage: { current(): string; call(model: string): string; park(): void };
+  garage: { current(): string; call(model: string, color?: number): string; park(): void };
   /** o admin mudou as equipes (o main reaplica a equipe do jogador) */
   onTeamsChanged(): void;
 }
@@ -73,6 +74,9 @@ const CSS = `
 .ps-price{font-weight:800;color:#8fe38a}
 .ps-buy{padding:9px;border:0;border-radius:9px;background:#4cc2ff;color:#10202e;font-weight:800;font-size:14px}
 .ps-buy:disabled{opacity:.4;cursor:default}
+.ps-sw{display:flex;gap:8px;margin:2px 0}
+.ps-swb{width:36px;height:36px;border-radius:8px;border:2px solid rgba(255,255,255,.55);cursor:pointer;padding:0}
+.ps-swb:hover,.ps-swb:focus-visible{border-color:#4cc2ff;outline:none}
 .ps-tag{align-self:flex-start;font-size:11px;font-weight:800;padding:2px 8px;border-radius:99px;background:#4cc2ff;color:#10202e}
 .ps-adm{display:flex;flex-direction:column;gap:10px}
 .ps-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px;border:2px solid #3b4358;border-radius:14px;background:#141926}
@@ -119,7 +123,7 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
   let tab: PauseTab = 'team';
   let admin = import.meta.env.DEV && new URLSearchParams(location.search).has('admin'); // ?admin=1 só no npm run dev: mostra as abas do admin para testar a tela
   let opened = false;
-  void isAdmin().then((a) => { admin = a || admin; d.inv.admin = a; d.billboard.setAdmin(a); if (opened) { renderTabs(); renderBody(); } });
+  void isAdmin().then((a) => { admin = a || admin; d.inv.admin = a || d.inv.admin; d.billboard.setAdmin(a); if (opened) { renderTabs(); renderBody(); } });
   void loadPrices();
 
   const tabs: { id: PauseTab; label: string; adm?: boolean }[] = [
@@ -186,7 +190,7 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
   function renderGarage(): void {
     const out = msg('');
     const cur = d.garage.current();
-    body.append(el('p', 'ps-note', 'Escolha o seu veículo: ele aparece perto de você e só você e a sua equipe podem entrar. Um veículo por vez. As cores são as da sua equipe.'), out);
+    body.append(el('p', 'ps-note', 'Escolha o seu veículo: ele aparece perto de você e só você e a sua equipe podem entrar. Um veículo por vez. Toque na foto para escolher a cor.'), out);
     const mine = GARAGE_ITEMS.filter((it) => d.inv.hasItem(it.id));
     if (mine.length === 0) { body.appendChild(el('p', 'ps-note', 'Você ainda não tem veículos. Compre na Loja.')); return; }
     const grid = el('div', 'ps-grid');
@@ -194,18 +198,42 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
       const pic = el('div', 'pic');
       if (it.img) { const img = el('img'); img.src = it.img; img.alt = ''; pic.appendChild(img); }
       const here = cur === it.model;
-      const go = el('button', 'ps-buy', here ? 'Guardar' : 'Chamar');
-      go.type = 'button';
-      go.onclick = () => {
-        if (here) d.garage.park();
-        else { const r = d.garage.call(it.model!); if (r) { out.className = 'ps-msg err'; out.textContent = r; return; } }
+      const colors = vehicleColors(it.model!);
+      const saved = (): number | undefined => { try { const v = localStorage.getItem(`arena-vcolor-${it.model}`); return v ? parseInt(v, 16) : undefined; } catch { return undefined; } };
+      const finish = (): void => {
         api.close();
         // PC: esconde o mouse de novo para jogar (o clique é o gesto que o navegador exige)
         if (!('ontouchstart' in window) && navigator.maxTouchPoints === 0) document.querySelector('canvas')?.requestPointerLock?.();
       };
+      const callWith = (color?: number): void => {
+        const r = d.garage.call(it.model!, color);
+        if (r) { out.className = 'ps-msg err'; out.textContent = r; return; }
+        finish();
+      };
+      const go = el('button', 'ps-buy', here ? 'Guardar' : 'Chamar');
+      go.type = 'button';
+      go.onclick = () => { if (here) { d.garage.park(); finish(); } else callWith(saved()); };
       pic.style.cursor = 'pointer';
-      pic.onclick = () => go.click(); // clicar na foto já escolhe o veículo, fecha a janela e esconde o mouse
-      const card = el('div', `ps-card${here ? ' sel' : ''}`, pic, el('b', '', it.name), el('small', '', it.desc));
+      // clicar na foto troca o subtítulo por 4 quadrados de cor; escolher uma cor chama o veículo naquela cor e fecha a janela (a viatura não tem cores: chama direto)
+      const sub = el('small', '', it.desc);
+      pic.onclick = () => {
+        if (colors.length === 0) { go.click(); return; }
+        const row = el('div', 'ps-sw');
+        for (const c of colors) {
+          const sw = el('button', 'ps-swb') as HTMLButtonElement;
+          sw.type = 'button';
+          sw.title = c.name;
+          sw.setAttribute('aria-label', c.name);
+          sw.style.background = `#${c.hex.toString(16).padStart(6, '0')}`;
+          sw.onclick = () => {
+            try { localStorage.setItem(`arena-vcolor-${it.model}`, c.hex.toString(16)); } catch { /* sem armazenamento */ }
+            callWith(c.hex);
+          };
+          row.appendChild(sw);
+        }
+        sub.replaceWith(row);
+      };
+      const card = el('div', `ps-card${here ? ' sel' : ''}`, pic, el('b', '', it.name), sub);
       if (here) card.appendChild(el('span', 'ps-tag', 'Perto de você'));
       card.appendChild(go);
       grid.appendChild(card);

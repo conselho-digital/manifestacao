@@ -124,6 +124,7 @@ if (import.meta.env.DEV) (window as unknown as { __voice: () => Voice }).__voice
 
 // ---------- equipe, personagem, pausa e loja ----------
 const inv = new Inventory();
+if (import.meta.env.DEV && new URLSearchParams(location.search).has('admin')) inv.admin = true; // ?admin=1 (só no npm run dev): todos os itens para testar
 let character: CharacterName = 'Carlos';
 let teamId = '';
 let myRing: THREE.Group = makeTeamRing(null);
@@ -166,7 +167,7 @@ function myVehInfo(): VehInfo | null {
   const c = PERSONAL.get(net.id);
   if (!c || !c.model) return null;
   const pt = myPaint();
-  return { m: c.model, c1: pt.c1, c2: pt.c2, t: teamId, x: Math.round(c.x * 10) / 10, z: Math.round(c.z * 10) / 10, h: Math.round(c.heading * 100) / 100 };
+  return { m: c.model, c1: pt.c1, c2: pt.c2, t: teamId, x: Math.round(c.x * 10) / 10, z: Math.round(c.z * 10) / 10, h: Math.round(c.heading * 100) / 100, k: `#${c.color.toString(16).padStart(6, '0')}` };
 }
 
 /** Avisa os outros e refaz o anel quando a equipe, o personagem ou o veículo mudam. */
@@ -175,7 +176,7 @@ function announceMe(): void {
 }
 
 /** Chama o veículo pessoal para perto de mim (troca o que já existe). Retorna a mensagem de erro, se houver. */
-function callVehicle(model: string): string {
+function callVehicle(model: string, color?: number): string {
   if (!player) return 'Entre no jogo primeiro.';
   if (!inv.hasVehicle(model)) return 'Você não tem este veículo.';
   if (player.isDriving) return 'Saia do veículo antes de chamar outro.';
@@ -185,7 +186,7 @@ function callVehicle(model: string): string {
   const spot = findVehicleSpot(o.position.x, o.position.z, o.rotation.y);
   const pt = myPaint();
   if (old && old.model !== model) despawnPersonal(net.id);
-  spawnPersonal(net.id, model, pt, teamId, spot.x, spot.z, o.rotation.y);
+  spawnPersonal(net.id, model, pt, teamId, spot.x, spot.z, o.rotation.y, color);
   announceMe();
   return '';
 }
@@ -201,7 +202,7 @@ function parkVehicle(): void {
 function syncRemoteVehicle(p: PlayerInfo): void {
   if (!p.veh) { despawnPersonal(p.id); return; }
   const v = p.veh;
-  spawnPersonal(p.id, v.m, { c1: v.c1, c2: v.c2 }, v.t, v.x, v.z, v.h);
+  spawnPersonal(p.id, v.m, { c1: v.c1, c2: v.c2 }, v.t, v.x, v.z, v.h, v.k ? parseInt(v.k.slice(1), 16) : undefined);
 }
 
 function setMyTeam(id: string): void {

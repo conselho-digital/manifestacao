@@ -17,7 +17,7 @@ export interface PlayerInfo {
   veh: VehInfo | null;
 }
 
-export interface VehInfo { m: string; c1: string; c2: string; t: string; x: number; z: number; h: number }
+export interface VehInfo { m: string; c1: string; c2: string; t: string; x: number; z: number; h: number; /** cor da pintura escolhida ('#rrggbb' ou '' = a padrão do modelo) */ k: string }
 
 /** Valida o veículo pessoal que veio da rede. */
 export function cleanVeh(v: unknown): VehInfo | null {
@@ -31,7 +31,8 @@ export function cleanVeh(v: unknown): VehInfo | null {
   const c1 = typeof o.c1 === 'string' && HEX.test(o.c1) ? o.c1.toLowerCase() : '#c8ccd2';
   const c2 = typeof o.c2 === 'string' && HEX.test(o.c2) ? o.c2.toLowerCase() : '#2b2e33';
   const t = typeof o.t === 'string' ? o.t.slice(0, 40) : '';
-  return { m: o.m, c1, c2, t, x, z, h };
+  const k = typeof o.k === 'string' && HEX.test(o.k) ? o.k.toLowerCase() : '';
+  return { m: o.m, c1, c2, t, x, z, h, k };
 }
 
 export interface MoveMsg {
@@ -228,7 +229,7 @@ export class Net {
         if (!meta || !character) continue;
         const info: PlayerInfo = { id, name: cleanName(meta.name), character, team: cleanLook(meta.team), veh: cleanVeh(meta.veh) };
         const v = info.veh;
-        const sig = `${info.character}|${info.name}|${info.team?.c1 ?? ''}${info.team?.c2 ?? ''}${info.team?.name ?? ''}|${v ? `${v.m}${v.c1}${v.c2}${v.t}${v.x.toFixed(1)}${v.z.toFixed(1)}${v.h.toFixed(2)}` : ''}`;
+        const sig = `${info.character}|${info.name}|${info.team?.c1 ?? ''}${info.team?.c2 ?? ''}${info.team?.name ?? ''}|${v ? `${v.m}${v.c1}${v.c2}${v.k}${v.t}${v.x.toFixed(1)}${v.z.toFixed(1)}${v.h.toFixed(2)}` : ''}`;
         if (this.known.has(id)) {
           if (this.sigs.get(id) !== sig) { this.sigs.set(id, sig); h.onUpdate(info); }
           continue;

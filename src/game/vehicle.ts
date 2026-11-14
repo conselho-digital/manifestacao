@@ -55,6 +55,18 @@ export const VEHICLE_COLOR: Record<string, number> = {
   blistac: 0x16234f, buffalo: 0x3a3d42, clover: 0x4a2f22,
   harley: 0x6a1419, triumph: 0xf0c419, bmw: 0xe8731a, suzuki: 0x1f7a3a,
 };
+/** As 7 cores da loja, em ordem: azul escuro, cinza escuro, marrom, vinho, amarela, laranja, verde. */
+export const PAINT_PALETTE: { name: string; hex: number }[] = [
+  { name: 'Azul escuro', hex: 0x16234f }, { name: 'Cinza escuro', hex: 0x3a3d42 }, { name: 'Marrom', hex: 0x4a2f22 }, { name: 'Vinho', hex: 0x6a1419 },
+  { name: 'Amarela', hex: 0xf0c419 }, { name: 'Laranja', hex: 0xe8731a }, { name: 'Verde', hex: 0x1f7a3a },
+];
+/** As 4 cores que cada veículo oferece (a padrão primeiro, depois as 3 seguintes da paleta). A viatura não tem escolha. */
+export function vehicleColors(model: string): { name: string; hex: number }[] {
+  const def = VEHICLE_COLOR[model];
+  if (def === undefined) return [];
+  const i = Math.max(0, PAINT_PALETTE.findIndex((c) => c.hex === def));
+  return [0, 1, 2, 3].map((k) => PAINT_PALETTE[(i + k) % PAINT_PALETTE.length]!);
+}
 /** materiais do GLB que formam a pintura (tanque, carenagem) de cada moto: recebem a cor de `VEHICLE_COLOR` */
 const BIKE_BODY: Record<string, string[]> = { harley: ['m5'], triumph: ['paint'], bmw: ['m0'], suzuki: ['m0', 'm1'] };
 export const POLICE_LOOK: PaintLook = { c1: '#f1f2f4', c2: '#16181b', police: true };
@@ -263,7 +275,7 @@ export function buildCarVisual(src: THREE.Object3D, colorHex: number, look?: Pai
   const paint = new THREE.Color(colorHex);
   const done = new Map<THREE.Material, THREE.Material>();
   if (!look?.police) applyCommonLook(model, bike, BIKE_DARK[modelName] ?? []);
-  if (bike && !look?.police && VEHICLE_COLOR[modelName] !== undefined) tintBike(model, BIKE_BODY[modelName] ?? [], VEHICLE_COLOR[modelName]!);
+  if (bike && !look?.police && VEHICLE_COLOR[modelName] !== undefined) tintBike(model, BIKE_BODY[modelName] ?? [], colorHex); // a cor vem do Car (a escolhida na garagem)
   if (modelName === POLICE_MODEL) { roundWheels(model); boostContrast(model); } // todo veículo comum: pneu preto (e motor preto nas motos)
   if (look?.police) applyTeamPaint(model, look, bike); // só a viatura é repintada; os pessoais mantêm as cores do arquivo (a equipe vai em adesivos nas portas dos carros; moto sem nada)
   model.traverse((o) => {
@@ -475,7 +487,7 @@ export class Car {
   driver: string | null = null;
   private wheels: Record<string, THREE.Object3D>;
   private spin = 0;
-  private readonly color: number;
+  readonly color: number;
   readonly bike: boolean;
   readonly model?: string;
   private readonly engine: EngineSound;
@@ -997,14 +1009,15 @@ export const PERSONAL = new Map<string, Car>();
 let nextPersonalId = 100;
 
 /** Cria (ou move/recolore) o veículo pessoal de um jogador. */
-export function spawnPersonal(ownerId: string, model: string, look: PaintLook | null, teamId: string, x: number, z: number, heading: number): Car | null {
+export function spawnPersonal(ownerId: string, model: string, look: PaintLook | null, teamId: string, x: number, z: number, heading: number, color?: number): Car | null {
   if (!carsGroup) return null;
   let car = PERSONAL.get(ownerId);
-  if (car && car.model !== model) { despawnPersonal(ownerId); car = undefined; }
+  const want = color ?? VEHICLE_COLOR[model];
+  if (car && (car.model !== model || (want !== undefined && car.color !== want && car.driver === null))) { despawnPersonal(ownerId); car = undefined; }
   if (!car) {
     let h = 0;
     for (const ch of ownerId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-    car = new Car(nextPersonalId++, x, z, heading, VEHICLE_COLOR[model] ?? colorForModel(model, COMMON_COLORS[h % COMMON_COLORS.length]!), model, look);
+    car = new Car(nextPersonalId++, x, z, heading, want ?? colorForModel(model, COMMON_COLORS[h % COMMON_COLORS.length]!), model, look);
     car.ownerId = ownerId;
     CARS.push(car);
     carsGroup.add(car.root);
