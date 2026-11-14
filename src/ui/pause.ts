@@ -11,7 +11,7 @@ import { checkYoutube, type Billboard } from '../game/billboard';
 import { ICON } from './icons';
 import { createCharacterPicker, createTeamPicker, el, PICKER_CSS, swatchStyle } from './pickers';
 
-export type PauseTab = 'team' | 'char' | 'weapons' | 'garage' | 'shop' | 'settings' | 'admin' | 'prices' | 'outdoor';
+export type PauseTab = 'team' | 'char' | 'weapons' | 'garage' | 'shop' | 'settings' | 'admin' | 'prices' | 'outdoor' | 'tools';
 
 export interface PauseDeps {
   inv: Inventory;
@@ -83,6 +83,9 @@ const CSS = `
 .ps-adm{display:flex;flex-direction:column;gap:10px}
 .ps-row{display:flex;flex-wrap:wrap;align-items:center;gap:10px;padding:10px;border:2px solid #3b4358;border-radius:14px;background:#141926}
 .ps-row .pk-sw{width:38px;height:38px}
+.ps-grow{flex:1;min-width:200px}
+.ps-grow p{margin:4px 0 0}
+.ps-row + .ps-row{margin-top:8px}
 .ps-row input[type=text]{flex:1;min-width:140px;padding:10px;font-size:15px;border-radius:9px;border:2px solid #3b4358;background:#0f1420;color:#fff}
 .ps-col{display:flex;flex-direction:column;align-items:center;gap:3px;font-size:11px;opacity:.9}
 .ps-row input[type=color]{width:46px;height:38px;padding:0;border:2px solid #3b4358;border-radius:8px;background:#0f1420;cursor:pointer}
@@ -138,6 +141,7 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     { id: 'admin', label: 'Gerenciar equipes', adm: true },
     { id: 'prices', label: 'Preços', adm: true },
     { id: 'outdoor', label: 'Outdoor', adm: true },
+    { id: 'tools', label: 'Ferramentas', adm: true },
   ];
 
   function renderTabs(): void {
@@ -359,6 +363,23 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
   };
 
   /** Controle do outdoor da praça: vídeo/live do YouTube, play/pause, parar, ±10 s e linha do tempo. */
+  /** páginas de ferramentas do site (abrem em outra aba; só o admin vê esta aba) */
+  const TOOLS: { name: string; desc: string; url: string }[] = [
+    { name: 'Criar personagens', desc: 'Mistura cabeça, tronco e pernas, pinta as partes, põe cabeça 3D nova e publica para todos.', url: '/personagens' },
+    { name: 'Armas nas mãos', desc: 'Ajusta a posição, o giro e o tamanho de cada arma na mão do personagem (e o giro das mãos).', url: '/armas' },
+    { name: 'Animações', desc: 'Troca as animações do Carlos a partir de arquivos .ifp do GTA (as três ferramentas ficam em abas nesta página).', url: '/load-animation' },
+  ];
+
+  function renderTools(): void {
+    body.append(el('p', 'ps-note', 'Ferramentas do jogo. Cada uma abre numa nova aba do navegador (o login de admin vale nelas).'));
+    for (const t of TOOLS) {
+      const open = el('button', 'ps-save', 'Abrir');
+      open.type = 'button';
+      open.onclick = () => { window.open(t.url, '_blank', 'noopener'); };
+      body.appendChild(el('div', 'ps-row', el('div', 'ps-grow', el('b', '', t.name), el('p', 'ps-note', t.desc)), open));
+    }
+  }
+
   function renderOutdoor(): void {
     const out = msg('');
     const url = el('input');
@@ -581,6 +602,7 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     else if (tab === 'settings') renderSettings();
     else if (admin && tab === 'prices') renderPrices();
     else if (admin && tab === 'outdoor') renderOutdoor();
+    else if (admin && tab === 'tools') renderTools();
     else if (admin) renderAdmin();
   }
 
@@ -590,7 +612,7 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     get isOpen(): boolean { return opened; },
     open(t?: PauseTab): void {
       if (t) tab = t;
-      if ((tab === 'admin' || tab === 'prices' || tab === 'outdoor') && !admin) tab = 'team';
+      if ((tab === 'admin' || tab === 'prices' || tab === 'outdoor' || tab === 'tools') && !admin) tab = 'team';
       if (document.pointerLockElement) document.exitPointerLock();
       opened = true;
       root.classList.add('open');
