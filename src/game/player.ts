@@ -170,6 +170,8 @@ export class Player {
   weaponVis: WeaponVisual | null = null;
   /** chamado ao ser atropelado (m/s); devolve false se está protegido (então não há tombo nem dano) */
   onRunOver: ((speed: number) => boolean) | null = null;
+  /** caiu da moto numa batida a `speed` m/s: aplica o dano */
+  onBikeCrash: ((speed: number) => void) | null = null;
   /** quem pode entrar neste veículo (veículos pessoais só aceitam o dono e a equipe dele) */
   enterRule: ((c: Car) => boolean) | null = null;
   /** tentou entrar num veículo de outra equipe */
@@ -774,6 +776,7 @@ export class Player {
 
   /** Batida forte de moto: o piloto voa para a frente, cai, desliza e levanta; a moto fica caída. */
   private crashBike(car: Car, speed: number): void {
+    this.onBikeCrash?.(speed);
     const h = car.heading;
     car.driver = null;
     car.speed = 0;

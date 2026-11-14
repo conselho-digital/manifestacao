@@ -240,6 +240,7 @@ let lastDenied = 0;
 /** Liga ao jogador local as regras de veículo (quem pode entrar), o aviso ao sair e o atropelamento. */
 function wirePlayer(p: Player): void {
   p.onRunOver = (sp) => combat?.vehicleHit(sp) ?? true;
+  p.onBikeCrash = (sp) => combat?.bikeCrash(sp);
   p.enterRule = (c) => !c.ownerId || c.ownerId === net.id || (!!c.teamId && c.teamId === teamId);
   p.onEnterDenied = () => {
     if (performance.now() - lastDenied < 3000) return;

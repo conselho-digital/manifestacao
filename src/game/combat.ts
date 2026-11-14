@@ -393,6 +393,11 @@ export class Combat {
     return true;
   }
 
+  /** Bati a moto e caí a `speed` m/s (≥ ~40 km/h): dano pela velocidade da batida (40 km/h ≈ 27, 100 km/h ≈ 170, 150 km/h ≈ 300 de 400; o colete segura 60%). */
+  bikeCrash(speed: number): void {
+    this.damage(Math.min(380, (speed - 8) * 9), this.d.net.id, 'ACIDENTE DE MOTO');
+  }
+
   /** Alguém morreu (inclusive eu): atualiza placar, dinheiro e o feed. */
   onKill(m: KillMsg): void {
     const killer = this.ensure(m.k, this.nameOf(m.k));
