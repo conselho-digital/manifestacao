@@ -17,7 +17,9 @@ const SEATS: Record<string, [number, number]> = { harley: [-0.46, 0.14], triumph
 /** Pontas do guidão (x lateral, z para a frente, y para cima), mesmo espaço dos assentos. */
 const BARS: Record<string, [number, number, number]> = { harley: [0.37, 0.15, 0.76], triumph: [0.37, 0.17, 0.63], bmw: [0.31, 0.43, 0.4], suzuki: [0.29, 0.46, 0.46] };
 /** quanto o piloto deita o tronco (0 ereto … 1,5 peito no tanque): custom/clássica quase ereto, esportiva deitado */
-const RIDER_LEAN: Record<string, number> = { harley: 0.35, triumph: 0.55, bmw: 1.4, suzuki: 1.5 };
+const RIDER_LEAN: Record<string, number> = { harley: 0.35, triumph: 0.5, bmw: 1.0, suzuki: 1.1 };
+/** quanto o piloto escorrega para a frente no banco (m): ombros mais perto do guidão, costas mais retas e braços um pouco dobrados */
+const RIDER_SHIFT: Record<string, number> = { harley: 0, triumph: 0.05, bmw: 0.26, suzuki: 0.3 };
 /** Banco do motorista dos carros (x para a esquerda, z para a frente, y para cima) e volante. */
 const CAR_SEATS: Record<string, [number, number, number]> = { blistac: [0.48, -0.25, -0.12], buffalo: [0.54, -0.35, -0.16], clover: [0.51, -0.15, -0.12], duster: [0.5, 0.15, -0.16] };
 const isBikeModel = (m?: string): boolean => (BIKE_MODELS as readonly string[]).includes(m ?? '');
@@ -586,6 +588,7 @@ export class Car {
   grips: [THREE.Vector3, THREE.Vector3] | null = null;
   /** inclinação do tronco do piloto (ver RIDER_LEAN); carros: 0 */
   get riderLean(): number { return this.bike ? RIDER_LEAN[this.model ?? ''] ?? 1.2 : 0; }
+  get riderShift(): number { return this.bike ? RIDER_SHIFT[this.model ?? ''] ?? 0 : 0; }
   private body: THREE.Group | null = null;
   private bodyBase = new THREE.Vector3();
 

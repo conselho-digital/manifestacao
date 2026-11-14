@@ -56,9 +56,9 @@ interface EngineProfile {
   sample?: SampleName;
 }
 
-/** Cada veículo tem seu motor: o Blista é um 4 cilindros agudo, o Buffalo e o Clover V8 graves, etc. */
+/** Cada veículo tem seu motor: o Blista (agora Gol no jogo) usa o som gravado do dono, o Buffalo e o Clover V8 graves, etc. */
 const PROFILES: Record<string, EngineProfile> = {
-  blistac: { a: 'sawtooth', b: 'square', idle: 52, top: 130, ratio: 0.5, cutIdle: 330, cutTop: 900, lope: 0, lopeDepth: 0, vol: 1, topSpeed: 28 },
+  blistac: { a: 'sawtooth', b: 'square', idle: 52, top: 130, ratio: 0.5, cutIdle: 330, cutTop: 900, lope: 0, lopeDepth: 0, vol: 1, topSpeed: 28, sample: 'harley' },
   buffalo: { a: 'sawtooth', b: 'sawtooth', idle: 30, top: 78, ratio: 0.5, cutIdle: 220, cutTop: 520, lope: 13, lopeDepth: 0.35, vol: 1.15, topSpeed: 28 },
   clover: { a: 'square', b: 'triangle', idle: 36, top: 96, ratio: 0.5, cutIdle: 260, cutTop: 620, lope: 9, lopeDepth: 0.25, vol: 1.05, topSpeed: 28 },
   harley: { a: 'sawtooth', b: 'square', idle: 26, top: 90, ratio: 0.5, cutIdle: 260, cutTop: 700, lope: 7, lopeDepth: 0.55, vol: 1.2, topSpeed: 20, sample: 'harley' },

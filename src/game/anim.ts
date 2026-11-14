@@ -588,8 +588,8 @@ export class Animator {
    * Sentado na moto: a pélvis vai para o assento (seat, no espaço do personagem). null = em pé.
    * `lean` = quanto o tronco deita para alcançar o guidão (0 ereto, 1.5 peito no tanque): custom/cruiser pouco, esportiva muito.
    */
-  setRide(seat: THREE.Vector3 | null, grips: [THREE.Vector3, THREE.Vector3] | null = null, lean = 1.5): void {
-    this.ride = seat ? { x: seat.x, y: seat.y - 0.97, z: seat.z, grips, lean } : null;
+  setRide(seat: THREE.Vector3 | null, grips: [THREE.Vector3, THREE.Vector3] | null = null, lean = 1.5, shift = 0): void {
+    this.ride = seat ? { x: seat.x, y: seat.y - 0.97, z: seat.z + shift, grips, lean } : null;
   }
 
   /** Desloca o modelo (entrando/saindo do carro): x para a esquerda, y para cima (pélvis), z para a frente. */
