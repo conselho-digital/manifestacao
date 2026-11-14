@@ -290,3 +290,8 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 - Limite de FPS: LIGADO por padrão em 30 (opções 30/45/60; desligado o jogo roda a cada quadro do navegador, sem limite). O corte fica no início de `loop()` em main.ts (pula quadros que chegam cedo demais, antes de ler o relógio).
 - Tecla L esconde/mostra a legenda das teclas no PC (a pé; dirigindo, L continua sendo as luzes da viatura).
 - load-animation.html só REGISTRA as trocas (Copiar/Baixar JSON): aplicar no jogo exige rodar o bake (`scripts/bake-carlos-ifp.cjs`) com o .ifp e o JSON.
+
+## Rodada: cores dos veículos, clique na foto da garagem, Shift empina
+- Cores fixas por modelo (`VEHICLE_COLOR` em vehicle.ts, usadas no jogo e nos ícones da loja/garagem): Blista azul escuro, Buffalo cinza escuro, Clover marrom; motos Harley vinho, Triumph amarela, BMW laranja, Suzuki verde (a viatura PM mantém a pintura do modelo). Antes o carro pessoal tinha cor sorteada por dono e os ícones saíam brancos/cinza. As motos são pintadas por `tintBike` nos materiais `BIKE_BODY` (tanque/carenagem: harley `m5`, triumph `paint`, bmw `m0`, suzuki `m0`+`m1`; achados pintando cada material de uma cor no navegador). Refazer ícones: `dev/vehicle-icons.html` (lê `window.ICONS`) e salvar em `public/hud/v-<modelo>.png`.
+- Garagem: clicar na FOTO do veículo faz o mesmo que o botão Chamar/Guardar (escolhe, fecha a janela) e, no PC, pede de novo o mouse preso (`requestPointerLock`, esconde o cursor).
+- Empinar a moto no PC: Shift (ou V). Legenda atualizada.

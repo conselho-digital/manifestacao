@@ -50,6 +50,13 @@ export const CLOVER_BROWN = 0x4a2f22;
 /** cores do carro: as comuns; o Clover também pode ser marrom escuro (troca o grafite, para não mudar o sorteio da cidade) */
 export const colorForModel = (model: string, c: number): number => (model === 'clover' && c === 0x4a4f57 ? CLOVER_BROWN : c);
 export const DEFAULT_PAINT = '#b9bec5';
+/** Cor de cada veículo da loja/garagem (a mesma no ícone e no jogo): carros azul escuro, cinza escuro e marrom; motos vinho, amarela, laranja e verde. A viatura mantém a pintura do modelo. */
+export const VEHICLE_COLOR: Record<string, number> = {
+  blistac: 0x16234f, buffalo: 0x3a3d42, clover: 0x4a2f22,
+  harley: 0x6a1419, triumph: 0xf0c419, bmw: 0xe8731a, suzuki: 0x1f7a3a,
+};
+/** materiais do GLB que formam a pintura (tanque, carenagem) de cada moto: recebem a cor de `VEHICLE_COLOR` */
+const BIKE_BODY: Record<string, string[]> = { harley: ['m5'], triumph: ['paint'], bmw: ['m0'], suzuki: ['m0', 'm1'] };
 export const POLICE_LOOK: PaintLook = { c1: '#f1f2f4', c2: '#16181b', police: true };
 
 const BLACK = 0x161616;
@@ -142,6 +149,21 @@ function applyCommonLook(model: THREE.Object3D, bike: boolean, dark: string[]): 
         return c;
       }
       return mat;
+    };
+    m.material = Array.isArray(m.material) ? m.material.map(fix) : fix(m.material);
+  });
+}
+/** Pinta o tanque e a carenagem da moto (materiais pelo nome no GLB), tirando a textura para a cor ficar lisa. As rodas já foram trocadas por `applyCommonLook`. */
+function tintBike(model: THREE.Object3D, names: string[], hex: number): void {
+  const done = new Map<THREE.Material, THREE.Material>();
+  model.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    const fix = (mat: THREE.Material): THREE.Material => {
+      if (!names.includes(mat.name)) return mat;
+      let c = done.get(mat);
+      if (!c) { const std = mat.clone() as THREE.MeshStandardMaterial; std.map = null; std.color.setHex(hex); std.roughness = 0.4; std.metalness = 0.35; c = std; done.set(mat, c); }
+      return c;
     };
     m.material = Array.isArray(m.material) ? m.material.map(fix) : fix(m.material);
   });
@@ -241,6 +263,7 @@ export function buildCarVisual(src: THREE.Object3D, colorHex: number, look?: Pai
   const paint = new THREE.Color(colorHex);
   const done = new Map<THREE.Material, THREE.Material>();
   if (!look?.police) applyCommonLook(model, bike, BIKE_DARK[modelName] ?? []);
+  if (bike && !look?.police && VEHICLE_COLOR[modelName] !== undefined) tintBike(model, BIKE_BODY[modelName] ?? [], VEHICLE_COLOR[modelName]!);
   if (modelName === POLICE_MODEL) { roundWheels(model); boostContrast(model); } // todo veículo comum: pneu preto (e motor preto nas motos)
   if (look?.police) applyTeamPaint(model, look, bike); // só a viatura é repintada; os pessoais mantêm as cores do arquivo (a equipe vai em adesivos nas portas dos carros; moto sem nada)
   model.traverse((o) => {
@@ -981,7 +1004,7 @@ export function spawnPersonal(ownerId: string, model: string, look: PaintLook | 
   if (!car) {
     let h = 0;
     for (const ch of ownerId) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
-    car = new Car(nextPersonalId++, x, z, heading, colorForModel(model, COMMON_COLORS[h % COMMON_COLORS.length]!), model, look);
+    car = new Car(nextPersonalId++, x, z, heading, VEHICLE_COLOR[model] ?? colorForModel(model, COMMON_COLORS[h % COMMON_COLORS.length]!), model, look);
     car.ownerId = ownerId;
     CARS.push(car);
     carsGroup.add(car.root);

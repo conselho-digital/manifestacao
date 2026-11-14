@@ -414,7 +414,7 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
     ['T', 'Falar (segure)'], ['M', 'Mapa'], ['L', 'Esconder esta legenda'], ['P', 'Menu / configurações'],
   ];
   const KEYS_CAR: [string, string][] = [
-    ['W / S', 'Acelerar / freio'], ['A / D', 'Virar'], ['Espaço', 'Freio de mão'], ['H', 'Buzina'], ['V', 'Empinar (moto)'], ['L', 'Luzes da viatura'],
+    ['W / S', 'Acelerar / freio'], ['A / D', 'Virar'], ['Espaço', 'Freio de mão'], ['H', 'Buzina'], ['Shift / V', 'Empinar (moto)'], ['L', 'Luzes da viatura'],
     ['F', 'Sair do veículo'], ['C', 'Veículos'], ['B', 'Loja'], ['M', 'Mapa'], ['P', 'Menu'],
   ];
   for (const [list, cls] of [[KEYS_FOOT, 'foot-k'], [KEYS_CAR, 'car-k']] as const) {

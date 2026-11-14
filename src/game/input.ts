@@ -163,7 +163,7 @@ export function readInput(): InputState {
     handbrake: keys.has('Space') || padHand,
     horn: keys.has('KeyH') || padHorn,
     lights: lightsQ,
-    wheelie: keys.has('KeyV') || padWheelie,
+    wheelie: keys.has('KeyV') || keys.has('ShiftLeft') || keys.has('ShiftRight') || padWheelie,
   };
   jumpQ = false;
   climbQ = false;

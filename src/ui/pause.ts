@@ -200,7 +200,11 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
         if (here) d.garage.park();
         else { const r = d.garage.call(it.model!); if (r) { out.className = 'ps-msg err'; out.textContent = r; return; } }
         api.close();
+        // PC: esconde o mouse de novo para jogar (o clique é o gesto que o navegador exige)
+        if (!('ontouchstart' in window) && navigator.maxTouchPoints === 0) document.querySelector('canvas')?.requestPointerLock?.();
       };
+      pic.style.cursor = 'pointer';
+      pic.onclick = () => go.click(); // clicar na foto já escolhe o veículo, fecha a janela e esconde o mouse
       const card = el('div', `ps-card${here ? ' sel' : ''}`, pic, el('b', '', it.name), el('small', '', it.desc));
       if (here) card.appendChild(el('span', 'ps-tag', 'Perto de você'));
       card.appendChild(go);
