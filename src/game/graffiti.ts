@@ -21,15 +21,15 @@ const SIZE = 2.2; // lado da pintura (m)
 const REACH = 2.6; // distância máxima até a parede
 const MAX_DECALS = 40;
 const SPRAY_TIME = 1.4; // a tinta aparece durante este tempo
-const HEIGHT = 1.7;
+const MIN_SIZE = 0.7; // menor pintura (muretas baixas)
 
-export interface WallHit { x: number; y: number; z: number; nx: number; nz: number }
+export interface WallHit { x: number; y: number; z: number; nx: number; nz: number; /** lado da pintura (m) */ w: number }
 
 const ray = new THREE.Raycaster();
 const nrm = new THREE.Vector3();
 
 /** Primeiro ponto de parede (superfície sólida quase vertical) que o raio acerta, ou null. Ignora folhagem, sprites e instâncias (árvores). */
-function wallAt(city: THREE.Object3D, o: THREE.Vector3, d: THREE.Vector3): { dist: number; point: THREE.Vector3; nx: number; nz: number } | null {
+export function wallAt(city: THREE.Object3D, o: THREE.Vector3, d: THREE.Vector3): { dist: number; point: THREE.Vector3; nx: number; nz: number } | null {
   ray.set(o, d);
   ray.far = REACH + 0.6;
   for (const h of ray.intersectObject(city, true)) {
@@ -48,24 +48,51 @@ function wallAt(city: THREE.Object3D, o: THREE.Vector3, d: THREE.Vector3): { dis
 }
 
 /**
- * Parede à frente (direção horizontal dx,dz) até REACH m, ou null. A superfície tem de ser lisa numa área de ~2 m
- * (cinco raios: centro, dois dos lados, um acima e um abaixo — se um acerta bem mais perto ou mais longe, é quina, coluna ou poste).
+ * Parede à frente (direção horizontal dx,dz) até REACH m, ou null. Raios horizontais em várias alturas (do chão a 2,5 m) acham o trecho
+ * liso e reto (mesma distância e mesma direção); a pintura se encaixa nele: paredes altas recebem a pintura inteira (2,2 m), muretas e
+ * jardineiras baixas uma menor, que cabe na altura que elas têm. Dois raios dos lados (0,9 m ou 0,45 m) garantem que não é quina, coluna ou poste.
  */
-export function findWall(city: THREE.Object3D, ox: number, oz: number, dx: number, dz: number): WallHit | null {
+export function findWall(city: THREE.Object3D, ox: number, oy: number, oz: number, dx: number, dz: number): WallHit | null {
   const len = Math.hypot(dx, dz) || 1;
   const ux = dx / len;
   const uz = dz / len;
   const dir = new THREE.Vector3(ux, 0, uz);
-  const c = wallAt(city, new THREE.Vector3(ox, HEIGHT, oz), dir);
-  if (!c || c.dist > REACH) return null;
   const side = new THREE.Vector3(-uz, 0, ux);
-  for (const [sx, sy] of [[0.9, 0], [-0.9, 0], [0, 0.9], [0, -0.9]] as const) {
-    const o = new THREE.Vector3(ox + side.x * sx, HEIGHT + sy, oz + side.z * sx);
-    const h = wallAt(city, o, dir);
-    // a distância é medida da origem de cada raio; o lado muda pouco se a parede é reta e de frente
-    if (!h || Math.abs(h.dist - c.dist) > 0.4) return null;
+  const STEP = 0.2;
+  const hits: ({ dist: number; point: THREE.Vector3; nx: number; nz: number } | null)[] = [];
+  for (let h = 0.2; h <= 2.6 + 1e-6; h += STEP) hits.push(wallAt(city, new THREE.Vector3(ox, oy + h, oz), dir));
+  const ok = (a: (typeof hits)[number], b: (typeof hits)[number]): boolean => !!a && !!b && Math.abs(a.dist - b.dist) < 0.15 && a.nx * b.nx + a.nz * b.nz > 0.95;
+  // maior trecho contínuo de alturas com a mesma parede (de preferência o que passa pela altura do peito)
+  let best: [number, number] | null = null;
+  let score = 0;
+  for (let a = 0; a < hits.length; a++) {
+    if (!hits[a] || hits[a]!.dist > REACH) continue;
+    let b = a;
+    while (b + 1 < hits.length && ok(hits[a], hits[b + 1])) b++;
+    const lo = 0.2 + a * STEP - STEP / 2;
+    const hi = 0.2 + b * STEP + STEP / 2;
+    const sc = Math.min(hi, 2.6) - Math.max(lo, 0) + (lo <= 1.4 && hi >= 1.0 ? 0.5 : 0);
+    if (sc > score) { score = sc; best = [a, b]; }
+    a = b;
   }
-  return { x: c.point.x, y: HEIGHT, z: c.point.z, nx: c.nx, nz: c.nz };
+  if (!best) return null;
+  const yLo = Math.max(0, 0.2 + best[0] * STEP - STEP / 2);
+  const yHi = Math.min(2.6, 0.2 + best[1] * STEP + STEP / 2);
+  const hgt = Math.min(SIZE, yHi - yLo - 0.1);
+  if (hgt < MIN_SIZE) return null;
+  const yc = THREE.MathUtils.clamp(1.4, yLo + hgt / 2 + 0.05, yHi - hgt / 2 - 0.05);
+  const ref = hits[Math.min(hits.length - 1, Math.max(0, Math.round((yc - 0.2) / STEP)))] ?? hits[best[0]]!;
+  // largura: os dois lados (0,9 m) têm de ser a mesma parede; senão tenta 0,45 m (parede mais estreita)
+  let half = 0;
+  for (const off of [0.9, 0.45]) {
+    const l = wallAt(city, new THREE.Vector3(ox + side.x * off, oy + yc, oz + side.z * off), dir);
+    const r = wallAt(city, new THREE.Vector3(ox - side.x * off, oy + yc, oz - side.z * off), dir);
+    if (l && r && ok(ref, l) && ok(ref, r)) { half = off; break; }
+  }
+  if (half === 0) return null;
+  const w = Math.min(hgt, half * 2 + 0.4);
+  if (w < MIN_SIZE) return null;
+  return { x: ref.point.x, y: oy + yc, z: ref.point.z, nx: ref.nx, nz: ref.nz, w };
 }
 
 const texCache = new Map<string, THREE.Texture>();

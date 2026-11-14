@@ -33,7 +33,8 @@ await new Promise((r) => setTimeout(r, 1500)); // clipes extras + rifle carregam
 
 const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
 
-function tile(col: number, cols: number, row: number, rows: number, view: 'side' | 'front' | 'top' | 'cam' | 'closeR' | 'closeB' | 'closeL' | 'closeF' | 'hand' | 'handL' | 'palmF' | 'palmT' | 'wR' | 'wF' | 'wL'): void {
+const focus = new THREE.Vector3();
+function tile(col: number, cols: number, row: number, rows: number, view: 'side' | 'front' | 'top' | 'cam' | 'closeR' | 'closeB' | 'closeL' | 'closeF' | 'hand' | 'handL' | 'palmF' | 'palmT' | 'wR' | 'wF' | 'wL' | 'wB' | 'hR' | 'hF' | 'hL' | 'hB' | 'hT'): void {
   const w = W / cols;
   const h = H / rows;
   const x = col * w;
@@ -51,6 +52,12 @@ function tile(col: number, cols: number, row: number, rows: number, view: 'side'
   else if (view === 'handL') { cam.position.set(0.75, 1.5, 1.15); c.set(0, 1.3, 0.4); }
   else if (view === 'wR') { cam.position.set(-3.4, 1.5, 0.4); c.set(0, 1.45, 0.4); }
   else if (view === 'wL') { cam.position.set(3.4, 1.5, 0.4); c.set(0, 1.45, 0.4); }
+  else if (view[0] === 'h' && view.length === 2) {
+    // câmera em volta da mão que segura a arma (focus), vista de perto: direita, frente, esquerda, trás, cima
+    const o = { R: [-1, 0, 0], F: [0, 0, 1], L: [1, 0, 0], B: [0, 0, -1], T: [0, 1, 0.001] }[view[1] as 'R'];
+    c.copy(focus);
+    cam.position.set(focus.x + o[0] * 1.1, focus.y + o[1] * 1.1, focus.z + o[2] * 1.1);
+  } else if (view === 'wB') { cam.position.set(0, 1.6, -3.6); c.set(0, 1.4, 0.4); }
   else if (view === 'wF') { cam.position.set(0, 1.6, 3.6); c.set(0, 1.4, 0.4); }
   else if (view === 'closeF') { cam.position.set(0, 1.25, 2.6); c.set(0, 1.1, 0); }
   else if (view === 'closeR') { cam.position.set(-2.4, 1.5, 0.3); c.set(0, 1.35, 0.3); }
@@ -139,7 +146,7 @@ const V = {
     return [best.x, best.y, best.z].map((v) => Math.round(v * 100) / 100);
   },
   /** Arma branca em ação: toca o clipe como no jogo (passos de 1/30 s) e desenha n quadros + mede onde o punho fica no cabo (t: 0 = ponta do cabo, 1 = ponta da arma; r: distância ao eixo, m). */
-  strip(clip: string, armed: Armed, n: number, view: 'side' | 'closeR' | 'closeF' | 'closeB' | 'closeL' | 'hand' | 'handL' | 'cam' | 'wR' | 'wF' | 'wL' = 'wR'): { f: number; t: number; r: number; tl: number; rl: number }[] {
+  strip(clip: string, armed: Armed, n: number, view: 'side' | 'closeR' | 'closeF' | 'closeB' | 'closeL' | 'hand' | 'handL' | 'cam' | 'wR' | 'wF' | 'wL' | 'wB' | 'hR' | 'hF' | 'hL' | 'hB' | 'hT' = 'wR'): { f: number; hd?: number[]; t: number; r: number; tl: number; rl: number }[] {
     animator.setArmed(armed);
     weapon.setMode(armed);
     animator.setAimPitch(0);
@@ -152,7 +159,7 @@ const V = {
     renderer.clear();
     const anchor = (weapon as unknown as { batAnchor: THREE.Object3D }).batAnchor;
     const hands = (animator as unknown as { hands: { side: number; fingers: THREE.Bone[] }[] }).hands;
-    const out: { f: number; t: number; r: number; tl: number; rl: number }[] = [];
+    const out: { f: number; hd?: number[]; t: number; r: number; tl: number; rl: number }[] = [];
     let col = 0;
     for (let f = 0; f <= total && col < n; f++) {
       animator.update(1 / 30);
@@ -181,7 +188,9 @@ const V = {
       };
       const [t, r] = meas(-1);
       const [tl, rl] = meas(1);
-      out.push({ f, t: Math.round(t * 100) / 100, r: Math.round(r * 1000) / 1000, tl: Math.round(tl * 100) / 100, rl: Math.round(rl * 1000) / 1000 });
+      const hd = (weapon as unknown as { extraInner: Map<string, unknown> }).extraInner.has(armed) ? V.headDir(armed) : [];
+      out.push({ f, hd, t: Math.round(t * 100) / 100, r: Math.round(r * 1000) / 1000, tl: Math.round(tl * 100) / 100, rl: Math.round(rl * 1000) / 1000 });
+      focus.copy(o);
       tile(col++, n, 0, 1, view);
     }
     return out;

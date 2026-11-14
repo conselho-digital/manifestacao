@@ -10,7 +10,7 @@ import type { Net, ShotMsg, KillMsg } from '../net/sync';
 import { isGunId, type Inventory, type ShopItem, type WeaponId } from './inventory';
 import type { RifleKind } from './rifles';
 import type { Armed } from './anim';
-import { findWall, SPRAY_DURATION, SPRAY_SIZE, type Graffiti } from './graffiti';
+import { findWall, SPRAY_DURATION, type Graffiti } from './graffiti';
 
 /** vida cheia: 400 (4 vezes a antiga de 100). O dano das armas não mudou, então o jogador aguenta 4 vezes mais. */
 export const MAX_HEALTH = 400;
@@ -45,7 +45,7 @@ const INVULNERABLE = 2;
 /** depois de morrer: 60 s andando sem arma e sem levar dano de jogadores ou carros */
 export const PROTECT_TIME = 60;
 /** armas brancas de duas mãos (golpes do baseball.ifp) e o que o jogador segura com cada uma */
-const MELEE_ARMED: Partial<Record<number, Armed>> = { 2: 'bat', 4: 'sign', 5: 'cricket', 6: 'baseball', 7: 'bottle', 8: 'pipe', 9: 'cleaver', 10: 'sickle', 11: 'axe', 16: 'knife' };
+const MELEE_ARMED: Partial<Record<number, Armed>> = { 2: 'bat', 4: 'sign', 5: 'cricket', 7: 'bottle', 8: 'pipe', 9: 'cleaver', 10: 'sickle', 11: 'axe', 16: 'knife' };
 const KILL_MONEY = 100;
 const SPAWNS: [number, number][] = [[25, 16], [-10, -16], [64, 16], [-45, 16], [30, -16], [-60, -16], [-14, 16], [80, -16]];
 
@@ -80,7 +80,7 @@ export class Combat {
   get money(): number { return this.d.inv.money; }
   /** pausado: não leva dano nem atira */
   paused = false;
-  /** 0 = AK-47, 1 = punho, 2 = taco (bandeira), 3 = pistola, 4 = placa de trânsito, 5 = taco de críquete, 6 = taco de beisebol */
+  /** 0 = AK-47, 1 = punho, 2 = taco (bandeira), 3 = pistola, 4 = placa de trânsito, 5 = taco de críquete */
   /** começa de mãos livres (punho); o botão Arma troca */
   weapon: WeaponId = 1;
   /** munição de cada arma (só quem tem a arma recebe) */
@@ -131,7 +131,7 @@ export class Combat {
 
   /** Armas que o jogador tem, na ordem do botão de troca. */
   ownedWeapons(): WeaponId[] {
-    return ([0, 12, 13, 14, 3, 2, 4, 5, 6, 7, 8, 9, 10, 11, 16, 15, 1] as const).filter((w) => this.d.inv.has(w));
+    return ([0, 12, 13, 14, 3, 2, 4, 5, 7, 8, 9, 10, 11, 16, 15, 1] as const).filter((w) => this.d.inv.has(w));
   }
 
   /** Munição de uma arma (para o menu). */
@@ -246,14 +246,14 @@ export class Combat {
   private spray(player: Player): void {
     const p = player.object.position;
     const dir = this.d.camera.getWorldDirection(this.tmpD);
-    const wall = findWall(this.d.city, p.x, p.z, dir.x, dir.z);
+    const wall = findWall(this.d.city, p.x, p.y, p.z, dir.x, dir.z);
     if (!wall) { this.cd = 1.2; this.d.log('Spray: chegue perto de uma parede lisa, olhando de frente para ela.'); return; }
     this.cd = 2.6;
     this.sprayT = SPRAY_DURATION;
     this.sprayTo.set(wall.x + wall.nx * 0.05, wall.y, wall.z + wall.nz * 0.05);
     const t = this.d.myTeam();
     const r2 = (v: number): number => Math.round(v * 100) / 100;
-    const msg = { x: r2(wall.x), y: wall.y, z: r2(wall.z), nx: r2(wall.nx), nz: r2(wall.nz), w: SPRAY_SIZE, t: t.id };
+    const msg = { x: r2(wall.x), y: wall.y, z: r2(wall.z), nx: r2(wall.nx), nz: r2(wall.nz), w: r2(wall.w), t: t.id };
     this.d.graffiti.add({ id: this.d.net.id, ...msg }, this.d.name);
     this.d.net.sendSpray(msg);
   }

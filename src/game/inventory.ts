@@ -1,7 +1,7 @@
 // Inventário e loja: o que o jogador tem (armas) e o que pode comprar. Fica salvo neste navegador, por conta.
 
-/** Índices de arma, os mesmos do Combat: 0 AK-47, 1 punho, 2 bandeira, 3 pistola, 4 placa, 5 taco de críquete, 6 taco de beisebol, 7 garrafa quebrada, 8 cano, 9 cutelo, 10 foice, 11 machado, 12 M4A1, 13 M16, 14 Honey Badger, 15 lata de spray. */
-export type WeaponId = 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16;
+/** Índices de arma, os mesmos do Combat: 0 AK-47, 1 punho, 2 bandeira, 3 pistola, 4 placa, 5 taco de críquete, 7 garrafa quebrada, 8 cano, 9 cutelo, 10 foice, 11 machado, 12 M4A1, 13 M16, 14 Honey Badger, 15 lata de spray. */
+export type WeaponId = 0 | 1 | 2 | 3 | 4 | 5 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 | 16;
 
 export interface ShopItem {
   id: string;
@@ -22,15 +22,15 @@ export interface ShopItem {
   img?: string;
 }
 
-export const WEAPON_NAMES: Record<WeaponId, string> = { 0: 'AK-47', 1: 'Punho', 2: 'Bandeira', 3: 'Pistola', 4: 'Placa de trânsito', 5: 'Taco de críquete', 6: 'Taco de beisebol', 7: 'Garrafa quebrada', 8: 'Cano', 9: 'Cutelo', 10: 'Foice', 11: 'Machado', 12: 'M4A1', 13: 'M16', 14: 'Honey Badger', 15: 'Lata de spray', 16: 'Faca' };
+export const WEAPON_NAMES: Record<WeaponId, string> = { 0: 'AK-47', 1: 'Punho', 2: 'Bandeira', 3: 'Pistola', 4: 'Placa de trânsito', 5: 'Taco de críquete', 7: 'Garrafa quebrada', 8: 'Cano', 9: 'Cutelo', 10: 'Foice', 11: 'Machado', 12: 'M4A1', 13: 'M16', 14: 'Honey Badger', 15: 'Lata de spray', 16: 'Faca' };
 /** armas de fogo (têm munição, mira e recarga) */
 export const GUN_IDS: WeaponId[] = [0, 3, 12, 13, 14];
 export const isGunId = (w: WeaponId): boolean => GUN_IDS.includes(w);
 /** nome curto usado no HUD e no nome do arquivo da imagem (public/hud/w-<chave>.png) */
-export const HUD_KEY: Record<WeaponId, string> = { 0: 'ak', 1: 'fist', 2: 'bat', 3: 'pistol', 4: 'sign', 5: 'cricket', 6: 'baseball', 7: 'bottle', 8: 'pipe', 9: 'cleaver', 10: 'sickle', 11: 'axe', 12: 'm4', 13: 'm16', 14: 'hb', 15: 'spray', 16: 'knife' };
+export const HUD_KEY: Record<WeaponId, string> = { 0: 'ak', 1: 'fist', 2: 'bat', 3: 'pistol', 4: 'sign', 5: 'cricket', 7: 'bottle', 8: 'pipe', 9: 'cleaver', 10: 'sickle', 11: 'axe', 12: 'm4', 13: 'm16', 14: 'hb', 15: 'spray', 16: 'knife' };
 /** todas as armas, na ordem do menu */
-export const ALL_WEAPONS: WeaponId[] = [1, 3, 0, 12, 13, 14, 2, 4, 5, 6, 7, 8, 9, 10, 11, 15];
-export const WEAPON_IMG: Partial<Record<WeaponId, string>> = { 0: '/hud/w-ak.png', 2: '/hud/w-bat.png', 3: '/hud/w-pistol.png', 4: '/hud/w-sign.png', 5: '/hud/w-cricket.png', 6: '/hud/w-baseball.png', 7: '/hud/w-bottle.png', 8: '/hud/w-pipe.png', 9: '/hud/w-cleaver.png', 10: '/hud/w-sickle.png', 11: '/hud/w-axe.png', 12: '/hud/w-m4.png', 13: '/hud/w-m16.png', 14: '/hud/w-hb.png', 15: '/hud/w-spray.png', 16: '/hud/w-knife.png' };
+export const ALL_WEAPONS: WeaponId[] = [1, 3, 0, 12, 13, 14, 2, 4, 5, 7, 8, 9, 10, 11, 15];
+export const WEAPON_IMG: Partial<Record<WeaponId, string>> = { 0: '/hud/w-ak.png', 2: '/hud/w-bat.png', 3: '/hud/w-pistol.png', 4: '/hud/w-sign.png', 5: '/hud/w-cricket.png', 7: '/hud/w-bottle.png', 8: '/hud/w-pipe.png', 9: '/hud/w-cleaver.png', 10: '/hud/w-sickle.png', 11: '/hud/w-axe.png', 12: '/hud/w-m4.png', 13: '/hud/w-m16.png', 14: '/hud/w-hb.png', 15: '/hud/w-spray.png', 16: '/hud/w-knife.png' };
 
 export const SHOP: ShopItem[] = [
   { id: 'w-pistol', name: 'Pistola', desc: '12 tiros por pente, 15 de dano. Vem com 60 balas.', price: 15, kind: 'weapon', weapon: 3, img: WEAPON_IMG[3] },
@@ -41,7 +41,6 @@ export const SHOP: ShopItem[] = [
   { id: 'w-bat', name: 'Bandeira', desc: 'Rebatida de duas mãos, 30 de dano.', price: 5, kind: 'weapon', weapon: 2, img: WEAPON_IMG[2] },
   { id: 'w-sign', name: 'Placa de trânsito', desc: 'Corpo a corpo pesado, 30 de dano.', price: 5, kind: 'weapon', weapon: 4, img: WEAPON_IMG[4] },
   { id: 'w-cricket', name: 'Taco de críquete', desc: 'Taco de madeira (do jogo Bully): rebatida de duas mãos, 30 de dano.', price: 5, kind: 'weapon', weapon: 5, img: WEAPON_IMG[5] },
-  { id: 'w-baseball', name: 'Taco de beisebol', desc: 'Taco de beisebol (do GTA SA): rebatida de duas mãos, 30 de dano.', price: 5, kind: 'weapon', weapon: 6, img: WEAPON_IMG[6] },
   { id: 'w-bottle', name: 'Garrafa quebrada', desc: 'Garrafa de vidro quebrada: corpo a corpo, 30 de dano.', price: 5, kind: 'weapon', weapon: 7, img: WEAPON_IMG[7] },
   { id: 'w-pipe', name: 'Cano', desc: 'Cano de metal: rebatida de duas mãos, 30 de dano.', price: 5, kind: 'weapon', weapon: 8, img: WEAPON_IMG[8] },
   { id: 'w-cleaver', name: 'Cutelo', desc: 'Cutelo de açougueiro: corpo a corpo, 30 de dano.', price: 5, kind: 'weapon', weapon: 9, img: WEAPON_IMG[9] },

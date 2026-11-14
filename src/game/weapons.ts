@@ -33,14 +33,11 @@ export const loadFlag = (): Promise<THREE.Object3D> => (flagSrc ??= loader.loadA
 let cricketSrc: Promise<THREE.Object3D> | null = null;
 export const loadCricket = (): Promise<THREE.Object3D> => (cricketSrc ??= loader.loadAsync('/models/weapons/cricket-bat.glb').then((g) => g.scene));
 
-let baseballSrc: Promise<THREE.Object3D> | null = null;
-export const loadBaseball = (): Promise<THREE.Object3D> => (baseballSrc ??= loader.loadAsync('/models/weapons/baseball-bat.glb').then((g) => g.scene));
-
 /** Armas brancas do pacote: arquivo, ponto do cabo onde a mão direita segura (eixo Y do modelo, m) e escala. */
 export const EXTRA_MELEE: Record<ExtraMelee, { file: string; grip: number; scale: number; /** giro em volta do cabo (rad) para a lâmina apontar para a frente */ roll?: number }> = {
   bottle: { file: 'broken-bottle.glb', grip: -0.04, scale: 1 },
   pipe: { file: 'pipe.glb', grip: -0.05, scale: 1 },
-  cleaver: { file: 'cleaver.glb', grip: -0.08, scale: 1, roll: 1.9 },
+  cleaver: { file: 'cleaver.glb', grip: -0.08, scale: 1, roll: 1.9 + Math.PI },
   sickle: { file: 'sickle.glb', grip: 0.25, scale: 1, roll: 1.9 }, // segurada no meio do cabo (antes: na ponta, grip 0)
   axe: { file: 'axe.glb', grip: 0.08, scale: 1, roll: 1.9 }, // segurado no meio do cabo (antes: na ponta, grip -0,2)
   knife: { file: 'knife.glb', grip: 0.02, scale: 1 },
@@ -104,7 +101,7 @@ function flashTexture(): THREE.Texture {
 
 /** Cópia visual de cada arma (para pré-carregar e compilar shaders). */
 export async function loadWeaponModels(): Promise<THREE.Object3D[]> {
-  const all = await Promise.all([loadPistol(), loadRifle(), loadFlag(), loadSign(), loadCricket(), loadBaseball(), ...EXTRA_MELEE_KEYS.map(loadExtra), ...RIFLE_KINDS.map(loadRifleKind)]);
+  const all = await Promise.all([loadPistol(), loadRifle(), loadFlag(), loadSign(), loadCricket(), ...EXTRA_MELEE_KEYS.map(loadExtra), ...RIFLE_KINDS.map(loadRifleKind)]);
   return all.map((o) => o.clone(true));
 }
 
@@ -125,7 +122,6 @@ export class WeaponVisual {
   private flagTeam: { team: Team | null; name: string; c1: string } | null = null;
   private readonly signInner = new THREE.Group();
   private readonly cricketInner = new THREE.Group();
-  private readonly baseballInner = new THREE.Group();
   private readonly extraInner = new Map<ExtraMelee, THREE.Group>();
   private flashT = 0;
   private mode: ArmedMode = 'none';
@@ -155,7 +151,7 @@ export class WeaponVisual {
     const fallbackBat = buildBat();
     this.batAnchor.add(fallbackBat);
     // o "taco" é a bandeira num mastro (modelo convertido do DFF); enquanto carrega, vale o taco simples
-    this.batAnchor.add(this.flagInner, this.signInner, this.cricketInner, this.baseballInner);
+    this.batAnchor.add(this.flagInner, this.signInner, this.cricketInner);
     void loadFlag().then((src) => {
       this.batAnchor.remove(fallbackBat);
       this.flagInner.clear();
@@ -197,19 +193,8 @@ export class WeaponVisual {
       inner.add(bat);
       inner.rotation.x = Math.PI / 2; // o comprimento (Y no GLB) passa a apontar para +Z
       inner.scale.setScalar(1.15);
-      inner.position.z = -0.02; // a mão direita segura perto do fim do cabo
+      inner.position.z = -0.075; // as mãos ficam no cabo branco (direita perto da lâmina, esquerda logo abaixo)
       this.cricketInner.add(inner);
-    });
-    // taco de beisebol (GTA SA): 89 cm, cabo na origem da mão direita
-    void loadBaseball().then((src) => {
-      const bat = src.clone(true);
-      bat.traverse((o) => { o.castShadow = true; });
-      const inner = new THREE.Group();
-      inner.add(bat);
-      inner.rotation.x = Math.PI / 2;
-      inner.scale.setScalar(1.1);
-      inner.position.z = 0.06;
-      this.baseballInner.add(inner);
     });
     // armas brancas do pacote (garrafa, cano, cutelo, foice, machado)
     for (const k of EXTRA_MELEE_KEYS) {
@@ -335,7 +320,6 @@ export class WeaponVisual {
     this.flagInner.visible = this.mode === 'bat';
     this.signInner.visible = this.mode === 'sign';
     this.cricketInner.visible = this.mode === 'cricket';
-    this.baseballInner.visible = this.mode === 'baseball';
     this.extraInner.forEach((g, k) => { g.visible = this.mode === k; });
     const pistol = this.mode === 'pistol' || this.mode === 'pistol_aim';
     this.anchor.visible = show && !bat;

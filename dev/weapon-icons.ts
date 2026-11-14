@@ -1,7 +1,7 @@
 // Ferramenta de desenvolvimento: desenha cada arma de lado, com fundo transparente, para virar ícone do HUD.
 // Uso: abrir /dev/weapon-icons.html e ler window.ICONS (dataURL por arma) — o script scratchpad/icons.js salva em public/hud/.
 import * as THREE from 'three';
-import { loadPistol, loadBaseball, loadCricket, loadExtra, loadFlag, loadRifle, loadSign } from '../src/game/weapons';
+import { loadPistol, loadCricket, loadExtra, loadFlag, loadRifle, loadSign } from '../src/game/weapons';
 import { EXTRA_MELEE_KEYS } from '../src/game/anim';
 import { loadRifleKind } from '../src/game/weapons';
 
@@ -75,8 +75,6 @@ sign.rotation.y = Math.PI / 2; // a placa vira de frente para a câmera
 out.sign = fit(sign, new THREE.Euler(0, 0, -Math.PI / 2 + 0.55));
 const cricket = (await loadCricket()).clone(true);
 out.cricket = fit(cricket, new THREE.Euler(0, 0, -Math.PI / 2 + 0.5)); // taco deitado, lâmina para a direita
-const baseball = (await loadBaseball()).clone(true);
-out.baseball = fit(baseball, new THREE.Euler(0, 0, -Math.PI / 2 + 0.55));
 for (const k of EXTRA_MELEE_KEYS) out[k] = fit((await loadExtra(k)).clone(true), new THREE.Euler(0, 0, -Math.PI / 2 + (k === 'pipe' ? 0.55 : 0.3)));
 for (const k of ['m4', 'm16', 'hb'] as const) out[k] = fit((await loadRifleKind(k)).clone(true), new THREE.Euler(0, 0, 0));
 (window as unknown as { ICONS: Record<string, string> }).ICONS = out;

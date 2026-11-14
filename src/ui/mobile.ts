@@ -25,7 +25,7 @@ export interface HudState {
   money: number;
   /** segundos de proteção restantes (0 = sem) */
   protect: number;
-  /** chave da arma (HUD_KEY): ak, fist, bat, pistol, sign, cricket, baseball, bottle, pipe, cleaver, sickle, axe */
+  /** chave da arma (HUD_KEY): ak, fist, bat, pistol, sign, cricket, bottle, pipe, cleaver, sickle, axe */
   weapon: string;
   weaponName: string;
   /** id da arma na mão e lista das que o jogador tem (para o menu de seleção do botão Arma) */

@@ -9,15 +9,15 @@ interface ClipData<T> { duration: number; tracks: T[]; /** descida do corpo (m) 
 type Clips<T> = Record<string, ClipData<T>>;
 type Kind = 'gta' | 'carlos';
 
-export type Armed = 'none' | 'rifle' | 'aim' | 'pistol' | 'pistol_aim' | 'bat' | 'sign' | 'cricket' | 'baseball' | 'spray' | 'spray_aim' | ExtraMelee;
+export type Armed = 'none' | 'rifle' | 'aim' | 'pistol' | 'pistol_aim' | 'bat' | 'sign' | 'cricket' | 'spray' | 'spray_aim' | ExtraMelee;
 /** Armas brancas extras (pacote de armas): garrafa quebrada, cano, cutelo, foice e machado. */
 export const EXTRA_MELEE_KEYS = ['bottle', 'pipe', 'cleaver', 'sickle', 'axe', 'knife'] as const;
 export type ExtraMelee = (typeof EXTRA_MELEE_KEYS)[number];
-export const ARMED_CODE: Record<Armed, number> = { none: 0, rifle: 1, aim: 2, bat: 3, pistol: 4, pistol_aim: 5, sign: 6, cricket: 7, baseball: 8, bottle: 9, pipe: 10, cleaver: 11, sickle: 12, axe: 13, knife: 22, spray: 20, spray_aim: 21 };
+export const ARMED_CODE: Record<Armed, number> = { none: 0, rifle: 1, aim: 2, bat: 3, pistol: 4, pistol_aim: 5, sign: 6, cricket: 7, bottle: 9, pipe: 10, cleaver: 11, sickle: 12, axe: 13, knife: 22, spray: 20, spray_aim: 21 };
 // 14–19 são os fuzis (rifleFromNetCode); 20 e 21 a lata de spray
-export const ARMED_FROM_CODE: Armed[] = ['none', 'rifle', 'aim', 'bat', 'pistol', 'pistol_aim', 'sign', 'cricket', 'baseball', 'bottle', 'pipe', 'cleaver', 'sickle', 'axe', 'none', 'none', 'none', 'none', 'none', 'none', 'spray', 'spray_aim', 'knife'];
-/** Armas brancas de duas mãos (bandeira, placa, tacos de críquete e de beisebol): usam os clipes do baseball.ifp. */
-export const isBatLike = (a: Armed): boolean => a === 'bat' || a === 'sign' || a === 'cricket' || a === 'baseball' || (EXTRA_MELEE_KEYS as readonly string[]).includes(a);
+export const ARMED_FROM_CODE: Armed[] = ['none', 'rifle', 'aim', 'bat', 'pistol', 'pistol_aim', 'sign', 'cricket', 'none', 'bottle', 'pipe', 'cleaver', 'sickle', 'axe', 'none', 'none', 'none', 'none', 'none', 'none', 'spray', 'spray_aim', 'knife'];
+/** Armas brancas de duas mãos (bandeira, placa, taco de críquete): usam os clipes do baseball.ifp. */
+export const isBatLike = (a: Armed): boolean => a === 'bat' || a === 'sign' || a === 'cricket' || (EXTRA_MELEE_KEYS as readonly string[]).includes(a);
 /** O corpo gira para onde a câmera mira só ao mirar ou atirar (arma levantada). Com a arma baixa a câmera olha livre e o corpo segue o movimento. */
 /** Armas de uma mão que usam os clipes da faca (knife.ifp): faca e garrafa quebrada. */
 export const isKnifeLike = (a: Armed): boolean => a === 'knife' || a === 'bottle' || a === 'cleaver';
