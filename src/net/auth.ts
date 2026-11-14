@@ -38,7 +38,7 @@ const GOOGLE_CLIENT_ID = (import.meta.env.VITE_GOOGLE_CLIENT_ID as string | unde
 
 interface GsiButtonOpts { type: string; theme: string; size: string; text: string; shape: string; logo_alignment: string; width: number; locale: string }
 interface GsiApi {
-  initialize(cfg: { client_id: string; callback: (r: { credential?: string }) => void; nonce: string; ux_mode: string; auto_select: boolean; use_fedcm_for_prompt: boolean }): void;
+  initialize(cfg: { client_id: string; callback: (r: { credential?: string }) => void; nonce: string; ux_mode: string; auto_select: boolean; use_fedcm_for_prompt: boolean; use_fedcm_for_button: boolean }): void;
   renderButton(parent: HTMLElement, opts: GsiButtonOpts): void;
 }
 declare global {
@@ -82,6 +82,8 @@ export async function renderGoogleButton(parent: HTMLElement, width: number, don
     ux_mode: 'popup',
     auto_select: false,
     use_fedcm_for_prompt: true,
+    // Chrome (celular Android M128+ e PC M125+): o botão usa a janela nativa do navegador (FedCM) em vez de abrir outra aba/popup, e o jogador continua na mesma aba. Em outros navegadores (iPhone) continua o popup.
+    use_fedcm_for_button: true,
     callback: (r) => {
       if (!r.credential) { done(null, 'O Google não devolveu o login. Tente de novo.'); return; }
       void client.auth.signInWithIdToken({ provider: 'google', token: r.credential, nonce: raw }).then(async ({ error }) => {

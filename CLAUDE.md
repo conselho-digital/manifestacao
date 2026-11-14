@@ -298,3 +298,6 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 
 ## Rodada: câmera com C, garagem com V
 - V abre a Garagem (antes C); o V não empina mais (só Shift). C alterna a câmera (`view.mode` em settings.ts, tratado em input.ts): 0 terceira pessoa (a de sempre), 1 terceira pessoa perto (metade da distância e do ombro), 2 primeira pessoa. Em `Player.followCamera`: primeira pessoa põe a câmera na cabeça (`Animator.firstPerson` esconde o osso da cabeça com escala ~0 e devolve a posição; sem esqueleto usa 1,65 m), com `camera.near` 0,1 só nesse modo (1 nos outros). Dirigindo, o modo 2 vale como o 0 (só a pé tem primeira pessoa). A colisão da câmera com prédios respeita a distância curta. Legenda das teclas atualizada. Só PC (sem botão no celular).
+
+## Login Google no celular
+- O popup do GSI abria outra aba no celular e, ao terminar, fechava e deixava o jogador na aba errada (ele tinha que voltar à aba do jogo). `auth.ts` agora liga `use_fedcm_for_button: true`: no Chrome (Android M128+, PC M125+) o botão usa a janela nativa do navegador (FedCM), sem popup e sem trocar de aba. Safari/iPhone e outros navegadores continuam com o popup (sem como evitar sem login por redirecionamento, que mostraria o endereço do Supabase). Não testado em aparelho real.
