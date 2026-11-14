@@ -10,7 +10,7 @@ export interface Settings {
   fpsCap: number;
 }
 
-export const FPS_CAPS = [30, 45, 60] as const;
+export const FPS_CAPS = [30, 45, 60, 90, 120] as const;
 
 const DEFAULTS: Settings = { sens: 1, fpsCapOn: true, fpsCap: 30 };
 

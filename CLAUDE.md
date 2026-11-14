@@ -324,3 +324,4 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 
 ## Rodada: entrar no mapa só com clique ou giro
 - Ao terminar de carregar (`Loading.finish` em ui/loading.ts) a tela fica parada em "Clique para entrar" (PC) ou "Toque na tela ou gire o celular para entrar" (celular) e SÓ DEPOIS do clique, toque, Enter/Espaço (PC) ou do giro do aparelho para a horizontal (`resize`/`orientationchange`) some e começa o voo de entrada. No PC o mesmo clique pede o mouse preso (`requestPointerLock`). Testes automáticos precisam clicar na tela depois de `__game.ready()`.
+- Opções de limite de FPS: 30, 45, 60, 90 e 120 (`FPS_CAPS` em settings.ts). Acima da taxa da tela não adianta: o navegador entrega no máximo a taxa da tela (60/90/120 Hz).
