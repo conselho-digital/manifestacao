@@ -51,7 +51,11 @@ scene.add(createCars());
 scene.add(sparksObject);
 const voiceRings = new VoiceRings();
 scene.add(voiceRings.group);
-const posterEditor = initPosterEditor(() => (player ? { x: player.object.position.x, z: player.object.position.z } : null));
+const posterEditor = initPosterEditor({
+  getPos: () => (player ? { x: player.object.position.x, z: player.object.position.z } : null),
+  money: () => inv.money,
+  spend: (n) => inv.spend(n),
+});
 void isAdmin().then((a) => posterEditor.setAdmin(a || (import.meta.env.DEV && new URLSearchParams(location.search).has('admin'))));
 initMouse(renderer.domElement);
 

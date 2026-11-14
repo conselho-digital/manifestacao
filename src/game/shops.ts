@@ -7,7 +7,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { supabase } from '../net/supabase';
 
 export interface ShopBuilding { name: string; r: { x0: number; x1: number; z0: number; z1: number }; off: number }
-export interface PosterSlot { id: string; building: string; face: 'zp' | 'zn' | 'xp' | 'xn'; n: number; x: number; z: number; nx: number; nz: number; page: number; cell: number; /** centro do cartaz no mundo (x, z) e altura */ cx: number; cz: number; cy: number }
+export interface PosterSlot { id: string; building: string; face: 'zp' | 'zn' | 'xp' | 'xn'; n: number; /** número do cartaz (1, 2, 3...): "Cartaz 01" */ num: number; x: number; z: number; nx: number; nz: number; page: number; cell: number; /** centro do cartaz no mundo (x, z) e altura */ cx: number; cz: number; cy: number }
 
 const SHOP_W = 6.2; // largura de cada loja (pilastras, vitrine e porta)
 const GAP = 0.4;
@@ -23,11 +23,14 @@ const SIDES = [
 ] as const;
 
 export const POSTER_SLOTS: PosterSlot[] = [];
+const numText = (n: number): string => String(n).padStart(2, '0');
+/** nome mostrado ao jogador: "Cartaz 01", "Cartaz 02"... (o id interno, ex. N1_zn2, só vale para arquivos e servidor) */
+export const posterName = (id: string): string => `Cartaz ${numText(slotById.get(id)?.num ?? 0)}`;
 
 const hash = (s: string): number => { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; };
 
 /** Cartaz de exemplo da vaga: cores pelo nome, com o nome grande (é ele que você usa no nome do arquivo). */
-function drawPlaceholder(g: CanvasRenderingContext2D, x: number, y: number, id: string): void {
+function drawPlaceholder(g: CanvasRenderingContext2D, x: number, y: number, id: string, num: number): void {
   const h = hash(id);
   const hue = h % 360;
   const grad = g.createLinearGradient(x, y, x + CELL_W, y + CELL_H);
@@ -49,10 +52,8 @@ function drawPlaceholder(g: CanvasRenderingContext2D, x: number, y: number, id: 
   g.fillStyle = '#fff';
   g.font = '700 22px system-ui, sans-serif';
   g.fillText('CARTAZ', x + CELL_W / 2, y + 40);
-  let size = 44;
-  g.font = `800 ${size}px system-ui, sans-serif`;
-  while (g.measureText(id).width > CELL_W - 36 && size > 16) { size -= 2; g.font = `800 ${size}px system-ui, sans-serif`; }
-  g.fillText(id, x + CELL_W / 2, y + 94);
+  g.font = '800 64px system-ui, sans-serif';
+  g.fillText(numText(num), x + CELL_W / 2, y + 94);
   g.font = '600 15px system-ui, sans-serif';
   g.fillText('1200 x 800 px (3:2)', x + CELL_W / 2, y + CELL_H - 24);
 }
@@ -78,6 +79,10 @@ let cityRef: THREE.Object3D | null = null;
 const slotById = new Map<string, PosterSlot>();
 /** imagem salva de cada vaga (arquivo de `public/posters` ou endereço do servidor) e prévia local (só para quem escolheu, ainda não salva) */
 const savedUrl = new Map<string, string>();
+/** arquivo fixo de `public/posters` e linha paga do servidor (preço pago, quando sai do ar); a paga vale enquanto não vence */
+const staticUrl = new Map<string, string>();
+interface Row { url: string; price: number; expires: number }
+const dbRow = new Map<string, Row>();
 const previewUrl = new Map<string, string>();
 const effectiveUrl = (id: string): string | undefined => previewUrl.get(id) ?? savedUrl.get(id);
 
@@ -88,7 +93,7 @@ function redraw(slot: PosterSlot): void {
   const g = page.canvas.getContext('2d')!;
   const x = (slot.cell % COLS) * CELL_W;
   const y = Math.floor(slot.cell / COLS) * CELL_H;
-  drawPlaceholder(g, x, y, slot.id);
+  drawPlaceholder(g, x, y, slot.id, slot.num);
   page.tex.needsUpdate = true;
   const url = effectiveUrl(slot.id);
   if (!url) return;
@@ -103,34 +108,57 @@ function redraw(slot: PosterSlot): void {
 }
 
 const SAFE_URL = /^(https:\/\/[^\s]+|\/posters\/[\w.-]{1,80})$/;
-function setSaved(id: string, url: string | null): void {
+const liveRow = (id: string): Row | undefined => { const r = dbRow.get(id); return r && r.expires > Date.now() ? r : undefined; };
+/** Recalcula o que a vaga mostra (linha paga ainda valendo, senão o arquivo fixo) e redesenha se mudou. */
+function syncSaved(id: string): void {
   const slot = slotById.get(id);
   if (!slot) return;
-  if (url && SAFE_URL.test(url)) savedUrl.set(id, url); else savedUrl.delete(id);
+  const url = liveRow(id)?.url ?? staticUrl.get(id);
+  if (url === savedUrl.get(id)) return;
+  if (url) savedUrl.set(id, url); else savedUrl.delete(id);
   redraw(slot);
+  overlayKey.clear();
+}
+function setRow(id: string, row: { url?: unknown; price?: unknown; expires_at?: unknown } | null): void {
+  if (row && typeof row.url === 'string' && SAFE_URL.test(row.url)) {
+    const exp = typeof row.expires_at === 'string' ? Date.parse(row.expires_at) : Infinity;
+    dbRow.set(id, { url: row.url, price: typeof row.price === 'number' ? Math.max(0, row.price) : 0, expires: Number.isFinite(exp) ? exp : Infinity });
+  } else dbRow.delete(id);
+  syncSaved(id);
 }
 
-/** Lê os cartazes: arquivos de `public/posters/index.json` e, por cima, os que o admin salvou no servidor (ao vivo pelo Realtime). */
+/** Preço e prazo do cartaz no ar (ou `null` se a vaga está livre). */
+export function posterInfo(id: string): { price: number; expires: number } | null { const r = liveRow(id); return r ? { price: r.price, expires: r.expires } : null; }
+/** Menor valor para pôr uma imagem agora: $2 na vaga livre; com imagem no ar, mais que o valor pago por ela. */
+export function posterMinPrice(id: string): number { const r = liveRow(id); return r ? Math.max(r.price + 1, FIRST_PRICE) : FIRST_PRICE; }
+export const FIRST_PRICE = 2;
+
+let listenersOn = false;
+/** Lê os cartazes: arquivos de `public/posters/index.json` e, por cima, os pagos no servidor (ao vivo pelo Realtime; vencem em 24 h). */
 async function loadPosters(): Promise<void> {
   try {
     const r = await fetch('/posters/index.json', { cache: 'no-cache' });
     if (r.ok) {
       const j = (await r.json()) as { posters?: Record<string, unknown> };
-      for (const [k, v] of Object.entries(j.posters ?? {})) if (typeof v === 'string' && /^[\w.-]{1,80}$/.test(v)) setSaved(k, `/posters/${v}`);
+      for (const [k, v] of Object.entries(j.posters ?? {})) if (typeof v === 'string' && /^[\w.-]{1,80}$/.test(v)) { staticUrl.set(k, `/posters/${v}`); syncSaved(k); }
     }
   } catch { /* sem índice */ }
   if (!supabase) return;
   try {
-    const { data } = await supabase.from('posters').select('slot_id,url');
-    for (const row of (data ?? []) as { slot_id: string; url: string }[]) setSaved(row.slot_id, row.url);
+    const { data } = await supabase.from('posters').select('slot_id,url,price,expires_at');
+    for (const row of (data ?? []) as { slot_id: string; url: string; price: number; expires_at: string | null }[]) setRow(row.slot_id, row);
   } catch { /* tabela ainda não existe: só os arquivos */ }
+  if (listenersOn) return;
+  listenersOn = true;
   supabase.channel('posters')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'posters' }, (p) => {
-      const n = p.new as { slot_id?: string; url?: string };
+      const n = p.new as { slot_id?: string; url?: string; price?: number; expires_at?: string };
       const o = p.old as { slot_id?: string };
-      if (p.eventType === 'DELETE') { if (o.slot_id) setSaved(o.slot_id, null); } else if (n.slot_id && typeof n.url === 'string') setSaved(n.slot_id, n.url);
+      if (p.eventType === 'DELETE') { if (o.slot_id) setRow(o.slot_id, null); } else if (n.slot_id) setRow(n.slot_id, n);
     })
     .subscribe();
+  // quem venceu (24 h) volta ao cartaz de exemplo sem precisar de aviso do servidor
+  setInterval(() => { for (const id of dbRow.keys()) syncSaved(id); }, 10000);
 }
 
 /** Vaga de cartaz na frente da qual o jogador está (a menos de 4 m, de frente para a vitrine), ou null. `reach` > 1 alarga a zona (para não cancelar na borda). */
@@ -160,33 +188,52 @@ export function setPosterPreview(id: string, blob: Blob | null): void {
   overlayKey.clear(); // força a revisão da imagem grande
 }
 export const hasPosterPreview = (id: string): boolean => previewUrl.has(id);
-export const posterHasImage = (id: string): boolean => savedUrl.has(id);
+export const posterHasImage = (id: string): boolean => liveRow(id) !== undefined;
 
-/** Admin: envia a imagem (webp) da vaga para o servidor e grava o endereço; todos passam a ver. Retorna a mensagem de erro, se houver. */
-export async function savePoster(id: string, blob: Blob): Promise<string | null> {
-  if (!supabase) return 'Sem conexão com o servidor.';
-  if (!slotById.has(id)) return 'Cartaz desconhecido.';
-  const path = `${id}.webp`;
-  const up = await supabase.storage.from('posters').upload(path, blob, { upsert: true, contentType: 'image/webp', cacheControl: '3600' });
-  if (up.error) return /bucket not found|not found/i.test(up.error.message) ? 'O armazenamento de cartazes ainda não existe no servidor.' : /row-level security|permission|unauthorized/i.test(up.error.message) ? 'Sem permissão: só o administrador salva cartazes.' : up.error.message;
-  const url = `${supabase.storage.from('posters').getPublicUrl(path).data.publicUrl}?v=${Date.now()}`;
-  const { error } = await supabase.from('posters').upsert({ slot_id: id, url }, { onConflict: 'slot_id' });
-  if (error) return /row-level security|permission/i.test(error.message) ? 'Sem permissão: só o administrador salva cartazes.' : error.message;
+/** `reach` pequeno = "bem perto" (só aí aparece o preço): a ~2 m da vitrine, no meio do cartaz. */
+export const CLOSE_REACH = 0.5;
+
+/**
+ * Envia a imagem (webp) com um nome novo e pede ao servidor a vaga (`claim_poster`): o servidor só aceita se `price` for maior que o valor
+ * pago pela imagem que está no ar (ou ≥ $2 na vaga livre); o admin não paga. Retorna `{ error }` ou `{ ok: true }` (quem chama desconta o dinheiro).
+ */
+export async function savePoster(id: string, blob: Blob, price: number): Promise<{ ok: true } | { error: string }> {
+  if (!supabase) return { error: 'Sem conexão com o servidor.' };
+  if (!slotById.has(id)) return { error: 'Cartaz desconhecido.' };
+  const path = `${id}/${Date.now()}.webp`;
+  const up = await supabase.storage.from('posters').upload(path, blob, { upsert: false, contentType: blob.type || 'image/webp', cacheControl: '31536000' });
+  if (up.error) return { error: /bucket not found|not found/i.test(up.error.message) ? 'O armazenamento de cartazes ainda não existe no servidor.' : /row-level security|permission|unauthorized|jwt/i.test(up.error.message) ? 'Entre com a sua conta para pôr um cartaz.' : up.error.message };
+  const prev = savedUrl.get(id);
+  const { data, error } = await supabase.rpc('claim_poster', { p_slot: id, p_path: path, p_price: Math.floor(price) });
+  const res = data as { ok?: boolean; error?: string; min?: number; url?: string; price?: number; expires_at?: string } | null;
+  if (error || !res?.ok) {
+    void supabase.storage.from('posters').remove([path]); // arquivo que ninguém usa
+    if (res?.error === 'preco') {
+      const cur = liveRow(id);
+      if (cur && typeof res.min === 'number') cur.price = Math.max(cur.price, res.min - 1); // alguém pagou mais enquanto você escolhia
+      return { error: `Alguém pagou mais. O mínimo agora é $${res.min ?? '?'}.` };
+    }
+    if (res?.error === 'login') return { error: 'Entre com a sua conta para pôr um cartaz.' };
+    return { error: error?.message ?? 'O servidor não aceitou o cartaz.' };
+  }
   const old = previewUrl.get(id);
   if (old) { URL.revokeObjectURL(old); previewUrl.delete(id); }
-  setSaved(id, url);
+  setRow(id, { url: res.url, price: res.price, expires_at: res.expires_at });
+  // a imagem anterior deixa de ser usada: apaga o arquivo (o servidor só deixa apagar arquivo sem uso)
+  const m = prev?.match(/\/posters\/([A-Za-z0-9_]+\/\d+\.webp)/);
+  if (m) void supabase.storage.from('posters').remove([m[1]]);
   overlayKey.clear();
-  return null;
+  return { ok: true };
 }
 
-/** Admin: tira o cartaz salvo (volta ao cartaz de exemplo). */
+/** Admin: tira o cartaz do ar (volta ao cartaz de exemplo). */
 export async function clearPoster(id: string): Promise<string | null> {
   if (!supabase) return 'Sem conexão com o servidor.';
-  await supabase.storage.from('posters').remove([`${id}.webp`]);
+  const prev = dbRow.get(id)?.url.match(/\/posters\/([A-Za-z0-9_]+\/\d+\.webp)/);
   const { error } = await supabase.from('posters').delete().eq('slot_id', id);
-  if (error) return /row-level security|permission/i.test(error.message) ? 'Sem permissão: só o administrador apaga cartazes.' : error.message;
-  setSaved(id, null);
-  overlayKey.clear();
+  if (error) return /row-level security|permission/i.test(error.message) ? 'Sem permissão: só o administrador remove cartazes.' : error.message;
+  if (prev) void supabase.storage.from('posters').remove([prev[1]]);
+  setRow(id, null);
   return null;
 }
 
@@ -288,7 +335,7 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
         const slotIndex = POSTER_SLOTS.length;
         const page = Math.floor(slotIndex / PER_PAGE);
         const cell = slotIndex % PER_PAGE;
-        POSTER_SLOTS.push({ id, building: b.name, face: s.k, n: i + 1, x: px, z: pz, nx: s.nx, nz: s.nz, page, cell, cx: px - 1.2 * s.nz + 0.13 * s.nx, cz: pz + 1.2 * s.nx + 0.13 * s.nz, cy: 1.95 });
+        POSTER_SLOTS.push({ id, building: b.name, face: s.k, n: i + 1, num: slotIndex + 1, x: px, z: pz, nx: s.nx, nz: s.nz, page, cell, cx: px - 1.2 * s.nz + 0.13 * s.nx, cz: pz + 1.2 * s.nx + 0.13 * s.nz, cy: 1.95 });
         // peça no espaço da loja (u ao longo da fachada, y para cima, w para fora) → mundo
         const put = (g: THREE.BufferGeometry, u: number, y: number, w: number): THREE.BufferGeometry => {
           g.translate(u, y, w);
@@ -344,7 +391,7 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
     const g = canvas.getContext('2d')!;
     g.fillStyle = '#222';
     g.fillRect(0, 0, canvas.width, canvas.height);
-    for (const slot of POSTER_SLOTS) if (slot.page === p) drawPlaceholder(g, (slot.cell % COLS) * CELL_W, Math.floor(slot.cell / COLS) * CELL_H, slot.id);
+    for (const slot of POSTER_SLOTS) if (slot.page === p) drawPlaceholder(g, (slot.cell % COLS) * CELL_W, Math.floor(slot.cell / COLS) * CELL_H, slot.id, slot.num);
     const tex = new THREE.CanvasTexture(canvas);
     tex.colorSpace = THREE.SRGBColorSpace;
     tex.generateMipmaps = false;
