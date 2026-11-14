@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { gripOf, type GripKey } from './grips';
 import { rifleGeo, type RifleKind } from './rifles';
 
 interface GtaTrack { id: number; t: number[]; q: number[] }
@@ -714,6 +715,7 @@ export class Animator {
       // mãos fechadas no cabo: fuzil, taco e pistola (duas mãos, também abaixada)
       this.curlHand(-1, isSpray(this.armed) ? SPRAY_CURL : 1);
       this.curlHand(1, isSpray(this.armed) ? 0 : 1);
+      this.applyHandAdjust();
       // armas brancas (faca, taco, bandeira, placa, foice...): o cabo fica no meio dos dedos já fechados, não acima da mão (o osso da mão + PALM deixava a arma flutuando)
       if (kind === 'bat' && this.bat) {
         const fingers = this.hands.find((h) => h.side === -1)?.fingers ?? [];
@@ -916,6 +918,43 @@ export class Animator {
     const yAxis = new THREE.Vector3().crossVectors(dir, xAxis);
     const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, dir));
     this.bat.quaternion.slerp(q, w);
+  }
+
+  /** Chave do ajuste de empunhadura (`grips.ts`) da arma que está na mão. */
+  private gripKey(): GripKey | null {
+    const a = this.armed;
+    if (a === 'rifle' || a === 'aim') return this.rifleKind;
+    if (a === 'pistol' || a === 'pistol_aim') return 'pistol';
+    if (isSpray(a)) return 'spray';
+    return a === 'none' ? null : (a as GripKey);
+  }
+
+  /**
+   * Giro extra de cada mão para a arma atual (editor "Armas nas mãos"): [giro da palma em volta do antebraço, pulso cima/baixo, pulso para os lados],
+   * em graus, no sistema do próprio osso da mão (eixos tirados da pose de repouso: antebraço, frente-trás e vertical). Positivo é espelhado entre as mãos.
+   */
+  private applyHandAdjust(): void {
+    const key = this.gripKey();
+    if (!key) return;
+    const g = gripOf(key);
+    let any = false;
+    for (const arm of this.arms) {
+      const d = arm.side < 0 ? g.hr : g.hl;
+      if (d[0] === 0 && d[1] === 0 && d[2] === 0) continue;
+      const inv = arm.q0[2].clone().invert();
+      const along = arm.dir0[1].clone().applyQuaternion(inv).normalize();
+      const flex = new THREE.Vector3(0, 0, 1).applyQuaternion(inv);
+      flex.addScaledVector(along, -flex.dot(along)).normalize();
+      const dev = new THREE.Vector3().crossVectors(along, flex).normalize();
+      const rad = (v: number): number => THREE.MathUtils.degToRad(v) * arm.side;
+      const q = new THREE.Quaternion().setFromAxisAngle(along, rad(d[0]))
+        .multiply(new THREE.Quaternion().setFromAxisAngle(flex, rad(d[1])))
+        .multiply(new THREE.Quaternion().setFromAxisAngle(dev, rad(d[2])));
+      arm.h.quaternion.multiply(q);
+      arm.h.updateMatrixWorld(true);
+      any = true;
+    }
+    if (any) this.updateRoot();
   }
 
   /** Fecha a mão em torno do cabo (w: 0 aberta, 1 fechada). Os dedos dobram no eixo local Z do osso. */

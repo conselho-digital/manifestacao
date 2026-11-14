@@ -6,7 +6,7 @@ import { createCharacter } from '../game/characters';
 import { Animator, type Armed } from '../game/anim';
 import { WeaponVisual } from '../game/weapons';
 import type { RifleKind } from '../game/rifles';
-import { cleanGrips, exportGrips, GRIP_KEYS, gripOf, isZeroGrip, setAllGrips, setGrip, zeroGrip, type Grip, type GripKey } from '../game/grips';
+import { cleanGrips, cloneGrip, exportGrips, GRIP_KEYS, gripOf, isZeroGrip, setAllGrips, setGrip, zeroGrip, type Grip, type GripKey } from '../game/grips';
 
 interface Pose { id: string; label: string; armed: Armed; clip?: string; swing?: string[]; run?: boolean }
 interface Entry { key: GripKey; name: string; group: string; icon: string; poses: Pose[]; rifle?: RifleKind }
@@ -110,6 +110,7 @@ let paused = false;
 let speed = 1;
 let follow = true;
 let showAxes = true;
+let handsShown = false;
 let swingIdx = 0;
 let swingT = 0;
 let axes: THREE.AxesHelper | null = null;
@@ -273,7 +274,7 @@ function commit(key: GripKey, g: Grip): void {
   persist();
   markList();
 }
-const cur = (key: GripKey): Grip => { const g = gripOf(key); return { p: [...g.p], r: [...g.r], s: g.s }; };
+const cur = (key: GripKey): Grip => cloneGrip(gripOf(key));
 
 function buildControls(): void {
   ctl.textContent = '';
@@ -294,6 +295,20 @@ function buildControls(): void {
   }
   pad.append(mk('h2', '', 'Tamanho'));
   pad.append(row('Escala %', '#93a1b3', 50, 200, 1, () => cur(key).s * 100, (v) => { const g = cur(key); g.s = v / 100; commit(key, g); }));
+
+  // giro das mãos do personagem (recolhido; o botão abre)
+  const handsOpen = mk('button', handsShown ? 'on' : '', handsShown ? '✋ Giro das mãos ▾' : '✋ Editar giro das mãos ▸');
+  handsOpen.onclick = () => { handsShown = !handsShown; buildControls(); };
+  pad.append(mk('h2', '', 'Mãos do personagem'), handsOpen);
+  if (handsShown) {
+    pad.append(mk('p', 'hint', 'Gira a mão do personagem sem mexer na arma. Valores iguais nas duas mãos dão um giro espelhado (simétrico).'));
+    for (const side of ['hr', 'hl'] as const) {
+      pad.append(mk('h2', '', side === 'hr' ? 'Mão direita (graus)' : 'Mão esquerda (graus)'));
+      ['Giro da palma', 'Pulso cima/baixo', 'Pulso p/ os lados'].forEach((label, i) => {
+        pad.append(row(label, '#f2c230', -180, 180, 1, () => cur(key)[side][i]!, (v) => { const g = cur(key); g[side][i] = v; commit(key, g); }));
+      });
+    }
+  }
 
   const nudge = mk('div', 'btns');
   const nb = (label: string, fn: () => void): void => { const b = mk('button', '', label); b.onclick = fn; nudge.append(b); };
