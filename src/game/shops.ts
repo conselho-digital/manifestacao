@@ -433,6 +433,10 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
   for (const b of buildings) {
     if (b.shops === false) continue;
     const top = b.top ?? TOP;
+    const house = top < 6; // casas de 2 andares: loja só de vitrine e porta, sem a base cinza e sem o letreiro com o nome
+    const gy = house ? 0.1 : 0.6; // onde começa o vidro
+    const gh = 3.4 - gy;
+    const pTop = house ? 3.6 : top;
     for (const s of SIDES) {
       const alongX = s.nz !== 0;
       const L0 = alongX ? b.r.x1 - b.r.x0 : b.r.z1 - b.r.z0;
@@ -487,20 +491,20 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
         };
         const box = (k: string, bw2: number, bh: number, bd: number, u: number, y: number, w: number): void => { push(k, put(new THREE.BoxGeometry(bw2, bh, bd), u, y + bh / 2, w)); };
         // base de pedra e pilastras escuras: a da esquerda fica em cima da coluna do prédio; a da direita só na última loja (nas outras é a da vizinha)
-        box('plinth', W, 0.6, 0.5, 0, 0, 0.27);
+        if (!house) box('plinth', W, 0.6, 0.5, 0, 0, 0.27);
         const inL = Math.max(0, 0.2 - uA);
         const inR = Math.max(0, 0.2 - (L - uB));
-        box('frame', 0.4, top - 0.6, 0.5, -W / 2 + inL, 0.6, 0.27);
-        if (i === count - 1) box('frame', 0.4, top - 0.6, 0.5, W / 2 - inR, 0.6, 0.27);
+        box('frame', 0.4, pTop - gy, 0.5, -W / 2 + inL, gy, 0.27);
+        if (i === count - 1) box('frame', 0.4, pTop - gy, 0.5, W / 2 - inR, gy, 0.27);
         // interior pintado atrás do vidro
-        const ip = new THREE.PlaneGeometry(Wi, 2.8);
+        const ip = new THREE.PlaneGeometry(Wi, gh);
         cellUV(ip, kind % 2, Math.floor(kind / 2), INT_W, INT_H, INT_W * 2, INT_H * 4);
-        interiorGeos.push(put(ip, 0, 2.0, 0.1));
+        interiorGeos.push(put(ip, 0, gy + gh / 2, 0.1));
         // vidro (janela e porta), travessa do alto, divisória entre janela e porta e porta dupla
-        box('glass', Wi, 2.8, 0.04, 0, 0.6, 0.38);
+        box('glass', Wi, gh, 0.04, 0, gy, 0.38);
         box('frame', Wi, 0.16, 0.12, 0, 3.4, 0.4);
-        box('frame', 0.12, 2.8, 0.12, um, 0.6, 0.4);
-        box('frame', 0.1, 2.5, 0.1, ud, 0.6, 0.4);
+        box('frame', 0.12, gh, 0.12, um, gy, 0.4);
+        box('frame', 0.1, 3.1 - gy, 0.1, ud, gy, 0.4);
         box('frame', dw, 0.1, 0.1, ud, 3.0, 0.4);
         box('metal', 0.05, 0.5, 0.06, ud - 0.1, 1.0, 0.46);
         box('metal', 0.05, 0.5, 0.06, ud + 0.1, 1.0, 0.46);
@@ -517,11 +521,13 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
           box('frame', 0.12, 2.2, 0.12, Wi * 0.18, 4.7, 0.4);
         }
         // letreiro branco com o nome e toldo fino colorido
-        box('signbox', W, 0.95, 0.34, 0, 3.55, 0.3);
-        const sw = Math.min(W - 0.6, 7.0);
-        const sp = new THREE.PlaneGeometry(sw, sw * (SIGN_H / SIGN_W));
-        cellUV(sp, nameIdx % 2, Math.floor(nameIdx / 2), SIGN_W, SIGN_H, SIGN_W * 2, SIGN_H * 8);
-        signGeos.push(put(sp, 0, 4.03, 0.48));
+        if (!house) {
+          box('signbox', W, 0.95, 0.34, 0, 3.55, 0.3);
+          const sw = Math.min(W - 0.6, 7.0);
+          const sp = new THREE.PlaneGeometry(sw, sw * (SIGN_H / SIGN_W));
+          cellUV(sp, nameIdx % 2, Math.floor(nameIdx / 2), SIGN_W, SIGN_H, SIGN_W * 2, SIGN_H * 8);
+          signGeos.push(put(sp, 0, 4.03, 0.48));
+        }
         box(`awn${hh % AWNINGS.length}`, W - 0.5, 0.1, 0.75, 0, 3.42, 0.7);
         // cartaz (atlas) na vitrine
         const pg = new THREE.PlaneGeometry(pw, ph);

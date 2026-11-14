@@ -417,3 +417,6 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 
 ## Rodada: subir na moto sem "pegar do chão"
 - O `BIKE_pullupL/R` do GTA SA é o gesto de abaixar e puxar a moto do chão (conferido quadro a quadro em `/dev/anim-viewer.html`), então subir numa moto EM PÉ parecia levantar a moto. A etapa `pullup` (player.ts, `stageClip`) agora toca `bike_mount_l/r`, clipe criado em `Animator.makeMount` (anim.ts, depois de carregar os clipes extras) que sai da pose `idle` (de pé ao lado da moto até 0,3 s) e vai à pose sentada do `bike_ride` em 1 s (`STAGE_DUR.pullup`); o corpo anda até o banco com `seatBlend`, que ganhou um pulinho de 14 cm ao subir na moto. Moto CAÍDA continua com `bike_pickup` (levantar a moto) e depois o mesmo `bike_mount`. Jogadores remotos reconhecem `bike_mount_l/r` em `stageOfClip`. Testado em `?dev=1&admin=1` (nove quadros: anda até o lado, fica de pé, senta).
+
+## Rodada: lojas das casas sem base cinza e sem letreiro
+- Nas casas de 2 andares (`kind: 'house'`, `top` 4,5 → `house` em `addShops`) a loja não tem mais a base cinza de pedra (`plinth`) nem o letreiro branco com o nome (livraria, farmácia...); o vidro desce até 0,1 m do chão e as pilastras vão só até 3,6 m (a travessa e o toldo fino ficam). Os outros prédios não mudaram.
