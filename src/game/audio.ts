@@ -143,6 +143,7 @@ export class EngineSound {
   private failed = false;
   private samp: SampleVoice | null = null;
   private wasOn = false;
+  private wasOnSynth = false;
   private gateAt = 0;
 
   private start(): boolean {
@@ -212,6 +213,39 @@ export class EngineSound {
     this.samp = null;
     this.gain = this.filter = this.pan = this.skidGain = this.skidFilter = this.skidPan = this.lopeGain = null;
     this.failed = true; // não recomeça depois de solto
+  }
+
+  /** Partida sintetizada (motor de arranque girando e pegando): ruído filtrado pulsando ~0,8 s, mais agudo e curto na moto. */
+  private crank(c: AudioContext, t: number, prox: { gain: number; pan: number }, bike: boolean): void {
+    const out = audioOut();
+    if (!out) return;
+    const dur = bike ? 0.7 : 0.9;
+    const src = c.createBufferSource();
+    src.buffer = noise(c);
+    const bp = c.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.frequency.setValueAtTime(bike ? 700 : 420, t);
+    bp.frequency.linearRampToValueAtTime(bike ? 1100 : 700, t + dur);
+    bp.Q.value = 1.4;
+    const pulse = c.createGain();
+    pulse.gain.value = 0.5;
+    const lfo = c.createOscillator();
+    lfo.frequency.value = bike ? 16 : 11; // a batida dos cilindros no arranque
+    const depth = c.createGain();
+    depth.gain.value = 0.5;
+    lfo.connect(depth).connect(pulse.gain);
+    const g = c.createGain();
+    g.gain.setValueAtTime(0, t);
+    g.gain.linearRampToValueAtTime(0.28 * prox.gain, t + 0.08);
+    g.gain.setValueAtTime(0.28 * prox.gain, t + dur - 0.15);
+    g.gain.linearRampToValueAtTime(0, t + dur);
+    const pan = c.createStereoPanner();
+    pan.pan.value = prox.pan;
+    src.connect(bp).connect(pulse).connect(g).connect(pan).connect(out);
+    src.start(t);
+    lfo.start(t);
+    src.stop(t + dur + 0.05);
+    lfo.stop(t + dur + 0.05);
   }
 
   /** Moto esportiva com som gravado: toca a partida ao subir, depois mistura marcha lenta e aceleração pelo acelerador; o tom sobe com a velocidade. */
@@ -341,6 +375,8 @@ export class EngineSound {
     const t = c.currentTime;
     const prox = proximity(x, z, ENGINE_RANGE);
     const set = p.sample ? sampleBufs.get(p.sample) : undefined;
+    if (on && !this.wasOnSynth && !set) this.crank(c, t, prox, bike); // sem som gravado: toca uma partida sintetizada (motor de arranque) ao ligar
+    this.wasOnSynth = on;
     if (p.sample && !set) loadSamples(p.sample);
     if (p.sample && set) {
       this.sampleEngine(c, t, set, SAMPLE_SETS[p.sample], on, rpm, throttle, prox);

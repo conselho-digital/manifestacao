@@ -529,6 +529,7 @@ export class Car {
   private seenSpeed = 0;
   /** o motorista já sentou (acabou a animação de subir): só então o motor liga e toca a partida */
   seated = false;
+  private seatedAt = 0;
 
   /** dono (id do jogador) e equipe do dono, se for um veículo pessoal: só o dono e a equipe dele entram */
   ownerId: string | null = null;
@@ -893,8 +894,12 @@ export class Car {
     this.scrapeSnd.update(this.scrapeK, this.x, this.z);
     this.scrapeK *= 0.7;
     this.crashCool = Math.max(0, this.crashCool - dt);
+    if (this.driver === null || !this.seated) this.seatedAt = 0;
     if (this.driver === null) this.seated = false;
-    this.engine.update(this.driver !== null && this.seated, this.seenSpeed, this.x, this.z, this.driver === null ? 0 : this.throttle, this.skidSmooth);
+    else if (this.seated && this.seatedAt === 0) this.seatedAt = performance.now();
+    // carro: o motor (e a partida) só liga 0,2 s depois de fechar a porta; moto: assim que acaba a subida
+    const engineOn = this.driver !== null && this.seated && (this.bike || performance.now() - this.seatedAt >= 200);
+    this.engine.update(engineOn, this.seenSpeed, this.x, this.z, this.driver === null ? 0 : this.throttle, this.skidSmooth);
   }
 
   setPose(x: number, z: number, heading: number): void {
