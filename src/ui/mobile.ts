@@ -1,3 +1,4 @@
+import { settings } from '../game/settings';
 import { ICON } from './icons';
 import { CARS } from '../game/vehicle';
 import { COLLIDERS, MAP, MAP_BASE, PARKS, placeName, ROADS } from '../game/map';
@@ -615,15 +616,19 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
     addChat,
     setVoice,
     update(s, dt): void {
-      // contador de quadros por segundo (conta no relógio real, não no dt do jogo, que é limitado a 50 ms)
+      // contador de quadros por segundo (conta no relógio real, não no dt do jogo, que é limitado a 50 ms), numa janela de 1 s
       fpsFrames++;
       const nowMs = performance.now();
-      if (nowMs - fpsT >= 500) {
-        const fps = Math.round((fpsFrames * 1000) / (nowMs - fpsT));
+      if (nowMs - fpsT >= 1000) {
+        let fps = Math.round((fpsFrames * 1000) / (nowMs - fpsT));
         fpsFrames = 0;
         fpsT = nowMs;
+        // com o limite ligado, 1 quadro a mais ou a menos na janela é só arredondamento da medida: mostra o próprio limite
+        if (settings.fpsCapOn && Math.abs(fps - settings.fpsCap) <= 1) fps = settings.fpsCap;
         fpsEl.textContent = `${fps} FPS`;
-        fpsEl.style.color = fps >= 50 ? '#7CFC7C' : fps >= 30 ? '#ffd84d' : '#ff6b5e';
+        // cores relativas ao limite (ou a 60, sem limite): verde a partir de 80% dele, amarelo de 40% a 80%, vermelho abaixo (limite 30: ≤ 11 vermelho, 12 a 23 amarelo, 24 a 30 verde)
+        const ref = settings.fpsCapOn ? settings.fpsCap : 60;
+        fpsEl.style.color = fps >= ref * 0.8 ? '#7CFC7C' : fps >= ref * 0.4 ? '#ffd84d' : '#ff6b5e';
       }
       hud.classList.toggle('driving', s.driving);
       hud.classList.toggle('bike', s.driving && s.bike);

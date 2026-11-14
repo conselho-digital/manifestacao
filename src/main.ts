@@ -418,11 +418,22 @@ function flyIntro(dt: number): void {
 }
 
 let lastFrameMs = 0;
+let lastCallMs = 0;
+let refreshMs = 16.7; // intervalo médio entre quadros da tela (estimado)
 function loop(): void {
-  // limite de FPS (opção nas configurações, ligada por padrão em 30): pula os quadros que chegam cedo demais
+  // limite de FPS (opção nas configurações, ligada por padrão em 30): pula os quadros que chegam cedo demais.
+  // Os quadros seguem uma grade fixa (múltiplos do intervalo): medir só "tempo desde o último" fazia um quadro que chegava 1-2 ms cedo ser pulado e o FPS caía para 28-29 numa tela de 60 Hz.
   const nowMs = performance.now();
-  if (settings.fpsCapOn && nowMs - lastFrameMs < 1000 / settings.fpsCap - 2) { requestAnimationFrame(loop); return; }
-  lastFrameMs = nowMs;
+  const callGap = nowMs - lastCallMs;
+  lastCallMs = nowMs;
+  if (callGap > 2 && callGap < 60) refreshMs += (Math.min(callGap, 34) - refreshMs) * 0.05;
+  if (settings.fpsCapOn) {
+    const gap = 1000 / settings.fpsCap;
+    const since = nowMs - lastFrameMs;
+    const tol = Math.min(10, Math.max(2, refreshMs * 0.45)); // quadros que chegam até meio intervalo da tela mais cedo contam (o relógio dos quadros tem tremor)
+    if (since < gap - tol) { requestAnimationFrame(loop); return; }
+    lastFrameMs = since > gap * 2.5 ? nowMs : lastFrameMs + gap * Math.max(1, Math.round(since / gap)); // atrasou muito (aba parada, carregamento): recomeça a grade
+  } else lastFrameMs = nowMs;
   const dt = Math.min(clock.getDelta(), 0.05);
   if (inMenu) { requestAnimationFrame(loop); return; } // menu: nada é desenhado (fundo liso)
   if (intro && !intro.started) menuCamera(dt); // o voo de entrada começa da vista aérea do menu
