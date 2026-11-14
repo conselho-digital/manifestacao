@@ -46,6 +46,8 @@ let touchX = 0;
 let touchY = 0;
 let touchActive = false;
 let sprintHeld = false;
+let sprintUntil = 0; // corre por mais 500 ms depois de soltar o botão
+const SPRINT_LINGER = 500;
 let jumpQ = false;
 let climbQ = false;
 let crouchQ = false;
@@ -74,7 +76,7 @@ window.addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLInputElement) return;
   keys.add(e.code);
   if (e.code === 'Space') { jumpQ = true; e.preventDefault(); }
-  if (e.code === 'KeyE' || e.code === 'KeyC') climbQ = true;
+  if (e.code === 'KeyE') climbQ = true;
   if (e.code === 'KeyF') interactQ = true;
   if (e.code === 'KeyL' && !e.repeat) lightsQ = true;
   if (e.code === 'KeyZ' || e.code === 'ControlLeft') { crouchQ = true; if (e.code === 'ControlLeft') e.preventDefault(); }
@@ -133,6 +135,11 @@ export function initMouse(canvas: HTMLElement): void {
     if (e.button === 2) mouseAim = false;
   });
   window.addEventListener('contextmenu', (e) => e.preventDefault());
+  // roda do mouse troca de arma (só com o mouse preso ao jogo)
+  window.addEventListener('wheel', (e) => {
+    if (!locked() || e.deltaY === 0) return;
+    stepQ = e.deltaY > 0 ? 1 : -1;
+  }, { passive: true });
 }
 
 export function readInput(): InputState {
@@ -149,9 +156,12 @@ export function readInput(): InputState {
   if (touchActive && Math.hypot(touchX, touchY) > 0.02) {
     x = touchX; y = touchY; len = Math.min(1, Math.hypot(x, y));
   }
+  const sprintDown = keys.has('KeyQ') || keys.has('ShiftLeft') || keys.has('ShiftRight') || sprintHeld;
+  const now = performance.now();
+  if (sprintDown) sprintUntil = now + SPRINT_LINGER;
   const state: InputState = {
     x, y, mag: len, walk,
-    sprint: keys.has('KeyQ') || keys.has('ShiftLeft') || keys.has('ShiftRight') || sprintHeld,
+    sprint: sprintDown || (now < sprintUntil && len > 0.02),
     jump: jumpQ, climb: climbQ, crouch: crouchQ, crouchHeld: keys.has('KeyZ') || keys.has('ControlLeft') || crouchTouch, interact: interactQ, emote: emoteQ, walkClip,
     fire: fireHeld || mouseFire,
     aim: aimOn || mouseAim,

@@ -139,6 +139,8 @@ export class Player {
   private stage: SeqStage = 'open';
   private side = 1; // lado de onde entra/sai (1 esquerda; -1 direita, só motos)
   private approachT = 0; // caminhando até a porta
+  private route: THREE.Vector2[] = []; // pontos pelos quais contorna o veículo até a porta
+  private approachMax = 1.6;
   private koVel = new THREE.Vector2();
   private koT = 0;
   private koCool = 0;
@@ -560,7 +562,55 @@ export class Player {
     // caminha até a porta do motorista (ou o lado da moto); chegando lá, abre e entra
     this.mode = 'approach';
     this.approachT = 0;
+    this.planRoute(best);
     return true;
+  }
+
+  /**
+   * Caminho até a porta sem atravessar o veículo: se a reta passa por dentro da caixa do carro, contorna pela frente ou por trás
+   * (escolhe o contorno mais curto). Espaço local: lx para a esquerda do veículo, lz para a frente.
+   */
+  private planRoute(car: Car): void {
+    this.route = [];
+    const hw = car.bike ? 0.5 : 1.1;
+    const hl = car.bike ? 1.2 : 2.45;
+    const c = hw + 0.45;
+    const d = hl + 0.45;
+    const cos = Math.cos(car.heading);
+    const sin = Math.sin(car.heading);
+    const toLocal = (x: number, z: number): THREE.Vector2 => new THREE.Vector2((x - car.x) * cos - (z - car.z) * sin, (x - car.x) * sin + (z - car.z) * cos);
+    const toWorld = (v: THREE.Vector2): THREE.Vector2 => new THREE.Vector2(car.x + v.x * cos + v.y * sin, car.z - v.x * sin + v.y * cos);
+    const hitsBox = (a: THREE.Vector2, b: THREE.Vector2): boolean => {
+      // segmento a-b contra a caixa (|lx| < hw, |lz| < hl), por amostragem curta
+      const n = Math.max(2, Math.ceil(a.distanceTo(b) / 0.2));
+      for (let i = 0; i <= n; i++) {
+        const t = i / n;
+        if (Math.abs(a.x + (b.x - a.x) * t) < hw && Math.abs(a.y + (b.y - a.y) * t) < hl) return true;
+      }
+      return false;
+    };
+    const start = toLocal(this.object.position.x, this.object.position.z);
+    const door = toLocal(this.doorPoint(car).x, this.doorPoint(car).y);
+    const paths: THREE.Vector2[][] = [
+      [door],
+      [new THREE.Vector2(c, d), door], [new THREE.Vector2(c, -d), door],
+      [new THREE.Vector2(-c, d), new THREE.Vector2(c, d), door], [new THREE.Vector2(-c, -d), new THREE.Vector2(c, -d), door],
+    ];
+    let best: THREE.Vector2[] | null = null;
+    let bestLen = Infinity;
+    for (const path of paths) {
+      let len = 0;
+      let prev = start;
+      let ok = true;
+      for (const pt of path) {
+        if (hitsBox(prev, pt)) { ok = false; break; }
+        len += prev.distanceTo(pt);
+        prev = pt;
+      }
+      if (ok && len < bestLen) { best = path; bestLen = len; }
+    }
+    if (best) this.route = best.slice(0, -1).map(toWorld); // o último ponto (a porta) é tratado em updateApproach
+    this.approachMax = Math.max(1.6, (Number.isFinite(bestLen) ? bestLen : 0) / (WALK_SPEED * 0.8));
   }
 
   /** Ponto ao lado do motorista (lado esquerdo do veículo), no chão. */
@@ -579,18 +629,23 @@ export class Player {
   private updateApproach(dt: number): void {
     const car = this.car!;
     const pos = this.object.position;
-    const target = this.doorPoint(car);
+    const way = this.route[0];
+    const target = way ?? this.doorPoint(car);
     const dx = target.x - pos.x;
     const dz = target.y - pos.z;
     const dist = Math.hypot(dx, dz);
     this.approachT += dt;
-    if (dist < 0.12 || this.approachT > 1.6) {
+    if (way && this.approachT > this.approachMax + 1.5) this.route = []; // preso em algum obstáculo: vai direto
+    if (way) {
+      // ponto do contorno: ao chegar perto passa para o próximo
+      if (dist < 0.3) this.route.shift();
+    } else if (dist < 0.12 || this.approachT > this.approachMax) {
       this.mode = 'enter';
       this.setStage(car.bike ? (car.fallen ? 'pickup' : 'pullup') : 'open');
       return;
     }
     const step = Math.min(dist, WALK_SPEED * dt);
-    this.moveHoriz((dx / dist) * step, (dz / dist) * step);
+    this.moveHoriz((dx / Math.max(dist, 1e-6)) * step, (dz / Math.max(dist, 1e-6)) * step);
     this.heading = Math.atan2(dx, dz);
     this.animator?.play('walk');
     this.finish(dt);

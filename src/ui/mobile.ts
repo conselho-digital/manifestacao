@@ -70,7 +70,15 @@ const CSS = `
   user-select:none;-webkit-user-select:none;touch-action:none;text-transform:uppercase}
 .m-hud *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 .m-look{position:fixed;inset:0;pointer-events:auto;touch-action:none}
-.m-hud.desktop .m-look,.m-hud.desktop .m-stick{display:none}
+.m-hud.desktop .m-look,.m-hud.desktop .m-stick,.m-hud.desktop .m-btn,.m-hud.desktop .m-wmenu,.m-hud.desktop .m-wback{display:none!important}
+.m-keys{position:fixed;left:calc(var(--u)*1.6);bottom:calc(var(--u)*2);display:grid;grid-template-columns:auto auto auto auto;gap:calc(var(--u)*.4) calc(var(--u)*.9);align-items:center;
+  padding:calc(var(--u)*1.2) calc(var(--u)*1.6);background:rgba(0,0,0,.5);border-radius:calc(var(--u)*1);font-size:calc(var(--u)*1.75);line-height:1.1;text-transform:none;font-weight:700;pointer-events:none;opacity:.92}
+.m-keys kbd{font:800 calc(var(--u)*1.6)/1 system-ui,sans-serif;background:#e9ecef;color:#111;border-radius:calc(var(--u)*.5);padding:calc(var(--u)*.4) calc(var(--u)*.8);text-align:center;white-space:nowrap;box-shadow:0 calc(var(--u)*.25) 0 #6c757d}
+.m-keys span{color:#f1f1f1;white-space:nowrap;margin-right:calc(var(--u)*1.2)}
+.m-keys .free{grid-column:1/-1;color:#ffd84d;text-align:center;display:none}
+.m-keys.unlocked .free{display:block}
+.m-hud.driving .m-keys .foot-k,.m-hud:not(.driving) .m-keys .car-k{display:none}
+.m-hud:not(.desktop) .m-keys{display:none}
 .m-hud.driving .foot,.m-hud.driving .m-stick{display:none!important}
 .m-steerL,.m-steerR{bottom:calc(var(--u)*10);width:calc(var(--u)*23.8);height:calc(var(--u)*23.8);}
 .m-wheelie{left:calc(var(--u)*58);bottom:calc(var(--u)*10);width:calc(var(--u)*17);height:calc(var(--u)*17)}
@@ -401,6 +409,32 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   const fpsEl = make('m-fps', hud);
   let fpsFrames = 0;
   let fpsT = performance.now();
+
+  // PC: legenda das teclas (a pé e dirigindo) no lugar dos botões de toque
+  const keys = make('m-keys', hud);
+  const KEYS_FOOT: [string, string][] = [
+    ['W A S D', 'Mover'], ['Shift / Q', 'Correr'], ['Espaço', 'Pular'], ['E', 'Escalar'], ['Z / Ctrl', 'Agachar'], ['F', 'Entrar no carro'],
+    ['Clique', 'Atirar / bater'], ['Botão direito', 'Mirar'], ['R', 'Recarregar'], ['Scroll', 'Trocar de arma'], ['B', 'Loja'], ['C', 'Veículos'],
+    ['T', 'Falar (segure)'], ['G', 'Animações'], ['M', 'Mapa'], ['P', 'Menu'],
+  ];
+  const KEYS_CAR: [string, string][] = [
+    ['W / S', 'Acelerar / freio'], ['A / D', 'Virar'], ['Espaço', 'Freio de mão'], ['H', 'Buzina'], ['V', 'Empinar (moto)'], ['L', 'Luzes da viatura'],
+    ['F', 'Sair do veículo'], ['C', 'Veículos'], ['B', 'Loja'], ['M', 'Mapa'], ['P', 'Menu'],
+  ];
+  for (const [list, cls] of [[KEYS_FOOT, 'foot-k'], [KEYS_CAR, 'car-k']] as const) {
+    for (const [k, t] of list) {
+      const key = make(cls, keys, 'kbd');
+      key.textContent = k;
+      make(cls, keys, 'span').textContent = t;
+    }
+  }
+  const esc = make('', keys, 'kbd');
+  esc.textContent = 'Esc';
+  make('', keys, 'span').textContent = 'Mostrar o mouse';
+  make('free', keys).textContent = 'Mouse livre: clique no jogo para voltar';
+  const syncLock = (): void => { keys.classList.toggle('unlocked', !document.pointerLockElement); };
+  document.addEventListener('pointerlockchange', syncLock);
+  syncLock();
 
   // Dinheiro, velocidade, arma e munição (a pé) / velocímetro (no carro)
   const money = make('m-money m-out foot', hud);

@@ -19,7 +19,7 @@ const BARS: Record<string, [number, number, number]> = { harley: [0.37, 0.15, 0.
 /** quanto o piloto deita o tronco (0 ereto … 1,5 peito no tanque): custom/clássica quase ereto, esportiva deitado */
 const RIDER_LEAN: Record<string, number> = { harley: 0.35, triumph: 0.55, bmw: 1.4, suzuki: 1.5 };
 /** Banco do motorista dos carros (x para a esquerda, z para a frente, y para cima) e volante. */
-const CAR_SEATS: Record<string, [number, number, number]> = { blistac: [0.48, -0.25, -0.12], buffalo: [0.54, -0.35, -0.16], clover: [0.51, -0.15, -0.12] };
+const CAR_SEATS: Record<string, [number, number, number]> = { blistac: [0.48, -0.25, -0.12], buffalo: [0.54, -0.35, -0.16], clover: [0.51, -0.15, -0.12], duster: [0.5, 0.15, -0.16] };
 const isBikeModel = (m?: string): boolean => (BIKE_MODELS as readonly string[]).includes(m ?? '');
 const loader = new GLTFLoader();
 const modelCache = new Map<string, Promise<THREE.Object3D>>();

@@ -528,8 +528,13 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
   root.addEventListener('pointerdown', (e) => { if (e.target === root) api.close(); });
   window.addEventListener('keydown', (e) => {
     if (e.target instanceof HTMLInputElement) return;
+    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.code === 'KeyP') { if (opened) api.close(); else api.open(); }
-    else if (e.code === 'Escape' && opened) api.close();
+    else if (e.code === 'KeyB' || e.code === 'KeyC') {
+      // B abre a loja, C a garagem (chamar o veículo); de novo na mesma aba fecha
+      const t: PauseTab = e.code === 'KeyB' ? 'shop' : 'garage';
+      if (opened && tab === t) api.close(); else api.open(t);
+    } else if (e.code === 'Escape' && opened) api.close();
   });
   return api;
 }

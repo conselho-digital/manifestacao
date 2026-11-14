@@ -218,6 +218,7 @@ export class Animator {
   /** orientação do taco no espaço da mão direita, calibrada no bat_idle (mãos afastadas) */
   private batLocal: THREE.Quaternion | null = null;
   private legK = 0; // andando agachado: dobra mais os joelhos
+  private leanK = 0; // sprint e agachado parado: endireita o tronco, que o clipe deixa caído para a esquerda
   private footRest = 0; // altura do pé mais baixo em repouso (espaço do modelo)
   private groundDrop = 0; // quanto o corpo desce para o pé tocar o chão
   private crouchK = 0; // 0 em pé, 1 agachado (tronco desce)
@@ -622,6 +623,8 @@ export class Animator {
     this.crouchK += (crouchT - this.crouchK) * Math.min(1, dt * 8);
     this.crouchW += ((this.clipName.startsWith('crouch_') ? 1 : 0) - this.crouchW) * Math.min(1, dt * 8);
     this.legK += ((this.clipName === 'crouch_fwd' || this.clipName === 'crouch_bwd' ? 1 : 0) - this.legK) * Math.min(1, dt * 8);
+    const leanT = this.clipName === 'sprint' || this.clipName === 'run' || this.clipName.startsWith('crouch_') ? 1 : 0;
+    this.leanK += (leanT - this.leanK) * Math.min(1, dt * 8);
     let jabW = 0;
     let jabE = 0;
     if (this.jabT >= 0) {
@@ -663,7 +666,7 @@ export class Animator {
     this.carryW = carry ? this.carryW + (1 - this.carryW) * Math.min(1, dt * 10) : 0;
     const flail = this.flailW;
     if (flail > 0) this.flailT += dt;
-    if ((!armed && !holding && !fist && kickW === 0 && flail === 0 && this.crouchK < 0.01 && this.legK < 0.01 && jabW === 0 && this.climbRel === null) || !this.spine) {
+    if ((!armed && !holding && !fist && kickW === 0 && flail === 0 && this.crouchK < 0.01 && this.legK < 0.01 && this.leanK < 0.01 && jabW === 0 && this.climbRel === null) || !this.spine) {
       this.groundFeet(dt);
       for (const b of this.touched) this.clean.set(b, b.quaternion.clone()); // tudo vem do clipe
       return;
@@ -672,7 +675,8 @@ export class Animator {
     this.dirty = true;
     this.updateRoot();
     this.bendTorso();
-    if (this.legK >= 0.01) { this.flexLegs(); this.uprightTorso(); }
+    if (this.legK >= 0.01) this.flexLegs();
+    if (this.legK >= 0.01 || this.leanK >= 0.01) this.uprightTorso(Math.max(this.legK, this.leanK), this.clipName !== 'crouch_idle', this.clipName === 'crouch_idle' ? 1.5 : 1);
     if (kickW > 0) this.applyKick(kickW);
     if (flail > 0) this.applyFlail(flail);
     if (fist) { this.curlHand(1, 1.4); this.curlHand(-1, 1.4); }
@@ -724,22 +728,28 @@ export class Animator {
   }
 
   /** Andando agachado o clipe inclina o tronco para o lado esquerdo: desfaz essa inclinação (roll) para ele andar reto. */
-  private uprightTorso(): void {
+  private uprightTorso(k: number, level = true, gain = 1): void {
     const sp = this.spine!;
     this.updateRoot();
     const head = this.posIn(sp.head, new THREE.Vector3());
     const lean = Math.atan2(head.x, Math.max(0.2, head.y - 0.63)); // + = cabeça para a esquerda do corpo
-    const fix = THREE.MathUtils.clamp(lean, -0.4, 0.4) * this.legK;
+    const fix = THREE.MathUtils.clamp(lean, -0.4, 0.4) * k * gain;
     // roll em torno do eixo de frente (Z): positivo leva a parte de cima para a direita
+    if (!level) {
+      // agachado parado: a coluna faz um S (cintura volta para a direita, peito para a esquerda): a cabeça volta ao centro sem inclinar a linha dos ombros
+      this.rotateBone(sp.mid, new THREE.Quaternion().setFromAxisAngle(Z, fix));
+      this.rotateBone(sp.chest, new THREE.Quaternion().setFromAxisAngle(Z, -fix * 0.9));
+      return;
+    }
     this.rotateBone(sp.mid, new THREE.Quaternion().setFromAxisAngle(Z, fix * 0.5));
     this.rotateBone(sp.chest, new THREE.Quaternion().setFromAxisAngle(Z, fix * 0.5));
     // linha dos ombros: nivela mais um pouco
     const l = this.arms.find((a) => a.side > 0);
     const r = this.arms.find((a) => a.side < 0);
-    if (l && r) {
+    if (l && r && level) {
       this.updateRoot();
       const dy = this.posIn(l.u, new THREE.Vector3()).y - this.posIn(r.u, new THREE.Vector3()).y;
-      this.rotateBone(sp.chest, new THREE.Quaternion().setFromAxisAngle(Z, THREE.MathUtils.clamp(-dy * 2.2, -0.25, 0.25) * this.legK));
+      this.rotateBone(sp.chest, new THREE.Quaternion().setFromAxisAngle(Z, THREE.MathUtils.clamp(-dy * 2.2, -0.25, 0.25) * k));
     }
   }
 
@@ -822,8 +832,6 @@ export class Animator {
       return hand.addScaledVector(hand.clone().sub(elbow).normalize(), PALM);
     };
     const hr = palm(right);
-    const hl = palm(left);
-    const axis = hl.clone().sub(hr);
     const handQ = this.quatIn(right.h, new THREE.Quaternion());
     this.bat.position.copy(hr);
     const knife = isKnifeLike(this.armed);
@@ -841,30 +849,23 @@ export class Animator {
       else this.bat.quaternion.copy(handQ.clone().multiply(right.q0[2].clone().invert()).multiply(new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), want)));
       return;
     }
-    // o mastro fica preso à mão direita (como no GTA): a orientação no espaço da mão é calibrada uma vez
-    // no bat_idle, quando as duas mãos estão afastadas e a reta entre elas dá a direção do mastro
-    // (recalibra sempre que o bat_idle está completo e com as mãos afastadas: uma calibração feita no meio da transição de outro clipe deixava a arma para baixo)
+    // o mastro fica preso à mão direita (como no GTA): a orientação no espaço da mão é calibrada no bat_idle (arma para cima e um pouco para a frente).
+    // Antes ela vinha da reta entre as duas mãos, mas no bat_idle as mãos ficam coladas (~14 cm) e a reta virava de cima para baixo a cada poucos quadros (a arma "pulava")
     const settled = this.clipName === 'bat_idle' && (this.current?.getEffectiveWeight() ?? 0) > 0.98;
-    if (this.batLocal && !(settled && hl.distanceTo(hr) > 0.22)) {
-      this.bat.quaternion.copy(handQ).multiply(this.batLocal);
-      // parado em guarda a arma tem que apontar para cima: se não aponta, a calibração está errada (descarta e usa o eixo das mãos até recalibrar)
-      if (this.clipName === 'bat_idle' && new THREE.Vector3(0, 0, 1).applyQuaternion(this.bat.quaternion).y < 0.1) this.batLocal = null;
-      else return;
+    const want = new THREE.Vector3(0, 0.88, 0.47).normalize();
+    if (settled) {
+      const xA = new THREE.Vector3().crossVectors(Y, want).normalize();
+      const yA = new THREE.Vector3().crossVectors(want, xA);
+      this.batLocal = handQ.clone().invert().multiply(new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(xA, yA, want)));
     }
-    if (axis.length() < 0.08) {
-      // mãos coladas: só a mão direita segura; taco para a frente e para cima
-      const delta = handQ.clone().multiply(right.q0[2].clone().invert());
-      const rest = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), new THREE.Vector3(0, 0.55, 0.83).normalize());
-      this.bat.quaternion.copy(delta.multiply(rest));
+    if (this.batLocal) {
+      this.bat.quaternion.copy(handQ).multiply(this.batLocal);
       return;
     }
-    axis.normalize();
-    const up = Math.abs(axis.y) > 0.95 ? new THREE.Vector3(0, 0, 1) : Y;
-    const xAxis = new THREE.Vector3().crossVectors(up, axis).normalize();
-    const yAxis = new THREE.Vector3().crossVectors(axis, xAxis);
-    const q = new THREE.Quaternion().setFromRotationMatrix(new THREE.Matrix4().makeBasis(xAxis, yAxis, axis));
-    this.bat.quaternion.copy(q);
-    if (settled && hl.distanceTo(hr) > 0.22) this.batLocal = handQ.clone().invert().multiply(q);
+    // ainda sem calibração (primeiros quadros): só a mão direita segura; taco para a frente e para cima
+    const delta = handQ.clone().multiply(right.q0[2].clone().invert());
+    const rest = new THREE.Quaternion().setFromUnitVectors(new THREE.Vector3(0, 0, 1), want);
+    this.bat.quaternion.copy(delta.multiply(rest));
   }
 
   /** Arma branca carregada para cima: mão direita na frente do peito, esquerda mais acima no cabo, arma inclinada para a frente. */
