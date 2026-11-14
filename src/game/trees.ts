@@ -139,8 +139,8 @@ function buildBush(): Template {
   const parts: THREE.BufferGeometry[] = [];
   const blobs: Blob[] = [];
   const V = (x: number, y: number, z: number): THREE.Vector3 => new THREE.Vector3(x, y, z);
-  for (let i = 0; i < 9; i++) {
-    const a = (i / 9) * Math.PI * 2 + rr(-0.3, 0.3);
+  for (let i = 0; i < 7; i++) {
+    const a = (i / 7) * Math.PI * 2 + rr(-0.3, 0.3);
     const reach = rr(0.18, 0.42);
     const top = rr(0.35, 0.75);
     const mid = V(Math.cos(a) * reach * 0.5, top * 0.5, Math.sin(a) * reach * 0.5);
@@ -153,7 +153,7 @@ function buildBush(): Template {
     }
   }
   // tufos: casca externa em volta + alguns mais baixos no meio, deixando frestas
-  for (let i = 0; i < 16; i++) {
+  for (let i = 0; i < 12; i++) {
     const a = rng() * Math.PI * 2;
     const u = 0.45 + rng() * 0.55;
     const e = rng() * Math.PI * 0.45;
@@ -194,7 +194,7 @@ function buildTemplate(sp: Exclude<Species, 'bush'>): Template {
     }
     parts.push(limb(V(0, 0.34, 0), V(0.02, 0.9, 0.01), 0.016, 0.004, 5));
     // copa: cúpula larga e cheia de tufos pequenos
-    for (let i = 0; i < 34; i++) {
+    for (let i = 0; i < 27; i++) {
       const a = rng() * Math.PI * 2;
       const u = Math.sqrt(rng());
       const e = rng() * Math.PI * 0.5;
@@ -244,7 +244,7 @@ function buildTemplate(sp: Exclude<Species, 'bush'>): Template {
       parts.push(limb(V(0.004, y0, 0), mid, 0.009, 0.006, 5));
       parts.push(limb(mid, V(Math.cos(a) * reach, top, Math.sin(a) * reach), 0.006, 0.0025, 4));
     }
-    for (let i = 0; i < 24; i++) {
+    for (let i = 0; i < 19; i++) {
       const a = rng() * Math.PI * 2;
       const u = Math.sqrt(rng());
       const e = rng() * Math.PI * 0.5;
@@ -268,7 +268,7 @@ function buildTemplate(sp: Exclude<Species, 'bush'>): Template {
     parts.push(limb(V(0.005, y0, 0), mid, 0.006, 0.004, 4));
     parts.push(limb(mid, V(Math.cos(a) * reach, top, Math.sin(a) * reach), 0.004, 0.002, 4));
   }
-  for (let i = 0; i < 26; i++) {
+  for (let i = 0; i < 21; i++) {
     const a = rng() * Math.PI * 2;
     const u = Math.sqrt(rng());
     const e = rng() * Math.PI * 0.5;
@@ -301,6 +301,7 @@ export function makeTrees(list: TreeSpec[]): THREE.Group {
     const all = list.filter((t) => t.species === sp);
     if (!all.length) continue;
     const tpl = sp === 'bush' ? bushTemplate : buildTemplate(sp);
+    const fill = sp === 'pine' ? 1 : 1.12; // menos tufos por árvore (menos triângulos); cada um um pouco maior para a copa não ficar rala
 
     // folhagem
     const ftex = foliageTex(sp);
@@ -330,7 +331,7 @@ export function makeTrees(list: TreeSpec[]): THREE.Group {
         const py = b.p.y * t.h + (t.y ?? 0);
         e.set(rng() * 0.4, rng() * 6.3, rng() * 0.4);
         q.setFromEuler(e);
-        m.compose(new THREE.Vector3(px, py, pz), q, b.r.clone().multiplyScalar(t.h));
+        m.compose(new THREE.Vector3(px, py, pz), q, b.r.clone().multiplyScalar(t.h * fill));
         blobs.setMatrixAt(bi, m);
         col.copy(base).offsetHSL(0, 0, (rng() - 0.5) * 0.14);
         blobs.setColorAt(bi, col);

@@ -432,3 +432,7 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 
 ## Rodada: duas lojas nas casas
 - Nas casas, quando a parede tem número ÍMPAR de baias (`nb`, ex.: 3), a baia que sobra vira uma loja pequena de 1 baia (~3,4 m, porta de ~1 m e cartaz de ~1,3 m) ao lado da de 2 baias (`cells` em `addShops`, só `house`); nos outros prédios a baia que sobra continua vazia. Agora são 217 vagas (os números mudaram de novo; `public/posters/LEIA.md` refeito).
+
+## Rodada: lojas coladas na parede e menos triângulos
+- Lojas (`shops.ts`): tudo que sai da parede (posição w e espessura) é multiplicado por `DEPTH` = 0,5 (pilastras de 0,25 m, vidro a ~0,19 m, toldo 0,38 m, cartaz a 0,2 m; `PW * DEPTH` nas coordenadas da vaga). As pilastras das pontas ficam a 10 cm da quina do prédio (`inL`/`inR` com 0,3 m), então não passam do canto da casa. A parede é sólida, então não dá para afundar a loja DENTRO dela (o interior pintado ficaria escondido): o jeito é diminuir o que sai.
+- Caixas das lojas sem as faces que ninguém vê (a de trás, junto da parede, e a de baixo; o vidro só tem a da frente): lojas ~8% menos triângulos do total. Árvores: menos tufos por árvore (arbusto 17→13, carvalho 34→27, bordo 24→19, bétula 26→21, 7 ramos no arbusto) e tufos 12% maiores (`fill` em `makeTrees`). Medido (soma de todas as malhas da cena / desenhado no quadro): 185 mil → 150 mil / 173 mil → 110 mil triângulos; chamadas 230 → 202. Árvores ainda são o maior gasto (~85 mil instanciados).

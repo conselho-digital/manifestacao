@@ -14,6 +14,7 @@ const POSTER_W = 3.0;
 const POSTER_H = 2.0;
 /** posição do cartaz no módulo da loja: w = para fora, y = centro (o centro ao longo da fachada, `pu`, depende da largura da loja) */
 const PW = 0.4;
+const DEPTH = 0.5; // a loja fica colada na parede: tudo que sai dela (w e espessura) é multiplicado por isto, para não parecer que sobressai do prédio
 /** altura da loja: até embaixo da laje do térreo dos prédios (o térreo `plinth` tem 7 m) */
 const TOP = 7.0;
 const CELL_W = 256;
@@ -490,25 +491,35 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
         const slotIndex = POSTER_SLOTS.length;
         const page = Math.floor(slotIndex / PER_PAGE);
         const cell = slotIndex % PER_PAGE;
-        POSTER_SLOTS.push({ id, building: b.name, face: s.k, n: i + 1, num: slotIndex + 1, x: px, z: pz, nx: s.nx, nz: s.nz, page, cell, cx: px + pu * s.nz + PW * s.nx, cz: pz - pu * s.nx + PW * s.nz, cy: py, pw });
+        POSTER_SLOTS.push({ id, building: b.name, face: s.k, n: i + 1, num: slotIndex + 1, x: px, z: pz, nx: s.nx, nz: s.nz, page, cell, cx: px + pu * s.nz + PW * DEPTH * s.nx, cz: pz - pu * s.nx + PW * DEPTH * s.nz, cy: py, pw });
         // peça no espaço da loja (u ao longo da fachada, y para cima, w para fora) → mundo
         const put = (g: THREE.BufferGeometry, u: number, y: number, w: number): THREE.BufferGeometry => {
-          g.translate(u, y, w);
+          g.translate(u, y, w * DEPTH);
           g.rotateY(theta);
           g.translate(px, 0, pz);
           return g;
         };
-        const box = (k: string, bw2: number, bh: number, bd: number, u: number, y: number, w: number): void => { push(k, put(new THREE.BoxGeometry(bw2, bh, bd), u, y + bh / 2, w)); };
+        // caixa sem as faces que ninguém vê (a de trás, encostada na parede, e a de baixo; o vidro só mantém a da frente): menos triângulos
+        const box = (k: string, bw2: number, bh: number, bd: number, u: number, y: number, w: number): void => {
+          const bg = new THREE.BoxGeometry(bw2, bh, bd * DEPTH);
+          const idx = bg.getIndex()!.array;
+          const keep: number[] = [];
+          const faces = k === 'glass' ? [4] : k.startsWith('awn') ? [0, 1, 2, 3, 4] : [0, 1, 2, 4]; // px nx py ny pz nz
+          for (const f of faces) for (let j = 0; j < 6; j++) keep.push(idx[f * 6 + j]!);
+          bg.setIndex(keep);
+          bg.clearGroups();
+          push(k, put(bg, u, y + bh / 2, w));
+        };
         // base de pedra e pilastras escuras: a da esquerda fica em cima da coluna do prédio; a da direita só na última loja (nas outras é a da vizinha)
         if (!house) box('plinth', W, 0.6, 0.5, 0, 0, 0.27);
-        const inL = Math.max(0, 0.2 - uA);
-        const inR = Math.max(0, 0.2 - (L - uB));
+        const inL = Math.max(0, 0.3 - uA); // a pilastra da ponta fica a 10 cm da quina do prédio, nunca passa dela
+        const inR = Math.max(0, 0.3 - (L - uB));
         box('frame', 0.4, pTop - gy, 0.5, -W / 2 + inL, gy, 0.27);
         if (i === cells.length - 1) box('frame', 0.4, pTop - gy, 0.5, W / 2 - inR, gy, 0.27);
         // interior pintado atrás do vidro
         const ip = new THREE.PlaneGeometry(Wi, gh);
         cellUV(ip, kind % 2, Math.floor(kind / 2), INT_W, INT_H, INT_W * 2, INT_H * 4);
-        interiorGeos.push(put(ip, 0, gy + gh / 2, 0.1));
+        interiorGeos.push(put(ip, 0, gy + gh / 2, 0.14));
         // vidro (janela e porta), travessa do alto, divisória entre janela e porta e porta dupla
         box('glass', Wi, gh, 0.04, 0, gy, 0.38);
         box('frame', Wi, 0.16, 0.12, 0, wTop, 0.4);
@@ -523,7 +534,7 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
           const up = new THREE.PlaneGeometry(Wi, uh);
           const uk = (kind + 3) % KINDS;
           cellUV(up, uk % 2, Math.floor(uk / 2), INT_W, INT_H, INT_W * 2, INT_H * 4, 0.8);
-          interiorGeos.push(put(up, 0, uy + uh / 2, 0.1));
+          interiorGeos.push(put(up, 0, uy + uh / 2, 0.14));
           box('glass', Wi, uh, 0.04, 0, uy, 0.38);
           box('frame', Wi, 0.2, 0.12, 0, uy - 0.2, 0.4);
           box('frame', Wi, 0.12, 0.12, 0, top - 0.12, 0.4);
