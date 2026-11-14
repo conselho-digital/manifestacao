@@ -734,6 +734,7 @@ export class Player {
       default: // close, pullup: sentado, pode dirigir
         car.doorHold = false;
         car.holdFallen = false;
+        car.seated = true;
         this.mode = 'drive';
         this.resetModelRot();
     }

@@ -1,3 +1,4 @@
+const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 
@@ -52,19 +53,21 @@ interface EngineProfile {
   vol: number;
   /** velocidade (m/s) em que chega ao topo de giro */
   topSpeed: number;
+  /** moto (o som cai quando larga o acelerador) */
+  bike?: boolean;
   /** usa o som gravado (partida, marcha lenta e aceleração) em vez do sintetizado */
   sample?: SampleName;
 }
 
 /** Cada veículo tem seu motor: o Blista (agora Gol no jogo) usa o som gravado do dono, o Buffalo e o Clover V8 graves, etc. */
 const PROFILES: Record<string, EngineProfile> = {
-  blistac: { a: 'sawtooth', b: 'square', idle: 52, top: 130, ratio: 0.5, cutIdle: 330, cutTop: 900, lope: 0, lopeDepth: 0, vol: 1, topSpeed: 28, sample: 'harley' },
-  buffalo: { a: 'sawtooth', b: 'sawtooth', idle: 30, top: 78, ratio: 0.5, cutIdle: 220, cutTop: 520, lope: 13, lopeDepth: 0.35, vol: 1.15, topSpeed: 28 },
-  clover: { a: 'square', b: 'triangle', idle: 36, top: 96, ratio: 0.5, cutIdle: 260, cutTop: 620, lope: 9, lopeDepth: 0.25, vol: 1.05, topSpeed: 28 },
-  harley: { a: 'sawtooth', b: 'square', idle: 26, top: 90, ratio: 0.5, cutIdle: 260, cutTop: 700, lope: 7, lopeDepth: 0.55, vol: 1.2, topSpeed: 20, sample: 'harley' },
-  triumph: { a: 'sawtooth', b: 'square', idle: 58, top: 210, ratio: 0.5, cutIdle: 520, cutTop: 1500, lope: 0, lopeDepth: 0, vol: 1, topSpeed: 20 },
-  bmw: { a: 'sawtooth', b: 'sawtooth', idle: 84, top: 330, ratio: 1.005, cutIdle: 800, cutTop: 2400, lope: 0, lopeDepth: 0, vol: 0.95, topSpeed: 20, sample: 'sport' },
-  suzuki: { a: 'square', b: 'sawtooth', idle: 96, top: 380, ratio: 1.003, cutIdle: 900, cutTop: 2800, lope: 0, lopeDepth: 0, vol: 0.95, topSpeed: 20, sample: 'sport' },
+  blistac: { a: 'sawtooth', b: 'square', idle: 52, top: 130, ratio: 0.5, cutIdle: 330, cutTop: 900, lope: 0, lopeDepth: 0, vol: 1, topSpeed: 33.3, sample: 'harley' },
+  buffalo: { a: 'sawtooth', b: 'sawtooth', idle: 30, top: 78, ratio: 0.5, cutIdle: 220, cutTop: 520, lope: 13, lopeDepth: 0.35, vol: 1.15, topSpeed: 33.3 },
+  clover: { a: 'square', b: 'triangle', idle: 36, top: 96, ratio: 0.5, cutIdle: 260, cutTop: 620, lope: 9, lopeDepth: 0.25, vol: 1.05, topSpeed: 33.3 },
+  harley: { a: 'sawtooth', b: 'square', idle: 26, top: 90, ratio: 0.5, cutIdle: 260, cutTop: 700, lope: 7, lopeDepth: 0.55, vol: 1.2, topSpeed: 41.7, bike: true, sample: 'harley' },
+  triumph: { a: 'sawtooth', b: 'square', idle: 58, top: 210, ratio: 0.5, cutIdle: 520, cutTop: 1500, lope: 0, lopeDepth: 0, vol: 1, topSpeed: 41.7, bike: true },
+  bmw: { a: 'sawtooth', b: 'sawtooth', idle: 84, top: 330, ratio: 1.005, cutIdle: 800, cutTop: 2400, lope: 0, lopeDepth: 0, vol: 0.95, topSpeed: 41.7, bike: true, sample: 'sport' },
+  suzuki: { a: 'square', b: 'sawtooth', idle: 96, top: 380, ratio: 1.003, cutIdle: 900, cutTop: 2800, lope: 0, lopeDepth: 0, vol: 0.95, topSpeed: 41.7, bike: true, sample: 'sport' },
 };
 const FALLBACK: EngineProfile = PROFILES.blistac!;
 const ENGINE_RANGE = 70; // metros até sumir
@@ -102,12 +105,20 @@ function loadSamples(name: SampleName): void {
     .catch(() => { sampleLoading.delete(name); });
 }
 
+/** Uma "puxada" do acelerador na moto esportiva: a subida de giro (`rise`) toca acompanhando a velocidade e, perto do fim, entra o patamar (`hold`). */
+interface RisePress { rise: AudioBufferSourceNode; riseG: GainNode; hold: AudioBufferSourceNode | null; holdG: GainNode | null; pos: number; lastT: number; rate: number; gear: number }
+/** Marchas simuladas pela velocidade (fração da velocidade máxima): em cada uma a subida do som vai do começo (GEAR_START) até perto do fim (RISE_END); na troca o som corta e recomeça. */
+const GEAR_EDGES = [0, 0.38, 0.68, 1] as const;
+const GEAR_START = [0.02, 0.3, 0.34] as const;
+const RISE_END = 0.9;
+const SHIFT_GAP = 0.16; // silêncio da troca de marcha (s)
+
 interface SampleVoice {
   mix: GainNode; pan: StereoPannerNode; idle: AudioBufferSourceNode; idleG: GainNode; revG: GainNode;
   /** conjuntos sem `rise`: loop contínuo da aceleração */
   rev: AudioBufferSourceNode | null;
   /** conjuntos com `rise`: a subida de giro de agora (uma por aperto do acelerador) e o patamar que entra no fim dela */
-  press: { rise: AudioBufferSourceNode; hold: AudioBufferSourceNode } | null;
+  press: RisePress | null;
 }
 
 /** Motor sintético por veículo + chiado de pneu ao derrapar. Um par por carro; o volume e o lado seguem a posição do veículo. */
@@ -194,7 +205,7 @@ export class EngineSound {
   dispose(): void {
     try {
       this.osc?.stop(); this.osc2?.stop(); this.lope?.stop(); this.skidSrc?.stop();
-      this.samp?.idle.stop(); this.samp?.rev?.stop(); this.samp?.press?.rise.stop(); this.samp?.press?.hold.stop(); this.samp?.pan.disconnect();
+      this.samp?.idle.stop(); this.samp?.rev?.stop(); this.samp?.press?.rise.stop(); this.samp?.press?.hold?.stop(); this.samp?.pan.disconnect();
       this.pan?.disconnect(); this.skidPan?.disconnect();
     } catch { /* já parado */ }
     this.osc = this.osc2 = this.lope = this.skidSrc = null;
@@ -256,37 +267,60 @@ export class EngineSound {
     const holdRate = cfg.revRate[0]! + rpm * cfg.revRate[1]!;
     if (sv.rev) sv.rev.playbackRate.setTargetAtTime(holdRate, t, 0.1);
     if (S.rise) {
-      if (a >= 0.5 && !sv.press && live) {
-        // apertou o acelerador: toca a subida de giro (a partir do ponto que combina com a velocidade de agora) e, no fim dela, entra o patamar
-        const off = Math.min(rpm, 1) * 0.85 * S.rise.duration;
-        const left = S.rise.duration - off;
-        const fade = Math.min(0.4, left);
+      const dur = S.rise.duration;
+      const g = rpm < GEAR_EDGES[1] ? 0 : rpm < GEAR_EDGES[2] ? 1 : 2;
+      const f = clamp((rpm - GEAR_EDGES[g]) / (GEAR_EDGES[g + 1] - GEAR_EDGES[g]), 0, 1);
+      const target = (GEAR_START[g] + f * (RISE_END - GEAR_START[g])) * dur; // ponto da subida que combina com a velocidade nesta marcha
+      const stopPress = (pr: RisePress): void => {
+        pr.riseG.gain.setTargetAtTime(0, t, 0.03);
+        pr.holdG?.gain.setTargetAtTime(0, t, 0.03);
+        pr.rise.stop(t + 0.4);
+        pr.hold?.stop(t + 0.4);
+      };
+      const begin = (when: number, off: number, gear: number): RisePress => {
         const rise = c.createBufferSource();
-        rise.buffer = S.rise;
+        rise.buffer = S.rise!;
         const riseG = c.createGain();
         rise.connect(riseG).connect(sv.revG);
-        riseG.gain.setValueAtTime(1, t);
-        riseG.gain.setValueAtTime(1, t + left - fade);
-        riseG.gain.linearRampToValueAtTime(0, t + left);
-        rise.start(t, off);
-        const hold = c.createBufferSource();
-        hold.buffer = S.rev;
-        hold.loop = true;
-        hold.playbackRate.value = 1;
-        const holdG = c.createGain();
-        hold.connect(holdG).connect(sv.revG);
-        holdG.gain.setValueAtTime(0, t);
-        holdG.gain.setValueAtTime(0, t + left - fade);
-        holdG.gain.linearRampToValueAtTime(1, t + left);
-        hold.start(t + left - fade);
-        sv.press = { rise, hold };
-      } else if (a < 0.25 && sv.press) {
-        // soltou: some e para as fontes
-        sv.press.rise.stop(t + 0.6);
-        sv.press.hold.stop(t + 0.6);
+        rise.start(when, Math.min(off, dur - 0.05));
+        return { rise, riseG, hold: null, holdG: null, pos: off, lastT: when, rate: 1, gear };
+      };
+      let pr = sv.press;
+      if (a >= 0.5 && live) {
+        if (!pr) pr = sv.press = begin(t, target, g);
+        else if (pr.gear !== g) {
+          // troca de marcha: corta o som, fica um instante em silêncio e recomeça a aceleração do começo da subida
+          stopPress(pr);
+          pr = sv.press = begin(t + SHIFT_GAP, GEAR_START[g] * dur, g);
+          pr.riseG.gain.setValueAtTime(0, t);
+          pr.riseG.gain.setValueAtTime(0, t + SHIFT_GAP - 0.02);
+          pr.riseG.gain.linearRampToValueAtTime(1, t + SHIFT_GAP + 0.03);
+        }
+        // a velocidade de reprodução puxa a posição do som para o ponto da velocidade atual (o tom sobe e desce junto)
+        const now = Math.max(t, pr.lastT);
+        pr.pos = Math.min(dur, pr.pos + pr.rate * (now - pr.lastT));
+        pr.lastT = now;
+        pr.rate = clamp(1 + (target - pr.pos) * 3, 0.3, 2.2);
+        pr.rise.playbackRate.setTargetAtTime(pr.rate, t, 0.05);
+        if (!pr.hold && pr.pos >= dur * 0.86 && t >= pr.lastT - 0.001) {
+          // chegou perto do fim da subida: entra o patamar em loop (no meio do som) e a subida sai
+          pr.hold = c.createBufferSource();
+          pr.hold.buffer = S.rev;
+          pr.hold.loop = true;
+          pr.hold.playbackRate.value = 1;
+          pr.holdG = c.createGain();
+          pr.hold.connect(pr.holdG).connect(sv.revG);
+          pr.holdG.gain.setValueAtTime(0, t);
+          pr.holdG.gain.linearRampToValueAtTime(1, t + 0.4);
+          pr.riseG.gain.setValueAtTime(1, t);
+          pr.riseG.gain.linearRampToValueAtTime(0, t + 0.4);
+          pr.hold.start(t);
+        }
+        pr.hold?.playbackRate.setTargetAtTime(holdRate, t, 0.3);
+      } else if (a < 0.25 && pr) {
+        stopPress(pr); // soltou o acelerador
         sv.press = null;
       }
-      sv.press?.hold.playbackRate.setTargetAtTime(holdRate, t, 0.3);
     }
     sv.mix.gain.setTargetAtTime(live ? 0.9 * this.p.vol * prox.gain * (0.4 + 0.6 * a) : 0, t, live ? 0.25 : 0.08);
     sv.pan.pan.setTargetAtTime(prox.pan, t, 0.05);
@@ -301,7 +335,7 @@ export class EngineSound {
     const c = audioCtx();
     if (!c || !this.start() || !this.gain || !this.osc || !this.osc2 || !this.filter || !this.pan || !this.skidGain || !this.skidFilter || !this.skidPan) return;
     const p = this.p;
-    const bike = p.topSpeed < 25;
+    const bike = p.bike === true;
     const rpm = Math.min(1, Math.abs(speed) / p.topSpeed);
     const f = p.idle + (p.top - p.idle) * rpm;
     const t = c.currentTime;

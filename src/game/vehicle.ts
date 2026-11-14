@@ -37,7 +37,8 @@ export const loadModel = (name: string): Promise<THREE.Object3D> => {
   return p;
 };
 
-const MAX_SPEED = 28; // 100 km/h (dobro do anterior)
+const MAX_SPEED = 33.3; // 120 km/h
+const BIKE_MAX_SPEED = 41.7; // 150 km/h
 const MAX_REVERSE = 10; // dobro da ré anterior (5)
 const ACCEL = 9; // carros demoram mais para pegar velocidade (era 18)
 const BIKE_ACCEL = 8;
@@ -526,6 +527,8 @@ export class Car {
   private lastZ = 0;
   /** velocidade estimada por quem só vê o carro (motorista remoto) */
   private seenSpeed = 0;
+  /** o motorista já sentou (acabou a animação de subir): só então o motor liga e toca a partida */
+  seated = false;
 
   /** dono (id do jogador) e equipe do dono, se for um veículo pessoal: só o dono e a equipe dele entram */
   ownerId: string | null = null;
@@ -649,13 +652,13 @@ export class Car {
     const bike = this.bike;
     this.throttle = gas ? 1 : 0;
     const accel = bike ? BIKE_ACCEL : ACCEL;
-    const maxSpeed = bike ? 20 : MAX_SPEED;
+    const maxSpeed = bike ? BIKE_MAX_SPEED : MAX_SPEED;
     const turn = bike ? 2.5 : TURN_RATE;
     const radius = bike ? 0.7 : RADIUS;
     // empinar: só com velocidade; a roda da frente sobe até ~40° e volta ao soltar
     const wantTilt = bike && wheelie && this.speed > 3 ? 0.72 : 0; // como antes: basta segurar empinar com a moto andando (sem precisar acelerar)
     this.tilt += (wantTilt - this.tilt) * Math.min(1, dt * (wantTilt > this.tilt ? 3 : (gas ? 7 : 12)));
-    if (gas) this.speed += (f < -0.5 ? BRAKE : accel * (this.tilt > 0.3 ? 1.5 : 1)) * dt; // empinada dá um arranque extra
+    if (gas) this.speed += (f < -0.5 ? BRAKE : accel * (this.tilt > 0.3 ? 1.5 : 1) * (1 - 0.55 * Math.min(1, Math.max(0, f) / maxSpeed) ** 2)) * dt; // empinada dá um arranque extra
     else if (brake) this.speed -= (f > 0.5 ? BRAKE : ACCEL * 0.6) * dt; // freia e depois dá ré
     else this.speed -= Math.sign(f) * Math.min(Math.abs(f), DRAG * dt);
     // freio de mão: em velocidade trava as traseiras e derrapa (perde menos velocidade); parado/devagar segura firme
@@ -890,7 +893,8 @@ export class Car {
     this.scrapeSnd.update(this.scrapeK, this.x, this.z);
     this.scrapeK *= 0.7;
     this.crashCool = Math.max(0, this.crashCool - dt);
-    this.engine.update(this.driver !== null, this.seenSpeed, this.x, this.z, this.driver === null ? 0 : this.throttle, this.skidSmooth);
+    if (this.driver === null) this.seated = false;
+    this.engine.update(this.driver !== null && this.seated, this.seenSpeed, this.x, this.z, this.driver === null ? 0 : this.throttle, this.skidSmooth);
   }
 
   setPose(x: number, z: number, heading: number): void {

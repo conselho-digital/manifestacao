@@ -133,6 +133,7 @@ export class RemotePlayer {
     if (car) {
       // Dirigindo: o boneco aparece sentado e o carro anda
       car.driver = this.info.id;
+      car.seated = true; // o remoto só aparece no veículo depois de sentar
       if (this.lastCar !== car) car.openDoor(1);
       this.lastCar = car;
       if (this.model) this.model.visible = true;
