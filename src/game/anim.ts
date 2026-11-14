@@ -714,8 +714,8 @@ export class Animator {
       // mãos fechadas no cabo: fuzil, taco e pistola (duas mãos, também abaixada)
       this.curlHand(-1, isSpray(this.armed) ? SPRAY_CURL : 1);
       this.curlHand(1, isSpray(this.armed) ? 0 : 1);
-      // faca, garrafa e cutelo (uma mão): o cabo fica no meio dos dedos já fechados, não acima da mão (o osso da mão + PALM deixava a arma flutuando)
-      if (kind === 'bat' && isKnifeLike(this.armed) && this.bat) {
+      // armas brancas (faca, taco, bandeira, placa, foice...): o cabo fica no meio dos dedos já fechados, não acima da mão (o osso da mão + PALM deixava a arma flutuando)
+      if (kind === 'bat' && this.bat) {
         const fingers = this.hands.find((h) => h.side === -1)?.fingers ?? [];
         if (fingers.length) {
           this.updateRoot();
