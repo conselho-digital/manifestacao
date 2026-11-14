@@ -353,11 +353,11 @@ function addCopperTower(b: Batch, x: number, z: number, w: number, d: number, h:
   b.box('metal', 1.4, 0.15, 1.4, x - bw * 0.2, roofY + 7, z + bd * 0.2);
 }
 
-/** Altura da loja numa casa: até a linha marrom (laje) do 1º andar, que é o fundo da 2ª fileira da textura (`wall()`: baias de 3 m, fileiras inteiras) menos a espessura da laje. */
+/** Altura da loja numa casa: até o TOPO da linha marrom (a laje desenhada no pé de cada fileira da textura, 0,2 m; `wall()`: fileiras inteiras de ~3 m). Casa de 3 fileiras: 2ª linha; casa de 2: 1ª linha. */
 function houseShopTop(h: number): number {
   const hw = h - 2.2 > 3 ? h - 2.2 : h;
   const rows = Math.max(1, Math.round(hw / KIND_CFG.house.floor));
-  return Math.min(hw, (hw / rows) * 2) - 0.2;
+  return (hw / rows) * (rows >= 3 ? 2 : 1) + 0.2;
 }
 
 function addBuilding(b: Batch, s: Spec, helipads: THREE.Mesh[], hpTex: THREE.Texture, name: string): void {
