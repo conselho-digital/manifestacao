@@ -4,7 +4,7 @@ import { ARMED_FROM_CODE, Animator } from './anim';
 import { CARS, PERSONAL, type Car } from './vehicle';
 import { WeaponVisual } from './weapons';
 import { seatBlend, stageOfClip } from './player';
-import { makeTeamRing, type TeamLook } from './teams';
+import { makeTeamRing, teamByName, type Team, type TeamLook } from './teams';
 import { rifleFromNetCode } from './rifles';
 import type { MoveMsg, PlayerInfo } from '../net/sync';
 
@@ -88,6 +88,7 @@ export class RemotePlayer {
       this.pivot.add(m);
       this.model = m;
       this.weaponVis = new WeaponVisual(this.root);
+      this.applyFlag();
       void Animator.create(m).then((a) => { this.animator = a; if (a) this.weaponVis?.bind(a); });
       this.ready = true;
       if (this.pending) this.setTarget(this.pending, true);
@@ -221,9 +222,18 @@ export class RemotePlayer {
     this.label.material.needsUpdate = true;
   }
 
+  /** A bandeira dele mostra a pichação da equipe (a equipe é achada pelo nome; sem imagem vale o desenho de reserva com as cores). */
+  private applyFlag(): void {
+    const look = this.info.team;
+    if (!look) { this.weaponVis?.setFlagTeam(null, '', '#ffffff'); return; }
+    const team: Team = teamByName(look.name) ?? { id: '', name: look.name, c1: look.c1, c2: look.c2 };
+    this.weaponVis?.setFlagTeam(team, team.name, look.c1);
+  }
+
   /** Trocou de equipe: refaz o nome e o anel. */
   setTeam(team: TeamLook | null): void {
     this.info.team = team;
+    this.applyFlag();
     this.redrawLabel();
     this.ring.removeFromParent();
     this.ring = makeTeamRing(team);

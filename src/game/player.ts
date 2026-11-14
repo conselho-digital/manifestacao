@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import type { Team } from './teams';
 import { view } from './settings';
 import { COLLIDERS, MAP, rayBox, terrainHeight, TREES, waterDepth, type Box } from './map';
 import type { InputState } from './input';
@@ -174,6 +175,11 @@ export class Player {
   onExitCar: ((c: Car) => void) | null = null;
 
   /** Liga a arma visual: o animador passa a posicioná-la (peito e mãos). */
+  /** A bandeira (arma branca) mostra a pichação da equipe. */
+  setFlagTeam(team: Team | null): void {
+    this.weaponVis?.setFlagTeam(team, team?.name ?? '', team?.c1 ?? '#ffffff');
+  }
+
   attachWeapon(w: WeaponVisual): void {
     this.weaponVis = w;
     if (this.animator) w.bind(this.animator);

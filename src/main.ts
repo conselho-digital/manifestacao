@@ -142,6 +142,7 @@ async function makePlayer(name: CharacterName, from?: Player): Promise<Player> {
   scene.add(obj);
   const p = new Player(obj, await Animator.create(obj));
   p.attachWeapon(new WeaponVisual(obj));
+  p.setFlagTeam(teamById(teamId));
   if (from) p.setHeading(from.object.rotation.y);
   myRing.removeFromParent();
   myRing = makeTeamRing(myLook());
@@ -211,6 +212,7 @@ function setMyTeam(id: string): void {
   myRing.removeFromParent();
   myRing = makeTeamRing(myLook());
   player?.object.add(myRing);
+  player?.setFlagTeam(teamById(id));
   const mine = PERSONAL.get(net.id);
   if (mine) { mine.teamId = id; mine.recolor(myPaint()); }
   announceMe();
@@ -291,6 +293,7 @@ void showLobby().then(async (profile) => {
   scene.add(first);
   player = new Player(first, await Animator.create(first));
   player.attachWeapon(new WeaponVisual(first));
+  player.setFlagTeam(teamById(teamId));
   myRing = makeTeamRing(myLook());
   first.add(myRing);
   loading.set(0.78, 'Carregando sua conta...');

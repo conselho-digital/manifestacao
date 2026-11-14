@@ -77,6 +77,7 @@ const CURL_AXIS = new THREE.Vector3(0, 0, 1);
 const JAB_TIME = 0.42;
 /** Distância do osso do pulso até o meio da palma (m): é a palma, não o pulso, que segura o cabo. */
 const PALM = 0.1;
+const HELD_ROLL = Math.PI; // giro (rad) da foice e do machado em volta do cabo quando estão seguros
 const X = new THREE.Vector3(1, 0, 0);
 const Y = new THREE.Vector3(0, 1, 0);
 const Z = new THREE.Vector3(0, 0, 1);
@@ -194,6 +195,7 @@ export class Animator {
   /** orientação do taco no espaço da mão direita, calibrada no bat_idle (mãos afastadas) */
   private batLocal: THREE.Quaternion | null = null;
   private legK = 0; // andando agachado: dobra mais os joelhos
+  private heldRollK = 0; // foice e machado: giro em volta do cabo quando NÃO estão batendo (0 batendo, 1 seguro)
   private leanK = 0; // sprint e agachado parado: endireita o tronco, que o clipe deixa caído para a esquerda
   private allBones: THREE.Object3D[] | null = null;
   private footRest = 0; // altura do pé mais baixo em repouso (espaço do modelo)
@@ -697,6 +699,10 @@ export class Animator {
     }
     if (!armed && !holding) return;
     if (kind === 'bat' && this.carryW > 0.01) this.carryBat(dt);
+    // foice e machado seguros (parado ou andando) giram em volta do cabo para a lâmina apontar para a frente; ao bater vale o giro do clipe
+    const heldT = this.bat && (this.armed === 'sickle' || this.armed === 'axe') && !this.clipName.startsWith('bat_swing') ? 1 : 0;
+    this.heldRollK += (heldT - this.heldRollK) * Math.min(1, dt * 10);
+    if (this.bat && this.heldRollK > 0.001) this.bat.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(Z, HELD_ROLL * this.heldRollK));
     this.updateRoot();
     const frame = this.weaponFrame();
     if (this.weapon) {

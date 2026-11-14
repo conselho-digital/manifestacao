@@ -124,6 +124,32 @@ function teamTexture(team: Team | null, name: string, done: (t: THREE.Texture) =
   loader.load(url, (t) => { t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 4; texCache.set(url, t); done(t); }, undefined, () => done(fallbackTexture(team, name)));
 }
 
+/** Textura da bandeira da equipe: a imagem da pichação (ou o desenho de reserva) sobre um pano na cor 1 da equipe. */
+const flagCache = new Map<string, THREE.Texture>();
+export function flagTexture(team: Team | null, name: string, c1: string, done: (t: THREE.Texture) => void): void {
+  teamTexture(team, name, (src) => {
+    const key = `${team?.graffiti ?? `fb:${team?.id ?? name}`}|${c1}`;
+    const hit = flagCache.get(key);
+    if (hit) { done(hit); return; }
+    const c = document.createElement('canvas');
+    c.width = 512;
+    c.height = 340;
+    const g = c.getContext('2d')!;
+    g.fillStyle = c1;
+    g.fillRect(0, 0, c.width, c.height);
+    const img = src.image as CanvasImageSource & { width: number; height: number };
+    if (img && img.width) {
+      const k = Math.min((c.width * 0.9) / img.width, (c.height * 0.9) / img.height);
+      g.drawImage(img, (c.width - img.width * k) / 2, (c.height - img.height * k) / 2, img.width * k, img.height * k);
+    }
+    const t = new THREE.CanvasTexture(c);
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.flipY = false; // as texturas do GLB usam a origem no topo
+    flagCache.set(key, t);
+    done(t);
+  });
+}
+
 interface Decal { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial; age: number }
 interface Puff { s: THREE.Sprite; t: number; life: number; vx: number; vy: number; vz: number }
 

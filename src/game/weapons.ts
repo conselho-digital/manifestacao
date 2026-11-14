@@ -1,3 +1,5 @@
+import { flagTexture } from './graffiti';
+import type { Team } from './teams';
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
@@ -117,6 +119,9 @@ export class WeaponVisual {
   private readonly canInner = buildSprayCan();
   private readonly batAnchor = new THREE.Group();
   private readonly flagInner = new THREE.Group();
+  /** panos da bandeira (material próprio por jogador) e a equipe pedida (pode chegar antes do modelo) */
+  private readonly flagCloth: THREE.MeshStandardMaterial[] = [];
+  private flagTeam: { team: Team | null; name: string; c1: string } | null = null;
   private readonly signInner = new THREE.Group();
   private readonly cricketInner = new THREE.Group();
   private readonly baseballInner = new THREE.Group();
@@ -154,13 +159,23 @@ export class WeaponVisual {
       this.batAnchor.remove(fallbackBat);
       this.flagInner.clear();
       const flag = src.clone(true);
-      flag.traverse((o) => { o.castShadow = true; });
+      flag.traverse((o) => {
+        o.castShadow = true;
+        const m = o as THREE.Mesh;
+        if (m.isMesh && !Array.isArray(m.material) && m.material.name === 'm2_cloch4') {
+          const cloth = m.material.clone() as THREE.MeshStandardMaterial; // o pano tem material só dele: cada jogador mostra a sua equipe
+          m.material = cloth;
+          this.flagCloth.push(cloth);
+        }
+      });
       const inner = new THREE.Group();
       inner.add(flag);
       inner.rotation.x = Math.PI / 2; // mastro (Y no GLB) passa a apontar para +Z
       inner.scale.setScalar(0.75);
       inner.position.z = 0.1 - 0.35 * 0.75; // a mão direita segura perto da base do mastro (a esquerda, mais acima)
       this.flagInner.add(inner);
+      this.flagInner.rotation.z = Math.PI / 2; // gira 90° (anti-horário) em volta do mastro: o pano aponta para trás
+      if (this.flagTeam) this.setFlagTeam(this.flagTeam.team, this.flagTeam.name, this.flagTeam.c1);
     });
     // placa de trânsito (convertida do DFF): mesma pegada de duas mãos
     void loadSign().then((src) => {
@@ -288,6 +303,16 @@ export class WeaponVisual {
   /** Inclina a arma para onde a câmera mira (positivo = para baixo). */
   setPitch(p: number): void {
     if (!this.bound) this.anchor.rotation.x = p * 0.9;
+  }
+
+  /** A bandeira mostra a imagem da pichação da equipe (ou o desenho de reserva com o nome e as cores) no lugar da bandeira da Turquia. */
+  setFlagTeam(team: Team | null, name: string, c1: string): void {
+    this.flagTeam = { team, name, c1 };
+    if (this.flagCloth.length === 0) return; // o modelo ainda carrega: aplica quando chegar
+    flagTexture(team, name, c1, (t) => {
+      if (this.flagTeam?.team !== team || this.flagTeam.name !== name) return; // trocou de equipe de novo enquanto a imagem chegava
+      for (const m of this.flagCloth) { m.map = t; m.color.set(0xffffff); m.needsUpdate = true; }
+    });
   }
 
   /** Esconde (morto, no carro) sem perder o modo. */
