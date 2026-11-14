@@ -218,6 +218,8 @@ export class Animator {
   private clean = new Map<THREE.Bone, THREE.Quaternion>();
   private dirty = false;
   private chestRest = { pos: new THREE.Vector3(), q: new THREE.Quaternion() };
+  /** orientação da cabeça na pose de repouso (rosto para +Z): serve para saber para onde o rosto aponta */
+  private headRest = new THREE.Quaternion();
   private drops = new Map<string, { t: number[]; y: number[] }>();
   private modelY0: number | null = null;
   private modelZ0 = 0;
@@ -261,6 +263,7 @@ export class Animator {
     if (spine) {
       this.chestRest.pos.copy(this.posIn(spine.chest, new THREE.Vector3()));
       this.quatIn(spine.chest, this.chestRest.q);
+      this.quatIn(spine.head, this.headRest);
     }
   }
 
@@ -1050,11 +1053,11 @@ export class Animator {
     const back = dirAt(pose.torso);
     if (base !== sp.mid) this.aimBone(base, sp.mid, back);
     this.aimBone(sp.mid, sp.chest, back);
-    const qChest = this.aimBone(sp.chest, sp.neck, back);
-    // pescoço e cabeça: levantam para olhar para a frente (o tronco inclinado jogaria o rosto para baixo)
-    const qNeck = this.aimBone(sp.neck, sp.head, dirAt(pose.torso + 38));
-    const tilt = (qChest.angleTo(new THREE.Quaternion()) + qNeck.angleTo(new THREE.Quaternion())) * 0.5;
-    this.rotateBone(sp.head, new THREE.Quaternion().setFromAxisAngle(X, -tilt));
+    this.aimBone(sp.chest, sp.neck, back);
+    // pescoço levanta; a cabeça gira até o rosto olhar para a FRENTE (horizontal), não importa a inclinação do tronco
+    this.aimBone(sp.neck, sp.head, dirAt(pose.torso + 38));
+    const face = new THREE.Vector3(0, 0, 1).applyQuaternion(this.quatIn(sp.head, new THREE.Quaternion()).multiply(this.headRest.clone().invert()));
+    this.rotateBone(sp.head, new THREE.Quaternion().setFromUnitVectors(face, new THREE.Vector3(0, 0, 1)));
     this.updateRoot();
     for (const l of this.legs) {
       const knee = this.posIn(l.calf, new THREE.Vector3());
