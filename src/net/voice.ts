@@ -10,11 +10,11 @@ export interface RtcMsg { from: string; to: string; k: RtcKind; d: unknown }
 const ICE: RTCConfiguration = {
   iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }],
 };
-/** liga a conversa a quem está a menos de 22,5 m e desliga acima de 30 m (histerese para não ficar ligando/desligando) */
-const CONNECT_RANGE = 22.5;
-const DROP_RANGE = 30;
-/** a voz some em 20 m; a menos de 2,5 m é cheia */
-export const HEAR_RANGE = 20;
+/** liga a conversa a quem está a menos de 11,25 m e desliga acima de 15 m (histerese para não ficar ligando/desligando) */
+const CONNECT_RANGE = 11.25;
+const DROP_RANGE = 15;
+/** a voz some em 10 m; a menos de 2,5 m é cheia */
+export const HEAR_RANGE = 10;
 const TICK = 0.5;
 const RETRY_AFTER_MS = 6000;
 const MAX_PEERS = 8; // malha completa só com os mais próximos
