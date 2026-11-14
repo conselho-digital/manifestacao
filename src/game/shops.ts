@@ -11,8 +11,12 @@ export interface PosterSlot { id: string; building: string; face: 'zp' | 'zn' | 
 
 const SHOP_W = 6.2; // largura de cada loja (pilastras, vitrine e porta)
 const GAP = 0.4;
-const POSTER_W = 3.6;
-const POSTER_H = 2.4;
+const POSTER_W = 3.0;
+const POSTER_H = 2.0;
+/** posição do cartaz no módulo da loja: u = ao longo da fachada, w = para fora, y = centro */
+const PU = -1.0;
+const PW = 0.4;
+const PY = 2.0;
 const CELL_W = 256;
 const CELL_H = 171; // 3:2, como o cartaz
 const COLS = 8;
@@ -300,8 +304,117 @@ export function updatePosterOverlays(dt: number, px: number, pz: number): void {
 const mat = (c: number): THREE.MeshLambertMaterial => new THREE.MeshLambertMaterial({ color: c });
 const AWNINGS = [0xc0392b, 0x2e7d4f, 0x2b5fa8, 0xe0a82e, 0x7a3b8c];
 
+// ---------- aparência das lojas: interior pintado atrás do vidro e letreiro com o nome ----------
+const KINDS = 8;
+const NAMES = [
+  'MODA URBANA', 'FASHION CENTER', 'TECH ZONE', 'ELETRO MAIS', 'CAFÉ CENTRAL', 'PADARIA DO BAIRRO', 'MERCADO PAULISTA', 'EMPÓRIO',
+  'LIVRARIA', 'PAPELARIA', 'FARMÁCIA', 'ÓTICA', 'PIZZARIA', 'LANCHES & CIA', 'CALÇADOS', 'ESPORTES',
+];
+const ACCENT = ['#8e44ad', '#2b86c5', '#a0522d', '#2e7d4f', '#b9770e', '#1e9e8a', '#c0392b', '#d35400'];
+const INT_W = 512;
+const INT_H = 256;
+const SIGN_W = 512;
+const SIGN_H = 64;
+
+function rng(seed: number): () => number { let a = seed >>> 0; return () => { a = (Math.imul(a, 1664525) + 1013904223) >>> 0; return a / 4294967296; }; }
+
+function drawInterior(g: CanvasRenderingContext2D, x: number, y: number, kind: number): void {
+  const r = rng(kind * 7919 + 13);
+  const wall = ['#cfc8bd', '#2b3340', '#c9a77c', '#e7ecd6', '#5a3b2a', '#f1f5f5', '#8a2a1f', '#e8e1d6'][kind];
+  const floor = ['#8a7b6a', '#3a3f48', '#6b4a32', '#b9b2a2', '#4a3426', '#d4d8da', '#4a4a4a', '#9a8b78'][kind];
+  g.save();
+  g.beginPath();
+  g.rect(x, y, INT_W, INT_H);
+  g.clip();
+  g.fillStyle = wall;
+  g.fillRect(x, y, INT_W, INT_H);
+  g.fillStyle = floor;
+  g.fillRect(x, y + INT_H * 0.8, INT_W, INT_H * 0.2);
+  const sh = g.createLinearGradient(0, y + INT_H * 0.8, 0, y + INT_H);
+  sh.addColorStop(0, 'rgba(255,255,255,.22)');
+  sh.addColorStop(1, 'rgba(0,0,0,.15)');
+  g.fillStyle = sh;
+  g.fillRect(x, y + INT_H * 0.8, INT_W, INT_H * 0.2);
+  g.fillStyle = '#e9e5dc';
+  g.fillRect(x, y, INT_W, 20);
+  for (let i = 0; i < 6; i++) { g.fillStyle = '#fffbe6'; g.fillRect(x + 30 + i * 82, y + 7, 52, 6); }
+  const box = (c: string, bx: number, by: number, bw: number, bh: number): void => { g.fillStyle = c; g.fillRect(x + bx, y + by, bw, bh); };
+  const rows = (ys: number[], colors: string[], w0: number, h0: number): void => {
+    for (const yy of ys) {
+      box('rgba(0,0,0,.35)', 10, yy + h0, INT_W - 20, 4);
+      for (let bx = 14; bx < INT_W - 24; bx += w0 + 3) box(colors[Math.floor(r() * colors.length)], bx, yy + h0 * (0.4 + 0.6 * r()) * 0.4, w0, h0 * (0.6 + 0.4 * r()));
+    }
+  };
+  if (kind === 0) { // moda: araras com roupas e manequins
+    for (const yy of [78, 138]) {
+      box('#555', 10, yy, INT_W - 20, 3);
+      for (let bx = 18; bx < INT_W - 30; bx += 17) box(['#2c3e50', '#c0392b', '#ecf0f1', '#8e44ad', '#27ae60', '#f1c40f'][Math.floor(r() * 6)], bx, yy + 3, 13, 40 + r() * 14);
+    }
+    for (const mx of [90, 250, 420]) { g.fillStyle = '#ddd'; g.beginPath(); g.arc(x + mx, y + 150, 9, 0, 7); g.fill(); box('#bbb', mx - 12, 160, 24, 36); box('#999', mx - 2, 196, 4, 8); }
+  } else if (kind === 1) { // tecnologia: prateleiras, telas
+    rows([66, 118, 170], ['#111', '#222', '#334', '#445'], 30, 34);
+    const sg = g.createLinearGradient(x, y + 80, x + 150, y + 150);
+    sg.addColorStop(0, '#2b8cff');
+    sg.addColorStop(1, '#7b3cff');
+    g.fillStyle = sg;
+    g.fillRect(x + 180, y + 70, 150, 84);
+  } else if (kind === 2) { // café: balcão, máquina, lâmpadas
+    box('#3b2a1e', 20, 24, 150, 60); box('#f4e9d8', 28, 34, 134, 4);
+    for (const lx of [90, 230, 380]) { box('#222', lx, 20, 2, 36); g.fillStyle = '#ffd98a'; g.beginPath(); g.arc(x + lx + 1, y + 62, 12, 0, 7); g.fill(); }
+    box('#5a3c28', 0, 160, INT_W, 56); box('#a9774e', 0, 156, INT_W, 8); box('#999', 300, 118, 46, 38); box('#222', 310, 126, 26, 12);
+    for (const cx of [60, 110, 160]) box('#fff', cx, 146, 12, 10);
+  } else if (kind === 3) { // mercado: gôndolas coloridas
+    rows([46, 98, 150], ['#e74c3c', '#f1c40f', '#27ae60', '#3498db', '#ecf0f1', '#e67e22'], 20, 40);
+  } else if (kind === 4) { // livraria: estantes cheias
+    rows([40, 92, 144], ['#c0392b', '#2c3e50', '#f1c40f', '#16a085', '#ecf0f1', '#8e44ad', '#d35400'], 9, 44);
+  } else if (kind === 5) { // farmácia: prateleiras brancas e cruz verde
+    rows([84, 134], ['#ffffff', '#27ae60', '#3498db', '#ecf0f1'], 22, 34);
+    box('#27ae60', 236, 30, 40, 12); box('#27ae60', 250, 16, 12, 40);
+  } else if (kind === 6) { // pizzaria: forno e balcão
+    box('#c0392b', 0, 156, INT_W, 56); for (let bx = 0; bx < INT_W; bx += 32) box('#fff', bx, 156, 16, 56);
+    box('#b34a1c', 330, 60, 130, 96); g.fillStyle = '#ff9a2e'; g.beginPath(); g.arc(x + 395, y + 130, 36, Math.PI, 0); g.fill();
+    for (const px of [60, 140, 220]) { g.fillStyle = '#e8b25a'; g.beginPath(); g.arc(x + px, y + 80, 28, 0, 7); g.fill(); g.fillStyle = '#c0392b'; g.beginPath(); g.arc(x + px, y + 80, 20, 0, 7); g.fill(); }
+  } else { // calçados: tênis na parede e banco
+    for (const yy of [60, 106, 152]) { box('#777', 10, yy + 22, INT_W - 20, 3); for (let bx = 20; bx < INT_W - 50; bx += 44) { g.fillStyle = ['#e74c3c', '#2c3e50', '#ecf0f1', '#f1c40f', '#27ae60'][Math.floor(r() * 5)]; g.beginPath(); g.ellipse(x + bx + 18, y + yy + 12, 18, 9, 0, 0, 7); g.fill(); } }
+    box('#6b4a32', 180, 188, 150, 14);
+  }
+  g.restore();
+}
+
+function drawSign(g: CanvasRenderingContext2D, x: number, y: number, name: string, accent: string): void {
+  g.fillStyle = '#f4f1ea';
+  g.fillRect(x, y, SIGN_W, SIGN_H);
+  g.fillStyle = accent;
+  g.fillRect(x, y + SIGN_H - 8, SIGN_W, 8);
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.fillStyle = '#2a2d33';
+  let size = 40;
+  g.font = `800 ${size}px system-ui, sans-serif`;
+  while (g.measureText(name).width > SIGN_W - 40 && size > 14) { size -= 2; g.font = `800 ${size}px system-ui, sans-serif`; }
+  g.fillText(name, x + SIGN_W / 2, y + (SIGN_H - 8) / 2 + 2);
+}
+
+function atlasTexture(canvas: HTMLCanvasElement): THREE.CanvasTexture {
+  const t = new THREE.CanvasTexture(canvas);
+  t.colorSpace = THREE.SRGBColorSpace;
+  t.anisotropy = 4;
+  return t;
+}
+
+/** põe o UV de um plano na célula (col, row) de um atlas */
+function cellUV(pg: THREE.BufferGeometry, col: number, row: number, cw: number, ch: number, W: number, H: number): void {
+  const uv = pg.getAttribute('uv') as THREE.BufferAttribute;
+  const eps = 0.5;
+  for (let k = 0; k < uv.count; k++) {
+    uv.setXY(k, (col * cw + eps + uv.getX(k) * (cw - 2 * eps)) / W, 1 - (row * ch + eps + (1 - uv.getY(k)) * (ch - 2 * eps)) / H);
+  }
+}
+
 /**
  * Põe lojas nos lados livres de cada prédio (lados que dão para rua, calçada ou praça). `bounds` = limite jogável (metade da largura e do fundo).
+ * Cada loja (6,2 m): base de pedra, pilastras escuras, vitrine de vidro com o interior pintado atrás (8 tipos: moda, tecnologia, café, mercado, livraria,
+ * farmácia, pizzaria, calçados), porta dupla, toldo fino colorido, letreiro branco com o nome e o cartaz (3 x 2 m) na vitrine.
  * Não usa o gerador aleatório da cidade (árvores e fachadas continuam nos mesmos lugares) e não cria colisão.
  */
 export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds: { hx: number; hz: number }): void {
@@ -313,6 +426,8 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
   const groups = new Map<string, THREE.BufferGeometry[]>();
   const push = (k: string, g: THREE.BufferGeometry): void => { (groups.get(k) ?? groups.set(k, []).get(k)!).push(g); };
   const posterGeos: THREE.BufferGeometry[][] = [];
+  const interiorGeos: THREE.BufferGeometry[] = [];
+  const signGeos: THREE.BufferGeometry[] = [];
 
   for (const b of buildings) {
     for (const s of SIDES) {
@@ -332,10 +447,13 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
         const px = alongX ? cx + u0 : face;
         const pz = alongX ? face : cz + u0;
         const id = `${b.name}_${s.k}${i + 1}`;
+        const hh = hash(id);
+        const kind = hh % KINDS;
+        const nameIdx = kind * 2 + ((hh >>> 8) & 1);
         const slotIndex = POSTER_SLOTS.length;
         const page = Math.floor(slotIndex / PER_PAGE);
         const cell = slotIndex % PER_PAGE;
-        POSTER_SLOTS.push({ id, building: b.name, face: s.k, n: i + 1, num: slotIndex + 1, x: px, z: pz, nx: s.nx, nz: s.nz, page, cell, cx: px - 1.2 * s.nz + 0.13 * s.nx, cz: pz + 1.2 * s.nx + 0.13 * s.nz, cy: 1.95 });
+        POSTER_SLOTS.push({ id, building: b.name, face: s.k, n: i + 1, num: slotIndex + 1, x: px, z: pz, nx: s.nx, nz: s.nz, page, cell, cx: px + PU * s.nz + PW * s.nx, cz: pz - PU * s.nx + PW * s.nz, cy: PY });
         // peça no espaço da loja (u ao longo da fachada, y para cima, w para fora) → mundo
         const put = (g: THREE.BufferGeometry, u: number, y: number, w: number): THREE.BufferGeometry => {
           g.translate(u, y, w);
@@ -344,42 +462,67 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
           return g;
         };
         const box = (k: string, bw: number, bh: number, bd: number, u: number, y: number, w: number): void => { push(k, put(new THREE.BoxGeometry(bw, bh, bd), u, y + bh / 2, w)); };
-        // pilastras (esquerda, meio e direita), vitrine, porta, letreiro e toldo
-        box('frame', 0.3, 3.9, 0.3, -SHOP_W / 2 + 0.15, 0, 0.12);
-        box('frame', 0.3, 3.9, 0.3, 0.8, 0, 0.12);
-        box('frame', 0.3, 3.9, 0.3, SHOP_W / 2 - 0.15, 0, 0.12);
-        box('glass', 4.2, 2.7, 0.1, -1.2, 0.6, 0.06);
-        box('frame', 4.2, 0.6, 0.2, -1.2, 0, 0.1); // peitoril
-        box('door', 1.1, 2.4, 0.1, 2.15, 0, 0.06);
-        box('sign', SHOP_W - 0.3, 0.7, 0.18, 0, 3.9, 0.12);
-        box(`awn${hash(id) % AWNINGS.length}`, SHOP_W - 0.2, 0.12, 0.95, 0, 3.55, 0.5);
-        // cartaz (atlas)
+        const more = i < n - 1 ? GAP : 0; // entre duas lojas a pilastra e o letreiro continuam
+        // base de pedra, pilastras escuras nas pontas e entre as lojas
+        box('plinth', SHOP_W + more, 0.6, 0.5, more / 2, 0, 0.27);
+        box('frame', 0.3, 3.55, 0.5, -SHOP_W / 2 + 0.15, 0.6, 0.27);
+        box('frame', 0.3, 3.55, 0.5, SHOP_W / 2 - 0.15, 0.6, 0.27);
+        if (more) box('frame', more + 0.02, 3.95, 0.5, SHOP_W / 2 + more / 2, 0.6, 0.27);
+        // interior pintado atrás do vidro
+        const ip = new THREE.PlaneGeometry(5.6, 2.8);
+        cellUV(ip, kind % 2, Math.floor(kind / 2), INT_W, INT_H, INT_W * 2, INT_H * 4);
+        interiorGeos.push(put(ip, 0, 2.0, 0.1));
+        // vidro (janela e porta), travessa do alto, divisória entre janela e porta e porta dupla
+        box('glass', 5.6, 2.8, 0.04, 0, 0.6, 0.38);
+        box('frame', 5.6, 0.16, 0.12, 0, 3.4, 0.4);
+        box('frame', 0.12, 2.8, 0.12, 0.8, 0.6, 0.4);
+        box('frame', 0.1, 2.5, 0.1, 1.9, 0.6, 0.4);
+        box('frame', 2.2, 0.1, 0.1, 1.9, 3.0, 0.4);
+        box('metal', 0.05, 0.5, 0.06, 1.8, 1.0, 0.46);
+        box('metal', 0.05, 0.5, 0.06, 2.0, 1.0, 0.46);
+        // letreiro branco com o nome e toldo fino colorido
+        box('signbox', SHOP_W + more, 0.95, 0.34, more / 2, 3.55, 0.3);
+        const sp = new THREE.PlaneGeometry(SHOP_W - 0.4, (SHOP_W - 0.4) * (SIGN_H / SIGN_W));
+        cellUV(sp, nameIdx % 2, Math.floor(nameIdx / 2), SIGN_W, SIGN_H, SIGN_W * 2, SIGN_H * 8);
+        signGeos.push(put(sp, 0, 4.03, 0.48));
+        box(`awn${hh % AWNINGS.length}`, SHOP_W - 0.5, 0.1, 0.75, 0, 3.42, 0.7);
+        // cartaz (atlas) na vitrine
         const pg = new THREE.PlaneGeometry(POSTER_W, POSTER_H);
-        const uv = pg.getAttribute('uv') as THREE.BufferAttribute;
-        const col = cell % COLS;
-        const row = Math.floor(cell / COLS);
-        const eps = 0.5;
-        const W = COLS * CELL_W;
-        const H = ROWS * CELL_H;
-        for (let k = 0; k < uv.count; k++) {
-          const u = uv.getX(k);
-          const v = uv.getY(k);
-          uv.setXY(k, (col * CELL_W + eps + u * (CELL_W - 2 * eps)) / W, 1 - (row * CELL_H + eps + (1 - v) * (CELL_H - 2 * eps)) / H);
-        }
-        put(pg, -1.2, 0.6 + 1.35, 0.13);
+        cellUV(pg, cell % COLS, Math.floor(cell / COLS), CELL_W, CELL_H, COLS * CELL_W, ROWS * CELL_H);
+        put(pg, PU, PY, PW);
         (posterGeos[page] ??= []).push(pg);
       }
     }
   }
 
-  const colors: Record<string, number> = { frame: 0x3b3a3f, glass: 0x1f3042, door: 0x1b1b1d, sign: 0xf0e9d6 };
+  const colors: Record<string, number> = { frame: 0x34353a, plinth: 0x4a4c52, metal: 0xc9ccd1, signbox: 0xf4f1ea };
   AWNINGS.forEach((c, i) => { colors[`awn${i}`] = c; });
   for (const [k, list] of groups) {
     const geo = mergeGeometries(list, false);
     if (!geo) continue;
-    const m = new THREE.Mesh(geo, mat(colors[k] ?? 0x888888));
-    m.receiveShadow = true;
+    const material = k === 'glass'
+      ? new THREE.MeshLambertMaterial({ color: 0xbfe0f0, transparent: true, opacity: 0.2, depthWrite: false })
+      : mat(colors[k] ?? 0x888888);
+    const m = new THREE.Mesh(geo, material);
+    m.receiveShadow = k !== 'glass';
+    if (k === 'glass') m.renderOrder = 2;
     city.add(m);
+  }
+
+  // interiores e letreiros: um atlas de canvas cada (1 chamada de desenho cada)
+  const intCanvas = document.createElement('canvas');
+  intCanvas.width = INT_W * 2;
+  intCanvas.height = INT_H * 4;
+  const ig = intCanvas.getContext('2d')!;
+  for (let k = 0; k < KINDS; k++) drawInterior(ig, (k % 2) * INT_W, Math.floor(k / 2) * INT_H, k);
+  const signCanvas = document.createElement('canvas');
+  signCanvas.width = SIGN_W * 2;
+  signCanvas.height = SIGN_H * 8;
+  const sg = signCanvas.getContext('2d')!;
+  NAMES.forEach((nm, k) => drawSign(sg, (k % 2) * SIGN_W, Math.floor(k / 2) * SIGN_H, nm, ACCENT[Math.floor(k / 2)]));
+  for (const [list, canvas] of [[interiorGeos, intCanvas], [signGeos, signCanvas]] as const) {
+    const geo = mergeGeometries(list as THREE.BufferGeometry[], false);
+    if (geo) city.add(new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: atlasTexture(canvas) })));
   }
 
   // atlas de cartazes: cartaz de exemplo em todas as vagas (as imagens publicadas entram por cima)
