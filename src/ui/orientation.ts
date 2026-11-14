@@ -24,7 +24,7 @@ function updateOverlay(): void {
  * Onde o navegador não deixa travar (iPhone), mostra o aviso "Gire o celular".
  */
 /** Tela cheia + paisagem travada (precisa de um toque do jogador; onde não der, segue sem). */
-async function goFullscreenLandscape(): Promise<void> {
+export async function goFullscreenLandscape(): Promise<void> {
   if (!document.fullscreenElement) {
     try { await document.documentElement.requestFullscreen?.({ navigationUI: 'hide' }); } catch { /* sem tela cheia: segue */ }
   }

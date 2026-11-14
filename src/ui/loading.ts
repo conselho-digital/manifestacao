@@ -1,5 +1,5 @@
 import { MAP_ID, MAPS } from '../game/map';
-import { isTouchDevice } from './orientation';
+import { goFullscreenLandscape, isTouchDevice } from './orientation';
 
 // Tela de carregamento ao entrar no mapa: uma foto da cidade vista de cima em preto e branco que vai ganhando cor
 // conforme o carregamento avança (public/loading/<mapa>.webp, gerada do próprio jogo: ver CLAUDE.md).
@@ -59,6 +59,19 @@ export function showLoading(): Loading {
   root.append(img, box);
   document.body.appendChild(root);
 
+  // celular em pé: a tela de carregamento aparece em formato paisagem (girada 90°), como será o jogo; em paisagem ou no PC fica normal
+  const touch = isTouchDevice();
+  const layout = (): void => {
+    const w = window.innerWidth;
+    const h = window.innerHeight;
+    if (touch && h > w) {
+      root.style.cssText = `inset:auto;left:0;top:0;width:${h}px;height:${w}px;transform-origin:0 0;transform:translateX(${w}px) rotate(90deg)`;
+    } else root.style.cssText = '';
+  };
+  layout();
+  window.addEventListener('resize', layout);
+  window.addEventListener('orientationchange', layout);
+
   let last = 0;
   const set = (p: number, text?: string): void => {
     last = Math.max(last, Math.min(1, p)); // nunca volta atrás
@@ -72,29 +85,28 @@ export function showLoading(): Loading {
     async finish(onFade) {
       set(1, 'Pronto!');
       await wait(750); // a cor termina de aparecer
-      // só entra no mapa (e começa o voo de entrada) quando o jogador clica ou, no celular, toca ou gira o aparelho
-      const touch = isTouchDevice();
+      // só entra no mapa (e começa o voo de entrada) quando o jogador clica ou toca; no celular o toque também liga a tela cheia em paisagem
       txt.className = 'ld-txt ld-go';
-      txt.textContent = touch ? 'Toque na tela ou gire o celular para entrar' : 'Clique para entrar';
+      txt.textContent = touch ? 'Toque na tela para entrar em tela cheia' : 'Clique para entrar';
       await new Promise<void>((resolve) => {
         const go = (): void => {
           root.removeEventListener('pointerdown', go);
           window.removeEventListener('keydown', onKey);
-          window.removeEventListener('resize', onTurn);
-          window.removeEventListener('orientationchange', go);
+          if (touch) void goFullscreenLandscape(); // dentro do toque: o navegador só libera tela cheia e travar a rotação assim
           resolve();
         };
-        const onKey = (e: KeyboardEvent): void => { if (e.code === 'Enter' || e.code === 'Space') go(); };
-        const onTurn = (): void => { if (touch && window.innerWidth > window.innerHeight) go(); };
+        const onKey = (e: KeyboardEvent): void => { if (!touch && (e.code === 'Enter' || e.code === 'Space')) go(); };
         root.addEventListener('pointerdown', go);
         window.addEventListener('keydown', onKey);
-        if (touch) { window.addEventListener('resize', onTurn); window.addEventListener('orientationchange', go); }
       });
+      if (touch) { txt.textContent = 'Entrando...'; await wait(700); } // dá tempo da tela cheia e da rotação acontecerem antes do voo da câmera
       if (!touch) document.querySelector('canvas')?.requestPointerLock?.(); // PC: o clique também esconde o mouse (gesto que o navegador exige)
       txt.textContent = '';
       onFade?.();
       root.classList.add('out');
       await wait(650);
+      window.removeEventListener('resize', layout);
+      window.removeEventListener('orientationchange', layout);
       root.remove();
       style.remove();
     },
