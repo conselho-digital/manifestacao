@@ -52,6 +52,8 @@ interface EngineProfile {
   vol: number;
   /** velocidade (m/s) em que chega ao topo de giro */
   topSpeed: number;
+  /** usa o som gravado (partida, marcha lenta e aceleração) em vez do sintetizado */
+  sample?: SampleName;
 }
 
 /** Cada veículo tem seu motor: o Blista é um 4 cilindros agudo, o Buffalo e o Clover V8 graves, etc. */
@@ -59,10 +61,10 @@ const PROFILES: Record<string, EngineProfile> = {
   blistac: { a: 'sawtooth', b: 'square', idle: 52, top: 130, ratio: 0.5, cutIdle: 330, cutTop: 900, lope: 0, lopeDepth: 0, vol: 1, topSpeed: 28 },
   buffalo: { a: 'sawtooth', b: 'sawtooth', idle: 30, top: 78, ratio: 0.5, cutIdle: 220, cutTop: 520, lope: 13, lopeDepth: 0.35, vol: 1.15, topSpeed: 28 },
   clover: { a: 'square', b: 'triangle', idle: 36, top: 96, ratio: 0.5, cutIdle: 260, cutTop: 620, lope: 9, lopeDepth: 0.25, vol: 1.05, topSpeed: 28 },
-  harley: { a: 'sawtooth', b: 'square', idle: 26, top: 90, ratio: 0.5, cutIdle: 260, cutTop: 700, lope: 7, lopeDepth: 0.55, vol: 1.2, topSpeed: 20 },
+  harley: { a: 'sawtooth', b: 'square', idle: 26, top: 90, ratio: 0.5, cutIdle: 260, cutTop: 700, lope: 7, lopeDepth: 0.55, vol: 1.2, topSpeed: 20, sample: 'harley' },
   triumph: { a: 'sawtooth', b: 'square', idle: 58, top: 210, ratio: 0.5, cutIdle: 520, cutTop: 1500, lope: 0, lopeDepth: 0, vol: 1, topSpeed: 20 },
-  bmw: { a: 'sawtooth', b: 'sawtooth', idle: 84, top: 330, ratio: 1.005, cutIdle: 800, cutTop: 2400, lope: 0, lopeDepth: 0, vol: 0.95, topSpeed: 20 },
-  suzuki: { a: 'square', b: 'sawtooth', idle: 96, top: 380, ratio: 1.003, cutIdle: 900, cutTop: 2800, lope: 0, lopeDepth: 0, vol: 0.95, topSpeed: 20 },
+  bmw: { a: 'sawtooth', b: 'sawtooth', idle: 84, top: 330, ratio: 1.005, cutIdle: 800, cutTop: 2400, lope: 0, lopeDepth: 0, vol: 0.95, topSpeed: 20, sample: 'sport' },
+  suzuki: { a: 'square', b: 'sawtooth', idle: 96, top: 380, ratio: 1.003, cutIdle: 900, cutTop: 2800, lope: 0, lopeDepth: 0, vol: 0.95, topSpeed: 20, sample: 'sport' },
 };
 const FALLBACK: EngineProfile = PROFILES.blistac!;
 const ENGINE_RANGE = 70; // metros até sumir
@@ -77,10 +79,36 @@ function noise(c: AudioContext): AudioBuffer {
   return noiseBuf;
 }
 
+// Sons gravados (enviados pelo dono): partida (ao subir), marcha lenta (loop) e aceleração (loop). 'sport' = BMW e Suzuki; 'harley' = Harley.
+const SAMPLE_SETS = {
+  sport: { start: '/sounds/moto-start.wav', idle: '/sounds/moto-idle.wav', rev: '/sounds/moto-rev.wav', idleRate: [0.9, 0.35], revRate: [0.75, 0.6] },
+  harley: { start: '/sounds/harley-start.wav', idle: '/sounds/harley-idle.wav', rev: '/sounds/harley-rev.wav', idleRate: [0.95, 0.2], revRate: [0.8, 0.45] },
+} as const;
+type SampleName = keyof typeof SAMPLE_SETS;
+type SampleSet = { start: AudioBuffer; idle: AudioBuffer; rev: AudioBuffer };
+const sampleBufs = new Map<SampleName, SampleSet>();
+const sampleLoading = new Set<SampleName>();
+/** Baixa e decodifica os 3 sons de um conjunto (uma vez). Até ficarem prontos, a moto usa o motor sintetizado. */
+function loadSamples(name: SampleName): void {
+  if (sampleBufs.has(name) || sampleLoading.has(name)) return;
+  const c = audioCtx();
+  if (!c) return;
+  sampleLoading.add(name);
+  const keys = ['start', 'idle', 'rev'] as const;
+  Promise.all(keys.map((k) => fetch(SAMPLE_SETS[name][k]).then((r) => r.arrayBuffer()).then((b) => c.decodeAudioData(b))))
+    .then((bufs) => { sampleBufs.set(name, { start: bufs[0]!, idle: bufs[1]!, rev: bufs[2]! }); })
+    .catch(() => { sampleLoading.delete(name); });
+}
+
+interface SampleVoice { mix: GainNode; pan: StereoPannerNode; idle: AudioBufferSourceNode; idleG: GainNode; rev: AudioBufferSourceNode; revG: GainNode }
+
 /** Motor sintético por veículo + chiado de pneu ao derrapar. Um par por carro; o volume e o lado seguem a posição do veículo. */
 export class EngineSound {
   private readonly p: EngineProfile;
-  constructor(model?: string) { this.p = (model && PROFILES[model]) || FALLBACK; }
+  constructor(model?: string) {
+    this.p = (model && PROFILES[model]) || FALLBACK;
+    if (this.p.sample) loadSamples(this.p.sample); // já baixa os sons gravados para a partida tocar no 1º uso
+  }
 
   private osc: OscillatorNode | null = null;
   private osc2: OscillatorNode | null = null;
@@ -94,6 +122,9 @@ export class EngineSound {
   private skidPan: StereoPannerNode | null = null;
   private skidSrc: AudioBufferSourceNode | null = null;
   private failed = false;
+  private samp: SampleVoice | null = null;
+  private wasOn = false;
+  private gateAt = 0;
 
   private start(): boolean {
     if (this.osc) return true;
@@ -155,11 +186,58 @@ export class EngineSound {
   dispose(): void {
     try {
       this.osc?.stop(); this.osc2?.stop(); this.lope?.stop(); this.skidSrc?.stop();
+      this.samp?.idle.stop(); this.samp?.rev.stop(); this.samp?.pan.disconnect();
       this.pan?.disconnect(); this.skidPan?.disconnect();
     } catch { /* já parado */ }
     this.osc = this.osc2 = this.lope = this.skidSrc = null;
+    this.samp = null;
     this.gain = this.filter = this.pan = this.skidGain = this.skidFilter = this.skidPan = this.lopeGain = null;
     this.failed = true; // não recomeça depois de solto
+  }
+
+  /** Moto esportiva com som gravado: toca a partida ao subir, depois mistura marcha lenta e aceleração pelo acelerador; o tom sobe com a velocidade. */
+  private sampleEngine(c: AudioContext, t: number, S: SampleSet, cfg: { idleRate: readonly number[]; revRate: readonly number[] }, on: boolean, rpm: number, throttle: number, prox: { gain: number; pan: number }): void {
+    const out = audioOut();
+    if (!out) return;
+    if (!this.samp) {
+      const mix = c.createGain();
+      mix.gain.value = 0;
+      const pan = c.createStereoPanner();
+      mix.connect(pan).connect(out);
+      const layer = (buf: AudioBuffer): { s: AudioBufferSourceNode; g: GainNode } => {
+        const s = c.createBufferSource();
+        s.buffer = buf;
+        s.loop = true;
+        const g = c.createGain();
+        g.gain.value = 0;
+        s.connect(g).connect(mix);
+        s.start(0, Math.random() * buf.duration);
+        return { s, g };
+      };
+      const i = layer(S.idle);
+      const r = layer(S.rev);
+      this.samp = { mix, pan, idle: i.s, idleG: i.g, rev: r.s, revG: r.g };
+    }
+    const sv = this.samp;
+    if (on && !this.wasOn) {
+      // ligou: toca a partida inteira; a marcha lenta entra quando ela está acabando
+      const s = c.createBufferSource();
+      s.buffer = S.start;
+      const g = c.createGain();
+      g.gain.value = 0.9 * this.p.vol * prox.gain;
+      s.connect(g).connect(sv.pan);
+      s.start(t);
+      this.gateAt = t + S.start.duration - 0.45;
+    }
+    this.wasOn = on;
+    const live = on && t >= this.gateAt;
+    const a = Math.min(1, Math.max(0, throttle));
+    sv.idleG.gain.setTargetAtTime(1 - a * 0.85, t, 0.12);
+    sv.revG.gain.setTargetAtTime(a, t, 0.1);
+    sv.idle.playbackRate.setTargetAtTime(cfg.idleRate[0]! + rpm * cfg.idleRate[1]!, t, 0.1);
+    sv.rev.playbackRate.setTargetAtTime(cfg.revRate[0]! + rpm * cfg.revRate[1]!, t, 0.1);
+    sv.mix.gain.setTargetAtTime(live ? 0.9 * this.p.vol * prox.gain * (0.4 + 0.6 * a) : 0, t, live ? 0.25 : 0.08);
+    sv.pan.pan.setTargetAtTime(prox.pan, t, 0.05);
   }
 
   /**
@@ -175,15 +253,22 @@ export class EngineSound {
     const rpm = Math.min(1, Math.abs(speed) / p.topSpeed);
     const f = p.idle + (p.top - p.idle) * rpm;
     const t = c.currentTime;
-    this.osc.frequency.setTargetAtTime(f, t, 0.08);
-    this.osc2.frequency.setTargetAtTime(f * p.ratio, t, 0.08);
-    this.filter.frequency.setTargetAtTime(p.cutIdle + (p.cutTop - p.cutIdle) * rpm, t, 0.1);
-    if (this.lope) this.lope.frequency.setTargetAtTime(p.lope + rpm * 22, t, 0.1); // a batida acelera com o giro
     const prox = proximity(x, z, ENGINE_RANGE);
-    // sem acelerar o barulho cai rápido (a moto mantém a velocidade, só o som diminui)
-    const level = bike ? 0.12 + 0.88 * throttle : 0.55 + 0.45 * throttle;
-    const vol = on ? (0.02 + rpm * 0.034) * p.vol * prox.gain * level : 0;
-    this.gain.gain.setTargetAtTime(vol, t, throttle > 0 || !bike ? 0.15 : 0.05);
+    const set = p.sample ? sampleBufs.get(p.sample) : undefined;
+    if (p.sample && !set) loadSamples(p.sample);
+    if (p.sample && set) {
+      this.sampleEngine(c, t, set, SAMPLE_SETS[p.sample], on, rpm, throttle, prox);
+      this.gain.gain.setTargetAtTime(0, t, 0.05); // o motor sintetizado fica mudo
+    } else {
+      this.osc.frequency.setTargetAtTime(f, t, 0.08);
+      this.osc2.frequency.setTargetAtTime(f * p.ratio, t, 0.08);
+      this.filter.frequency.setTargetAtTime(p.cutIdle + (p.cutTop - p.cutIdle) * rpm, t, 0.1);
+      if (this.lope) this.lope.frequency.setTargetAtTime(p.lope + rpm * 22, t, 0.1); // a batida acelera com o giro
+      // sem acelerar o barulho cai rápido (a moto mantém a velocidade, só o som diminui)
+      const level = bike ? 0.12 + 0.88 * throttle : 0.55 + 0.45 * throttle;
+      const vol = on ? (0.02 + rpm * 0.034) * p.vol * prox.gain * level : 0;
+      this.gain.gain.setTargetAtTime(vol, t, throttle > 0 || !bike ? 0.15 : 0.05);
+    }
     this.pan.pan.setTargetAtTime(prox.pan, t, 0.05);
     // pneu cantando: mais agudo e mais forte com a velocidade
     const sk = on ? Math.min(1, skid) : 0;
