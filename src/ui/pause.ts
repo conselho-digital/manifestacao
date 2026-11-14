@@ -299,10 +299,8 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
         if (o2) { o2.className = 'ps-msg ok'; o2.textContent = 'Compras atualizadas. Se o item ainda não apareceu, a liberação pode levar alguns minutos.'; }
       });
     };
-    body.append(el('p', 'ps-note', 'Armas e veículos são vendidos em reais (R$). Munição, vida e colete usam o dinheiro do jogo ($); cada abate rende $100.'), el('div', 'ps-center', paid), out);
+    body.append(el('p', 'ps-note', 'Todas as armas (fuzis, pistola, bandeira, placa, armas brancas e spray) já são suas. Os veículos são vendidos em reais (R$). Munição, vida e colete usam o dinheiro do jogo ($); cada abate rende $100.'), el('div', 'ps-center', paid), out);
     const sections: [string, ShopItem[]][] = [
-      ['Armas de fogo', SHOP.filter((i) => i.kind === 'weapon' && i.weapon !== undefined && isGunId(i.weapon))],
-      ['Armas brancas', SHOP.filter((i) => i.kind === 'weapon' && i.weapon !== undefined && !isGunId(i.weapon))],
       ['Veículos', SHOP.filter((i) => i.kind === 'vehicle')],
       ['Munição, vida e colete', SHOP.filter((i) => !isReal(i))],
     ];

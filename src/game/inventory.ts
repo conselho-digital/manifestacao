@@ -97,14 +97,10 @@ export class Inventory {
     try { localStorage.setItem(this.key, JSON.stringify({ money: this.money } satisfies Saved)); } catch { /* sem armazenamento */ }
   }
 
-  /** tem a arma? (o punho é sempre dele) */
-  has(w: WeaponId): boolean {
-    if (w === 1 || this.admin) return true;
-    const id = shopIdOfWeapon(w);
-    return !!id && this.bought.has(id);
-  }
+  /** tem a arma? Todas as armas (fuzis, pistola, bandeira, placa, armas brancas, spray) são de todas as contas por padrão; só os veículos são comprados. */
+  has(w: WeaponId): boolean { return w >= 0; }
 
-  hasItem(id: string): boolean { return this.admin || this.bought.has(id); }
+  hasItem(id: string): boolean { return this.admin || this.bought.has(id) || SHOP.some((i) => i.id === id && i.kind === 'weapon'); }
 
   hasVehicle(model: string): boolean {
     const it = GARAGE_ITEMS.find((i) => i.model === model);
