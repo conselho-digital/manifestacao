@@ -225,13 +225,15 @@ const PIT_Z2 = 160; // fundo: z 28 → 160 (passa pelas torres de trás); a ramp
 const PIT_Z3 = 188;
 const smooth = (t: number): number => { const c = Math.min(1, Math.max(0, t)); return c * c * (3 - 2 * c); };
 // lagos rasos em frente ao Congresso (x, z em metros; quem olha para o Congresso vê +x à ESQUERDA, então o x da foto está invertido)
-const LAKE_POLYS: [number, number][][] = [
+const LAKE_RAW: [number, number][][] = [
   [[39.8, 90.4], [29.8, 90.4], [29.8, 62.6], [39.8, 62.6]],
   [[25.5, 90.4], [21.4, 90.4], [19.2, 86.3], [17.3, 81.9], [15.5, 76.2], [13.6, 71.8], [25.5, 71.3]],
   [[6.1, 71.1], [-12.6, 71.1], [-12.6, 81.9], [-4.7, 79.7], [1.9, 77.5], [5.6, 73.7]], // termina antes da rampa do novo Congresso (x −24..−14)
   [[-30.9, 90.4], [-41.1, 90.4], [-41.1, 62.6], [-30.9, 62.6]],
   [[25.5, 61.2], [-12.6, 61.2], [-12.6, 57.4], [-8.4, 55.1], [-5.6, 49.9], [-2.8, 48.5], [4.7, 49.0], [12.2, 49.9], [18.8, 53.2], [25.5, 54.6]],
 ];
+// o Congresso foi espelhado em x (esquerda e direita trocadas, a pedido): a rampa e as torres mudam de lado, então os lagos também (a rampa deixa de bater neles)
+const LAKE_POLYS: [number, number][][] = LAKE_RAW.map((pts) => pts.map(([x, z]) => [-x, z] as [number, number]));
 const WATER_Y = -PIT_D - 0.25; // superfície da água: 25 cm abaixo da margem
 const LAKE_DEPTH = 0.5; // profundidade máxima (m) abaixo da superfície: dá para andar dentro
 const LAKE_IN = 3; // caimento de dentro (da borda da água ao fundo)
@@ -983,7 +985,7 @@ export function createEsplanada(): THREE.Group {
       if (WALKS.some(([x0, x1, z0, z1]) => x > x0 - 1.5 && x < x1 + 1.5 && z > z0 - 1.5 && z < z1 + 1.5)) return false;
       if (poleXZ.some(([px, pz]) => Math.hypot(px - x, pz - z) < 2)) return false;
       if (Math.abs(x) > 97 && x > 0 && z > -94 && z < -32) return false; // gramado em frente ao Palácio (colunata): sem árvores
-      if (x > -28 && x < 4 && z > 148 && z < 186) return false; // as duas torres
+      if (x > -4 && x < 28 && z > 148 && z < 186) return false; // as duas torres (modelo espelhado em x)
       if (Math.abs(x) < 26 && z > 139 && z < 147) return false; // pontes de pedestres
       if (Math.abs(x + 92) < 9 && Math.abs(z + 60) < 10) return false; // em frente ao outdoor
       if (Math.abs(Math.abs(x) - 91.2) < 4.5 && (Math.abs(z + 122) < 6 || Math.abs(z - 30) < 6)) return false; // pontos de ônibus
@@ -1031,8 +1033,10 @@ export function createEsplanada(): THREE.Group {
     fetch('/models/map/congresso-colliders.json').then((r) => r.json() as Promise<number[][]>),
   ]).then(([g, boxes]) => {
     g.scene.traverse((o) => { if ((o as THREE.Mesh).isMesh) { o.castShadow = true; o.receiveShadow = true; o.frustumCulled = false; } });
+    // o modelo saiu do SketchUp com esquerda e direita trocadas: espelha em x (escala -1: o three.js inverte as faces sozinho) e as caixas de colisão junto
+    g.scene.scale.x = -1;
     city.add(g.scene);
-    for (const [x0, x1, z0, z1, top, bottom] of boxes as [number, number, number, number, number, number][]) addBox(x0, x1, z0, z1, top, '#cfcfcf', bottom);
+    for (const [x0, x1, z0, z1, top, bottom] of boxes as [number, number, number, number, number, number][]) addBox(-x1, -x0, z0, z1, top, '#cfcfcf', bottom);
   }).catch((e) => { console.warn('Congresso não carregou:', e); });
 
   return city;

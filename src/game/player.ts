@@ -123,7 +123,6 @@ export class Player {
   private mode: Mode = 'ground';
   private launchT = 0;
   private landT = 0;
-  private emote: string | null = null;
   private special: { id: string; t: number } | null = null;
   /** deslocamento do corpo do clipe que está tocando (passos do golpe, empurrão, rolagem): já andado até agora */
   private mot: { name: string; f: number; l: number } | null = null;
@@ -239,6 +238,17 @@ export class Player {
     this.swingT = this.clipLen(id, 0.6);
     this.animator?.restart(id);
     this.startMotion(id);
+    if (id === 'hitk_2' && this.animator?.has('getup')) {
+      // o chute derruba: cai, fica deitado e levanta (getup) em vez de "ficar de pé" de repente
+      this.mode = 'ko';
+      this.koT = 0;
+      this.koFace = false;
+      this.koFront = false;
+      this.koVel.set(0, 0);
+      this.crouching = false;
+      this.weaponVis?.setHidden(true);
+      this.animator?.setArmed('none');
+    }
   }
 
   /** Combo corpo a corpo: soco, soco, soco e chute (alternando os 2 chutes). Retorna 'k' se foi chute. */
@@ -321,7 +331,6 @@ export class Player {
     if (this.car) this.exitCar();
     this.mode = 'dead';
     this.crouching = false;
-    this.emote = null;
     this.climb = null;
     this.special = null;
     this.animator?.play('idle');
@@ -375,8 +384,6 @@ export class Player {
     if (this.mode === 'special' && this.special) { this.updateSpecial(dt); this.finish(dt); return; }
 
     const moving = input.mag > 0.02;
-    if (this.emote && (moving || input.jump)) this.emote = null;
-    if (input.emote) this.startAction(input.emote);
     if (this.mode === 'special') { this.finish(dt); return; }
 
     if (input.interact && this.mode === 'ground' && this.tryEnterCar()) return;
@@ -396,7 +403,6 @@ export class Player {
       this.mode = 'air';
       this.launchT = 0.2;
       this.landT = 0;
-      this.emote = null;
       this.animator?.restart('jump_launch');
     }
 
@@ -462,7 +468,6 @@ export class Player {
     if (!a.has(id)) return false;
     this.mode = 'special';
     this.special = { id, t: 0 };
-    this.emote = null;
     a.restart(id);
     this.startMotion(id);
     return true;
@@ -495,22 +500,10 @@ export class Player {
     } else if (moving) {
       // correndo armado: fuzil nas duas mãos = run_armed; pistola = run_1armed (ped.ifp); sem arma de fogo, sprint
       const gunRun = this.armed === 'rifle' || this.armed === 'aim' ? 'run_armed' : this.armed === 'pistol' || this.armed === 'pistol_aim' ? 'run_1armed' : 'sprint';
-      const clip = input.sprint ? (a.has(gunRun) ? gunRun : 'sprint') : input.walkClip;
+      const clip = input.sprint ? (a.has(gunRun) ? gunRun : 'sprint') : 'walk';
       a.play(a.has(clip) ? clip : 'walk');
-    } else if (this.emote && a.has(this.emote)) a.play(this.emote);
-    else if (this.armed === 'pistol_aim' && a.has('arrestgun')) a.play('arrestgun'); // pistola mirando parado: o corpo e a pose de mirar do ARRESTgun (ped.ifp)
+    } else if (this.armed === 'pistol_aim' && a.has('arrestgun')) a.play('arrestgun'); // pistola mirando parado: o corpo e a pose de mirar do ARRESTgun (ped.ifp)
     else a.play(this.combatT > 0 && this.armed === 'none' && a.has('combat_idle') ? 'combat_idle' : isKnifeLike(this.armed) && a.has('knife_idle') ? 'knife_idle' : isBatLike(this.armed) && a.has('bat_idle') ? 'bat_idle' : (this.armed === 'rifle' || this.armed === 'aim') && a.has('gun_idle') ? 'gun_idle' : 'idle');
-  }
-
-  /** Emote (loop até mexer) ou ação (rolar, mergulhar). */
-  private startAction(id: string): void {
-    if (this.mode !== 'ground') return;
-    const sp = SPECIAL[id];
-    if (sp) {
-      this.mode = 'special';
-      this.special = { id, t: 0 };
-      this.animator?.restart(id);
-    } else this.emote = id;
   }
 
   private updateSpecial(dt: number): void {
@@ -554,7 +547,6 @@ export class Player {
     // moto: entra pelo lado em que o jogador está; carro: só pela porta do motorista
     this.side = best.bike && (pos.x - best.x) * Math.cos(best.heading) - (pos.z - best.z) * Math.sin(best.heading) < 0 ? -1 : 1;
     best.holdFallen = best.fallen; // moto caída: continua deitada até o personagem levantar
-    this.emote = null;
     this.vy = 0;
     this.object.visible = true; // o motorista aparece sentado (carro ou moto)
     this.crouching = false;
@@ -754,7 +746,6 @@ export class Player {
         this.mode = 'ko';
         this.koT = 0;
         this.crouching = false;
-        this.emote = null;
         this.weaponVis?.setHidden(true);
         this.animator?.setArmed('none');
         // cai de costas (KO_skid_back) se o carro vem pela frente, de bruços (KO_skid_front) se vem por trás; o corpo se vira para cair no sentido da batida
@@ -884,7 +875,6 @@ export class Player {
     };
     this.mode = 'climb';
     this.vy = 0;
-    this.emote = null;
     this.animator?.restart(high ? 'climb_jump' : 'idle');
     this.climbPhase = 0;
     return true;

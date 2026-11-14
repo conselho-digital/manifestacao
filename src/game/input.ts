@@ -16,10 +16,7 @@ export interface InputState {
   crouchHeld: boolean;
   /** entrar/sair do carro */
   interact: boolean;
-  /** id de animação pedida no menu (emote ou ação) */
-  emote: string | null;
   /** clipe usado ao andar (estilo de andar) */
-  walkClip: string;
   /** combate */
   fire: boolean;
   aim: boolean;
@@ -57,10 +54,8 @@ let reloadQ = false;
 let switchQ = false;
 let stepQ = 0;
 let pickQ: number | null = null;
-let emoteQ: string | null = null;
 let lookDx = 0;
 let lookDy = 0;
-let walkClip = 'walk';
 let fireHeld = false;
 let aimOn = false;
 let mouseFire = false;
@@ -95,7 +90,6 @@ export const queueReload = (): void => { reloadQ = true; };
 export const queueSwitch = (): void => { switchQ = true; };
 export const queueWeaponStep = (dir: number): void => { stepQ = dir < 0 ? -1 : 1; };
 export const queueWeaponPick = (id: number): void => { pickQ = id; };
-export const queueEmote = (id: string): void => { emoteQ = id; };
 export const setSprint = (v: boolean): void => { sprintHeld = v; };
 export const setFire = (v: boolean): void => { fireHeld = v; };
 export const setAim = (v: boolean): void => { aimOn = v; };
@@ -103,8 +97,6 @@ export const setWheelie = (v: boolean): void => { padWheelie = v; };
 export const queueLights = (): void => { lightsQ = true; };
 export const setHorn = (on: boolean): void => { padHorn = on; };
 export const setPedals = (gas: boolean, brake: boolean, hand: boolean): void => { padGas = gas; padBrake = brake; padHand = hand; };
-export const setWalkClip = (id: string): void => { walkClip = id; };
-export const getWalkClip = (): string => walkClip;
 export function setTouchVector(x: number, y: number, active: boolean): void {
   touchX = x; touchY = y; touchActive = active;
 }
@@ -162,7 +154,7 @@ export function readInput(): InputState {
   const state: InputState = {
     x, y, mag: len, walk,
     sprint: sprintDown || (now < sprintUntil && len > 0.02),
-    jump: jumpQ, climb: climbQ, crouch: crouchQ, crouchHeld: keys.has('KeyZ') || keys.has('ControlLeft') || crouchTouch, interact: interactQ, emote: emoteQ, walkClip,
+    jump: jumpQ, climb: climbQ, crouch: crouchQ, crouchHeld: keys.has('KeyZ') || keys.has('ControlLeft') || crouchTouch, interact: interactQ,
     fire: fireHeld || mouseFire,
     aim: aimOn || mouseAim,
     reload: reloadQ, switchWeapon: switchQ, weaponStep: stepQ, weaponPick: pickQ,
@@ -182,6 +174,5 @@ export function readInput(): InputState {
   switchQ = false;
   stepQ = 0;
   pickQ = null;
-  emoteQ = null;
   return state;
 }

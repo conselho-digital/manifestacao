@@ -204,7 +204,7 @@ export function showLobby(): Promise<Profile> {
     const submit = (): void => {
       const name = nameInput.value.trim();
       if (!name || !user) return; // só entra quem fez login e escolheu um nome
-      void enterLandscape(); // tela cheia + paisagem (precisa ser dentro do toque)
+      void enterLandscape(); // só mostra o aviso de girar se estiver em pé; tela cheia/giro só ao confirmar no botão do aviso
       const profile: Profile = { name, character: selected, team: teamId, userId: user.id };
       saveProfile({ name, character: selected });
       saveTeamId(teamId);

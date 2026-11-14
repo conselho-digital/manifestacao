@@ -15,10 +15,7 @@ function updateOverlay(): void {
   setViewportUnit();
   if (!overlay) return;
   const portrait = window.innerHeight > window.innerWidth;
-  const was = overlay.style.display === 'flex';
   overlay.style.display = portrait ? 'flex' : 'none';
-  if (was && !portrait) wantFullscreenOnTouch(); // girou para a horizontal: tela cheia
-  if (!was && portrait) void goFullscreenLandscape().catch(() => undefined);
 }
 
 /**
@@ -34,24 +31,9 @@ async function goFullscreenLandscape(): Promise<void> {
   try { await (screen.orientation as unknown as LockableOrientation).lock?.('landscape'); } catch { /* não suportado: o aviso cobre */ }
 }
 
-/**
- * Quando o celular gira para a horizontal sem um toque (o navegador pode negar a tela cheia sem toque), o primeiro toque na tela
- * depois disso entra em tela cheia. Também tenta na hora da rotação.
- */
-function wantFullscreenOnTouch(): void {
-  if (document.fullscreenElement) return;
-  void goFullscreenLandscape();
-  const once = (): void => {
-    window.removeEventListener('pointerdown', once, true);
-    if (window.innerHeight <= window.innerWidth) void goFullscreenLandscape();
-  };
-  window.addEventListener('pointerdown', once, true);
-}
-
 export async function enterLandscape(): Promise<void> {
   if (!isTouchDevice()) return;
-  await goFullscreenLandscape();
-
+  // nada de tela cheia nem giro automáticos: só depois que o jogador confirmar no botão do aviso
   if (!overlay) {
     const style = document.createElement('style');
     style.textContent = `
@@ -60,15 +42,16 @@ export async function enterLandscape(): Promise<void> {
 .rotate-overlay svg{width:84px;height:84px;animation:rot 1.8s ease-in-out infinite}
 .rotate-overlay p{margin:0;font-size:20px;font-weight:700}
 .rotate-overlay small{opacity:.65;font-size:14px}
+.rotate-overlay button{font:700 16px system-ui,sans-serif;color:#10161f;background:#fff;border:0;border-radius:10px;padding:12px 22px}
 @keyframes rot{0%,20%{transform:rotate(0)}60%,100%{transform:rotate(-90deg)}}`;
     document.head.appendChild(style);
     overlay = document.createElement('div');
     overlay.className = 'rotate-overlay';
     overlay.insertAdjacentHTML('beforeend',
       '<svg viewBox="0 0 24 24" fill="#fff"><path d="M16.5 2h-9A2.5 2.5 0 0 0 5 4.5v15A2.5 2.5 0 0 0 7.5 22h9a2.5 2.5 0 0 0 2.5-2.5v-15A2.5 2.5 0 0 0 16.5 2zM12 21a1 1 0 1 1 0-2 1 1 0 0 1 0 2zm5-3H7V5h10v13z"/></svg>' +
-      '<p>Gire o celular para jogar</p><small>Toque na tela para girar e ir para tela cheia</small>');
-    // tocar no aviso gira para a horizontal (onde o navegador deixa travar) e vai para a tela cheia
-    overlay.addEventListener('pointerdown', () => { void goFullscreenLandscape(); });
+      '<p>Gire o celular para jogar</p><small>Ou confirme abaixo para girar a tela e usar tela cheia</small><button type="button">Girar e tela cheia</button>');
+    // só o botão (confirmação do jogador) gira para a horizontal (onde o navegador deixa travar) e vai para a tela cheia
+    overlay.querySelector('button')?.addEventListener('click', () => { void goFullscreenLandscape(); });
     document.body.appendChild(overlay);
     window.addEventListener('resize', updateOverlay);
     window.addEventListener('orientationchange', updateOverlay);

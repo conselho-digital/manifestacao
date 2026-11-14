@@ -28,11 +28,14 @@ type Kind3 = 'rifle' | 'pistol' | 'bat';
 const kindOf = (a: Armed): Kind3 | null => (a === 'rifle' || a === 'aim' ? 'rifle' : a === 'pistol' || a === 'pistol_aim' || isSpray(a) ? 'pistol' : isBatLike(a) ? 'bat' : null);
 
 /** Clipes que tocam uma vez e param no último quadro. */
+/** Clipes em que o corpo cai ou levanta do chão: o corpo é apoiado pelo osso mais baixo (os dados do IFP não têm a altura certa de cada instante). */
+const GROUNDED = new Set(['getup', 'getup_front', 'ko', 'ko_front', 'ko_skid_back', 'ko_skid_front', 'hitk_2']);
+const LIE_CONTACT = 0.08; // altura do osso mais baixo quando o corpo está deitado (a pele tem ~10 cm de espessura)
 const ONCE = new Set(['roll_f', 'roll_fl', 'roll_fr', 'roll_l', 'roll_r', 'roll_b', 'roll_bl', 'roll_br', 'bat_swing4', 'arrestgun', 'knife_1', 'knife_2', 'knife_3', 'knife_4', 'knife_g', 'kill_player', 'kill_ped_damage', 'kill_ped_die', 'kick_1', 'kick_2', 'hitk_1', 'hitk_2', 'hit_1', 'hit_2', 'hit_3', 'block', 'punch_1', 'punch_2', 'punch_3', 'punch_4', 'bat_swing', 'bat_swing2', 'bat_swing3', 'bat_hit_1', 'bat_hit_2', 'bat_hit_3', 'car_getin_l', 'car_getout_l', 'car_open_l', 'car_closedoor_l', 'car_close_l', 'bike_pickup_l', 'bike_pickup_r', 'bike_pullup_l', 'bike_pullup_r', 'bike_fall', 'ko_front', 'getup_front', 'getup', 'ko_skid_back', 'ko_skid_front', 'hitr_front', 'hitr_back', 'hitr_l', 'hitr_r', 'hitr_behind', 'jump_launch', 'jump_land', 'climb_jump', 'climb_pull', 'climb_stand', 'roll', 'dive']);
 export const isOnceClip = (name: string): boolean => ONCE.has(name);
 
 /** Clipes em que o personagem não segura o fuzil (escalar, rolar, mergulhar, emotes). */
-const FREE_HANDS = (name: string): boolean => name.startsWith('climb_') || name === 'roll' || name.startsWith('roll_') || name === 'dive' || name.startsWith('e_');
+const FREE_HANDS = (name: string): boolean => name.startsWith('climb_') || name === 'roll' || name.startsWith('roll_') || name === 'dive';
 
 /** Clipes feitos para segurar o fuzil (Gun_stand, GunMove_*, WEAPON_crouch...): os braços vêm do clipe e a arma segue a mão. */
 const OWN_HOLD = (name: string): boolean => name.startsWith('gun_') || name.startsWith('crouch_') || name === 'run_armed' || name === 'run_1armed' || name === 'walk_armed';
@@ -43,34 +46,7 @@ const OWN_HOLD = (name: string): boolean => name.startsWith('gun_') || name.star
 const PLANTED = new Set(['punch_1', 'punch_2', 'punch_3', 'combat_idle', 'block']);
 const TIME_SCALE: Record<string, number> = { ko: 1.8, getup: 1.1, ko_front: 1.5, getup_front: 1.1, ko_skid_back: 1, ko_skid_front: 1, hitr_front: 1.1, hitr_back: 1.1, hitr_l: 1.1, hitr_r: 1.1, hitr_behind: 1.1, run_armed: 1.15, run_1armed: 1.15, bike_fall: 1.2, car_getin_l: 0.9, car_getout_l: 0.85, car_open_l: 1.25, car_closedoor_l: 1.2, car_close_l: 1.2, bike_pickup_l: 1.15, bike_pickup_r: 1.15, bike_pullup_l: 1, bike_pullup_r: 1, hit_1: 1.8, hit_2: 1.4, hit_3: 2.2, punch_1: 2.2, punch_2: 2.2, punch_3: 2.0, punch_4: 1.6, bat_swing: 1.4, bat_swing2: 1.5, bat_swing3: 1.6, bat_hit_1: 1.3, bat_hit_2: 1.3, bat_hit_3: 1.8, arrestgun: 1.3, knife_1: 1.5, knife_2: 1.5, knife_3: 1.4, knife_4: 1.2, kick_1: 1.3, kick_2: 1.8, hitk_1: 1.4, hitk_2: 2, gun_fwd: 1.2, gun_bwd: 1.0, gun_left: 1.5, gun_right: 1.4, crouch_fwd: 0.6, crouch_bwd: 0.6,
   // andar/correr: o passo do clipe (medido pelo pé de apoio, ver dev/anim-viewer) é bem menor que a velocidade do jogo (andar 2,1 m/s, correr 6,2 m/s) e os pés patinavam; acelera o clipe até ficar perto, sem passar da cadência natural
-  walk: 1.6, walk_armed: 1.3, sprint: 1.1, run: 1.1, w_gang: 1.6, w_drunk: 1.5, w_old: 1.6, w_fat: 1.6, w_sneak: 1.6 };
-
-/** Animações disponíveis no menu. */
-export const EMOTES: { id: string; label: string }[] = [
-  { id: 'e_chat', label: 'Conversar' },
-  { id: 'e_tired', label: 'Cansado' },
-  { id: 'e_gang', label: 'Gangue' },
-  { id: 'e_taxi', label: 'Esperando' },
-  { id: 'e_swat', label: 'Alerta' },
-  { id: 'e_homeless', label: 'Largado' },
-  { id: 'e_latino', label: 'Relaxado' },
-  { id: 'e_fight', label: 'Posição de luta' },
-  { id: 'e_cower', label: 'Agachado' },
-  { id: 'e_old', label: 'Velhinho' },
-];
-export const SPECIALS: { id: string; label: string }[] = [
-  { id: 'roll', label: 'Rolar' },
-  { id: 'dive', label: 'Mergulho' },
-];
-export const WALK_STYLES: { id: string; label: string }[] = [
-  { id: 'walk', label: 'Normal' },
-  { id: 'w_gang', label: 'Gangue' },
-  { id: 'w_drunk', label: 'Bêbado' },
-  { id: 'w_old', label: 'Velho' },
-  { id: 'w_fat', label: 'Gordo' },
-  { id: 'w_limp', label: 'Mancando' },
-  { id: 'w_sneak', label: 'Furtivo' },
-];
+  walk: 1.6, walk_armed: 1.3, sprint: 1.1, run: 1.1 };
 
 /** Nome do osso (padrão GTA SA, sem sufixo numérico) -> ID usado no ped.ifp. */
 const GTA_BONE_IDS: Record<string, number> = {
@@ -219,6 +195,7 @@ export class Animator {
   private batLocal: THREE.Quaternion | null = null;
   private legK = 0; // andando agachado: dobra mais os joelhos
   private leanK = 0; // sprint e agachado parado: endireita o tronco, que o clipe deixa caído para a esquerda
+  private allBones: THREE.Object3D[] | null = null;
   private footRest = 0; // altura do pé mais baixo em repouso (espaço do modelo)
   private groundDrop = 0; // quanto o corpo desce para o pé tocar o chão
   private crouchK = 0; // 0 em pé, 1 agachado (tronco desce)
@@ -594,10 +571,25 @@ export class Animator {
       else y = d.y[i - 1]! + ((d.y[i]! - d.y[i - 1]!) * (t - d.t[i - 1]!)) / Math.max(1e-6, d.t[i]! - d.t[i - 1]!);
       if (i < 0) y = d.y[d.y.length - 1]!;
     }
+    if (GROUNDED.has(this.clipName)) y = this.groundedDrop(model, this.modelY0);
     y += this.groundDrop + (this.ride?.y ?? 0);
     model.position.y = this.modelY0 + y;
     model.position.z = this.modelZ0 + (this.ride?.z ?? 0);
     model.position.x = this.modelX0 + (this.ride?.x ?? 0);
+  }
+
+  /** Quanto o corpo precisa descer para o osso mais baixo tocar o chão (nunca sobe: em pé fica 0). Cobre cair, ficar deitado e levantar. */
+  private groundedDrop(model: THREE.Object3D, y0: number): number {
+    if (!this.allBones) {
+      this.allBones = [];
+      model.traverse((o) => { if ((o as THREE.Bone).isBone && !/eye|lip|mouth|jaw|brow|_rootJoint|root_ground|footsteps/i.test(o.name)) this.allBones!.push(o); });
+    }
+    model.position.y = y0; // mede sem descida
+    this.updateRoot();
+    const v = new THREE.Vector3();
+    let low = Infinity;
+    for (const b of this.allBones) low = Math.min(low, this.posIn(b, v).y);
+    return Math.min(0, LIE_CONTACT - low);
   }
 
   private pose(dt: number): void {
@@ -676,7 +668,8 @@ export class Animator {
     this.updateRoot();
     this.bendTorso();
     if (this.legK >= 0.01) this.flexLegs();
-    if (this.legK >= 0.01 || this.leanK >= 0.01) this.uprightTorso(Math.max(this.legK, this.leanK), this.clipName !== 'crouch_idle', this.clipName === 'crouch_idle' ? 1.5 : 1);
+    if (this.clipName === 'crouch_idle' && this.crouchK > 0.01) this.openHips(this.crouchK);
+    if ((this.legK >= 0.01 || this.leanK >= 0.01)) this.uprightTorso(Math.max(this.legK, this.leanK), this.clipName !== 'crouch_idle', this.clipName === 'crouch_idle' ? 1.5 : 1);
     if (kickW > 0) this.applyKick(kickW);
     if (flail > 0) this.applyFlail(flail);
     if (fist) { this.curlHand(1, 1.4); this.curlHand(-1, 1.4); }
@@ -751,6 +744,12 @@ export class Animator {
       const dy = this.posIn(l.u, new THREE.Vector3()).y - this.posIn(r.u, new THREE.Vector3()).y;
       this.rotateBone(sp.chest, new THREE.Quaternion().setFromAxisAngle(Z, THREE.MathUtils.clamp(-dy * 2.2, -0.25, 0.25) * k));
     }
+  }
+
+  /** Agachado parado: o clipe dobra o quadril além do que a pele aguenta e a malha das nádegas se deforma; abre um pouco o ângulo da coxa. */
+  private openHips(k: number): void {
+    const thigh = new THREE.Quaternion().setFromAxisAngle(X, 0.3 * k);
+    for (const l of this.legs) this.rotateBone(l.thigh, thigh);
   }
 
   /** Andando agachado: joelhos mais dobrados (coxa para a frente, canela de volta) para o corpo ficar mais baixo. */

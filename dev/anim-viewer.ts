@@ -156,6 +156,7 @@ const V = {
     return dur;
   },
 };
+(V as unknown as Record<string, unknown>).obj = obj;
 (window as unknown as { V: typeof V }).V = V;
 (window as unknown as { READY: boolean }).READY = true;
 

@@ -433,7 +433,7 @@ function loop(): void {
     const input = readInput();
     if (intro) { // durante o voo o jogador espera (sem comandos)
       look.dx = 0; look.dy = 0;
-      Object.assign(input, { x: 0, y: 0, mag: 0, fire: false, aim: false, jump: false, climb: false, crouch: false, interact: false, emote: null, reload: false, switchWeapon: false, weaponStep: 0, weaponPick: null, sprint: false, gas: false, brake: false, handbrake: false, wheelie: false });
+      Object.assign(input, { x: 0, y: 0, mag: 0, fire: false, aim: false, jump: false, climb: false, crouch: false, interact: false, reload: false, switchWeapon: false, weaponStep: 0, weaponPick: null, sprint: false, gas: false, brake: false, handbrake: false, wheelie: false });
     }
     lastInput = input;
     if (!paused) {

@@ -46,7 +46,6 @@ export interface HudState {
 }
 
 export interface MobileHudOptions {
-  onAnimations: () => void;
   /** botão do microfone (voz por proximidade) */
   onVoiceTalk: (on: boolean) => void;
   /** engrenagem: pausa o jogo e abre o menu */
@@ -139,9 +138,6 @@ const CSS = `
 .m-hud.driving .m-door{right:calc(var(--u)*3.2);bottom:calc(var(--u)*33);width:calc(var(--u)*13);height:calc(var(--u)*13)}
 /* Sprint à direita (o Escalar saiu: escala sozinho ao pular perto de um obstáculo) */
 .m-sprint{right:calc(var(--u)*19.4);bottom:calc(var(--u)*8);width:calc(var(--u)*14);height:calc(var(--u)*14);font-size:calc(var(--u)*3.2)}
-.m-anim{left:50%;top:calc(var(--u)*1.5);transform:translateX(-50%);width:auto;height:calc(var(--u)*8);border-radius:calc(var(--u)*4);padding:0 calc(var(--u)*3);
-  flex-direction:row;gap:calc(var(--u)*1.2);font-size:calc(var(--u)*3);position:fixed}
-.m-anim .ico{width:calc(var(--u)*4.4);height:calc(var(--u)*4.4)}
 /* carro */
 .m-gas{right:calc(var(--u)*1.2);bottom:calc(var(--u)*9.5);width:calc(var(--u)*17);height:calc(var(--u)*17)}
 .m-brake{right:calc(var(--u)*19.4);bottom:calc(var(--u)*8);width:calc(var(--u)*14);height:calc(var(--u)*14)}
@@ -415,7 +411,7 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   const KEYS_FOOT: [string, string][] = [
     ['W A S D', 'Mover'], ['Shift / Q', 'Correr'], ['Espaço', 'Pular'], ['E', 'Escalar'], ['Z / Ctrl', 'Agachar'], ['F', 'Entrar no carro'],
     ['Clique', 'Atirar / bater'], ['Botão direito', 'Mirar'], ['R', 'Recarregar'], ['Scroll', 'Trocar de arma'], ['B', 'Loja'], ['C', 'Veículos'],
-    ['T', 'Falar (segure)'], ['G', 'Animações'], ['M', 'Mapa'], ['P', 'Menu'],
+    ['T', 'Falar (segure)'], ['M', 'Mapa'], ['P', 'Menu'],
   ];
   const KEYS_CAR: [string, string][] = [
     ['W / S', 'Acelerar / freio'], ['A / D', 'Virar'], ['Espaço', 'Freio de mão'], ['H', 'Buzina'], ['V', 'Empinar (moto)'], ['L', 'Luzes da viatura'],
