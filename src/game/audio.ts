@@ -92,6 +92,7 @@ export class EngineSound {
   private skidGain: GainNode | null = null;
   private skidFilter: BiquadFilterNode | null = null;
   private skidPan: StereoPannerNode | null = null;
+  private skidSrc: AudioBufferSourceNode | null = null;
   private failed = false;
 
   private start(): boolean {
@@ -142,11 +143,23 @@ export class EngineSound {
       this.skidPan = c.createStereoPanner();
       src.connect(this.skidFilter).connect(this.skidGain).connect(this.skidPan).connect(out);
       src.start();
+      this.skidSrc = src;
       return true;
     } catch {
       this.failed = true;
       return false;
     }
+  }
+
+  /** Para e solta tudo do motor (veículo guardado ou jogador que saiu): sem isso os osciladores seguiam tocando para sempre, até com o carro já removido. */
+  dispose(): void {
+    try {
+      this.osc?.stop(); this.osc2?.stop(); this.lope?.stop(); this.skidSrc?.stop();
+      this.pan?.disconnect(); this.skidPan?.disconnect();
+    } catch { /* já parado */ }
+    this.osc = this.osc2 = this.lope = this.skidSrc = null;
+    this.gain = this.filter = this.pan = this.skidGain = this.skidFilter = this.skidPan = this.lopeGain = null;
+    this.failed = true; // não recomeça depois de solto
   }
 
   /**
@@ -385,6 +398,13 @@ export class ScrapeSound {
     }
   }
 
+  /** Para o ruído (veículo removido). */
+  dispose(): void {
+    try { this.src?.stop(); this.pan?.disconnect(); } catch { /* já parado */ }
+    this.src = this.gain = this.pan = this.filt = null;
+    this.failed = true;
+  }
+
   update(k: number, x: number, z: number): void {
     if (k < 0.02) {
       if (this.gain && audioCtx()) this.gain.gain.setTargetAtTime(0, audioCtx()!.currentTime, 0.06);
@@ -440,6 +460,9 @@ export class SirenSound {
       return false;
     }
   }
+
+  /** Para a sirene (veículo removido). */
+  dispose(): void { this.stop(); }
 
   private stop(): void {
     try { this.osc?.stop(); this.lfo?.stop(); this.gain?.disconnect(); } catch { /* já parado */ }

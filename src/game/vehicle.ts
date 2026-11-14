@@ -541,6 +541,17 @@ export class Car {
   }
 
   /** Troca as cores da equipe (o dono mudou de equipe). */
+  /** Solta o que o veículo prende: sons (motor, raspar, sirene, que seguiam tocando) e os materiais copiados da pintura. */
+  dispose(): void {
+    this.engine.dispose();
+    this.scrapeSnd.dispose();
+    this.sirenSnd.dispose();
+    this.root.traverse((o) => {
+      const m = (o as THREE.Mesh).material;
+      if (m) (Array.isArray(m) ? m : [m]).forEach((x) => x.dispose());
+    });
+  }
+
   recolor(look: PaintLook | null): void {
     this.look = look;
     if (this.srcModel) this.useModel(this.srcModel);
@@ -1037,6 +1048,7 @@ export function despawnPersonal(ownerId: string): void {
   const i = CARS.indexOf(car);
   if (i >= 0) CARS.splice(i, 1);
   car.root.removeFromParent();
+  car.dispose();
 }
 
 /** Procura um lugar livre perto de (px, pz), preferindo a frente de `heading`: sem prédio, árvore, banco ou outro veículo. */

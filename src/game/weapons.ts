@@ -98,6 +98,7 @@ function flashTexture(): THREE.Texture {
   g.fillStyle = grad;
   g.fillRect(0, 0, 64, 64);
   flashTex = new THREE.CanvasTexture(c);
+  flashTex.colorSpace = THREE.SRGBColorSpace;
   return flashTex;
 }
 

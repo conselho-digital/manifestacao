@@ -40,7 +40,19 @@ function drawLabel(text: string, team: TeamLook | null, hp = 100, shield = false
     g.fillStyle = hp > 50 ? '#69b25a' : hp > 25 ? '#e0b23d' : '#d04a3a';
     g.fillRect(50, 70, 156 * Math.max(0, hp) / 100, 6);
   }
-  return new THREE.CanvasTexture(c);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+
+/** Solta a geometria e os materiais de um grupo só dele (anel da equipe). */
+function freeGroup(g: THREE.Object3D): void {
+  g.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    m.geometry.dispose();
+    (Array.isArray(m.material) ? m.material : [m.material]).forEach((x) => x.dispose());
+  });
 }
 
 function makeLabel(text: string, team: TeamLook | null): THREE.Sprite {
@@ -236,6 +248,7 @@ export class RemotePlayer {
     this.applyFlag();
     this.redrawLabel();
     this.ring.removeFromParent();
+    freeGroup(this.ring);
     this.ring = makeTeamRing(team);
     this.root.add(this.ring);
   }
@@ -254,5 +267,9 @@ export class RemotePlayer {
   dispose(): void {
     if (this.lastCar) this.lastCar.driver = null;
     this.root.removeFromParent();
+    // solta o que é só dele: a textura e o material do nome e o anel da equipe (a malha do personagem é compartilhada)
+    this.label.material.map?.dispose();
+    this.label.material.dispose();
+    freeGroup(this.ring);
   }
 }

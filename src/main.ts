@@ -96,7 +96,8 @@ const GAME_PIXEL_RATIO = pixelRatio();
 const warm = warmUp(renderer, scene, camera, menuFog);
 let loadingScreen = false; // true enquanto a tela de carregamento cobre o jogo: não desenha a cena
 
-const clock = new THREE.Clock();
+const clock = new THREE.Timer(); // THREE.Clock está obsoleto desde o r183
+clock.connect(document); // depois de uma aba escondida não vem um delta gigante
 let player: Player | null = null;
 let hud: MobileHud | null = null;
 let combat: Combat | null = null;
@@ -435,7 +436,8 @@ function next(): void {
   else requestAnimationFrame(loop);
 }
 function loop(): void {
-  const dt = Math.min(clock.getDelta(), 0.05);
+  clock.update();
+  const dt = Math.min(Math.max(clock.getDelta(), 0), 0.05);
   if (inMenu) { next(); return; } // menu: nada é desenhado (fundo liso)
   if (intro && !intro.started) menuCamera(dt); // o voo de entrada começa da vista aérea do menu
   if (loadingScreen) { next(); return; } // tela de carregamento cobre tudo: sem simulação nem desenho
