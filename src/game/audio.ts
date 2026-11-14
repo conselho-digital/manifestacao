@@ -2,11 +2,21 @@ const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.m
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 
+// Tiro do revólver (pistola): gravação enviada pelo dono, cortada em 1 disparo (public/sounds/revolver.wav, 0,69 s). Até carregar vale o tiro sintetizado.
+let revolverBuf: AudioBuffer | null = null;
+let revolverLoading = false;
+function loadRevolver(c: AudioContext): void {
+  if (revolverBuf || revolverLoading) return;
+  revolverLoading = true;
+  fetch('/sounds/revolver.wav').then((r) => r.arrayBuffer()).then((b) => c.decodeAudioData(b)).then((buf) => { revolverBuf = buf; }).catch(() => { revolverLoading = false; });
+}
+
 /** AudioContext único do jogo (motores, tiros e voz passam todos pelo ganho mestre). */
 export function audioCtx(): AudioContext | null {
   try {
     ctx ??= new AudioContext();
     if (ctx.state === 'suspended') void ctx.resume();
+    loadRevolver(ctx);
     if (!master) { master = ctx.createGain(); master.gain.value = 1; master.connect(ctx.destination); }
     return ctx;
   } catch {
@@ -107,10 +117,10 @@ function loadSamples(name: SampleName): void {
 
 /** Uma "puxada" do acelerador na moto esportiva: a subida de giro (`rise`) toca acompanhando a velocidade e, perto do fim, entra o patamar (`hold`). */
 interface RisePress { rise: AudioBufferSourceNode; riseG: GainNode; hold: AudioBufferSourceNode | null; holdG: GainNode | null; pos: number; lastT: number; rate: number; gear: number }
-/** Marchas simuladas pela velocidade (fração da velocidade máxima): em cada uma a subida do som vai do começo (GEAR_START) até perto do fim (RISE_END); na troca o som corta e recomeça. */
-const GEAR_EDGES = [0, 0.38, 0.68, 1] as const;
-const GEAR_START = [0.02, 0.3, 0.34] as const;
-const RISE_END = 0.9;
+/** Marchas por PORCENTAGEM da velocidade máxima: de 0% a SHIFT_AT é a 1ª marcha (o som vai do começo ao fim), na troca corta, fica um instante em silêncio e a 2ª marcha (de SHIFT_AT a 100%) começa o som de novo. Vale para todos os veículos. */
+const SHIFT_AT = 0.6;
+const GEAR_START = 0.02; // onde a subida gravada começa em cada marcha (fração da duração)
+const RISE_END = 0.9; // e onde chega no fim da marcha
 const SHIFT_GAP = 0.16; // silêncio da troca de marcha (s)
 
 interface SampleVoice {
@@ -144,6 +154,9 @@ export class EngineSound {
   private samp: SampleVoice | null = null;
   private wasOn = false;
   private wasOnSynth = false;
+  private gear = 0;
+  private lastGear = 0;
+  private dipUntil = 0;
   private gateAt = 0;
 
   private start(): boolean {
@@ -249,7 +262,7 @@ export class EngineSound {
   }
 
   /** Moto esportiva com som gravado: toca a partida ao subir, depois mistura marcha lenta e aceleração pelo acelerador; o tom sobe com a velocidade. */
-  private sampleEngine(c: AudioContext, t: number, S: SampleSet, cfg: { idleRate: readonly number[]; revRate: readonly number[] }, on: boolean, rpm: number, throttle: number, prox: { gain: number; pan: number }): void {
+  private sampleEngine(c: AudioContext, t: number, S: SampleSet, cfg: { idleRate: readonly number[]; revRate: readonly number[] }, on: boolean, g: number, gf: number, throttle: number, prox: { gain: number; pan: number }): void {
     const out = audioOut();
     if (!out) return;
     if (!this.samp) {
@@ -296,15 +309,13 @@ export class EngineSound {
     const live = on && t >= this.gateAt;
     const a = Math.min(1, Math.max(0, throttle));
     sv.idleG.gain.setTargetAtTime(1 - a * 0.85, t, 0.12);
-    sv.revG.gain.setTargetAtTime(a, t, 0.1);
-    sv.idle.playbackRate.setTargetAtTime(cfg.idleRate[0]! + rpm * cfg.idleRate[1]!, t, 0.1);
-    const holdRate = cfg.revRate[0]! + rpm * cfg.revRate[1]!;
+    sv.revG.gain.setTargetAtTime(t < this.dipUntil ? 0 : a, t, 0.04); // na troca de marcha o som some um instante
+    sv.idle.playbackRate.setTargetAtTime(cfg.idleRate[0]!, t, 0.1); // solto o acelerador: sempre o som do motor parado e ligado
+    const holdRate = cfg.revRate[0]! + gf * cfg.revRate[1]!; // dentro da marcha o tom sobe de 0% a 100% dela
     if (sv.rev) sv.rev.playbackRate.setTargetAtTime(holdRate, t, 0.1);
     if (S.rise) {
       const dur = S.rise.duration;
-      const g = rpm < GEAR_EDGES[1] ? 0 : rpm < GEAR_EDGES[2] ? 1 : 2;
-      const f = clamp((rpm - GEAR_EDGES[g]) / (GEAR_EDGES[g + 1] - GEAR_EDGES[g]), 0, 1);
-      const target = (GEAR_START[g] + f * (RISE_END - GEAR_START[g])) * dur; // ponto da subida que combina com a velocidade nesta marcha
+      const target = (GEAR_START + gf * (RISE_END - GEAR_START)) * dur; // ponto da subida que combina com a porcentagem da marcha
       const stopPress = (pr: RisePress): void => {
         pr.riseG.gain.setTargetAtTime(0, t, 0.03);
         pr.holdG?.gain.setTargetAtTime(0, t, 0.03);
@@ -325,7 +336,7 @@ export class EngineSound {
         else if (pr.gear !== g) {
           // troca de marcha: corta o som, fica um instante em silêncio e recomeça a aceleração do começo da subida
           stopPress(pr);
-          pr = sv.press = begin(t + SHIFT_GAP, GEAR_START[g] * dur, g);
+          pr = sv.press = begin(t + SHIFT_GAP, GEAR_START * dur, g);
           pr.riseG.gain.setValueAtTime(0, t);
           pr.riseG.gain.setValueAtTime(0, t + SHIFT_GAP - 0.02);
           pr.riseG.gain.linearRampToValueAtTime(1, t + SHIFT_GAP + 0.03);
@@ -371,25 +382,33 @@ export class EngineSound {
     const p = this.p;
     const bike = p.bike === true;
     const rpm = Math.min(1, Math.abs(speed) / p.topSpeed);
-    const f = p.idle + (p.top - p.idle) * rpm;
     const t = c.currentTime;
+    // marcha pela porcentagem da velocidade máxima (com folga de 3% ao descer para não ficar trocando)
+    if (this.gear === 0 && rpm >= SHIFT_AT) this.gear = 1;
+    else if (this.gear === 1 && rpm < SHIFT_AT - 0.03) this.gear = 0;
+    const g = this.gear;
+    const gf = clamp(g === 0 ? rpm / SHIFT_AT : (rpm - SHIFT_AT) / (1 - SHIFT_AT), 0, 1); // 0..1 dentro da marcha
+    const pushing = throttle >= 0.5;
+    if (g !== this.lastGear) { if (pushing && on) this.dipUntil = t + SHIFT_GAP; this.lastGear = g; }
+    const rpmEff = pushing ? gf : 0; // solto o acelerador: volta ao som do motor parado
+    const f = p.idle + (p.top - p.idle) * rpmEff;
     const prox = proximity(x, z, ENGINE_RANGE);
     const set = p.sample ? sampleBufs.get(p.sample) : undefined;
     if (on && !this.wasOnSynth && !set) this.crank(c, t, prox, bike); // sem som gravado: toca uma partida sintetizada (motor de arranque) ao ligar
     this.wasOnSynth = on;
     if (p.sample && !set) loadSamples(p.sample);
     if (p.sample && set) {
-      this.sampleEngine(c, t, set, SAMPLE_SETS[p.sample], on, rpm, throttle, prox);
+      this.sampleEngine(c, t, set, SAMPLE_SETS[p.sample], on, g, gf, throttle, prox);
       this.gain.gain.setTargetAtTime(0, t, 0.05); // o motor sintetizado fica mudo
     } else {
       this.osc.frequency.setTargetAtTime(f, t, 0.08);
       this.osc2.frequency.setTargetAtTime(f * p.ratio, t, 0.08);
-      this.filter.frequency.setTargetAtTime(p.cutIdle + (p.cutTop - p.cutIdle) * rpm, t, 0.1);
-      if (this.lope) this.lope.frequency.setTargetAtTime(p.lope + rpm * 22, t, 0.1); // a batida acelera com o giro
-      // sem acelerar o barulho cai rápido (a moto mantém a velocidade, só o som diminui)
-      const level = bike ? 0.12 + 0.88 * throttle : 0.55 + 0.45 * throttle;
-      const vol = on ? (0.02 + rpm * 0.034) * p.vol * prox.gain * level : 0;
-      this.gain.gain.setTargetAtTime(vol, t, throttle > 0 || !bike ? 0.15 : 0.05);
+      this.filter.frequency.setTargetAtTime(p.cutIdle + (p.cutTop - p.cutIdle) * rpmEff, t, 0.1);
+      if (this.lope) this.lope.frequency.setTargetAtTime(p.lope + rpmEff * 22, t, 0.1); // a batida acelera com o giro
+      // sem acelerar: som do motor parado (grave e baixo); na troca de marcha o som some um instante
+      const level = pushing ? 1 : 0.35;
+      const vol = on ? (0.02 + rpmEff * 0.034) * p.vol * prox.gain * level * (t < this.dipUntil ? 0.1 : 1) : 0;
+      this.gain.gain.setTargetAtTime(vol, t, pushing ? 0.12 : 0.05);
     }
     this.pan.pan.setTargetAtTime(prox.pan, t, 0.05);
     // pneu cantando: mais agudo e mais forte com a velocidade
@@ -414,6 +433,21 @@ export function playShotAt(x: number, z: number, kind: ShotKind): void {
   const out = audioOut();
   if (!c || !out) return;
   try {
+    if (kind === 'pistol' && revolverBuf) {
+      const src = c.createBufferSource();
+      src.buffer = revolverBuf;
+      src.playbackRate.value = 0.97 + Math.random() * 0.06; // cada tiro um pouquinho diferente
+      const lp = c.createBiquadFilter();
+      lp.type = 'lowpass';
+      lp.frequency.value = 9000 * (0.25 + 0.75 * prox.gain); // longe, o ar come os agudos
+      const g = c.createGain();
+      g.gain.value = 0.6 * prox.gain;
+      const pan = c.createStereoPanner();
+      pan.pan.value = prox.pan;
+      src.connect(lp).connect(g).connect(pan).connect(out);
+      src.start();
+      return;
+    }
     const rifle = kind === 'rifle';
     const quiet = kind === 'silenced'; // Honey Badger: tiro baixo e abafado
     const dur = rifle ? 0.16 : quiet ? 0.07 : 0.09;
