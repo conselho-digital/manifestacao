@@ -1,3 +1,4 @@
+import { gripOf, gripsVersion, GRIP_KEYS, type GripKey } from './grips';
 import { flagTexture } from './graffiti';
 import type { Team } from './teams';
 import * as THREE from 'three';
@@ -124,6 +125,9 @@ export class WeaponVisual {
   private readonly cricketInner = new THREE.Group();
   private readonly extraInner = new Map<ExtraMelee, THREE.Group>();
   private flashT = 0;
+  /** um grupo por arma: o ajuste fino da posição na mão (`grips.ts`) mexe nele, sem tocar no modelo */
+  private readonly gripWrap = new Map<GripKey, THREE.Group>();
+  private gripVer = -1;
   private mode: ArmedMode = 'none';
   private ready = false;
   private bound = false;
@@ -134,7 +138,8 @@ export class WeaponVisual {
   constructor(root: THREE.Object3D) {
     this.anchor.visible = false;
     root.add(this.anchor);
-    this.anchor.add(this.pistolInner, this.canInner);
+    this.mount(this.anchor, 'pistol', this.pistolInner);
+    this.mount(this.anchor, 'spray', this.canInner);
     this.pistolInner.visible = false;
     this.canInner.visible = false;
     // o revólver Python .357 troca a pistola simples (que fica só até o arquivo carregar)
@@ -151,7 +156,9 @@ export class WeaponVisual {
     const fallbackBat = buildBat();
     this.batAnchor.add(fallbackBat);
     // o "taco" é a bandeira num mastro (modelo convertido do DFF); enquanto carrega, vale o taco simples
-    this.batAnchor.add(this.flagInner, this.signInner, this.cricketInner);
+    this.mount(this.batAnchor, 'bat', this.flagInner);
+    this.mount(this.batAnchor, 'sign', this.signInner);
+    this.mount(this.batAnchor, 'cricket', this.cricketInner);
     void loadFlag().then((src) => {
       this.batAnchor.remove(fallbackBat);
       this.flagInner.clear();
@@ -200,7 +207,7 @@ export class WeaponVisual {
     for (const k of EXTRA_MELEE_KEYS) {
       const holder = new THREE.Group();
       this.extraInner.set(k, holder);
-      this.batAnchor.add(holder);
+      this.mount(this.batAnchor, k, holder);
       void loadExtra(k).then((src) => {
         const m = src.clone(true);
         m.traverse((o) => { o.castShadow = true; });
@@ -237,7 +244,7 @@ export class WeaponVisual {
         inner.position.set(0, geo.shiftY, 0.3);
         inner.traverse((o) => { o.castShadow = true; });
         inner.visible = false;
-        this.anchor.add(inner);
+        this.mount(this.anchor, k, inner);
         this.rifleInners.set(k, inner);
         this.refresh();
       });
@@ -258,11 +265,40 @@ export class WeaponVisual {
       inner.rotation.y = -Math.PI / 2; // cano para +Z (frente)
       inner.position.z = 0.3;
       inner.traverse((o) => { o.castShadow = true; });
-      this.anchor.add(inner);
+      this.mount(this.anchor, 'ak', inner);
       this.rifleInner = inner;
       this.ready = true;
       this.apply();
     });
+  }
+
+  private mount(parent: THREE.Object3D, key: GripKey, child: THREE.Object3D): void {
+    let w = this.gripWrap.get(key);
+    if (!w) { w = new THREE.Group(); this.gripWrap.set(key, w); parent.add(w); }
+    w.add(child);
+  }
+
+  /** Aplica o ajuste de posição/giro/escala de cada arma na mão (de `grips.ts`). Chamado de novo quando o editor muda um valor. */
+  refreshGrips(): void {
+    this.gripVer = gripsVersion();
+    for (const k of GRIP_KEYS) {
+      const w = this.gripWrap.get(k);
+      if (!w) continue;
+      const g = gripOf(k);
+      w.position.set(g.p[0], g.p[1], g.p[2]);
+      w.rotation.set(THREE.MathUtils.degToRad(g.r[0]), THREE.MathUtils.degToRad(g.r[1]), THREE.MathUtils.degToRad(g.r[2]));
+      w.scale.setScalar(g.s);
+    }
+  }
+
+  /** Grupo de ajuste de uma arma (para o editor mostrar os eixos nele). */
+  gripFrame(key: GripKey): THREE.Group | undefined { return this.gripWrap.get(key); }
+
+  /** Onde a arma está agora no mundo (ponto de empunhadura), para a câmera do editor seguir. */
+  heldPosition(out: THREE.Vector3): THREE.Vector3 {
+    const a = this.batAnchor.visible ? this.batAnchor : this.anchor;
+    a.updateWorldMatrix(true, false);
+    return out.setFromMatrixPosition(a.matrixWorld);
   }
 
   /** A posição da arma passa a ser dada pelo animador (acompanha o peito e as mãos). */
@@ -315,6 +351,7 @@ export class WeaponVisual {
   }
 
   private refresh(): void {
+    if (this.gripVer !== gripsVersion()) this.refreshGrips();
     const show = this.ready && this.mode !== 'none' && !this.hidden && !this.suppressed;
     const bat = isBatLike(this.mode);
     this.flagInner.visible = this.mode === 'bat';

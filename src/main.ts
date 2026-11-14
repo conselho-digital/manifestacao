@@ -21,6 +21,7 @@ import { Graffiti } from './game/graffiti';
 import { Billboard } from './game/billboard';
 import { updateCulling } from './game/culling';
 import { WeaponVisual } from './game/weapons';
+import { loadGrips } from './game/grips';
 import { warmUp } from './game/preload';
 import { playCrashAt, playHornAt, setListener } from './game/audio';
 import { HUD_KEY, Inventory, WEAPON_NAMES, type WeaponId } from './game/inventory';
@@ -93,6 +94,7 @@ function menuCamera(dt: number): void {
 // No menu NÃO se desenha mapa nenhum (fundo liso). Só se pré-carregam, sem mostrar, os modelos (veículos, armas, personagens, animações);
 // a cidade é criada e os gráficos compilados na tela de carregamento, depois de clicar em Entrar.
 const GAME_PIXEL_RATIO = pixelRatio();
+void loadGrips(); // ajustes finos da posição das armas nas mãos (public/weapon-grips.json)
 const warm = warmUp(renderer, scene, camera, menuFog);
 let loadingScreen = false; // true enquanto a tela de carregamento cobre o jogo: não desenha a cena
 

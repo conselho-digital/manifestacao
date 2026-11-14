@@ -47,6 +47,10 @@
     {
       "source": "/load-animation",
       "destination": "/load-animation.html"
+    },
+    {
+      "source": "/armas",
+      "destination": "/armas.html"
     }
   ]
 }
