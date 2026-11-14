@@ -14,7 +14,7 @@ const ICE: RTCConfiguration = {
 const CONNECT_RANGE = 45;
 const DROP_RANGE = 60;
 /** a voz some em 40 m; a menos de 5 m é cheia */
-const HEAR_RANGE = 40;
+export const HEAR_RANGE = 40;
 const TICK = 0.5;
 const RETRY_AFTER_MS = 6000;
 const MAX_PEERS = 8; // malha completa só com os mais próximos

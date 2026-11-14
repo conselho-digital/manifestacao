@@ -36,3 +36,32 @@ export async function toLightImage(file: File): Promise<Blob> {
   }
   throw new Error('Não consegui deixar a imagem leve o bastante. Tente uma menor.');
 }
+
+const POSTER_W = 1200;
+const POSTER_H = 800;
+const POSTER_MAX = 450 * 1024;
+
+/** Cartaz de vitrine: corta a imagem no formato 3:2 (preenchendo), 1200 x 800 px, e converte para webp abaixo de ~450 KB. */
+export async function toPosterImage(file: File): Promise<Blob> {
+  if (!file.type.startsWith('image/')) throw new Error('Escolha um arquivo de imagem (png, jpg, webp...).');
+  if (file.size > 25 * 1024 * 1024) throw new Error('Imagem muito grande (máximo 25 MB).');
+  const img = await load(file);
+  for (const w of [POSTER_W, 1000, 800, 640]) {
+    const h = Math.round((w * POSTER_H) / POSTER_W);
+    const c = document.createElement('canvas');
+    c.width = w;
+    c.height = h;
+    const g = c.getContext('2d')!;
+    const k = Math.max(w / img.naturalWidth, h / img.naturalHeight);
+    const dw = img.naturalWidth * k;
+    const dh = img.naturalHeight * k;
+    g.drawImage(img, (w - dw) / 2, (h - dh) / 2, dw, dh);
+    for (const q of [0.86, 0.74, 0.62, 0.5]) {
+      const b = await toBlob(c, 'image/webp', q);
+      if (!b) break;
+      if (b.type !== 'image/webp') throw new Error('Este navegador não gera imagens webp. Use o Chrome ou o Edge.');
+      if (b.size <= POSTER_MAX) return b;
+    }
+  }
+  throw new Error('Não consegui deixar a imagem leve o bastante. Tente uma menor.');
+}

@@ -22,6 +22,9 @@ import { Billboard } from './game/billboard';
 import { updateCulling } from './game/culling';
 import { WeaponVisual } from './game/weapons';
 import { loadGrips } from './game/grips';
+import { VoiceRings } from './game/voiceRing';
+import { updatePosterOverlays } from './game/shops';
+import { initPosterEditor } from './ui/posterEditor';
 import { warmUp } from './game/preload';
 import { playCrashAt, playHornAt, setListener } from './game/audio';
 import { HUD_KEY, Inventory, WEAPON_NAMES, type WeaponId } from './game/inventory';
@@ -46,6 +49,10 @@ handleResize(renderer, camera);
 // A cidade só é montada depois do menu (tela de carregamento): no menu não há mapa carregado nem desenhado
 scene.add(createCars());
 scene.add(sparksObject);
+const voiceRings = new VoiceRings();
+scene.add(voiceRings.group);
+const posterEditor = initPosterEditor(() => (player ? { x: player.object.position.x, z: player.object.position.z } : null));
+void isAdmin().then((a) => posterEditor.setAdmin(a || (import.meta.env.DEV && new URLSearchParams(location.search).has('admin'))));
 initMouse(renderer.domElement);
 
 // Ângulo extra da câmera (para inspecionar de lado): ?camoffset=1.57
@@ -559,6 +566,13 @@ function loop(): void {
   graffiti.update(dt);
   if (player) { cullT -= dt; if (cullT <= 0) { cullT = 0.25; updateCulling(player.object.position.x, player.object.position.z); } }
   if (player) billboard.update(dt, player.object.position.x, player.object.position.z);
+  if (player) {
+    updatePosterOverlays(dt, player.object.position.x, player.object.position.z);
+    posterEditor.update(dt);
+    const spots = [{ x: player.object.position.x, y: player.object.position.y, z: player.object.position.z }];
+    remotes.forEach((r) => spots.push({ x: r.root.position.x, y: r.root.position.y, z: r.root.position.z }));
+    voiceRings.update(spots);
+  }
   if (player) {
     const others = new Map<string, { x: number; z: number }>();
     remotes.forEach((r, id) => others.set(id, { x: r.root.position.x, z: r.root.position.z }));

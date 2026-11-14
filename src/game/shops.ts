@@ -4,9 +4,10 @@
 // liste-o em `public/posters/index.json` ({ "posters": { "N1_zp1": "N1_zp1.webp" } }) — ver `public/posters/LEIA.md`.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { supabase } from '../net/supabase';
 
 export interface ShopBuilding { name: string; r: { x0: number; x1: number; z0: number; z1: number }; off: number }
-export interface PosterSlot { id: string; building: string; face: 'zp' | 'zn' | 'xp' | 'xn'; n: number; x: number; z: number; nx: number; nz: number; page: number; cell: number }
+export interface PosterSlot { id: string; building: string; face: 'zp' | 'zn' | 'xp' | 'xn'; n: number; x: number; z: number; nx: number; nz: number; page: number; cell: number; /** centro do cartaz no mundo (x, z) e altura */ cx: number; cz: number; cy: number }
 
 const SHOP_W = 6.2; // largura de cada loja (pilastras, vitrine e porta)
 const GAP = 0.4;
@@ -71,28 +72,181 @@ function drawImage(g: CanvasRenderingContext2D, x: number, y: number, img: HTMLI
   g.restore();
 }
 
-/** Lê o índice de cartazes publicados e pinta cada um na sua vaga. */
-async function loadPosters(pages: Page[]): Promise<void> {
-  let index: Record<string, string> = {};
+// ---------- imagens dos cartazes ----------
+let pagesRef: Page[] = [];
+let cityRef: THREE.Object3D | null = null;
+const slotById = new Map<string, PosterSlot>();
+/** imagem salva de cada vaga (arquivo de `public/posters` ou endereço do servidor) e prévia local (só para quem escolheu, ainda não salva) */
+const savedUrl = new Map<string, string>();
+const previewUrl = new Map<string, string>();
+const effectiveUrl = (id: string): string | undefined => previewUrl.get(id) ?? savedUrl.get(id);
+
+/** Redesenha a vaga no atlas: cartaz de exemplo e, por cima, a imagem (prévia ou salva), se houver. */
+function redraw(slot: PosterSlot): void {
+  const page = pagesRef[slot.page];
+  if (!page) return;
+  const g = page.canvas.getContext('2d')!;
+  const x = (slot.cell % COLS) * CELL_W;
+  const y = Math.floor(slot.cell / COLS) * CELL_H;
+  drawPlaceholder(g, x, y, slot.id);
+  page.tex.needsUpdate = true;
+  const url = effectiveUrl(slot.id);
+  if (!url) return;
+  const img = new Image();
+  img.crossOrigin = 'anonymous';
+  img.onload = () => {
+    if (effectiveUrl(slot.id) !== url) return; // trocou enquanto carregava
+    drawImage(g, x, y, img);
+    page.tex.needsUpdate = true;
+  };
+  img.src = url;
+}
+
+const SAFE_URL = /^(https:\/\/[^\s]+|\/posters\/[\w.-]{1,80})$/;
+function setSaved(id: string, url: string | null): void {
+  const slot = slotById.get(id);
+  if (!slot) return;
+  if (url && SAFE_URL.test(url)) savedUrl.set(id, url); else savedUrl.delete(id);
+  redraw(slot);
+}
+
+/** Lê os cartazes: arquivos de `public/posters/index.json` e, por cima, os que o admin salvou no servidor (ao vivo pelo Realtime). */
+async function loadPosters(): Promise<void> {
   try {
     const r = await fetch('/posters/index.json', { cache: 'no-cache' });
-    if (!r.ok) return;
-    const j = (await r.json()) as { posters?: Record<string, unknown> };
-    for (const [k, v] of Object.entries(j.posters ?? {})) if (typeof v === 'string' && /^[\w.-]{1,80}$/.test(v)) index[k] = v;
-  } catch { index = {}; }
-  for (const slot of POSTER_SLOTS) {
-    const file = index[slot.id];
-    if (!file) continue;
-    const page = pages[slot.page];
-    if (!page) continue;
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    img.onload = () => {
-      const g = page.canvas.getContext('2d')!;
-      drawImage(g, (slot.cell % COLS) * CELL_W, Math.floor(slot.cell / COLS) * CELL_H, img);
-      page.tex.needsUpdate = true;
-    };
-    img.src = `/posters/${file}`;
+    if (r.ok) {
+      const j = (await r.json()) as { posters?: Record<string, unknown> };
+      for (const [k, v] of Object.entries(j.posters ?? {})) if (typeof v === 'string' && /^[\w.-]{1,80}$/.test(v)) setSaved(k, `/posters/${v}`);
+    }
+  } catch { /* sem índice */ }
+  if (!supabase) return;
+  try {
+    const { data } = await supabase.from('posters').select('slot_id,url');
+    for (const row of (data ?? []) as { slot_id: string; url: string }[]) setSaved(row.slot_id, row.url);
+  } catch { /* tabela ainda não existe: só os arquivos */ }
+  supabase.channel('posters')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'posters' }, (p) => {
+      const n = p.new as { slot_id?: string; url?: string };
+      const o = p.old as { slot_id?: string };
+      if (p.eventType === 'DELETE') { if (o.slot_id) setSaved(o.slot_id, null); } else if (n.slot_id && typeof n.url === 'string') setSaved(n.slot_id, n.url);
+    })
+    .subscribe();
+}
+
+/** Vaga de cartaz na frente da qual o jogador está (a menos de 4 m, de frente para a vitrine), ou null. `reach` > 1 alarga a zona (para não cancelar na borda). */
+export function nearestPoster(x: number, z: number, reach = 1): PosterSlot | null {
+  let best: PosterSlot | null = null;
+  let bd = Infinity;
+  for (const s of POSTER_SLOTS) {
+    const dx = x - s.cx;
+    const dz = z - s.cz;
+    const d = dx * s.nx + dz * s.nz; // distância à frente do cartaz
+    const lat = dx * s.nz - dz * s.nx; // ao longo da fachada
+    if (d < 0.2 || d > 4.2 * reach || Math.abs(lat) > 2.6 * reach) continue;
+    const dist = Math.hypot(d, lat);
+    if (dist < bd) { bd = dist; best = s; }
+  }
+  return best;
+}
+
+/** Mostra uma imagem no cartaz SÓ para este jogador (prévia, ainda não salva); `null` desfaz e volta ao que está salvo. */
+export function setPosterPreview(id: string, blob: Blob | null): void {
+  const slot = slotById.get(id);
+  if (!slot) return;
+  const old = previewUrl.get(id);
+  if (old) { URL.revokeObjectURL(old); previewUrl.delete(id); }
+  if (blob) previewUrl.set(id, URL.createObjectURL(blob));
+  redraw(slot);
+  overlayKey.clear(); // força a revisão da imagem grande
+}
+export const hasPosterPreview = (id: string): boolean => previewUrl.has(id);
+export const posterHasImage = (id: string): boolean => savedUrl.has(id);
+
+/** Admin: envia a imagem (webp) da vaga para o servidor e grava o endereço; todos passam a ver. Retorna a mensagem de erro, se houver. */
+export async function savePoster(id: string, blob: Blob): Promise<string | null> {
+  if (!supabase) return 'Sem conexão com o servidor.';
+  if (!slotById.has(id)) return 'Cartaz desconhecido.';
+  const path = `${id}.webp`;
+  const up = await supabase.storage.from('posters').upload(path, blob, { upsert: true, contentType: 'image/webp', cacheControl: '3600' });
+  if (up.error) return /bucket not found|not found/i.test(up.error.message) ? 'O armazenamento de cartazes ainda não existe no servidor.' : /row-level security|permission|unauthorized/i.test(up.error.message) ? 'Sem permissão: só o administrador salva cartazes.' : up.error.message;
+  const url = `${supabase.storage.from('posters').getPublicUrl(path).data.publicUrl}?v=${Date.now()}`;
+  const { error } = await supabase.from('posters').upsert({ slot_id: id, url }, { onConflict: 'slot_id' });
+  if (error) return /row-level security|permission/i.test(error.message) ? 'Sem permissão: só o administrador salva cartazes.' : error.message;
+  const old = previewUrl.get(id);
+  if (old) { URL.revokeObjectURL(old); previewUrl.delete(id); }
+  setSaved(id, url);
+  overlayKey.clear();
+  return null;
+}
+
+/** Admin: tira o cartaz salvo (volta ao cartaz de exemplo). */
+export async function clearPoster(id: string): Promise<string | null> {
+  if (!supabase) return 'Sem conexão com o servidor.';
+  await supabase.storage.from('posters').remove([`${id}.webp`]);
+  const { error } = await supabase.from('posters').delete().eq('slot_id', id);
+  if (error) return /row-level security|permission/i.test(error.message) ? 'Sem permissão: só o administrador apaga cartazes.' : error.message;
+  setSaved(id, null);
+  overlayKey.clear();
+  return null;
+}
+
+// Cartaz em alta resolução: o atlas tem só 256 px por vaga; os 4 cartazes com imagem mais perto (até 28 m) ganham um plano com a imagem inteira.
+const OVERLAYS = 4;
+const overlays: { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial }[] = [];
+const overlayKey = new Map<number, string>();
+const texCache = new Map<string, THREE.Texture>();
+const texLoader = new THREE.TextureLoader();
+texLoader.setCrossOrigin('anonymous');
+let overlayT = 0;
+
+function overlayTexture(url: string, done: (t: THREE.Texture) => void): void {
+  const hit = texCache.get(url);
+  if (hit) { done(hit); return; }
+  texLoader.load(url, (t) => {
+    t.colorSpace = THREE.SRGBColorSpace;
+    t.anisotropy = 4;
+    if (texCache.size >= 10) { const k = texCache.keys().next().value as string; texCache.get(k)?.dispose(); texCache.delete(k); }
+    texCache.set(url, t);
+    done(t);
+  });
+}
+
+export function updatePosterOverlays(dt: number, px: number, pz: number): void {
+  if (!cityRef) return;
+  overlayT -= dt;
+  if (overlayT > 0) return;
+  overlayT = 0.35;
+  const near = POSTER_SLOTS
+    .filter((s) => effectiveUrl(s.id))
+    .map((s) => ({ s, d: Math.hypot(s.cx - px, s.cz - pz) }))
+    .filter((e) => e.d < 28)
+    .sort((a, b) => a.d - b.d)
+    .slice(0, OVERLAYS);
+  for (let i = 0; i < OVERLAYS; i++) {
+    let o = overlays[i];
+    if (!o) {
+      const mat = new THREE.MeshBasicMaterial({ transparent: false });
+      const mesh = new THREE.Mesh(new THREE.PlaneGeometry(POSTER_W, POSTER_H), mat);
+      mesh.visible = false;
+      cityRef.add(mesh);
+      o = { mesh, mat };
+      overlays[i] = o;
+    }
+    const e = near[i];
+    if (!e) { o.mesh.visible = false; overlayKey.delete(i); continue; }
+    const url = effectiveUrl(e.s.id)!;
+    const key = `${e.s.id}|${url}`;
+    if (overlayKey.get(i) === key) continue;
+    overlayKey.set(i, key);
+    o.mesh.position.set(e.s.cx + 0.01 * e.s.nx, e.s.cy, e.s.cz + 0.01 * e.s.nz);
+    o.mesh.rotation.y = Math.atan2(e.s.nx, e.s.nz);
+    o.mesh.visible = false;
+    overlayTexture(url, (t) => {
+      if (overlayKey.get(i) !== key) return;
+      o!.mat.map = t;
+      o!.mat.needsUpdate = true;
+      o!.mesh.visible = true;
+    });
   }
 }
 
@@ -134,7 +288,7 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
         const slotIndex = POSTER_SLOTS.length;
         const page = Math.floor(slotIndex / PER_PAGE);
         const cell = slotIndex % PER_PAGE;
-        POSTER_SLOTS.push({ id, building: b.name, face: s.k, n: i + 1, x: px, z: pz, nx: s.nx, nz: s.nz, page, cell });
+        POSTER_SLOTS.push({ id, building: b.name, face: s.k, n: i + 1, x: px, z: pz, nx: s.nx, nz: s.nz, page, cell, cx: px - 1.2 * s.nz + 0.13 * s.nx, cz: pz + 1.2 * s.nx + 0.13 * s.nz, cy: 1.95 });
         // peça no espaço da loja (u ao longo da fachada, y para cima, w para fora) → mundo
         const put = (g: THREE.BufferGeometry, u: number, y: number, w: number): THREE.BufferGeometry => {
           g.translate(u, y, w);
@@ -202,6 +356,10 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
     const m = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: tex }));
     city.add(m);
   });
-  void loadPosters(pages);
+  pagesRef = pages;
+  cityRef = city;
+  slotById.clear();
+  for (const sl of POSTER_SLOTS) slotById.set(sl.id, sl);
+  void loadPosters();
   if (import.meta.env.DEV) (window as unknown as { __posterSlots: PosterSlot[] }).__posterSlots = POSTER_SLOTS;
 }
