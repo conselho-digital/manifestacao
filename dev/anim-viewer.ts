@@ -33,7 +33,7 @@ await new Promise((r) => setTimeout(r, 1500)); // clipes extras + rifle carregam
 
 const cam = new THREE.PerspectiveCamera(30, 1, 0.1, 50);
 
-function tile(col: number, cols: number, row: number, rows: number, view: 'side' | 'front' | 'top' | 'cam' | 'closeR' | 'closeB' | 'closeL' | 'closeF' | 'hand' | 'handL' | 'palmF' | 'palmT'): void {
+function tile(col: number, cols: number, row: number, rows: number, view: 'side' | 'front' | 'top' | 'cam' | 'closeR' | 'closeB' | 'closeL' | 'closeF' | 'hand' | 'handL' | 'palmF' | 'palmT' | 'wR' | 'wF' | 'wL'): void {
   const w = W / cols;
   const h = H / rows;
   const x = col * w;
@@ -49,6 +49,9 @@ function tile(col: number, cols: number, row: number, rows: number, view: 'side'
   else if (view === 'palmF') { cam.position.set(-0.12, 1.5, 1.55); c.set(-0.1, 1.42, 0.5); }
   else if (view === 'palmT') { cam.position.set(-0.1, 2.3, 0.7); c.set(-0.1, 1.42, 0.5); }
   else if (view === 'handL') { cam.position.set(0.75, 1.5, 1.15); c.set(0, 1.3, 0.4); }
+  else if (view === 'wR') { cam.position.set(-3.4, 1.5, 0.4); c.set(0, 1.45, 0.4); }
+  else if (view === 'wL') { cam.position.set(3.4, 1.5, 0.4); c.set(0, 1.45, 0.4); }
+  else if (view === 'wF') { cam.position.set(0, 1.6, 3.6); c.set(0, 1.4, 0.4); }
   else if (view === 'closeF') { cam.position.set(0, 1.25, 2.6); c.set(0, 1.1, 0); }
   else if (view === 'closeR') { cam.position.set(-2.4, 1.5, 0.3); c.set(0, 1.35, 0.3); }
   else if (view === 'closeL') { cam.position.set(2.4, 1.5, 0.3); c.set(0, 1.35, 0.3); }
@@ -134,6 +137,54 @@ const V = {
     const inv = new THREE.Matrix4().copy(obj.matrixWorld).invert();
     best.transformDirection(inv).multiplyScalar(bd);
     return [best.x, best.y, best.z].map((v) => Math.round(v * 100) / 100);
+  },
+  /** Arma branca em ação: toca o clipe como no jogo (passos de 1/30 s) e desenha n quadros + mede onde o punho fica no cabo (t: 0 = ponta do cabo, 1 = ponta da arma; r: distância ao eixo, m). */
+  strip(clip: string, armed: Armed, n: number, view: 'side' | 'closeR' | 'closeF' | 'closeB' | 'closeL' | 'hand' | 'handL' | 'cam' | 'wR' | 'wF' | 'wL' = 'wR'): { f: number; t: number; r: number; tl: number; rl: number }[] {
+    animator.setArmed(armed);
+    weapon.setMode(armed);
+    animator.setAimPitch(0);
+    animator.play('idle');
+    for (let i = 0; i < 20; i++) animator.update(1 / 30);
+    animator.restart(clip);
+    const total = Math.max(n, Math.round(animator.duration(clip) * 30));
+    renderer.setScissor(0, 0, W, H);
+    renderer.setViewport(0, 0, W, H);
+    renderer.clear();
+    const anchor = (weapon as unknown as { batAnchor: THREE.Object3D }).batAnchor;
+    const hands = (animator as unknown as { hands: { side: number; fingers: THREE.Bone[] }[] }).hands;
+    const out: { f: number; t: number; r: number; tl: number; rl: number }[] = [];
+    let col = 0;
+    for (let f = 0; f <= total && col < n; f++) {
+      animator.update(1 / 30);
+      if (f % Math.max(1, Math.floor(total / n)) !== 0) continue;
+      obj.updateMatrixWorld(true);
+      const axis = new THREE.Vector3(0, 0, 1).transformDirection(anchor.matrixWorld);
+      const o = new THREE.Vector3().setFromMatrixPosition(anchor.matrixWorld);
+      // extensão da arma ao longo do eixo
+      let lo = Infinity; let hi = -Infinity;
+      anchor.traverse((m) => {
+        const me = m as THREE.Mesh;
+        if (!me.isMesh) return;
+        for (let q: THREE.Object3D | null = me; q; q = q.parent) if (!q.visible) return;
+        const a = me.geometry.getAttribute('position');
+        const v = new THREE.Vector3();
+        for (let i = 0; i < a.count; i += 3) { v.fromBufferAttribute(a, i).applyMatrix4(me.matrixWorld); const d = v.clone().sub(o).dot(axis); lo = Math.min(lo, d); hi = Math.max(hi, d); }
+      });
+      const meas = (side: number): [number, number] => {
+        const fg = hands.find((h) => h.side === side)?.fingers ?? [];
+        const c = new THREE.Vector3(); const v = new THREE.Vector3();
+        for (const b of fg) c.add(v.setFromMatrixPosition(b.matrixWorld));
+        c.divideScalar(Math.max(1, fg.length));
+        const d = c.clone().sub(o);
+        const al = d.dot(axis);
+        return [(al - lo) / Math.max(1e-6, hi - lo), d.addScaledVector(axis, -al).length()];
+      };
+      const [t, r] = meas(-1);
+      const [tl, rl] = meas(1);
+      out.push({ f, t: Math.round(t * 100) / 100, r: Math.round(r * 1000) / 1000, tl: Math.round(tl * 100) / 100, rl: Math.round(rl * 1000) / 1000 });
+      tile(col++, n, 0, 1, view);
+    }
+    return out;
   },
   /** Escalada: mãos na borda a `rel` m acima dos pés (null desliga). */
   climbHands(rel: number | null): void { animator.setClimbHands(rel, 1); },

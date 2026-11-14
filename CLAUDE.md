@@ -350,3 +350,7 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 
 ## Rodada: armas brancas presas no punho
 - Todas as armas brancas (taco, bandeira, placa, cano, foice, machado, faca...) agora ficam no CENTRO DOS DEDOS fechados da mão direita (bloco no fim de `pose()` em anim.ts, antes só valia para faca/garrafa/cutelo): o cabo flutuava acima da mão, parado e andando (`carryBat`). Conferido em captura parado e andando com taco de críquete, beisebol, bandeira, placa e cano.
+
+## Rodada: conferência quadro a quadro das armas brancas na mão
+- `V.strip(clip, armed, n, view)` no `dev/anim-viewer.ts` (views `wR`, `wL`, `wF`): toca o clipe como no jogo (passos de 1/30 s), desenha n quadros e devolve, por quadro, `t` (posição do punho direito no eixo da arma: 0 = ponta do cabo, 1 = ponta da arma), `r` (distância ao eixo; 0 por construção) e `tl`/`rl` (mão esquerda). Conferidos parado (`bat_idle`/`knife_idle`), andando (`walk`) e batendo (`bat_swing`, `knife_1`) com bandeira, placa, críquete, beisebol, cano, foice, machado, garrafa, cutelo e faca: o punho fica no cabo em todos os quadros.
+- Ajustes: críquete (`inner.position.z` 0,1 → -0,02), beisebol (0,12 → 0,06) e cano (`grip` -0,1 → -0,05): antes o punho ficava na ponta do cabo e a mão esquerda passava do fim (t < 0); agora direita ~0,17 e esquerda ~0,10 do cabo.

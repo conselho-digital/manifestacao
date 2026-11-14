@@ -39,7 +39,7 @@ export const loadBaseball = (): Promise<THREE.Object3D> => (baseballSrc ??= load
 /** Armas brancas do pacote: arquivo, ponto do cabo onde a mão direita segura (eixo Y do modelo, m) e escala. */
 export const EXTRA_MELEE: Record<ExtraMelee, { file: string; grip: number; scale: number; /** giro em volta do cabo (rad) para a lâmina apontar para a frente */ roll?: number }> = {
   bottle: { file: 'broken-bottle.glb', grip: -0.04, scale: 1 },
-  pipe: { file: 'pipe.glb', grip: -0.1, scale: 1 },
+  pipe: { file: 'pipe.glb', grip: -0.05, scale: 1 },
   cleaver: { file: 'cleaver.glb', grip: -0.08, scale: 1, roll: 1.9 },
   sickle: { file: 'sickle.glb', grip: 0.25, scale: 1, roll: 1.9 }, // segurada no meio do cabo (antes: na ponta, grip 0)
   axe: { file: 'axe.glb', grip: 0.08, scale: 1, roll: 1.9 }, // segurado no meio do cabo (antes: na ponta, grip -0,2)
@@ -197,7 +197,7 @@ export class WeaponVisual {
       inner.add(bat);
       inner.rotation.x = Math.PI / 2; // o comprimento (Y no GLB) passa a apontar para +Z
       inner.scale.setScalar(1.15);
-      inner.position.z = 0.1; // a mão direita segura perto do fim do cabo
+      inner.position.z = -0.02; // a mão direita segura perto do fim do cabo
       this.cricketInner.add(inner);
     });
     // taco de beisebol (GTA SA): 89 cm, cabo na origem da mão direita
@@ -208,7 +208,7 @@ export class WeaponVisual {
       inner.add(bat);
       inner.rotation.x = Math.PI / 2;
       inner.scale.setScalar(1.1);
-      inner.position.z = 0.12;
+      inner.position.z = 0.06;
       this.baseballInner.add(inner);
     });
     // armas brancas do pacote (garrafa, cano, cutelo, foice, machado)
