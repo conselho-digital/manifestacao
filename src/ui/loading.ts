@@ -1,4 +1,5 @@
 import { MAP_ID, MAPS } from '../game/map';
+import { isTouchDevice } from './orientation';
 
 // Tela de carregamento ao entrar no mapa: uma foto da cidade vista de cima em preto e branco que vai ganhando cor
 // conforme o carregamento avança (public/loading/<mapa>.webp, gerada do próprio jogo: ver CLAUDE.md).
@@ -12,6 +13,8 @@ const CSS = `
 .ld-title{margin:0;font-size:clamp(18px,3.4vw,26px);font-weight:800;letter-spacing:.04em}
 .ld-txt{font-size:13px;opacity:.85;min-height:16px}
 .ld-bar{width:min(420px,100%);height:8px;border-radius:5px;background:rgba(255,255,255,.2);overflow:hidden}
+.ld-go{font-size:16px;font-weight:800;letter-spacing:.03em;animation:ldpulse 1.4s ease-in-out infinite}
+@keyframes ldpulse{50%{opacity:.45}}
 .ld-fill{height:100%;width:0;background:#4cc2ff;border-radius:5px;transition:width .5s ease}
 `;
 
@@ -69,6 +72,26 @@ export function showLoading(): Loading {
     async finish(onFade) {
       set(1, 'Pronto!');
       await wait(750); // a cor termina de aparecer
+      // só entra no mapa (e começa o voo de entrada) quando o jogador clica ou, no celular, toca ou gira o aparelho
+      const touch = isTouchDevice();
+      txt.className = 'ld-txt ld-go';
+      txt.textContent = touch ? 'Toque na tela ou gire o celular para entrar' : 'Clique para entrar';
+      await new Promise<void>((resolve) => {
+        const go = (): void => {
+          root.removeEventListener('pointerdown', go);
+          window.removeEventListener('keydown', onKey);
+          window.removeEventListener('resize', onTurn);
+          window.removeEventListener('orientationchange', go);
+          resolve();
+        };
+        const onKey = (e: KeyboardEvent): void => { if (e.code === 'Enter' || e.code === 'Space') go(); };
+        const onTurn = (): void => { if (touch && window.innerWidth > window.innerHeight) go(); };
+        root.addEventListener('pointerdown', go);
+        window.addEventListener('keydown', onKey);
+        if (touch) { window.addEventListener('resize', onTurn); window.addEventListener('orientationchange', go); }
+      });
+      if (!touch) document.querySelector('canvas')?.requestPointerLock?.(); // PC: o clique também esconde o mouse (gesto que o navegador exige)
+      txt.textContent = '';
       onFade?.();
       root.classList.add('out');
       await wait(650);

@@ -321,3 +321,6 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 ## Rodada: limite de FPS sem descartar quadros; neblina 30% mais curta
 - Limite de FPS (`next()` em main.ts): não descarta mais quadros. O jogo desenha todo quadro que pede e apenas DEMORA a pedir o próximo (`setTimeout` até 6 ms antes do horário, depois `requestAnimationFrame`), com horários numa grade fixa (`dueMs += intervalo`). Substitui o corte "pula o quadro que chega cedo" da rodada anterior. Menu, carregamento e limite desligado pedem o próximo quadro direto.
 - Neblina/descarte 30% mais curtos: `FOG_NEAR` 70 → 49 m, `FOG_FAR` 230 → 161 m (a câmera vai até 191 m), `FAR_TREES` 220 → 154 m e `FAR_VEHICLES` 190 → 133 m (`culling.ts`). Sombras (55/40 m) não mudaram.
+
+## Rodada: entrar no mapa só com clique ou giro
+- Ao terminar de carregar (`Loading.finish` em ui/loading.ts) a tela fica parada em "Clique para entrar" (PC) ou "Toque na tela ou gire o celular para entrar" (celular) e SÓ DEPOIS do clique, toque, Enter/Espaço (PC) ou do giro do aparelho para a horizontal (`resize`/`orientationchange`) some e começa o voo de entrada. No PC o mesmo clique pede o mouse preso (`requestPointerLock`). Testes automáticos precisam clicar na tela depois de `__game.ready()`.
