@@ -1,3 +1,5 @@
+import { CAMERA_MODES, view } from './settings';
+
 export interface InputState {
   /** x: direita(+)/esquerda(-), y: frente(+)/trás(-), valores de -1 a 1 */
   x: number;
@@ -73,6 +75,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') { jumpQ = true; e.preventDefault(); }
   if (e.code === 'KeyE') climbQ = true;
   if (e.code === 'KeyF') interactQ = true;
+  if (e.code === 'KeyC' && !e.repeat && !e.ctrlKey && !e.metaKey) view.mode = (view.mode + 1) % CAMERA_MODES;
   if (e.code === 'KeyL' && !e.repeat) lightsQ = true;
   if (e.code === 'KeyZ' || e.code === 'ControlLeft') { crouchQ = true; if (e.code === 'ControlLeft') e.preventDefault(); }
   if (e.code === 'KeyR') reloadQ = true;
@@ -163,7 +166,7 @@ export function readInput(): InputState {
     handbrake: keys.has('Space') || padHand,
     horn: keys.has('KeyH') || padHorn,
     lights: lightsQ,
-    wheelie: keys.has('KeyV') || keys.has('ShiftLeft') || keys.has('ShiftRight') || padWheelie,
+    wheelie: keys.has('ShiftLeft') || keys.has('ShiftRight') || padWheelie,
   };
   jumpQ = false;
   climbQ = false;

@@ -464,6 +464,17 @@ export class Animator {
     this.aimPitch = p;
   }
 
+  /** Primeira pessoa: esconde a cabeça (a câmera fica dentro dela) e devolve onde ela está no mundo; false se o modelo não tem esqueleto. */
+  firstPerson(on: boolean, out: THREE.Vector3): boolean {
+    const head = this.spine?.head;
+    if (!head) return false;
+    head.scale.setScalar(on ? 0.001 : 1);
+    if (!on) return false;
+    head.updateWorldMatrix(true, false);
+    head.getWorldPosition(out);
+    return true;
+  }
+
   /** Escalada: coloca as duas mãos em cima da borda (altura `rel` acima dos pés), palmas para baixo; null desliga. */
   setClimbHands(rel: number | null, w = 1): void {
     this.climbRel = rel;

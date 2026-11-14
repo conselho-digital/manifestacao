@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { view } from './settings';
 import { COLLIDERS, MAP, rayBox, terrainHeight, TREES, waterDepth, type Box } from './map';
 import type { InputState } from './input';
 import { CARS, hittables, type Car } from './vehicle';
@@ -982,8 +983,25 @@ export class Player {
   followCamera(camera: THREE.PerspectiveCamera, dt: number, yaw: number, pitch: number, aimK: number, snap = false): void {
     const p = this.object.position;
     const driving = this.mode === 'drive';
-    const dist = driving ? (this.car?.bike ? 6.2 : 8) : THREE.MathUtils.lerp(CAM_DISTANCE, CAM_AIM_DISTANCE, aimK);
-    const shoulder = driving ? 0 : THREE.MathUtils.lerp(CAM_SHOULDER, CAM_AIM_SHOULDER, aimK); // a pé: sempre à direita do personagem
+    // tecla C: 0 = terceira pessoa, 1 = terceira pessoa perto (metade da distância), 2 = primeira pessoa (só a pé)
+    const mode = driving && view.mode === 2 ? 0 : view.mode;
+    const near = mode === 1 ? 0.5 : 1;
+    const dist = driving ? (this.car?.bike ? 6.2 : 8) * near : THREE.MathUtils.lerp(CAM_DISTANCE * near, CAM_AIM_DISTANCE, aimK);
+    const shoulder = driving ? 0 : THREE.MathUtils.lerp(CAM_SHOULDER * near, CAM_AIM_SHOULDER, aimK); // a pé: sempre à direita do personagem
+    const fp = mode === 2 && !snap;
+    const nearPlane = fp ? 0.1 : 1;
+    if (camera.near !== nearPlane) { camera.near = nearPlane; camera.updateProjectionMatrix(); }
+    if (fp) {
+      const eye = new THREE.Vector3();
+      const fpDir = new THREE.Vector3(Math.sin(yaw) * Math.cos(pitch), -Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
+      if (this.animator?.firstPerson(true, eye)) eye.y += 0.06; else eye.set(p.x, p.y + 1.65 - 0.5 * this.crouchK, p.z);
+      eye.x += Math.sin(yaw) * 0.12;
+      eye.z += Math.cos(yaw) * 0.12;
+      camera.position.copy(eye);
+      camera.lookAt(eye.x + fpDir.x, eye.y + fpDir.y, eye.z + fpDir.z);
+      return;
+    }
+    this.animator?.firstPerson(false, new THREE.Vector3());
     this.crouchK += ((this.crouching && !driving ? 1 : 0) - this.crouchK) * Math.min(1, dt * 8);
     const target = new THREE.Vector3(p.x, p.y + (driving ? 1.35 : THREE.MathUtils.lerp(CAM_LOOK_HEIGHT, CAM_AIM_HEIGHT, aimK) - 0.5 * this.crouchK), p.z);
     const cp = Math.cos(pitch);
@@ -997,7 +1015,7 @@ export class Player {
     const back = dir.clone().negate();
     for (const b of COLLIDERS) {
       const t = rayBox(from.x, from.y, from.z, back.x, back.y, back.z, b.minX - 0.25, b.bottom ?? 0, b.minZ - 0.25, b.maxX + 0.25, b.top + 0.25, b.maxZ + 0.25);
-      if (t !== null && t < d) d = Math.max(1.6, t - 0.1);
+      if (t !== null && t < d) d = Math.max(Math.min(1.6, dist), t - 0.1);
     }
     // copas de árvores: a câmera para antes de entrar (se o jogador já está debaixo da copa, ela não atrapalha)
     for (const tr of TREES) {
@@ -1011,7 +1029,7 @@ export class Player {
       const disc = bq * bq - c;
       if (disc < 0) continue;
       const t = -bq - Math.sqrt(disc);
-      if (t > 0 && t < d) d = Math.max(1.6, t - 0.1);
+      if (t > 0 && t < d) d = Math.max(Math.min(1.6, dist), t - 0.1);
     }
     const desired = from.clone().addScaledVector(back, d);
     desired.y = Math.max(desired.y, terrainHeight(desired.x, desired.z) + 0.35);

@@ -567,8 +567,8 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     if (e.target instanceof HTMLInputElement) return;
     if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
     if (e.code === 'KeyP') { if (opened) api.close(); else api.open(); }
-    else if (e.code === 'KeyB' || e.code === 'KeyC') {
-      // B abre a loja, C a garagem (chamar o veículo); de novo na mesma aba fecha
+    else if (e.code === 'KeyB' || e.code === 'KeyV') {
+      // B abre a loja, V a garagem (chamar o veículo); de novo na mesma aba fecha
       const t: PauseTab = e.code === 'KeyB' ? 'shop' : 'garage';
       if (opened && tab === t) api.close(); else api.open(t);
     } else if (e.code === 'Escape' && opened) api.close();

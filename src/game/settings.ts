@@ -30,3 +30,7 @@ export const settings: Settings = load();
 export function saveSettings(): void {
   try { localStorage.setItem(KEY, JSON.stringify(settings)); } catch { /* sem armazenamento: vale só nesta sessão */ }
 }
+
+/** Câmera: 0 = terceira pessoa (padrão), 1 = terceira pessoa perto (metade da distância), 2 = primeira pessoa. Tecla C no PC. */
+export const view = { mode: 0 };
+export const CAMERA_MODES = 3;
