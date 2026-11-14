@@ -462,3 +462,6 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 
 ## Rodada: piloto olhando para a frente
 - `poseRider` (anim.ts): depois de apontar o pescoço, a cabeça gira (`setFromUnitVectors`) até o rosto apontar para a frente na horizontal; a direção do rosto vem da orientação da cabeça contra a pose de repouso (`headRest`, guardada no construtor; rosto = +Z). Antes a cabeça só compensava uma parte da inclinação do tronco e ficava olhando para baixo. O resto do corpo não mudou.
+
+## Rodada: voz com metade do alcance (de novo)
+- `HEAR_RANGE` 5 m (era 10; o círculo no chão acompanha), conecta a 5,6 m (`CONNECT_RANGE`) e desliga a 7,5 m (`DROP_RANGE`); volume cheio até 1,25 m. Anel um pouco mais fino (0,2 m de cada lado).

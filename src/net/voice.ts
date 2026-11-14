@@ -11,10 +11,10 @@ const ICE: RTCConfiguration = {
   iceServers: [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] }],
 };
 /** liga a conversa a quem está a menos de 11,25 m e desliga acima de 15 m (histerese para não ficar ligando/desligando) */
-const CONNECT_RANGE = 11.25;
-const DROP_RANGE = 15;
+const CONNECT_RANGE = 5.6;
+const DROP_RANGE = 7.5;
 /** a voz some em 10 m; a menos de 2,5 m é cheia */
-export const HEAR_RANGE = 10;
+export const HEAR_RANGE = 5;
 const TICK = 0.5;
 const RETRY_AFTER_MS = 6000;
 const MAX_PEERS = 8; // malha completa só com os mais próximos
@@ -266,7 +266,7 @@ export class Voice {
     for (const [id, peer] of this.peers) {
       const p = others.get(id);
       if (!p || !peer.gain || !peer.pan) continue;
-      const prox = proximity(p.x, p.z, HEAR_RANGE, 2.5);
+      const prox = proximity(p.x, p.z, HEAR_RANGE, 1.25);
       const c = audioCtx();
       if (!c) continue;
       peer.gain.gain.setTargetAtTime(Math.min(1.4, prox.gain * 1.6), c.currentTime, 0.1);

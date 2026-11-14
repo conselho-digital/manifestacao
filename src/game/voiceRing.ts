@@ -4,7 +4,7 @@ import * as THREE from 'three';
 import { HEAR_RANGE } from '../net/voice';
 import { settings } from './settings';
 
-const geo = new THREE.RingGeometry(HEAR_RANGE - 0.3, HEAR_RANGE + 0.3, 120);
+const geo = new THREE.RingGeometry(HEAR_RANGE - 0.2, HEAR_RANGE + 0.2, 120);
 geo.rotateX(-Math.PI / 2);
 const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.6, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5 });
 
