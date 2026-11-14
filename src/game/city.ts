@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { addBox, CITY, COLLIDERS, MAP, PARKS, PLACES, ROADS, TREES, type Rect } from './map';
+import { addBox, COLLIDERS, PARKS, PLACES, ROADS, TREES, type Rect } from './map';
 import { buildGrayTower, TOWER } from './tower';
 import { registerCullChildren, FAR_TREES } from './culling';
 import { placeSafraSign } from './safra';
@@ -12,10 +12,10 @@ import { CAR_MODELS, COMMON_COLORS, TRAFFIC } from './vehicle';
 // Cidade inspirada na maquete da Av. Paulista (SP). O layout é escrito "como na foto" (x para a direita,
 // z para o norte) e convertido para o mundo espelhando o eixo X (R(): x_mundo = -x_foto).
 
-const HX = CITY.halfX; // cidade (quadras)
-const HZ = CITY.halfZ;
-const RX = MAP.halfX; // mapa todo, com a rua em volta
-const RZ = MAP.halfZ;
+const HX = 110; // cidade (quadras): a Paulista tem tamanho fixo (o mapa pode trocar no menu sem recarregar a página, então não lê `CITY`)
+const HZ = 84;
+const RX = HX + 12; // mapa todo, com a rua em volta
+const RZ = HZ + 12;
 /** retângulo no espaço da foto -> retângulo do mundo */
 const R = (sx0: number, sx1: number, sz0: number, sz1: number): Rect => ({ x0: -sx1, x1: -sx0, z0: sz0, z1: sz1 });
 

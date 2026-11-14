@@ -24,8 +24,8 @@ export function cleanVeh(v: unknown): VehInfo | null {
   if (typeof v !== 'object' || v === null) return null;
   const o = v as Record<string, unknown>;
   const models = [...CAR_MODELS, POLICE_MODEL, ...BIKE_MODELS] as readonly string[];
-  const x = finite(o.x, LIMIT);
-  const z = finite(o.z, LIMIT);
+  const x = finite(o.x, limit());
+  const z = finite(o.z, limit());
   const h = finite(o.h, 100);
   if (typeof o.m !== 'string' || !models.includes(o.m) || x === null || z === null || h === null) return null;
   const c1 = typeof o.c1 === 'string' && HEX.test(o.c1) ? o.c1.toLowerCase() : '#c8ccd2';
@@ -90,7 +90,7 @@ export interface NetHandlers {
 }
 
 /** Sala: arena:main; ?room=nome troca (para testes, sem misturar com os jogadores de verdade). */
-const CHANNEL = `arena:${(new URLSearchParams(location.search).get('room') ?? (MAP_ID === 'esplanada' ? 'esplanada' : 'main')).replace(/[^a-z0-9_-]/gi, '').slice(0, 24) || 'main'}`;
+const channelBase = (): string => `arena:${(new URLSearchParams(location.search).get('room') ?? (MAP_ID === 'esplanada' ? 'esplanada' : 'main')).replace(/[^a-z0-9_-]/gi, '').slice(0, 24) || 'main'}`;
 export const MAX_NAME = 16;
 export const MAX_CHAT = 80;
 /** máximo de jogadores no mapa ao mesmo tempo (contando você) */
@@ -100,7 +100,8 @@ export const FULL = 'MAPA_CHEIO';
 /** quantas sessões de 30 jogadores existem no máximo (12 × 30 = 360 jogadores) */
 export const MAX_ROOMS = 12;
 const MAX_REMOTE = MAX_PLAYERS - 1; // limite de jogadores remotos renderizados
-const LIMIT = Math.max(MAP.halfX, MAP.halfZ) + 10; // coordenadas fora disso são descartadas
+/** coordenadas fora disso são descartadas (depende do mapa escolhido) */
+function limit(): number { return Math.max(MAP.halfX, MAP.halfZ) + 10; }
 const MAX_ANIM = 24;
 const MIN_SHOT_GAP_MS = 60; // ignora rajadas impossíveis
 const MIN_CHAT_GAP_MS = 400;
@@ -128,9 +129,9 @@ const idOk = (v: unknown): v is string => typeof v === 'string' && v.length > 0 
 function cleanMove(raw: unknown): MoveMsg | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const m = raw as Record<string, unknown>;
-  const x = finite(m.x, LIMIT);
+  const x = finite(m.x, limit());
   const y = finite(m.y ?? 0, 50);
-  const z = finite(m.z, LIMIT);
+  const z = finite(m.z, limit());
   const ry = finite(m.ry, 100);
   if (!idOk(m.id) || x === null || y === null || z === null || ry === null) return null;
   const a = typeof m.a === 'string' && /^[a-z0-9_]{1,24}$/.test(m.a) && m.a.length <= MAX_ANIM ? m.a : 'idle';
@@ -158,8 +159,8 @@ function cleanShot(raw: unknown): ShotMsg | null {
 function cleanSpray(raw: unknown): SprayMsg | null {
   if (typeof raw !== 'object' || raw === null) return null;
   const m = raw as Record<string, unknown>;
-  const x = finite(m.x, LIMIT);
-  const z = finite(m.z, LIMIT);
+  const x = finite(m.x, limit());
+  const z = finite(m.z, limit());
   const y = finite(m.y, 12);
   const w = finite(m.w, 4);
   if (!idOk(m.id) || x === null || z === null || y === null || w === null || w < 0.5) return null;
@@ -198,7 +199,7 @@ export class Net {
     if (!supabase) return false;
     for (let i = 1; i <= MAX_ROOMS; i++) {
       try {
-        const ok = await this.joinRoom(i === 1 ? CHANNEL : `${CHANNEL}-${i}`, me, h);
+        const ok = await this.joinRoom(i === 1 ? channelBase() : `${channelBase()}-${i}`, me, h);
         if (ok) { this.roomIndex = i; return true; }
       } catch (e) {
         if (e instanceof Error && e.message === FULL && i < MAX_ROOMS) continue; // cheia: tenta a próxima sessão
@@ -291,8 +292,8 @@ export class Net {
     channel.on('broadcast', { event: 'horn' }, ({ payload }) => {
       const m = payload as Record<string, unknown> | null;
       if (!m || !idOk(m.id) || m.id === this.id || !this.known.has(m.id)) return;
-      const x = finite(m.x, LIMIT);
-      const z = finite(m.z, LIMIT);
+      const x = finite(m.x, limit());
+      const z = finite(m.z, limit());
       if (x === null || z === null) return;
       const now = performance.now();
       if (now - (this.lastHornAt.get(m.id) ?? 0) < MIN_HORN_GAP_MS) return;

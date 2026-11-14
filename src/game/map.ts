@@ -21,20 +21,35 @@ function readMapId(): MapId {
   try { const v = localStorage.getItem('arena-map'); if (v === 'esplanada') return v; } catch { /* sem armazenamento */ }
   return 'paulista';
 }
-/** Mapa desta sessão do navegador (escolhido no menu; trocar recarrega a página). */
-export const MAP_ID: MapId = readMapId();
+/** Mapa escolhido (menu). Trocar no menu NÃO recarrega a página nem mexe no endereço: `setMapId` troca estes valores (importar daqui sempre vê o valor atual). */
+export let MAP_ID: MapId = readMapId();
+const CITY_SIZE = { esplanada: { halfX: 162, halfZ: 202 }, paulista: { halfX: 110, halfZ: 84 } } as const;
+/** Quadras e prédios da cidade (metros a partir do centro). */
+export const CITY = { ...CITY_SIZE[MAP_ID] };
+/** Largura da rua que contorna a cidade (a Esplanada não tem: o limite é o muro). */
+export let RING = MAP_ID === 'esplanada' ? 0 : 12;
+/** Cor do chão no minimapa. */
+export let MAP_BASE = MAP_ID === 'esplanada' ? '#6c8f4f' : '#b9b3a2';
+/** Limites do mapa jogável: a cidade mais a rua em volta (o muro preto fica logo depois). */
+export const MAP = { halfX: CITY.halfX + RING, halfZ: CITY.halfZ + RING };
+const mapListeners: (() => void)[] = [];
+/** Quem depende do mapa (ex.: o telão) se registra aqui para ser avisado quando o menu troca de mapa. */
+export const onMapChange = (cb: () => void): void => { mapListeners.push(cb); };
 export function saveMapChoice(id: MapId): void {
   try { localStorage.setItem('arena-map', id); } catch { /* sem armazenamento */ }
 }
-
-/** Quadras e prédios da cidade (metros a partir do centro). */
-export const CITY = MAP_ID === 'esplanada' ? { halfX: 162, halfZ: 202 } : { halfX: 110, halfZ: 84 };
-/** Largura da rua que contorna a cidade (a Esplanada não tem: o limite é o muro). */
-export const RING = MAP_ID === 'esplanada' ? 0 : 12;
-/** Cor do chão no minimapa. */
-export const MAP_BASE = MAP_ID === 'esplanada' ? '#6c8f4f' : '#b9b3a2';
-/** Limites do mapa jogável: a cidade mais a rua em volta (o muro preto fica logo depois). */
-export const MAP = { halfX: CITY.halfX + RING, halfZ: CITY.halfZ + RING };
+/** Troca o mapa sem recarregar a página (só vale no menu, antes de o mapa ser montado) e guarda a escolha. */
+export function setMapId(id: MapId): void {
+  if (id === MAP_ID) return;
+  MAP_ID = id;
+  Object.assign(CITY, CITY_SIZE[id]);
+  RING = id === 'esplanada' ? 0 : 12;
+  MAP_BASE = id === 'esplanada' ? '#6c8f4f' : '#b9b3a2';
+  MAP.halfX = CITY.halfX + RING;
+  MAP.halfZ = CITY.halfZ + RING;
+  saveMapChoice(id);
+  mapListeners.forEach((f) => f());
+}
 
 /** Lugares com nome, em ordem de prioridade (o primeiro que contém o ponto vence). */
 export const PLACES: { name: string; rect: Rect }[] = [];

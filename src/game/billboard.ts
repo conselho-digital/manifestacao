@@ -6,8 +6,13 @@ import * as THREE from 'three';
 import { supabase } from '../net/supabase';
 import { addBox, MAP_ID } from './map';
 
-const POS = MAP_ID === 'esplanada' ? new THREE.Vector3(-92, 0, -60) : new THREE.Vector3(20.5, 0, -14.5); // Paulista: calçada de pedras do outro lado da avenida, em frente ao Parque Trianon; Esplanada: gramado junto à avenida oeste
-const FACE = MAP_ID === 'esplanada' ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1); // a frente do telão é virada para a rua (avenida) e para o museu
+const POS = new THREE.Vector3();
+const FACE = new THREE.Vector3();
+function placeForMap(): void {
+  POS.copy(MAP_ID === 'esplanada' ? new THREE.Vector3(-92, 0, -60) : new THREE.Vector3(20.5, 0, -14.5)); // Paulista: calçada de pedras do outro lado da avenida, em frente ao Parque Trianon; Esplanada: gramado junto à avenida oeste
+  FACE.copy(MAP_ID === 'esplanada' ? new THREE.Vector3(1, 0, 0) : new THREE.Vector3(0, 0, 1)); // a frente do telão é virada para a rua (avenida) e para o museu
+}
+placeForMap();
 const W = 12;
 const H = 6.75; // 16:9
 const SCREEN_Y = 6.7; // centro do telão
@@ -139,8 +144,9 @@ function badgeTexture(label: string, color: string, hint: string): THREE.CanvasT
 }
 
 export class Billboard {
-  readonly x = POS.x;
-  readonly z = POS.z;
+  get x(): number { return POS.x; }
+  get z(): number { return POS.z; }
+  private readonly group: THREE.Group;
   private S: BillboardState = { videoId: '', live: false, playing: false, position: 0, at: 0 };
   private skew = 0; // servidor − relógio deste navegador (ms)
   private readonly screen: THREE.Mesh;
@@ -170,6 +176,7 @@ export class Billboard {
 
   constructor(scene: THREE.Scene) {
     const g = new THREE.Group();
+    this.group = g;
     g.position.copy(POS);
     g.rotation.y = Math.atan2(FACE.x, FACE.z);
     const steel = new THREE.MeshLambertMaterial({ color: 0x2b3038 });
@@ -338,6 +345,13 @@ export class Billboard {
     } finally {
       this.creating = false;
     }
+  }
+
+  /** O menu trocou de mapa: o telão muda de lugar (o mapa só é montado ao entrar no jogo). */
+  moveToMap(): void {
+    placeForMap();
+    this.group.position.copy(POS);
+    this.group.rotation.y = Math.atan2(FACE.x, FACE.z);
   }
 
   /** Chamado todo quadro: distância ao telão, mostra/esconde o quadro e acerta o volume; confere a sincronia a cada segundo. */

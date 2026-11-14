@@ -2,7 +2,7 @@ import { enterLandscape } from './orientation';
 import { CHARACTERS, labelOf, type CharacterName } from '../game/characters';
 import { authAvailable, currentUser, renderGoogleButton, signOut, type AuthUser } from '../net/auth';
 import { createCharacterPicker, createTeamPicker, el, faceUrl, PICKER_CSS } from './pickers';
-import { MAP_ID, MAPS, saveMapChoice } from '../game/map';
+import { MAP_ID, MAPS, setMapId } from '../game/map';
 import { getTeams, loadTeams, savedTeamId, saveTeamId, validTeamId } from '../game/teams';
 
 export interface Profile {
@@ -99,19 +99,17 @@ export function showLobby(): Promise<Profile> {
   nameLabel.htmlFor = 'lobby-name';
   const teamLabel = el('label', '', 'Sua equipe');
   const teamPicker = createTeamPicker(getTeams(), teamId, (id) => { teamId = id; saveTeamId(id); });
-  // mapa: trocar recarrega a página (o mapa é montado ao abrir o jogo); o nome e o personagem ficam salvos
+  // mapa: trocar não recarrega a página nem mexe no endereço (o mapa é montado ao abrir o jogo)
   const mapLabel = el('label', '', 'Mapa');
   const mapRow = el('div', 'lb-maps');
   for (const m of MAPS) {
     const b = el('button', `lb-map${m.id === MAP_ID ? ' on' : ''}`, el('b', '', m.name), el('small', '', m.desc));
     b.type = 'button';
     b.onclick = () => {
+      // troca o mapa sem recarregar a página e sem mudar o endereço (o mapa só é montado ao clicar em Entrar)
       if (m.id === MAP_ID) return;
-      saveProfile({ name: nameInput.value.trim().slice(0, MAX_NAME), character: selected });
-      saveMapChoice(m.id);
-      const u = new URL(location.href);
-      u.searchParams.set('mapa', m.id);
-      location.href = u.toString();
+      setMapId(m.id);
+      mapRow.querySelectorAll('.lb-map').forEach((x, i) => x.classList.toggle('on', MAPS[i]!.id === m.id));
     };
     mapRow.appendChild(b);
   }
