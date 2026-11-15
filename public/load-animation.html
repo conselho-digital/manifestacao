@@ -1535,6 +1535,13 @@ const CarlosRetarget = (function () {
     loadGame().then((ok) => { if (ok) buildGameList(); });
   }
 
+  /* ---------- Arquivo padrão: o ped.ifp do GTA SA já vem carregado; o botão de escolher outro arquivo continua valendo ---------- */
+  if (/^https?:$/.test(location.protocol)) {
+    fetch('/tools/ped.ifp').then((r) => (r.ok ? r.arrayBuffer() : Promise.reject(new Error(String(r.status)))))
+      .then((buf) => { if (!S.ifp) return loadFile(new File([buf], 'ped.ifp')); })
+      .catch(() => { /* sem o arquivo padrão: escolha um .ifp */ });
+  }
+
   // Gancho para testes automáticos
   window.__page = { S, select, selectGame, play, scene, camera, controls, handTrack };
 })();
