@@ -43,6 +43,8 @@ const RIFLE_OF: Partial<Record<number, { kind: RifleKind; shot: 'r' | 'm' | 'q' 
 };
 const SHOT_DAMAGE: Record<string, number> = { r: 20, m: 18, q: 22, h: 16 };
 const FIST_GAP = 0.5;
+/** intervalo mínimo entre dois golpes/tiros da mesma arma (s), usado para validar o dano que vem da rede */
+const SHOT_GAP_S: Record<string, number> = { r: 0.11, m: 0.09, q: 0.12, h: 0.1, p: PISTOL_GAP, b: BAT_GAP, f: FIST_GAP, k: FIST_GAP };
 const FIST_RANGE = 1.7;
 const RANGE = 90;
 const HIT_RADIUS = 0.55; // um pouco generoso para facilitar no celular
@@ -114,6 +116,10 @@ export class Combat {
   /** segundos restantes de proteção depois de renascer (sem arma, sem dano) */
   protectT = 0;
   private lastFlinchAt = -1e9;
+  /** última vez que um atirador me causou dano (cadência da arma: ninguém me atinge mais rápido que a arma atira) */
+  private lastDmgFrom = new Map<string, number>();
+  /** última vez que EU acertei cada jogador (só então um abate dele conta para o ranking e o dinheiro) */
+  private recentHit = new Map<string, number>();
   private lastCarHit: CarHit | null = null;
   private readonly tracers: Tracers;
   private readonly stats = new Map<string, StatRow>();
@@ -240,6 +246,7 @@ export class Combat {
   statRows(): StatRow[] {
     this.ensure(this.d.net.id, this.d.name);
     for (const [id, r] of this.d.remotes) this.ensure(id, r.info.name);
+    for (const id of [...this.stats.keys()]) if (id !== this.d.net.id && !this.d.remotes.has(id)) this.stats.delete(id); // quem saiu (ou id inventado) some do placar
     return [...this.stats.values()].sort((a, b) => b.k - a.k || a.d - b.d);
   }
 
@@ -379,7 +386,7 @@ export class Combat {
     this.tracers.add(muzzle, end);
     player.weaponVis?.flash();
     playShotAt(muzzle.x, muzzle.z, kind === 'p' ? 'pistol' : kind === 'h' ? 'silenced' : kind === 'm' ? 'm4' : kind === 'q' ? 'm16' : 'rifle');
-    if (hit.id) this.hitTick++;
+    if (hit.id) { this.hitTick++; this.recentHit.set(hit.id, performance.now()); }
     if (hit.npc) { const dmg = kind === 'p' ? PISTOL_DAMAGE : SHOT_DAMAGE[kind] ?? AK_DAMAGE; hit.npc.hurt(hit.head ? dmg * 2 : dmg, muzzle.x, muzzle.z); this.hitTick++; }
     this.d.npcs?.()?.scare(muzzle.x, muzzle.z, kind === 'h' ? 10 : 35); // o barulho do tiro faz a rua fugir
     net.sendShot({ x1: muzzle.x, y1: muzzle.y, z1: muzzle.z, x2: end.x, y2: end.y, z2: end.z, h: hit.id ?? '', k: kind, hs: hit.head });
@@ -413,7 +420,7 @@ export class Combat {
       const dist = Math.hypot(dx, dz);
       if (dist < range && (dx * fx + dz * fz) / (dist || 1) > 0.4) { n.hurt(kind === 'k' ? KICK_DAMAGE : kind === 'b' ? BAT_DAMAGE : FIST_DAMAGE, p.x, p.z); this.hitTick++; }
     }
-    if (best) this.hitTick++;
+    if (best) { this.hitTick++; this.recentHit.set(best.info.id, performance.now()); }
     this.d.net.sendShot({ x1: p.x, y1: p.y + 1.3, z1: p.z, x2: p.x + fx, y2: p.y + 1.3, z2: p.z + fz, h: best ? best.info.id : '', k: kind, hs: false });
   }
 
@@ -461,13 +468,48 @@ export class Combat {
       this.d.npcs?.()?.scare(from.x, from.z, m.k === 'h' ? 10 : 35);
       playShotAt(from.x, from.z, m.k === 'p' ? 'pistol' : m.k === 'h' ? 'silenced' : m.k === 'm' ? 'm4' : m.k === 'q' ? 'm16' : 'rifle'); // volume e lado pela distância ao ouvinte
     }
-    if (m.h === this.d.net.id && !this.dead && this.invuln <= 0 && this.protectT <= 0 && !this.paused) {
+    if (m.h === this.d.net.id && !this.dead && this.invuln <= 0 && this.protectT <= 0 && !this.paused && this.plausible(m, shooter)) {
       const base = m.k === 'k' ? KICK_DAMAGE : m.k === 'f' ? FIST_DAMAGE : m.k === 'b' ? BAT_DAMAGE : m.k === 'p' ? PISTOL_DAMAGE : (SHOT_DAMAGE[m.k] ?? AK_DAMAGE);
       const dmg = m.hs && m.k !== 'f' && m.k !== 'b' && m.k !== 'k' ? base * 2 : base;
       if (m.k === 'f' || m.k === 'b' || m.k === 'k') this.player?.flinch(m.k, shooter?.root.position);
       else if (performance.now() - this.lastFlinchAt > 700) { this.lastFlinchAt = performance.now(); this.player?.flinch('f', shooter?.root.position); } // levou tiro: reage (no máximo a cada 0,7 s)
       this.damage(dmg, m.id, { f: 'PUNHO', k: 'CHUTE', b: 'ARMA BRANCA', p: 'PISTOLA', r: 'AK-47', m: 'M4A1', q: 'M16', h: 'HONEY BADGER' }[m.k]);
     }
+  }
+
+  /**
+   * O canal é público e o atirador é quem diz que me acertou: confere se o tiro é possível antes de tirar vida.
+   * O atirador precisa estar vivo, a pé e perto de onde diz que disparou; o tiro precisa passar por mim, sem parede no meio,
+   * dentro do alcance e na cadência da arma. (Sem servidor não dá para ser perfeito, mas acaba com o dano de qualquer lugar.)
+   */
+  private plausible(m: ShotMsg, s: RemotePlayer | undefined): boolean {
+    const me = this.player;
+    if (!s || !me || s.isDead || s.inCar) return false;
+    const now = performance.now();
+    const gap = (SHOT_GAP_S[m.k] ?? 0.1) * 1000 * 0.6; // folga para o agrupamento de pacotes da rede
+    if (now - (this.lastDmgFrom.get(m.id) ?? -1e9) < gap) return false;
+    const mp = me.object.position;
+    const sp = s.root.position;
+    const melee = m.k === 'f' || m.k === 'k' || m.k === 'b';
+    if (Math.hypot(m.x1 - sp.x, m.z1 - sp.z) > 8) return false; // diz que atirou de onde ele não está
+    if (melee) {
+      if (Math.hypot(mp.x - sp.x, mp.z - sp.z) > (m.k === 'b' ? BAT_RANGE : FIST_RANGE + 0.3) + 3.5) return false;
+    } else {
+      const from = new THREE.Vector3(m.x1, m.y1, m.z1);
+      const to = new THREE.Vector3(m.x2, m.y2, m.z2);
+      const dir = to.clone().sub(from);
+      const len = dir.length();
+      if (len < 0.5 || len > RANGE + 5) return false;
+      dir.divideScalar(len);
+      const hit = rayVerticalSegment(from, dir, mp, 1.75, HIT_RADIUS + 0.9);
+      if (!hit || hit.t > len + 1) return false; // o tiro não passa por mim
+      for (const b of COLLIDERS) {
+        const t = rayBox(from.x, from.y, from.z, dir.x, dir.y, dir.z, b.minX, b.bottom ?? 0, b.minZ, b.maxX, b.top, b.maxZ);
+        if (t !== null && t > 0.05 && t < hit.t - 0.6) return false; // tem parede no caminho
+      }
+    }
+    this.lastDmgFrom.set(m.id, now);
+    return true;
   }
 
   private damage(amount: number, attacker: string, weapon: string): void {
@@ -505,8 +547,8 @@ export class Combat {
     victim.d++;
     if (m.k !== m.v) killer.k++;
     if (m.v === this.d.net.id) rankDeath(); // ranking global (conta)
-    if (m.k === this.d.net.id && m.v !== this.d.net.id) rankKill();
-    if (m.k === this.d.net.id && m.v !== this.d.net.id) this.d.inv.earn(KILL_MONEY);
+    // abate meu só vale (ranking e dinheiro) se eu acertei essa vítima nos últimos 15 s: uma mensagem falsa de "matei fulano" não conta
+    if (m.k === this.d.net.id && m.v !== this.d.net.id && performance.now() - (this.recentHit.get(m.v) ?? -1e9) < 15000) { rankKill(); this.d.inv.earn(KILL_MONEY); }
     if (m.k === m.v) this.d.log(`${this.nameOf(m.v)}: morreu (${m.w || 'acidente'})`);
     else this.d.log(`${this.nameOf(m.k)}: matou ${this.nameOf(m.v)} (${m.w || 'AK-47'})`);
   }

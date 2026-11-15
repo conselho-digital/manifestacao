@@ -108,6 +108,7 @@ function limit(): number { return Math.max(MAP.halfX, MAP.halfZ) + 10; }
 const MAX_ANIM = 24;
 const MIN_SHOT_GAP_MS = 60; // ignora rajadas impossíveis
 const MIN_CHAT_GAP_MS = 400;
+const MIN_KILL_GAP_MS = 3000;
 
 const printable = (v: unknown): string =>
   typeof v === 'string' ? [...v].filter((ch) => ch.charCodeAt(0) > 31 && ch.charCodeAt(0) !== 127).join('') : '';
@@ -189,6 +190,7 @@ export class Net {
   private lastChatAt = new Map<string, number>();
   private lastSprayAt = new Map<string, number>();
   private lastHornAt = new Map<string, number>();
+  private lastKillAt = new Map<string, number>();
 
   /** Entra na sala. Retorna false se o Supabase não estiver configurado. */
   /** Número da sessão (1 = a principal; 2, 3... quando as anteriores estão cheias). */
@@ -252,6 +254,7 @@ export class Net {
           this.lastChatAt.delete(id);
           this.lastSprayAt.delete(id);
           this.lastHornAt.delete(id);
+          this.lastKillAt.delete(id);
           h.onLeave(id);
         }
       }
@@ -272,6 +275,10 @@ export class Net {
     channel.on('broadcast', { event: 'kill' }, ({ payload }) => {
       const p = payload as Record<string, unknown> | null;
       if (!p || !idOk(p.k) || !idOk(p.v) || !this.known.has(p.v)) return;
+      if (p.k !== p.v && p.k !== this.id && !this.known.has(p.k)) return; // quem matou precisa ser um jogador desta sessão (ou ele mesmo)
+      const now = performance.now();
+      if (now - (this.lastKillAt.get(p.v) ?? -1e9) < MIN_KILL_GAP_MS) return; // uma morte por vítima a cada 3 s (o renascimento leva 3,5 s)
+      this.lastKillAt.set(p.v, now);
       h.onKill({ k: p.k, v: p.v, w: typeof p.w === 'string' ? p.w.slice(0, 12) : '' });
     });
     channel.on('broadcast', { event: 'chat' }, ({ payload }) => {

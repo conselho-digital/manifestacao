@@ -65,6 +65,10 @@ function drawPlaceholder(g: CanvasRenderingContext2D, x: number, y: number, id: 
 interface Page { canvas: HTMLCanvasElement; tex: THREE.CanvasTexture }
 
 /** Pinta a imagem do cartaz na vaga (corta para preencher, 3:2). */
+/** imagens de cartaz vêm de qualquer jogador: um webp minúsculo pode ter dezenas de milhares de pixels por lado e travar quem o decodifica. Acima disto a imagem é ignorada (o envio normal é 1200 x 800). */
+const MAX_POSTER_PIXELS = 3_000_000;
+const imageOk = (w: number, h: number): boolean => w > 0 && h > 0 && w <= 4096 && h <= 4096 && w * h <= MAX_POSTER_PIXELS;
+
 function drawImage(g: CanvasRenderingContext2D, x: number, y: number, img: HTMLImageElement): void {
   const k = Math.max(CELL_W / img.width, CELL_H / img.height);
   const w = img.width * k;
@@ -105,6 +109,7 @@ function redraw(slot: PosterSlot): void {
   img.crossOrigin = 'anonymous';
   img.onload = () => {
     if (effectiveUrl(slot.id) !== url) return; // trocou enquanto carregava
+    if (!imageOk(img.naturalWidth, img.naturalHeight)) return; // grande demais: fica o cartaz de exemplo
     drawImage(g, x, y, img);
     page.tex.needsUpdate = true;
   };
@@ -255,6 +260,8 @@ function overlayTexture(url: string, done: (t: THREE.Texture) => void): void {
   const hit = texCache.get(url);
   if (hit) { done(hit); return; }
   texLoader.load(url, (t) => {
+    const im = t.image as { width?: number; height?: number } | undefined;
+    if (!imageOk(im?.width ?? 0, im?.height ?? 0)) { t.dispose(); return; }
     t.colorSpace = THREE.SRGBColorSpace;
     t.anisotropy = 4;
     if (texCache.size >= 10) { const k = texCache.keys().next().value as string; texCache.get(k)?.dispose(); texCache.delete(k); }

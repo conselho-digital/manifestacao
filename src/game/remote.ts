@@ -64,6 +64,10 @@ function makeLabel(text: string, team: TeamLook | null): THREE.Sprite {
 }
 
 /** Jogador remoto: posição suavizada em direção ao último estado recebido. */
+let ownerTeamName: (id: string) => string | undefined = () => undefined;
+/** O main informa como achar o nome da equipe de um jogador pelo id (eu ou um remoto). */
+export function setOwnerTeamLookup(fn: (id: string) => string | undefined): void { ownerTeamName = fn; }
+
 export class RemotePlayer {
   readonly root = new THREE.Group();
   private target = new THREE.Vector3();
@@ -108,6 +112,13 @@ export class RemotePlayer {
     });
   }
 
+  /** `owner` é o id do dono do veículo pessoal: eu mesmo, ou alguém da mesma equipe (pelo nome na presence). */
+  private mayDrive(owner: string): boolean {
+    if (owner === this.info.id) return true;
+    const mine = this.info.team?.name;
+    return !!mine && ownerTeamName(owner) === mine;
+  }
+
   setTarget(m: MoveMsg, snap = false): void {
     this.pending = m;
     this.target.set(m.x, m.y ?? 0, m.z);
@@ -131,7 +142,9 @@ export class RemotePlayer {
     if (key !== this.labelKey) { this.labelKey = key; this.redrawLabel(); }
     const k = 1 - Math.exp(-dt * 12);
     this.root.position.lerp(this.target, k);
-    const car = this.carId === 8 ? PERSONAL.get(this.carOwner) : this.carId >= 0 ? CARS[this.carId] : undefined;
+    let car = this.carId === 8 ? PERSONAL.get(this.carOwner) : this.carId >= 0 ? CARS[this.carId] : undefined;
+    // veículo pessoal: só o dono ou alguém da equipe do dono dirige (uma mensagem de rede forjada não leva o carro de outro jogador)
+    if (car && this.carId === 8 && !this.mayDrive(this.carOwner)) car = undefined;
     if (car) {
       // Dirigindo: o boneco aparece sentado e o carro anda
       car.driver = this.info.id;
