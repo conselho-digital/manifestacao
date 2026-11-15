@@ -19,7 +19,7 @@ import { FULL, MAX_PLAYERS, MAX_ROOMS, Net } from './net/sync';
 import { Voice } from './net/voice';
 import { RemotePlayer } from './game/remote';
 import { sparksObject, updateSparks } from './game/sparks';
-import { CARS, carEvents, createCars, despawnPersonal, TRAFFIC, findVehicleSpot, PERSONAL, spawnPersonal, updateEngines, updateTraffic } from './game/vehicle';
+import { CARS, carEvents, hittables, createCars, despawnPersonal, TRAFFIC, findVehicleSpot, PERSONAL, spawnPersonal, updateEngines, updateTraffic } from './game/vehicle';
 import { Combat, MAX_HEALTH } from './game/combat';
 import { Graffiti } from './game/graffiti';
 import { Billboard } from './game/billboard';
@@ -329,7 +329,7 @@ void showLobby().then(async (profile) => {
   loading.set(0.88, 'Entrando na arena...');
   if (import.meta.env.DEV && new URLSearchParams(location.search).has('admin')) inv.admin = true; // só para testar no npm run dev
   startRanking(profile.name); // ranking global: envia abates e mortes da conta
-  combat = new Combat({ scene, camera, net, name: profile.name, remotes, log: (t) => hud?.addChat(t), inv, graffiti, city, myTeam: () => ({ id: teamId, c1: teamById(teamId)?.c1 ?? '#ffffff' }) });
+  combat = new Combat({ scene, camera, net, name: profile.name, remotes, log: (t) => hud?.addChat(t), inv, graffiti, city, myTeam: () => ({ id: teamId, c1: teamById(teamId)?.c1 ?? '#ffffff' }), npcs: () => npcs });
   wirePlayer(player);
 
   pauseMenu = createPauseMenu({
@@ -586,7 +586,13 @@ function loop(): void {
   if (player) updateEngines(paused ? 0 : dt);
   updateSparks(paused ? 0 : dt);
   remotes.forEach((r) => r.update(dt));
-  if (player && npcs) npcs.update(paused ? 0 : dt, player.object.position.x, player.object.position.z);
+  if (player && npcs) {
+    // veículos em movimento (os da cidade e o que o jogador dirige) atropelam pedestres
+    const veh = hittables().map((h) => ({ circles: h.circles, vx: h.vx, vz: h.vz }));
+    const dc = player.drivenCar;
+    if (dc) veh.push({ circles: dc.circles(), vx: Math.sin(dc.heading) * dc.movingSpeed, vz: Math.cos(dc.heading) * dc.movingSpeed });
+    npcs.update(paused ? 0 : dt, player.object.position.x, player.object.position.z, veh);
+  }
   graffiti.update(dt);
   if (player) { cullT -= dt; if (cullT <= 0) { cullT = 0.25; updateCulling(player.object.position.x, player.object.position.z); } }
   if (player) billboard.update(dt, player.object.position.x, player.object.position.z);

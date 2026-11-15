@@ -1,4 +1,5 @@
 import { rankDeath, rankKill } from '../net/ranking';
+import type { Npc, Npcs } from './npcs';
 import * as THREE from 'three';
 import { COLLIDERS, rayBox, terrainHeight } from './map';
 import { playClick, playReloadSound, playShotAt } from './audio';
@@ -58,7 +59,7 @@ export interface StatRow { id: string; name: string; k: number; d: number }
 
 interface CarHit { h: ReturnType<typeof hittables>[number]; dx: number; dz: number; t: number }
 
-interface Hit { t: number; id: string | null; head: boolean }
+interface Hit { t: number; id: string | null; head: boolean; npc?: Npc }
 
 interface Deps {
   scene: THREE.Scene;
@@ -76,6 +77,8 @@ interface Deps {
   city: THREE.Object3D;
   /** equipe do jogador (id e cor 1, para a pintura e a névoa) */
   myTeam(): { id: string; c1: string };
+  /** pedestres da cidade (levam tiro e golpe e fogem) */
+  npcs?: () => Npcs | null;
 }
 
 /** Combate casual: o atirador calcula o acerto; quem foi acertado aplica o dano em si mesmo. */
@@ -377,6 +380,8 @@ export class Combat {
     player.weaponVis?.flash();
     playShotAt(muzzle.x, muzzle.z, kind === 'p' ? 'pistol' : kind === 'h' ? 'silenced' : kind === 'm' ? 'm4' : kind === 'q' ? 'm16' : 'rifle');
     if (hit.id) this.hitTick++;
+    if (hit.npc) { const dmg = kind === 'p' ? PISTOL_DAMAGE : SHOT_DAMAGE[kind] ?? AK_DAMAGE; hit.npc.hurt(hit.head ? dmg * 2 : dmg, muzzle.x, muzzle.z); this.hitTick++; }
+    this.d.npcs?.()?.scare(muzzle.x, muzzle.z, kind === 'h' ? 10 : 35); // o barulho do tiro faz a rua fugir
     net.sendShot({ x1: muzzle.x, y1: muzzle.y, z1: muzzle.z, x2: end.x, y2: end.y, z2: end.z, h: hit.id ?? '', k: kind, hs: hit.head });
   }
 
@@ -401,6 +406,13 @@ export class Combat {
         if (dist < range && (dx * fx + dz * fz) / (Math.hypot(dx, dz) || 1) > 0.5) { h.hit(dx, dz, kind === 'b' ? 3 : 1.5); this.hitTick++; }
       }
     }
+    for (const n of this.d.npcs?.()?.targets ?? []) {
+      if (!n.alive) continue;
+      const dx = n.pos.x - p.x;
+      const dz = n.pos.z - p.z;
+      const dist = Math.hypot(dx, dz);
+      if (dist < range && (dx * fx + dz * fz) / (dist || 1) > 0.4) { n.hurt(kind === 'k' ? KICK_DAMAGE : kind === 'b' ? BAT_DAMAGE : FIST_DAMAGE, p.x, p.z); this.hitTick++; }
+    }
     if (best) this.hitTick++;
     this.d.net.sendShot({ x1: p.x, y1: p.y + 1.3, z1: p.z, x2: p.x + fx, y2: p.y + 1.3, z2: p.z + fz, h: best ? best.info.id : '', k: kind, hs: false });
   }
@@ -420,14 +432,20 @@ export class Combat {
       const hit = rayVerticalSegment(o, d, r.root.position, 1.75, HIT_RADIUS);
       if (hit && hit.t < best) { best = hit.t; id = r.info.id; head = hit.s > 0.82; }
     }
+    let npc: Npc | undefined;
+    for (const n of this.d.npcs?.()?.targets ?? []) {
+      if (!n.alive) continue;
+      const hit = rayVerticalSegment(o, d, n.pos, 1.75, 0.45);
+      if (hit && hit.t < best) { best = hit.t; id = null; npc = n; head = hit.s > 0.82; }
+    }
     // veículos (carros, motos e trânsito): a bala para neles e eles balançam
     for (const h of hittables()) {
       for (const [cx, cz, r] of h.circles) {
         const hit = rayVerticalSegment(o, d, new THREE.Vector3(cx, 0, cz), 1.5, r);
-        if (hit && hit.t < best) { best = hit.t; id = null; head = false; if (hit.t < maxT) this.lastCarHit = { h, dx: d.x, dz: d.z, t: hit.t }; }
+        if (hit && hit.t < best) { best = hit.t; id = null; npc = undefined; head = false; if (hit.t < maxT) this.lastCarHit = { h, dx: d.x, dz: d.z, t: hit.t }; }
       }
     }
-    return { t: best, id, head };
+    return { t: best, id, head, npc };
   }
 
   // ---------- eventos da rede ----------
@@ -440,6 +458,7 @@ export class Combat {
       const to = new THREE.Vector3(m.x2, m.y2, m.z2);
       this.tracers.add(from, to);
       shooter?.flash();
+      this.d.npcs?.()?.scare(from.x, from.z, m.k === 'h' ? 10 : 35);
       playShotAt(from.x, from.z, m.k === 'p' ? 'pistol' : m.k === 'h' ? 'silenced' : m.k === 'm' ? 'm4' : m.k === 'q' ? 'm16' : 'rifle'); // volume e lado pela distância ao ouvinte
     }
     if (m.h === this.d.net.id && !this.dead && this.invuln <= 0 && this.protectT <= 0 && !this.paused) {
