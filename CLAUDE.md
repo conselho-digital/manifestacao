@@ -512,3 +512,7 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 
 ## Rodada: botão "Ad" abre o cartão de troca de imagem
 - O cartão de trocar a imagem do cartaz da loja (`posterEditor.ts`) NÃO aparece mais sozinho ao chegar perto. Há um botão redondo verde "Ad" no HUD, logo à direita do botão do microfone (`.pe-ad`, criado em `initPosterEditor`, aparece quando o jogo começa). Tocar nele: se há cartaz a menos de `POSTER_REACH` (1,05 m) abre o cartão (e solta o mouse no PC); sem cartaz perto mostra o aviso "Chegue bem perto de um cartaz de loja (1 m) e toque em Ad.". Tocar de novo (ou "Fechar" no cartão) fecha; fecha sozinho ao se afastar, e depois de publicar. A tecla U só vale com o cartão aberto. Estado `open` + `setOpen()`. Testado no navegador (perto, longe, abrir e fechar).
+
+## Rodada: volume dos motores e Clover vira Opala
+- Volume do motor (`PROFILES[...].vol`, audio.ts): Gol (`blistac`) 1 → 0,5 (metade); Buffalo 1,15 → 1,7 e Clover 1,05 → 1,6 (mais altos). A Harley usa o mesmo arquivo de som mas tem `vol` próprio (1,2), não mudou.
+- O Clover agora se chama **Opala** na loja/garagem (`inventory.ts`); o id interno `clover`, o modelo e o ícone não mudam.

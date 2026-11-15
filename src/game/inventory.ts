@@ -50,7 +50,7 @@ export const SHOP: ShopItem[] = [
   { id: 'w-spray', name: 'Lata de spray', desc: 'Pinta a imagem da sua equipe numa parede de prédio. Não causa dano.', price: 5, kind: 'weapon', weapon: 15, img: WEAPON_IMG[15] },
   { id: 'v-blistac', name: 'Gol', desc: 'Carro esportivo compacto.', price: 30, kind: 'vehicle', model: 'blistac', img: '/hud/v-blistac.png?v=4' },
   { id: 'v-buffalo', name: 'Buffalo', desc: 'Sedã esportivo potente.', price: 30, kind: 'vehicle', model: 'buffalo', img: '/hud/v-buffalo.png?v=4' },
-  { id: 'v-clover', name: 'Clover', desc: 'Muscle car clássico.', price: 30, kind: 'vehicle', model: 'clover', img: '/hud/v-clover.png?v=4' },
+  { id: 'v-clover', name: 'Opala', desc: 'Muscle car clássico.', price: 30, kind: 'vehicle', model: 'clover', img: '/hud/v-clover.png?v=4' },
   { id: 'v-duster', name: 'Viatura PM', desc: 'Renault Duster da Polícia Militar: sirene (segure a buzina) e luzes.', price: 30, kind: 'vehicle', model: 'duster', img: '/hud/v-duster.png?v=4' },
   { id: 'v-harley', name: 'Harley', desc: 'Moto custom.', price: 30, kind: 'vehicle', model: 'harley', img: '/hud/v-harley.png?v=4' },
   { id: 'v-triumph', name: 'Triumph', desc: 'Moto clássica.', price: 30, kind: 'vehicle', model: 'triumph', img: '/hud/v-triumph.png?v=4' },
