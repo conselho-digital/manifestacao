@@ -83,6 +83,8 @@ export class Inventory {
   /** administrador: tem todas as armas e veículos */
   admin = false;
   private key = 'arena-inv:anon';
+  /** id da conta (para guardar outras coisas por conta, como a munição) */
+  get userKey(): string { return this.key.slice('arena-inv:'.length); }
 
   /** Carrega o dinheiro que esta conta já tinha. */
   load(userId: string): void {

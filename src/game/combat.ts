@@ -11,6 +11,7 @@ import { isGunId, type Inventory, type ShopItem, type WeaponId } from './invento
 import type { RifleKind } from './rifles';
 import type { Armed } from './anim';
 import { findWall, SPRAY_DURATION, type Graffiti } from './graffiti';
+import { showNotice } from '../ui/toast';
 
 /** vida cheia: 400 (4 vezes a antiga de 100). O dano das armas não mudou, então o jogador aguenta 4 vezes mais. */
 export const MAX_HEALTH = 400;
@@ -18,6 +19,9 @@ export const MAG_SIZE = 30;
 const RESERVE_START = 120;
 const PISTOL_MAG = 12;
 const PISTOL_RESERVE = 60;
+/** a munição é de graça, mas só enche de novo a cada 30 minutos */
+const AMMO_REFILL_MS = 30 * 60 * 1000;
+const GUN_IDS = [0, 3, 12, 13, 14] as const;
 const PISTOL_DAMAGE = 15;
 const PISTOL_GAP = 0.28;
 const BAT_DAMAGE = 30;
@@ -116,7 +120,69 @@ export class Combat {
   constructor(private d: Deps) {
     this.tracers = new Tracers(d.scene);
     this.ensure(d.net.id, d.name);
+    this.loadAmmo();
+    window.addEventListener('pagehide', () => this.saveAmmo());
+  }
+
+  /** quando a munição encheu pela última vez (ms) e se há algo para guardar */
+  private lastRefill = Date.now();
+  private ammoDirty = false;
+  private ammoSaveT = 0;
+  private lastEmptyWarn = -1e9;
+
+  /** Começa com a munição guardada desta conta; se já passaram 30 min desde o último enchimento, enche. (Recarregar a página não enche.) */
+  private loadAmmo(): void {
+    const key = `arena-ammo:${this.d.inv.userKey}`;
+    try {
+      const raw = JSON.parse(localStorage.getItem(key) ?? 'null') as { t?: number; a?: Record<string, { mag: number; reserve: number }> } | null;
+      if (raw && typeof raw.t === 'number' && raw.a && raw.t <= Date.now() && Date.now() - raw.t < AMMO_REFILL_MS) {
+        for (const w of GUN_IDS) {
+          const v = raw.a[String(w)];
+          if (v && Number.isFinite(v.mag) && Number.isFinite(v.reserve)) this.ammo[w] = { mag: Math.max(0, Math.min(MAG_SIZE, Math.floor(v.mag))), reserve: Math.max(0, Math.min(5000, Math.floor(v.reserve))) };
+          else this.ammo[w] = this.startAmmo(w);
+        }
+        this.lastRefill = raw.t;
+        return;
+      }
+    } catch { /* sem dados: começa cheio */ }
     this.refillGuns();
+    this.lastRefill = Date.now();
+    this.ammoDirty = true;
+    this.saveAmmo();
+  }
+
+  private saveAmmo(): void {
+    this.ammoDirty = false;
+    try {
+      const a: Record<string, { mag: number; reserve: number }> = {};
+      for (const w of GUN_IDS) a[String(w)] = this.ammo[w]!;
+      localStorage.setItem(`arena-ammo:${this.d.inv.userKey}`, JSON.stringify({ t: this.lastRefill, a }));
+    } catch { /* sem armazenamento */ }
+  }
+
+  /** Minutos que faltam para a munição encher de novo (arredonda para cima). */
+  private refillMinutes(): number { return Math.max(1, Math.ceil((this.lastRefill + AMMO_REFILL_MS - Date.now()) / 60000)); }
+
+  /** Aviso: a munição acabou (no máximo de 6 em 6 segundos). */
+  private warnEmpty(): void {
+    const now = performance.now();
+    if (now - this.lastEmptyWarn < 6000) return;
+    this.lastEmptyWarn = now;
+    showNotice(`Sem munição! A munição é de graça, mas só enche 1 vez a cada 30 minutos. Faltam ${this.refillMinutes()} min.`, 6000);
+  }
+
+  /** Cura (ícone de vida no mapa). Devolve false se a vida já está cheia ou o jogador morreu. */
+  heal(n: number): boolean {
+    if (this.dead || this.health >= MAX_HEALTH) return false;
+    this.health = Math.min(MAX_HEALTH, this.health + n);
+    return true;
+  }
+
+  /** Colete (ícone no mapa). Devolve false se o colete já está cheio ou o jogador morreu. */
+  addArmor(n: number): boolean {
+    if (this.dead || this.armor >= 100) return false;
+    this.armor = Math.min(100, this.armor + n);
+    return true;
   }
 
   /** Enche a munição das armas de fogo que o jogador tem. */
@@ -156,6 +222,7 @@ export class Combat {
     if (item.kind === 'ammo' && item.weapons) {
       for (const w of item.weapons) if (inv.has(w)) this.ammo[w]!.reserve += item.amount ?? 0;
     } else if (item.kind === 'ammo' && item.weapon !== undefined) this.ammo[item.weapon]!.reserve += item.amount ?? 0;
+    if (item.kind === 'ammo') this.ammoDirty = true;
     else if (item.kind === 'health') this.health = MAX_HEALTH;
     else if (item.kind === 'armor') this.armor = 100;
     return { ok: true, msg: `${item.name} comprado.` };
@@ -187,6 +254,15 @@ export class Combat {
   update(dt: number, input: InputState, player: Player): void {
     this.player = player;
     this.tracers.update(dt);
+    // a cada 30 minutos a munição enche de novo (também enquanto o jogador está morto ou dirigindo)
+    if (Date.now() - this.lastRefill >= AMMO_REFILL_MS) {
+      this.refillGuns();
+      this.lastRefill = Date.now();
+      this.ammoDirty = true;
+      showNotice('Munição reabastecida! Ela enche de novo em 30 minutos.', 5000);
+    }
+    this.ammoSaveT -= dt;
+    if (this.ammoDirty && this.ammoSaveT <= 0) { this.ammoSaveT = 2; this.saveAmmo(); }
     if (this.invuln > 0) this.invuln -= dt;
     if (this.protectT > 0) this.protectT = Math.max(0, this.protectT - dt);
 
@@ -216,6 +292,7 @@ export class Combat {
         a.mag += take;
         a.reserve -= take;
         this.reloading = false;
+        this.ammoDirty = true;
       }
     }
     this.cd -= dt;
@@ -233,9 +310,11 @@ export class Combat {
       if (this.isGun) {
         if (a.mag > 0) {
           a.mag--;
+          this.ammoDirty = true;
           this.cd = rf ? rf.gap : PISTOL_GAP;
           this.fireGun(player, aiming, rf ? rf.shot : 'p');
-        } else { this.cd = 0.3; playClick(); this.startReload(); }
+          if (a.mag === 0 && a.reserve === 0) this.warnEmpty(); // acabou o último tiro
+        } else { this.cd = 0.3; playClick(); this.startReload(); if (a.reserve === 0) this.warnEmpty(); }
       } else if (this.weapon === 15) this.spray(player);
       else if (MELEE_ARMED[this.weapon]) { this.cd = BAT_GAP; player.swing(); this.melee(player, BAT_RANGE, 'b'); }
       else { this.cd = FIST_GAP; const kind = player.punch(); this.melee(player, kind === 'k' ? FIST_RANGE + 0.3 : FIST_RANGE, kind); }

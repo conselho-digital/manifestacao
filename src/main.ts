@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createCamera, createRenderer, createScene, handleResize, pixelRatio } from './game/scene';
 import { createCity } from './game/city';
+import { Pickups, HEALTH_GIVES, ARMOR_GIVES } from './game/pickups';
 import { createEsplanada, esplanadaReady } from './game/esplanada';
 import { MAP_ID, onMapChange, spawnPoint } from './game/map';
 import { createCharacter, type CharacterName } from './game/characters';
@@ -27,7 +28,7 @@ import { VoiceRings } from './game/voiceRing';
 import { updatePosterOverlays } from './game/shops';
 import { initPosterEditor } from './ui/posterEditor';
 import { warmUp } from './game/preload';
-import { playCrashAt, playHornAt, setListener } from './game/audio';
+import { playCrashAt, playHornAt, playPickup, setListener } from './game/audio';
 import { HUD_KEY, Inventory, WEAPON_NAMES, type WeaponId } from './game/inventory';
 import { isAdmin, lookOf, makeTeamRing, saveTeamId, teamById, validTeamId } from './game/teams';
 import { loadPrices, loadPurchases } from './game/shop';
@@ -116,6 +117,7 @@ clock.connect(document); // depois de uma aba escondida não vem um delta gigant
 let player: Player | null = null;
 let hud: MobileHud | null = null;
 let combat: Combat | null = null;
+let pickups: Pickups | null = null;
 const BASE_FOV = camera.fov;
 const net = new Net();
 const remotes = new Map<string, RemotePlayer>();
@@ -124,7 +126,7 @@ const graffiti = new Graffiti(scene);
 const billboard = new Billboard(scene);
 onMapChange(() => billboard.moveToMap()); // só começa (billboard.start) depois da cidade: a cidade zera as colisões ao ser criada
 if (import.meta.env.DEV) (window as unknown as { __net: Net; __game: { ready: () => boolean } }).__net = net;
-if (import.meta.env.DEV) (window as unknown as { __game: { ready: () => boolean; camera: THREE.PerspectiveCamera; scene: THREE.Scene; renderer: THREE.WebGLRenderer; combat: () => Combat | null; player: () => Player | null; remotes: () => Map<string, RemotePlayer>; look: { yaw: number; pitch: number }; sim: { TRAFFIC: typeof TRAFFIC; CARS: typeof CARS; updateTraffic: typeof updateTraffic; spawnPersonal: typeof spawnPersonal } } }).__game = { ready: () => !!player, camera, scene, renderer, combat: () => combat, player: () => player, remotes: () => remotes, look: { get yaw() { return yaw; }, set yaw(v: number) { yaw = v; }, get pitch() { return pitch; }, set pitch(v: number) { pitch = v; } }, sim: { TRAFFIC, CARS, updateTraffic, spawnPersonal } };
+if (import.meta.env.DEV) (window as unknown as { __game: { ready: () => boolean; camera: THREE.PerspectiveCamera; scene: THREE.Scene; renderer: THREE.WebGLRenderer; combat: () => Combat | null; player: () => Player | null; remotes: () => Map<string, RemotePlayer>; pickups: () => Pickups | null; look: { yaw: number; pitch: number }; sim: { TRAFFIC: typeof TRAFFIC; CARS: typeof CARS; updateTraffic: typeof updateTraffic; spawnPersonal: typeof spawnPersonal } } }).__game = { ready: () => !!player, camera, scene, renderer, combat: () => combat, player: () => player, remotes: () => remotes, pickups: () => pickups, look: { get yaw() { return yaw; }, set yaw(v: number) { yaw = v; }, get pitch() { return pitch; }, set pitch(v: number) { pitch = v; } }, sim: { TRAFFIC, CARS, updateTraffic, spawnPersonal } };
 let profileName = 'Jogador';
 carEvents.onCrash = (x, z) => net.sendHorn(x, z, 5); // batida do meu carro: os outros ouvem
 let lastHornAt = 0; // última buzina minha (ms)
@@ -285,6 +287,8 @@ void showLobby().then(async (profile) => {
   scene.add(city);
   if (MAP_ID === 'esplanada') await esplanadaReady; // modelo e colisões do Congresso
   void billboard.start();
+  pickups = new Pickups(); // ícones de vida e colete espalhados (depois da cidade: precisam das colisões); entra na cena antes de compilar os gráficos
+  scene.add(pickups.group);
   loading.set(0.3, 'Carregando modelos...');
   await warm;
   loading.set(0.5, 'Preparando os gráficos...');
@@ -485,6 +489,11 @@ function loop(): void {
         yaw += d * Math.min(1, dt * 2.5);
       }
       combat.update(dt, input, player);
+      pickups?.update(dt, combat.dead ? null : player.object.position, camera.position, (kind) => {
+        const ok = kind === 'health' ? combat!.heal(HEALTH_GIVES) : combat!.addArmor(ARMOR_GIVES);
+        if (ok) { playPickup(); hud?.addChat(kind === 'health' ? `+${HEALTH_GIVES / 4} de vida` : `+${ARMOR_GIVES} de colete`); }
+        return ok;
+      });
       player.setReloading(combat.reloading);
       player.update(dt, input, yaw);
       // buzina: segurando H/botão repete a cada 0,4 s (com a sirene ligada é a buzina de caminhão de bombeiros); na viatura, segurar 0,5 s liga/desliga a sirene (até sair do carro); L/botão liga e desliga as luzes; os outros ouvem e veem pelo canal

@@ -763,6 +763,28 @@ export class SirenSound {
 }
 
 /** Clique de arma vazia (só quem atira ouve). */
+/** Pegou vida ou colete: duas notas curtas subindo. */
+export function playPickup(): void {
+  const c = audioCtx();
+  const out = audioOut();
+  if (!c || !out) return;
+  try {
+    [660, 990].forEach((f, i) => {
+      const o = c.createOscillator();
+      const g = c.createGain();
+      const t = c.currentTime + i * 0.09;
+      o.type = 'triangle';
+      o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, t);
+      g.gain.exponentialRampToValueAtTime(0.12, t + 0.01);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + 0.18);
+      o.connect(g).connect(out);
+      o.start(t);
+      o.stop(t + 0.2);
+    });
+  } catch { /* sem áudio */ }
+}
+
 export function playClick(): void {
   const c = audioCtx();
   const out = audioOut();
