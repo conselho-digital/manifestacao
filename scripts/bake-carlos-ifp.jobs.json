@@ -107,7 +107,7 @@
    "assets-src/ifp/ped-arrestgun.ifp",
    {
     "CAR_sit": "car_sit",
-    "run_player": "sprint"
+    "sprint_civi": "sprint", "WALK_civi": "walk"
    }
   ],
   [
