@@ -1,5 +1,4 @@
 // Menu de pausa (engrenagem): equipe, personagem, armas que o jogador já tem, loja e (só para o admin) gerenciar equipes.
-import { OUTFIT_COLORS, SLOTS, type Outfit } from '../game/outfit';
 import { fetchMine, fetchTop } from '../net/ranking';
 import { VEHICLE_COLOR, vehicleColors } from '../game/vehicle';
 import { vehiclePreview } from './vehiclePreview';
@@ -13,7 +12,7 @@ import { checkYoutube, type Billboard } from '../game/billboard';
 import { ICON } from './icons';
 import { createCharacterPicker, createTeamPicker, el, PICKER_CSS, swatchStyle } from './pickers';
 
-export type PauseTab = 'team' | 'char' | 'outfit' | 'weapons' | 'garage' | 'shop' | 'settings' | 'ranking' | 'admin' | 'prices' | 'outdoor' | 'tools';
+export type PauseTab = 'team' | 'char' | 'weapons' | 'garage' | 'shop' | 'settings' | 'ranking' | 'admin' | 'prices' | 'outdoor' | 'tools';
 
 export interface PauseDeps {
   inv: Inventory;
@@ -23,8 +22,6 @@ export interface PauseDeps {
   setTeam(id: string): void;
   getCharacter(): CharacterName;
   setCharacter(n: CharacterName): void;
-  getOutfit(): Outfit | null;
-  setOutfit(o: Outfit | null): void;
   currentWeapon(): WeaponId;
   /** segundos de proteção restantes (sem armas enquanto > 0) */
   protectLeft(): number;
@@ -109,10 +106,6 @@ const CSS = `
 .ps-rr.head{background:none;opacity:.7;font-size:12px;text-transform:uppercase;letter-spacing:.05em}
 .ps-rr.me{outline:2px solid #f1c40f}
 .ps-rr .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ps-sw{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-.ps-sw .ps-swb{width:34px;height:34px}
-.ps-sw .ps-swb.orig{width:auto;padding:0 12px;background:#2a3246;color:#fff;font-weight:700;font-size:13px}
-.ps-swfree{width:42px;height:34px;padding:0;border:2px solid #3b4358;border-radius:8px;background:none}
 .ps-center{display:flex;flex-direction:column;align-items:center;gap:12px}
 @media (max-height:520px){.ps-head{padding:6px 12px}.ps-tab{padding:7px 11px;font-size:13px}.ps-body{padding:10px}.ps-go{padding:8px 18px}}
 `;
@@ -147,7 +140,6 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
   const tabs: { id: PauseTab; label: string; adm?: boolean }[] = [
     { id: 'team', label: 'Equipe' },
     { id: 'char', label: 'Personagem' },
-    { id: 'outfit', label: 'Roupas' },
     { id: 'weapons', label: 'Armas' },
     { id: 'garage', label: 'Garagem' },
     { id: 'shop', label: 'Loja' },
@@ -185,47 +177,6 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     const picker = createCharacterPicker(d.getCharacter(), (n) => d.setCharacter(n));
     body.append(el('p', 'ps-note', 'Trocar de personagem vale na hora (a posição e a arma ficam como estão).'), picker.root);
     window.setTimeout(() => picker.reveal(), 50);
-  }
-
-  function renderOutfit(): void {
-    const cur: Outfit = { ...(d.getOutfit() ?? {}) };
-    const apply = (): void => d.setOutfit(Object.keys(cur).length ? { ...cur } : null);
-    body.append(el('p', 'ps-note', 'Escolha as cores da camisa, da calça e do sapato. Vale na hora e os outros jogadores veem. Pele, cabelo e rosto não mudam.'));
-    for (const { key, label } of SLOTS) {
-      const row = el('div', 'ps-sw');
-      const swatches: HTMLButtonElement[] = [];
-      const mark = (): void => swatches.forEach((b) => b.classList.toggle('on', (b.dataset.c ?? '') === (cur[key] ?? '')));
-      const pick = (c: string): void => { if (c) cur[key] = c; else delete cur[key]; mark(); apply(); };
-      const orig = el('button', 'ps-swb orig', 'Original');
-      orig.type = 'button';
-      orig.dataset.c = '';
-      orig.onclick = () => pick('');
-      swatches.push(orig);
-      row.append(orig);
-      for (const c of OUTFIT_COLORS) {
-        const b = el('button', 'ps-swb');
-        b.type = 'button';
-        b.style.background = c;
-        b.dataset.c = c;
-        b.title = c;
-        b.onclick = () => pick(c);
-        swatches.push(b);
-        row.append(b);
-      }
-      const free = el('input');
-      free.type = 'color';
-      free.className = 'ps-swfree';
-      free.value = cur[key] ?? '#808080';
-      free.title = 'Outra cor';
-      free.oninput = () => pick(free.value.toLowerCase());
-      row.append(free);
-      mark();
-      body.append(el('h3', 'ps-h3', label), row);
-    }
-    const reset = el('button', 'ps-save', 'Voltar às roupas originais');
-    reset.type = 'button';
-    reset.onclick = () => { d.setOutfit(null); body.textContent = ''; renderOutfit(); };
-    body.append(el('div', 'ps-center', reset));
   }
 
   function renderWeapons(): void {
@@ -687,7 +638,6 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     body.textContent = '';
     if (tab === 'team') renderTeam();
     else if (tab === 'char') renderChar();
-    else if (tab === 'outfit') renderOutfit();
     else if (tab === 'weapons') renderWeapons();
     else if (tab === 'garage') renderGarage();
     else if (tab === 'shop') renderShop();

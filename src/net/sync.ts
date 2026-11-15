@@ -6,7 +6,6 @@ import { MAP, MAP_ID } from '../game/map';
 import { cleanRtc, type RtcKind } from './voice';
 import { cleanLook, HEX, type TeamLook } from '../game/teams';
 import { BIKE_MODELS, CAR_MODELS, POLICE_MODEL } from '../game/vehicle';
-import { cleanOutfit, outfitKey, type Outfit } from '../game/outfit';
 import type { SprayMsg } from '../game/graffiti';
 
 export interface PlayerInfo {
@@ -17,8 +16,6 @@ export interface PlayerInfo {
   team: TeamLook | null;
   /** veículo pessoal chamado da garagem (modelo, cores da equipe, id da equipe e onde está parado), ou null */
   veh: VehInfo | null;
-  /** roupa escolhida (cores da camisa, calça e sapato), ou null = a original do modelo */
-  outfit?: Outfit | null;
 }
 
 export interface VehInfo { m: string; c1: string; c2: string; t: string; x: number; z: number; h: number; /** cor da pintura escolhida ('#rrggbb' ou '' = a padrão do modelo) */ k: string }
@@ -235,9 +232,9 @@ export class Net {
         const meta = metas[metas.length - 1]; // o último track é o mais novo
         const character = cleanCharacter(meta?.character);
         if (!meta || !character) continue;
-        const info: PlayerInfo = { id, name: cleanName(meta.name), character, team: cleanLook(meta.team), veh: cleanVeh(meta.veh), outfit: cleanOutfit(meta.outfit) };
+        const info: PlayerInfo = { id, name: cleanName(meta.name), character, team: cleanLook(meta.team), veh: cleanVeh(meta.veh) };
         const v = info.veh;
-        const sig = `${info.character}|${outfitKey(info.outfit)}|${info.name}|${info.team?.c1 ?? ''}${info.team?.c2 ?? ''}${info.team?.name ?? ''}|${v ? `${v.m}${v.c1}${v.c2}${v.k}${v.t}${v.x.toFixed(1)}${v.z.toFixed(1)}${v.h.toFixed(2)}` : ''}`;
+        const sig = `${info.character}|${info.name}|${info.team?.c1 ?? ''}${info.team?.c2 ?? ''}${info.team?.name ?? ''}|${v ? `${v.m}${v.c1}${v.c2}${v.k}${v.t}${v.x.toFixed(1)}${v.z.toFixed(1)}${v.h.toFixed(2)}` : ''}`;
         if (this.known.has(id)) {
           if (this.sigs.get(id) !== sig) { this.sigs.set(id, sig); h.onUpdate(info); }
           continue;

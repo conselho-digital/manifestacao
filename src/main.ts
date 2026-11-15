@@ -2,7 +2,6 @@ import * as THREE from 'three';
 import { createCamera, createRenderer, createScene, handleResize, pixelRatio } from './game/scene';
 import { createCity } from './game/city';
 import { startRanking } from './net/ranking';
-import { applyOutfit, cleanOutfit, outfitKey, type Outfit } from './game/outfit';
 import { Npcs } from './game/npcs';
 import { Pickups, HEALTH_GIVES, ARMOR_GIVES } from './game/pickups';
 import { createEsplanada, esplanadaReady } from './game/esplanada';
@@ -150,8 +149,6 @@ const inv = new Inventory();
 if (import.meta.env.DEV && new URLSearchParams(location.search).has('admin')) inv.admin = true; // ?admin=1 (só no npm run dev): todos os itens para testar
 let character: CharacterName = 'Carlos';
 let teamId = '';
-/** minha roupa (cores da camisa, calça e sapato; null = a original do personagem), guardada no navegador */
-let outfit: Outfit | null = (() => { try { return cleanOutfit(JSON.parse(localStorage.getItem('arena-outfit') ?? 'null')); } catch { return null; } })();
 let myRing: THREE.Group = makeTeamRing(null);
 let pauseMenu: PauseMenu | null = null;
 let paused = false;
@@ -164,7 +161,6 @@ async function makePlayer(name: CharacterName, from?: Player): Promise<Player> {
     obj.position.copy(from.object.position);
     obj.rotation.copy(from.object.rotation);
   }
-  applyOutfit(obj, outfit);
   scene.add(obj);
   const p = new Player(obj, await Animator.create(obj));
   p.attachWeapon(new WeaponVisual(obj));
@@ -199,7 +195,7 @@ function myVehInfo(): VehInfo | null {
 
 /** Avisa os outros e refaz o anel quando a equipe, o personagem ou o veículo mudam. */
 function announceMe(): void {
-  net.updateMe({ name: profileName, character, team: myLook(), veh: myVehInfo(), outfit });
+  net.updateMe({ name: profileName, character, team: myLook(), veh: myVehInfo() });
 }
 
 /** Chama o veículo pessoal para perto de mim (troca o que já existe). Retorna a mensagem de erro, se houver. */
@@ -343,13 +339,6 @@ void showLobby().then(async (profile) => {
     setTeam: setMyTeam,
     getCharacter: () => character,
     setCharacter: (n) => { void setMyCharacter(n); },
-    getOutfit: () => outfit,
-    setOutfit: (o) => {
-      outfit = o;
-      try { localStorage.setItem('arena-outfit', JSON.stringify(o)); } catch { /* sem armazenamento */ }
-      if (player) applyOutfit(player.object, o);
-      announceMe();
-    },
     currentWeapon: () => (combat?.weapon ?? 1) as WeaponId,
     protectLeft: () => combat?.protectT ?? 0,
     equip: (w) => combat?.equip(w),
@@ -368,7 +357,7 @@ void showLobby().then(async (profile) => {
   if (import.meta.env.DEV) (window as unknown as { __pause: PauseMenu }).__pause = pauseMenu;
 
   try {
-    await net.join({ name: profile.name, character: profile.character, team: myLook(), veh: myVehInfo(), outfit }, {
+    await net.join({ name: profile.name, character: profile.character, team: myLook(), veh: myVehInfo() }, {
       onJoin: (p) => {
         syncRemoteVehicle(p);
         hud?.addChat(`${p.name}: entrou na arena`);
@@ -387,10 +376,7 @@ void showLobby().then(async (profile) => {
           r.dispose();
           remotes.set(p.id, nr);
           scene.add(nr.root);
-        } else {
-          r.setTeam(p.team);
-          if (outfitKey(r.info.outfit) !== outfitKey(p.outfit)) r.setOutfit(p.outfit ?? null);
-        }
+        } else r.setTeam(p.team);
       },
       onLeave: (id) => {
         const who = remotes.get(id)?.info.name;
