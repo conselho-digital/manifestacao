@@ -26,7 +26,16 @@ export interface CharRecipe {
   hp?: [number, number, number];
   hr?: [number, number, number];
   hs?: number;
+  /** rosto a partir de fotos (projetadas na cabeça do modelo escolhido em `head`) */
+  face?: FaceRecipe;
 }
+/** Fotos do rosto (endereços https) e como cada uma se encaixa na cabeça: [zoom, deslocamento x, deslocamento y]; `m` = área do rosto [largura, altura, altura do centro] */
+export interface FaceRecipe {
+  f: string; l?: string; r?: string;
+  pf: [number, number, number]; pl: [number, number, number]; pr: [number, number, number];
+  m: [number, number, number];
+}
+export const FACE_DEFAULT: Omit<FaceRecipe, 'f'> = { pf: [0.7, 0, 0], pl: [0.7, 0, 0], pr: [0.7, 0, 0], m: [0.3, 0.38, -0.04] };
 export interface HeadDef { id: string; name: string; url: string }
 export interface CustomChar { id: string; name: string; recipe: CharRecipe; face: string }
 
@@ -38,6 +47,28 @@ const vec3 = (v: unknown, lim: number): [number, number, number] | undefined => 
   const o = v.map((x) => (typeof x === 'number' && Number.isFinite(x) ? Math.max(-lim, Math.min(lim, x)) : 0));
   return [o[0]!, o[1]!, o[2]!];
 };
+
+const HTTPS = /^https:\/\/[^\s]{4,400}$/;
+const nums = (v: unknown, n: number, lo: number, hi: number, d: number[]): number[] => {
+  const a = Array.isArray(v) ? v : [];
+  return d.slice(0, n).map((x, i) => (typeof a[i] === 'number' && Number.isFinite(a[i]) ? Math.max(lo, Math.min(hi, a[i] as number)) : x));
+};
+/** Valida o rosto por fotos (só endereços https; o editor usa blob: só na prévia, sem passar por aqui). */
+export function cleanFace(v: unknown): FaceRecipe | null {
+  if (!v || typeof v !== 'object') return null;
+  const o = v as Record<string, unknown>;
+  if (typeof o.f !== 'string' || !HTTPS.test(o.f)) return null;
+  const out: FaceRecipe = {
+    f: o.f,
+    pf: nums(o.pf, 3, -1.5, 1.5, FACE_DEFAULT.pf) as FaceRecipe['pf'],
+    pl: nums(o.pl, 3, -1.5, 1.5, FACE_DEFAULT.pl) as FaceRecipe['pl'],
+    pr: nums(o.pr, 3, -1.5, 1.5, FACE_DEFAULT.pr) as FaceRecipe['pr'],
+    m: nums(o.m, 3, -1, 1, FACE_DEFAULT.m) as FaceRecipe['m'],
+  };
+  if (typeof o.l === 'string' && HTTPS.test(o.l)) out.l = o.l;
+  if (typeof o.r === 'string' && HTTPS.test(o.r)) out.r = o.r;
+  return out;
+}
 
 /** Valida uma receita vinda do servidor ou do editor. */
 export function cleanRecipe(v: unknown): CharRecipe | null {
@@ -54,6 +85,8 @@ export function cleanRecipe(v: unknown): CharRecipe | null {
     for (const p of PARTS) if (typeof t[p] === 'string' && HEX.test(t[p] as string) && (t[p] as string).toLowerCase() !== '#ffffff') tint[p] = (t[p] as string).toLowerCase();
     if (Object.keys(tint).length) out.tint = tint;
   }
+  const face = cleanFace(r.face);
+  if (face && !isHeadId(head)) out.face = face;
   const hp = vec3(r.hp, 1);
   const hr = vec3(r.hr, 360);
   if (hp) out.hp = hp;
@@ -121,6 +154,7 @@ interface SrcInfo {
   pos: THREE.Vector3;
   quat: THREE.Quaternion;
   scale: THREE.Vector3;
+  faceGeom?: THREE.BufferGeometry;
 }
 const srcCache = new Map<string, Promise<SrcInfo>>();
 
@@ -171,6 +205,136 @@ function source(name: string): Promise<SrcInfo> {
     srcCache.set(name, p);
   }
   return p;
+}
+
+
+// ---------- rosto por fotos ----------
+// A cabeça do modelo escolhido ganha, em cada vértice, a posição e a normal num sistema da própria cabeça (x = direita do personagem, y = cima,
+// z = frente, tudo dividido pela altura da cabeça): `fP` e `fN`. O shader projeta até 3 fotos (frente, perfil esquerdo e direito) por essas
+// coordenadas e as mistura pelo lado para onde a superfície aponta, só dentro de uma "área do rosto" oval; fora dela vale a textura do modelo.
+const boneAt = (info: SrcInfo, re: RegExp): THREE.Vector3 => {
+  const i = info.joints.findIndex((j) => re.test(j));
+  if (i < 0) throw new Error(`osso ${re} não existe`);
+  return new THREE.Vector3().setFromMatrixPosition(info.ibms[i]!.clone().invert());
+};
+
+function faceGeometry(info: SrcInfo): THREE.BufferGeometry {
+  if (info.faceGeom) return info.faceGeom;
+  const g = info.geoms[0]!;
+  const up = boneAt(info, /^Head$/).sub(boneAt(info, /^Neck$/)).normalize();
+  const right = boneAt(info, /^R Brow$/).sub(boneAt(info, /^L Brow$/));
+  right.addScaledVector(up, -right.dot(up)).normalize();
+  const fwd = new THREE.Vector3().crossVectors(up, right).normalize();
+  const pos = g.getAttribute('position');
+  const used = new Set<number>();
+  const ix = g.index!;
+  for (let i = 0; i < ix.count; i++) used.add(ix.getX(i));
+  const w = new Float32Array(pos.count * 3);
+  const mn = new THREE.Vector3(1e9, 1e9, 1e9);
+  const mx = new THREE.Vector3(-1e9, -1e9, -1e9);
+  const v = new THREE.Vector3();
+  for (const i of used) {
+    v.fromBufferAttribute(pos, i).applyMatrix4(info.bind);
+    w[i * 3] = v.dot(right); w[i * 3 + 1] = v.dot(up); w[i * 3 + 2] = v.dot(fwd);
+    mn.min(new THREE.Vector3(w[i * 3], w[i * 3 + 1], w[i * 3 + 2]));
+    mx.max(new THREE.Vector3(w[i * 3], w[i * 3 + 1], w[i * 3 + 2]));
+  }
+  const size = Math.max(1e-6, mx.y - mn.y);
+  const cen = mn.clone().add(mx).multiplyScalar(0.5);
+  const ng = new THREE.BufferGeometry();
+  for (const k of Object.keys(g.attributes)) ng.setAttribute(k, g.attributes[k]!);
+  ng.setIndex(g.index);
+  const fP = new Float32Array(pos.count * 3);
+  for (const i of used) for (let k = 0; k < 3; k++) fP[i * 3 + k] = (w[i * 3 + k]! - cen.getComponent(k)) / size;
+  // normais do pedaço da cabeça, levadas ao mesmo sistema
+  const nrm = new THREE.BufferGeometry();
+  nrm.setAttribute('position', pos);
+  nrm.setIndex(g.index);
+  nrm.computeVertexNormals();
+  const na = nrm.getAttribute('normal');
+  const nm = new THREE.Matrix3().getNormalMatrix(info.bind);
+  const fN = new Float32Array(pos.count * 3);
+  const n = new THREE.Vector3();
+  for (const i of used) {
+    n.fromBufferAttribute(na, i).applyMatrix3(nm).normalize();
+    fN[i * 3] = n.dot(right); fN[i * 3 + 1] = n.dot(up); fN[i * 3 + 2] = n.dot(fwd);
+  }
+  ng.setAttribute('fP', new THREE.BufferAttribute(fP, 3));
+  ng.setAttribute('fN', new THREE.BufferAttribute(fN, 3));
+  info.faceGeom = ng;
+  return ng;
+}
+
+const texLoader = new THREE.TextureLoader();
+texLoader.setCrossOrigin('anonymous');
+const photoCache = new Map<string, Promise<THREE.Texture>>();
+const loadPhoto = (url: string): Promise<THREE.Texture> => {
+  let p = photoCache.get(url);
+  if (!p) {
+    p = texLoader.loadAsync(url).then((t) => { t.colorSpace = THREE.SRGBColorSpace; t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping; return t; });
+    photoCache.set(url, p);
+  }
+  return p;
+};
+const WHITE = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+WHITE.needsUpdate = true;
+
+/** Material da cabeça com o rosto: parte do material do modelo e troca a cor dentro da área do rosto pelas fotos. */
+function faceMaterial(base: THREE.Material, face: FaceRecipe): THREE.Material {
+  const mat = base.clone();
+  const u = {
+    tF: { value: WHITE as THREE.Texture }, tL: { value: WHITE as THREE.Texture }, tR: { value: WHITE as THREE.Texture },
+    pF: { value: new THREE.Vector4(face.pf[0], face.pf[1], face.pf[2], 0) },
+    pL: { value: new THREE.Vector4(face.pl[0], face.pl[1], face.pl[2], 0) },
+    pR: { value: new THREE.Vector4(face.pr[0], face.pr[1], face.pr[2], 0) },
+    mk: { value: new THREE.Vector3(face.m[0], face.m[1], face.m[2]) },
+  };
+  mat.userData.face = u;
+  mat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, { uTF: u.tF, uTL: u.tL, uTR: u.tR, uPF: u.pF, uPL: u.pL, uPR: u.pR, uMK: u.mk });
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute vec3 fP;\nattribute vec3 fN;\nvarying vec3 vFP;\nvarying vec3 vFN;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFP = fP;\nvFN = fN;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', `#include <common>
+varying vec3 vFP;
+varying vec3 vFN;
+uniform sampler2D uTF;
+uniform sampler2D uTL;
+uniform sampler2D uTR;
+uniform vec4 uPF;
+uniform vec4 uPL;
+uniform vec4 uPR;
+uniform vec3 uMK;
+float inUV(vec2 t) { return step(0.0, t.x) * step(t.x, 1.0) * step(0.0, t.y) * step(t.y, 1.0); }`)
+      .replace('#include <map_fragment>', `#include <map_fragment>
+      {
+        float a = vFP.x; float b = vFP.y; float c = vFP.z;
+        vec3 n = normalize(vFN + vec3(1e-5));
+        float rb = (b - uMK.z) / uMK.y;
+        // área do rosto: oval na frente; nas laterais, faixa entre a testa e o queixo, da frente até a orelha
+        float mFront = 1.0 - smoothstep(0.7, 1.0, length(vec2(a / uMK.x, rb)));
+        float mSide = (1.0 - smoothstep(0.75, 1.0, abs(rb))) * smoothstep(-0.18, 0.02, c);
+        vec2 tF = vec2(0.5 - a * uPF.x + uPF.y, 0.5 + b * uPF.x + uPF.z);
+        vec2 tL = vec2(0.5 - c * uPL.x + uPL.y, 0.5 + b * uPL.x + uPL.z);
+        vec2 tR = vec2(0.5 + c * uPR.x + uPR.y, 0.5 + b * uPR.x + uPR.z);
+        float wF = pow(max(n.z, 0.0), 3.0) * mFront * inUV(tF) * uPF.w;
+        float wL = pow(max(-n.x, 0.0), 2.0) * mSide * inUV(tL) * uPL.w;
+        float wR = pow(max(n.x, 0.0), 2.0) * mSide * inUV(tR) * uPR.w;
+        float tot = wF + wL + wR;
+        if (tot > 0.001) {
+          vec3 ph = (texture2D(uTF, tF).rgb * wF + texture2D(uTL, tL).rgb * wL + texture2D(uTR, tR).rgb * wR) / tot;
+          diffuseColor.rgb = mix(diffuseColor.rgb, ph, clamp(tot * 1.6, 0.0, 1.0));
+        }
+      }`);
+  };
+  mat.customProgramCacheKey = () => 'face';
+  const set = (key: 'tF' | 'tL' | 'tR', pk: 'pF' | 'pL' | 'pR', url: string | undefined): void => {
+    if (!url) return;
+    void loadPhoto(url).then((t) => { u[key].value = t; u[pk].value.w = 1; }).catch(() => undefined);
+  };
+  set('tF', 'pF', face.f); set('tL', 'pL', face.l); set('tR', 'pR', face.r);
+  return mat;
 }
 
 // ---------- cabeça 3D nova ----------
@@ -257,7 +421,8 @@ export async function buildCustom(rec: CharRecipe): Promise<THREE.Group> {
     const material = (info.material as THREE.MeshBasicMaterial).clone();
     const tint = rec.tint?.[part];
     if (tint && (material as THREE.MeshBasicMaterial).color) (material as THREE.MeshBasicMaterial).color.set(tint);
-    const mesh = new THREE.SkinnedMesh(info.geoms[i]!, material);
+    const withFace = part === 'head' && rec.face;
+    const mesh = new THREE.SkinnedMesh(withFace ? faceGeometry(info) : info.geoms[i]!, withFace ? faceMaterial(material, rec.face!) : material);
     mesh.position.copy(info.pos);
     mesh.quaternion.copy(info.quat);
     mesh.scale.copy(info.scale);

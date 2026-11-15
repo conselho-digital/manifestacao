@@ -6,7 +6,7 @@ import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import { Animator } from '../game/anim';
 import { supabase } from '../net/supabase';
 import { isAdmin } from '../game/teams';
-import { buildCustom, customList, forgetHead, headList, headOf, isHeadId, LAW_SOURCES, loadCustom, loadHeadModel, PART_LABEL, PARTS, registerLocalHead, type CharRecipe, type CustomChar } from '../game/customChars';
+import { buildCustom, FACE_DEFAULT, type FaceRecipe, customList, forgetHead, headList, headOf, isHeadId, LAW_SOURCES, loadCustom, loadHeadModel, PART_LABEL, PARTS, registerLocalHead, type CharRecipe, type CustomChar } from '../game/customChars';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const mk = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''): HTMLElementTagNameMap[K] => {
@@ -57,7 +57,9 @@ let paused = false;
 let admin = false;
 let busy = false;
 let building = 0;
-const localHeads = new Map<string, { file: Blob; name: string }>(); // cabeças ainda não enviadas (já normalizadas/leves)
+const localHeads = new Map<string, { file: Blob; name: string }>();
+/** fotos do rosto escolhidas neste navegador e ainda não enviadas (a receita aponta para um endereço blob: só na prévia) */
+const photos: Partial<Record<'f' | 'l' | 'r', { blob: Blob; url: string }>> = {}; // cabeças ainda não enviadas (já normalizadas/leves)
 const status = mk('div');
 status.id = 'status';
 let statusTimer = 0;
@@ -171,6 +173,21 @@ function edit(c: CustomChar): void {
 
 // ---------- controles da direita ----------
 const ctl = $('ctl');
+const slider = (pad: HTMLElement, label: string, get: () => number, set: (v: number) => void, min: number, max: number, step: number, unit: string, live?: () => void): void => {
+    const row = mk('div', 'row');
+    const r = mk('input');
+    r.type = 'range';
+    r.min = String(min); r.max = String(max); r.step = String(step); r.value = String(get());
+    const n = mk('input');
+    n.type = 'number';
+    n.step = String(step); n.value = String(get());
+    const apply = (v: number): void => { if (!Number.isFinite(v)) return; set(v); r.value = String(v); n.value = String(Math.round(v * 100) / 100); if (live) live(); else schedule(); };
+    r.oninput = () => apply(Number(r.value));
+    n.onchange = () => apply(Number(n.value));
+    row.append(mk('label', '', `${label} ${unit}`), r, n);
+    pad.append(row);
+  };
+
 function buildControls(): void {
   ctl.textContent = '';
   ctl.append(mk('div', 'title', 'Cores e salvar'));
@@ -196,34 +213,61 @@ function buildControls(): void {
   }
   pad.append(mk('div', 'hint', 'A cor se multiplica na textura: branco = sem mudar; tons escuros escurecem a roupa.'));
 
+  if (!isHeadId(rec.head)) {
+    pad.append(mk('h2', '', 'Rosto por fotos'));
+    pad.lastElementChild!.setAttribute('style', 'padding-left:0');
+    pad.append(mk('div', 'hint', 'Envie fotos do rosto de frente e, se quiser, dos dois lados. A foto é projetada na cabeça do modelo escolhido ao lado (a cabeça mantém o formato e o cabelo do modelo). Atenção: as fotos ficam públicas dentro do jogo; use só fotos que você pode divulgar.'));
+    const kinds = [['f', 'Frente (obrigatória)'], ['l', 'Perfil esquerdo (nariz para a esquerda)'], ['r', 'Perfil direito (nariz para a direita)']] as const;
+    for (const [k, label] of kinds) {
+      const row = mk('div', 'tint');
+      const lab = mk('label', '', label);
+      const has = !!(rec.face && rec.face[k]);
+      const pick = mk('button', '', has ? 'Trocar' : 'Escolher');
+      pick.onclick = () => pickPhoto(k);
+      row.append(lab, pick);
+      if (has && k !== 'f') {
+        const rm = mk('button', 'warn', '✕');
+        rm.title = 'Tirar esta foto';
+        rm.onclick = () => { dropPhoto(k); };
+        row.append(rm);
+      }
+      pad.append(row);
+    }
+    if (rec.face) {
+      const fc = rec.face;
+      const sl = (label: string, arr: 'pf' | 'pl' | 'pr' | 'm', i: number, min: number, max: number, step: number): void =>
+        slider(pad, label, () => fc[arr][i]!, (v) => { fc[arr][i] = v; }, min, max, step, '', applyFaceUniforms);
+      for (const [arr, name, on] of [['pf', 'Frente', true], ['pl', 'Esquerdo', !!fc.l], ['pr', 'Direito', !!fc.r]] as const) {
+        if (!on) continue;
+        pad.append(mk('div', 'hint', `Encaixe da foto — ${name}`));
+        sl('Zoom', arr, 0, 0.25, 1.6, 0.01);
+        sl('Mover X', arr, 1, -0.5, 0.5, 0.005);
+        sl('Mover Y', arr, 2, -0.5, 0.5, 0.005);
+      }
+      pad.append(mk('div', 'hint', 'Área do rosto na cabeça (o resto fica com a textura do modelo)'));
+      sl('Largura', 'm', 0, 0.1, 0.6, 0.005);
+      sl('Altura', 'm', 1, 0.15, 0.7, 0.005);
+      sl('Posição', 'm', 2, -0.3, 0.3, 0.005);
+      const clr = mk('button', '', 'Tirar o rosto das fotos');
+      clr.onclick = () => { for (const k of ['f', 'l', 'r'] as const) dropPhoto(k, true); delete rec.face; buildControls(); schedule(); };
+      pad.append(clr);
+    }
+  }
+
   if (isHeadId(rec.head)) {
     pad.append(mk('h2', '', 'Posição da cabeça 3D'));
     pad.lastElementChild!.setAttribute('style', 'padding-left:0');
-    const slider = (label: string, get: () => number, set: (v: number) => void, min: number, max: number, step: number, unit: string): void => {
-      const row = mk('div', 'row');
-      const r = mk('input');
-      r.type = 'range';
-      r.min = String(min); r.max = String(max); r.step = String(step); r.value = String(get());
-      const n = mk('input');
-      n.type = 'number';
-      n.step = String(step); n.value = String(get());
-      const apply = (v: number): void => { if (!Number.isFinite(v)) return; set(v); r.value = String(v); n.value = String(Math.round(v * 100) / 100); schedule(); };
-      r.oninput = () => apply(Number(r.value));
-      n.onchange = () => apply(Number(n.value));
-      row.append(mk('label', '', `${label} ${unit}`), r, n);
-      pad.append(row);
-    };
     const hp = rec.hp ?? [0, 0.075, 0];
     const hr = rec.hr ?? [0, 0, 0];
     const setP = (i: number, v: number): void => { const a = [...(rec.hp ?? [0, 0.075, 0])] as [number, number, number]; a[i] = v / 100; rec = { ...rec, hp: a }; };
     const setR = (i: number, v: number): void => { const a = [...(rec.hr ?? [0, 0, 0])] as [number, number, number]; a[i] = v; rec = { ...rec, hr: a }; };
-    slider('Lado', () => Math.round(hp[0] * 100), (v) => setP(0, v), -15, 15, 0.5, '(cm)');
-    slider('Altura', () => Math.round(hp[1] * 100), (v) => setP(1, v), -15, 20, 0.5, '(cm)');
-    slider('Frente', () => Math.round(hp[2] * 100), (v) => setP(2, v), -15, 15, 0.5, '(cm)');
-    slider('Girar X', () => hr[0], (v) => setR(0, v), -180, 180, 1, '(°)');
-    slider('Girar Y', () => hr[1], (v) => setR(1, v), -180, 180, 1, '(°)');
-    slider('Girar Z', () => hr[2], (v) => setR(2, v), -180, 180, 1, '(°)');
-    slider('Tamanho', () => Math.round((rec.hs ?? 1) * 100), (v) => { rec = { ...rec, hs: v / 100 }; }, 40, 220, 1, '(%)');
+    slider(pad, 'Lado', () => Math.round(hp[0] * 100), (v) => setP(0, v), -15, 15, 0.5, '(cm)');
+    slider(pad, 'Altura', () => Math.round(hp[1] * 100), (v) => setP(1, v), -15, 20, 0.5, '(cm)');
+    slider(pad, 'Frente', () => Math.round(hp[2] * 100), (v) => setP(2, v), -15, 15, 0.5, '(cm)');
+    slider(pad, 'Girar X', () => hr[0], (v) => setR(0, v), -180, 180, 1, '(°)');
+    slider(pad, 'Girar Y', () => hr[1], (v) => setR(1, v), -180, 180, 1, '(°)');
+    slider(pad, 'Girar Z', () => hr[2], (v) => setR(2, v), -180, 180, 1, '(°)');
+    slider(pad, 'Tamanho', () => Math.round((rec.hs ?? 1) * 100), (v) => { rec = { ...rec, hs: v / 100 }; }, 40, 220, 1, '(%)');
     pad.append(mk('div', 'hint', 'A cabeça nova fica presa ao osso da cabeça: acompanha o corpo e some na 1ª pessoa. Olhando de frente, ela deve cobrir o pescoço.'));
   }
 
@@ -249,6 +293,69 @@ function buildControls(): void {
   fresh.onclick = () => { rec = { head: 'Law1', torso: 'Law1', legs: 'Law1' }; name = 'Novo personagem'; editingId = null; buildList(); buildControls(); schedule(); };
   pad.append(fresh);
   ctl.append(pad, status);
+}
+
+
+// ---------- rosto por fotos ----------
+/** Lê a foto, reduz (até 640 px) e converte para webp leve; também remove dados da câmera (EXIF) por redesenhar. */
+async function toPhoto(file: Blob): Promise<Blob> {
+  const bmp = await createImageBitmap(file);
+  const k = Math.min(1, 640 / Math.max(bmp.width, bmp.height));
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(bmp.width * k));
+  c.height = Math.max(1, Math.round(bmp.height * k));
+  c.getContext('2d')!.drawImage(bmp, 0, 0, c.width, c.height);
+  bmp.close();
+  return new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error('Não consegui ler a foto.'))), 'image/webp', 0.86));
+}
+
+let photoKind: 'f' | 'l' | 'r' = 'f';
+function pickPhoto(k: 'f' | 'l' | 'r'): void {
+  photoKind = k;
+  $<HTMLInputElement>('photo').click();
+}
+$<HTMLInputElement>('photo').onchange = (ev) => {
+  const input = ev.target as HTMLInputElement;
+  const f = input.files?.[0];
+  input.value = '';
+  if (!f) return;
+  const k = photoKind;
+  void (async () => {
+    try {
+      const blob = await toPhoto(f);
+      if (photos[k]) URL.revokeObjectURL(photos[k]!.url);
+      const url = URL.createObjectURL(blob);
+      photos[k] = { blob, url };
+      const base: FaceRecipe = rec.face ?? { f: '', ...FACE_DEFAULT, pf: [...FACE_DEFAULT.pf], pl: [...FACE_DEFAULT.pl], pr: [...FACE_DEFAULT.pr], m: [...FACE_DEFAULT.m] };
+      rec = { ...rec, face: { ...base, [k]: url } };
+      buildControls();
+      schedule();
+      say(`Foto pronta (${(blob.size / 1024).toFixed(0)} KB). Ajuste o encaixe com os controles.`);
+    } catch (e) { say((e as Error).message); }
+  })();
+};
+function dropPhoto(k: 'f' | 'l' | 'r', quiet = false): void {
+  if (photos[k]) { URL.revokeObjectURL(photos[k]!.url); delete photos[k]; }
+  if (!rec.face) return;
+  if (k === 'f') { if (!quiet) { delete rec.face; buildControls(); schedule(); } return; }
+  const f = { ...rec.face };
+  delete f[k];
+  rec = { ...rec, face: f };
+  if (!quiet) { buildControls(); schedule(); }
+}
+/** Atualiza o encaixe das fotos no boneco que já está na cena (sem montar tudo de novo). */
+function applyFaceUniforms(): void {
+  const face = rec.face;
+  if (!face || !obj) return;
+  obj.traverse((o) => {
+    const m = (o as THREE.SkinnedMesh).isSkinnedMesh && o.name === 'part_head' ? (o as THREE.SkinnedMesh).material as THREE.Material : null;
+    const u = m?.userData.face as { pF: { value: THREE.Vector4 }; pL: { value: THREE.Vector4 }; pR: { value: THREE.Vector4 }; mk: { value: THREE.Vector3 } } | undefined;
+    if (!u) return;
+    u.pF.value.set(face.pf[0], face.pf[1], face.pf[2], u.pF.value.w);
+    u.pL.value.set(face.pl[0], face.pl[1], face.pl[2], u.pL.value.w);
+    u.pR.value.set(face.pr[0], face.pr[1], face.pr[2], u.pR.value.w);
+    u.mk.value.set(face.m[0], face.m[1], face.m[2]);
+  });
 }
 
 // ---------- poses e câmera ----------
@@ -354,6 +461,8 @@ async function deleteChar(c: CustomChar): Promise<void> {
   if (error) { say(error.message); return; }
   const m = c.face.match(/\/chars\/(faces\/[^?]+)/);
   if (m) await supabase.storage.from('chars').remove([m[1]!]);
+  const srcs = (['f', 'l', 'r'] as const).map((k) => c.recipe.face?.[k]?.match(/\/chars\/(faces-src\/[^?]+)/)?.[1]).filter((x): x is string => !!x);
+  if (srcs.length) await supabase.storage.from('chars').remove(srcs);
   if (editingId === c.id) editingId = null;
   await loadCustom(true);
   buildList();
@@ -413,8 +522,19 @@ async function saveChar(asNew: boolean): Promise<void> {
       if (ins.error) throw new Error(ins.error.message);
       localHeads.delete(r.head);
     }
-    const face = await faceShot();
     const id = !asNew && editingId ? editingId : rid('c_');
+    // fotos do rosto ainda locais: envia (webp leve) e a receita passa a apontar para o endereço público
+    if (r.face) {
+      for (const k of ['f', 'l', 'r'] as const) {
+        const ph = photos[k];
+        if (!ph || !r.face[k]?.startsWith('blob:')) continue;
+        const path = `faces-src/${id}-${k}-${Date.now()}.webp`;
+        const upl = await supabase.storage.from('chars').upload(path, ph.blob, { contentType: 'image/webp', upsert: false, cacheControl: '31536000' });
+        if (upl.error) throw new Error(upl.error.message);
+        r.face[k] = supabase.storage.from('chars').getPublicUrl(path).data.publicUrl;
+      }
+    }
+    const face = await faceShot();
     const fpath = `faces/${id}-${Date.now()}.webp`;
     const fu = await supabase.storage.from('chars').upload(fpath, face, { contentType: 'image/webp', upsert: false, cacheControl: '31536000' });
     if (fu.error) throw new Error(fu.error.message);
@@ -423,6 +543,13 @@ async function saveChar(asNew: boolean): Promise<void> {
     const row = await supabase.from('custom_characters').upsert({ id, name: nm, recipe: r, face_url }, { onConflict: 'id' });
     if (row.error) throw new Error(row.error.message);
     if (old) void supabase.storage.from('chars').remove([old]);
+    // fotos que o personagem tinha antes e deixou de usar saem do armazenamento
+    const prev = editingId && !asNew ? customList().find((c) => c.id === editingId)?.recipe.face : undefined;
+    const gone = prev ? (['f', 'l', 'r'] as const).map((k) => prev[k]).filter((u): u is string => !!u && !Object.values(r.face ?? {}).includes(u)).map((u) => u.match(/\/chars\/(faces-src\/[^?]+)/)?.[1]).filter((x): x is string => !!x) : [];
+    if (gone.length) void supabase.storage.from('chars').remove(gone);
+    // a receita local passa a apontar para os endereços públicos
+    for (const k of ['f', 'l', 'r'] as const) { if (photos[k]) { URL.revokeObjectURL(photos[k]!.url); delete photos[k]; } }
+    if (r.face) rec = { ...rec, face: r.face };
     editingId = id;
     await loadCustom(true);
     // a cabeça que acabou de subir passa a vir do servidor
