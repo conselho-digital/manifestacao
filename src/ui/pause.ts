@@ -1,4 +1,5 @@
 // Menu de pausa (engrenagem): equipe, personagem, armas que o jogador já tem, loja e (só para o admin) gerenciar equipes.
+import { fetchMine, fetchTop } from '../net/ranking';
 import { VEHICLE_COLOR, vehicleColors } from '../game/vehicle';
 import { vehiclePreview } from './vehiclePreview';
 import { FPS_CAPS, saveSettings, settings } from '../game/settings';
@@ -11,7 +12,7 @@ import { checkYoutube, type Billboard } from '../game/billboard';
 import { ICON } from './icons';
 import { createCharacterPicker, createTeamPicker, el, PICKER_CSS, swatchStyle } from './pickers';
 
-export type PauseTab = 'team' | 'char' | 'weapons' | 'garage' | 'shop' | 'settings' | 'admin' | 'prices' | 'outdoor' | 'tools';
+export type PauseTab = 'team' | 'char' | 'weapons' | 'garage' | 'shop' | 'settings' | 'ranking' | 'admin' | 'prices' | 'outdoor' | 'tools';
 
 export interface PauseDeps {
   inv: Inventory;
@@ -100,6 +101,11 @@ const CSS = `
 .ps-img img{width:54px;height:54px;object-fit:contain;border-radius:8px;background:#0f1420;border:2px solid #3b4358}
 .ps-img .none{width:54px;height:54px;border-radius:8px;border:2px dashed #3b4358;display:flex;align-items:center;justify-content:center;font-size:10px;opacity:.7;text-align:center}
 .ps-file{padding:9px 13px;border-radius:9px;background:#3d2d52;color:#fff;font-weight:800;cursor:pointer}
+.ps-rank{display:flex;flex-direction:column;gap:3px;max-width:520px}
+.ps-rr{display:grid;grid-template-columns:34px 1fr 64px 64px;gap:6px;padding:7px 10px;border-radius:8px;background:#161c2b;font-size:14px}
+.ps-rr.head{background:none;opacity:.7;font-size:12px;text-transform:uppercase;letter-spacing:.05em}
+.ps-rr.me{outline:2px solid #f1c40f}
+.ps-rr .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ps-center{display:flex;flex-direction:column;align-items:center;gap:12px}
 @media (max-height:520px){.ps-head{padding:6px 12px}.ps-tab{padding:7px 11px;font-size:13px}.ps-body{padding:10px}.ps-go{padding:8px 18px}}
 `;
@@ -137,6 +143,7 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     { id: 'weapons', label: 'Armas' },
     { id: 'garage', label: 'Garagem' },
     { id: 'shop', label: 'Loja' },
+    { id: 'ranking', label: 'Ranking' },
     { id: 'settings', label: 'Configurações' },
     { id: 'admin', label: 'Gerenciar equipes', adm: true },
     { id: 'prices', label: 'Preços', adm: true },
@@ -610,6 +617,22 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     body.append(leave);
   }
 
+  function renderRanking(): void {
+    const note = el('p', 'ps-note', 'Ranking global: abates e mortes de todas as sessões e mapas, por conta. Atualiza a cada ~15 s.');
+    const mine = el('p', 'ps-msg ok', 'Carregando...');
+    const table = el('div', 'ps-rank');
+    body.append(note, mine, table);
+    void Promise.all([fetchTop(20), fetchMine()]).then(([top, me]) => {
+      if (tab !== 'ranking' || !opened) return;
+      if (!top) { mine.className = 'ps-msg err'; mine.textContent = 'Ranking indisponível (sem conexão ou sem login).'; return; }
+      mine.textContent = me ? `Você: ${me.pos}º lugar · ${me.kills} abates · ${me.deaths} mortes` : 'Você ainda não aparece no ranking: derrube alguém!';
+      const head = el('div', 'ps-rr head', el('span', '', '#'), el('span', '', 'Jogador'), el('span', '', 'Abates'), el('span', '', 'Mortes'));
+      table.append(head);
+      top.forEach((r, i) => table.append(el('div', `ps-rr${me && r.kills === me.kills && r.deaths === me.deaths ? ' me' : ''}`, el('span', '', String(i + 1)), el('span', 'nm', r.name), el('span', '', String(r.kills)), el('span', '', String(r.deaths)))));
+      if (!top.length) table.append(el('p', 'ps-note', 'Ninguém no ranking ainda.'));
+    });
+  }
+
   function renderBody(): void {
     stopOutdoor();
     body.textContent = '';
@@ -618,6 +641,7 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     else if (tab === 'weapons') renderWeapons();
     else if (tab === 'garage') renderGarage();
     else if (tab === 'shop') renderShop();
+    else if (tab === 'ranking') renderRanking();
     else if (tab === 'settings') renderSettings();
     else if (admin && tab === 'prices') renderPrices();
     else if (admin && tab === 'outdoor') renderOutdoor();

@@ -1,3 +1,4 @@
+import { rankDeath, rankKill } from '../net/ranking';
 import * as THREE from 'three';
 import { COLLIDERS, rayBox, terrainHeight } from './map';
 import { playClick, playReloadSound, playShotAt } from './audio';
@@ -484,6 +485,8 @@ export class Combat {
     const victim = this.ensure(m.v, this.nameOf(m.v));
     victim.d++;
     if (m.k !== m.v) killer.k++;
+    if (m.v === this.d.net.id) rankDeath(); // ranking global (conta)
+    if (m.k === this.d.net.id && m.v !== this.d.net.id) rankKill();
     if (m.k === this.d.net.id && m.v !== this.d.net.id) this.d.inv.earn(KILL_MONEY);
     if (m.k === m.v) this.d.log(`${this.nameOf(m.v)}: morreu (${m.w || 'acidente'})`);
     else this.d.log(`${this.nameOf(m.k)}: matou ${this.nameOf(m.v)} (${m.w || 'AK-47'})`);

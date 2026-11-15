@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createCamera, createRenderer, createScene, handleResize, pixelRatio } from './game/scene';
 import { createCity } from './game/city';
+import { startRanking } from './net/ranking';
 import { Npcs } from './game/npcs';
 import { Pickups, HEALTH_GIVES, ARMOR_GIVES } from './game/pickups';
 import { createEsplanada, esplanadaReady } from './game/esplanada';
@@ -327,6 +328,7 @@ void showLobby().then(async (profile) => {
   await Promise.all([loadPrices(), isAdmin().then((a) => loadPurchases(inv, a))]);
   loading.set(0.88, 'Entrando na arena...');
   if (import.meta.env.DEV && new URLSearchParams(location.search).has('admin')) inv.admin = true; // só para testar no npm run dev
+  startRanking(profile.name); // ranking global: envia abates e mortes da conta
   combat = new Combat({ scene, camera, net, name: profile.name, remotes, log: (t) => hud?.addChat(t), inv, graffiti, city, myTeam: () => ({ id: teamId, c1: teamById(teamId)?.c1 ?? '#ffffff' }) });
   wirePlayer(player);
 
