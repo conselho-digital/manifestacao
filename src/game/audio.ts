@@ -4,6 +4,7 @@ let master: GainNode | null = null;
 
 // Tiro do revólver (pistola): gravação enviada pelo dono, cortada em 1 disparo (public/sounds/revolver.wav, 0,69 s). Até carregar vale o tiro sintetizado.
 let revolverBuf: AudioBuffer | null = null;
+let m4Buf: AudioBuffer | null = null; // M4A1: o áudio próprio do dono (public/sounds/m4a1.wav, 0,47 s: o último tiro de uma rajada, com a cauda)
 let rifleBuf: AudioBuffer | null = null; // fuzis (AK-47, M4A1, M16): um tiro do mesmo áudio, cortado antes do próximo da rajada (public/sounds/ak47.wav, 0,31 s)
 let gunsLoading = false;
 function loadRevolver(c: AudioContext): void {
@@ -12,6 +13,7 @@ function loadRevolver(c: AudioContext): void {
   const get = (url: string, set: (b: AudioBuffer) => void): void => { fetch(url).then((r) => r.arrayBuffer()).then((b) => c.decodeAudioData(b)).then(set).catch(() => { gunsLoading = false; }); };
   get('/sounds/revolver.wav', (b) => { revolverBuf = b; });
   get('/sounds/ak47.wav', (b) => { rifleBuf = b; });
+  get('/sounds/m4a1.wav', (b) => { m4Buf = b; });
 }
 
 /** AudioContext único do jogo (motores, tiros e voz passam todos pelo ganho mestre). */
@@ -425,7 +427,7 @@ export class EngineSound {
 
 // ---------- tiros ----------
 
-export type ShotKind = 'rifle' | 'pistol' | 'silenced';
+export type ShotKind = 'rifle' | 'm4' | 'pistol' | 'silenced';
 const SHOT_RANGE = 130;
 
 /** Tiro no ponto (x, z): volume e lado vêm da distância ao ouvinte. O fuzil é grave e longo; a pistola, seca e curta. */
@@ -436,7 +438,7 @@ export function playShotAt(x: number, z: number, kind: ShotKind): void {
   const out = audioOut();
   if (!c || !out) return;
   try {
-    const sample = kind === 'pistol' ? revolverBuf : kind === 'rifle' ? rifleBuf : null;
+    const sample = kind === 'pistol' ? revolverBuf : kind === 'rifle' ? rifleBuf : kind === 'm4' ? m4Buf : null;
     if (sample) {
       const src = c.createBufferSource();
       src.buffer = sample;
@@ -445,14 +447,14 @@ export function playShotAt(x: number, z: number, kind: ShotKind): void {
       lp.type = 'lowpass';
       lp.frequency.value = 9000 * (0.25 + 0.75 * prox.gain); // longe, o ar come os agudos
       const g = c.createGain();
-      g.gain.value = (kind === 'rifle' ? 0.5 : 0.6) * prox.gain;
+      g.gain.value = (kind === 'rifle' || kind === 'm4' ? 0.5 : 0.6) * prox.gain;
       const pan = c.createStereoPanner();
       pan.pan.value = prox.pan;
       src.connect(lp).connect(g).connect(pan).connect(out);
       src.start();
       return;
     }
-    const rifle = kind === 'rifle';
+    const rifle = kind === 'rifle' || kind === 'm4';
     const quiet = kind === 'silenced'; // Honey Badger: tiro baixo e abafado
     const dur = rifle ? 0.16 : quiet ? 0.07 : 0.09;
     const len = Math.floor(c.sampleRate * dur);

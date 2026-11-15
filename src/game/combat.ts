@@ -294,7 +294,7 @@ export class Combat {
 
     this.tracers.add(muzzle, end);
     player.weaponVis?.flash();
-    playShotAt(muzzle.x, muzzle.z, kind === 'p' ? 'pistol' : kind === 'h' ? 'silenced' : 'rifle');
+    playShotAt(muzzle.x, muzzle.z, kind === 'p' ? 'pistol' : kind === 'h' ? 'silenced' : kind === 'm' ? 'm4' : 'rifle');
     if (hit.id) this.hitTick++;
     net.sendShot({ x1: muzzle.x, y1: muzzle.y, z1: muzzle.z, x2: end.x, y2: end.y, z2: end.z, h: hit.id ?? '', k: kind, hs: hit.head });
   }
@@ -359,7 +359,7 @@ export class Combat {
       const to = new THREE.Vector3(m.x2, m.y2, m.z2);
       this.tracers.add(from, to);
       shooter?.flash();
-      playShotAt(from.x, from.z, m.k === 'p' ? 'pistol' : m.k === 'h' ? 'silenced' : 'rifle'); // volume e lado pela distância ao ouvinte
+      playShotAt(from.x, from.z, m.k === 'p' ? 'pistol' : m.k === 'h' ? 'silenced' : m.k === 'm' ? 'm4' : 'rifle'); // volume e lado pela distância ao ouvinte
     }
     if (m.h === this.d.net.id && !this.dead && this.invuln <= 0 && this.protectT <= 0 && !this.paused) {
       const base = m.k === 'k' ? KICK_DAMAGE : m.k === 'f' ? FIST_DAMAGE : m.k === 'b' ? BAT_DAMAGE : m.k === 'p' ? PISTOL_DAMAGE : (SHOT_DAMAGE[m.k] ?? AK_DAMAGE);
