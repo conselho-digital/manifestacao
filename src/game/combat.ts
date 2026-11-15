@@ -262,7 +262,7 @@ export class Combat {
     if (this.isGun && !this.reloading && this.mag < this.magSize && this.reserve > 0) {
       this.reloading = true;
       this.reloadT = RELOAD_TIME;
-      if (this.weapon === 0 || this.weapon === 12 || this.weapon === 13) playReloadSound(); // AK-47, M4A1 e M16 (o Honey Badger e a pistola ficam sem som de recarga)
+      if (this.weapon === 0 || this.weapon === 12 || this.weapon === 13 || this.weapon === 14) playReloadSound(); // AK-47, M4A1, M16 e Honey Badger (a pistola fica sem som de recarga)
     }
   }
 

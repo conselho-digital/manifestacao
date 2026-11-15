@@ -1187,6 +1187,26 @@ export class Animator {
       q.premultiply(flat.clone().multiply(dq).multiply(flat.clone().invert()));
       this.ovLeft = { lr: v3(tr.lr).applyQuaternion(flat), w };
     }
+    // recarregando um fuzil: a arma inclina, a mão esquerda solta o carregador, pega outro, encaixa e puxa o ferrolho (tempos do som `reload-rifle`: 0, 0,42, 0,92 e 1,36 s)
+    if (!tr && kindOf(this.armed) === 'rifle' && this.reloadT >= 0) {
+      const t = this.reloadT;
+      const sm = THREE.MathUtils.smoothstep;
+      const w = THREE.MathUtils.clamp(Math.min(t / 0.1, (this.reloadDur - t) / 0.15), 0, 1);
+      const tilt = w * sm(t, 0.02, 0.14) * (1 - sm(t, 0.55, 0.75)); // inclina a arma para trocar o carregador
+      const lift = w * sm(t, 0.7, 0.9) * (1 - sm(t, 1.3, 1.5)); // levanta o cano um pouco ao puxar o ferrolho
+      q.multiply(new THREE.Quaternion().setFromAxisAngle(Z, 0.45 * tilt)).multiply(new THREE.Quaternion().setFromAxisAngle(X, -0.12 * lift));
+      const H = (x: number, y: number, z: number): THREE.Vector3 => new THREE.Vector3(x, y, z);
+      const KF: [number, THREE.Vector3][] = [
+        [0, cfg.gripL], [0.12, H(0, -0.16, 0.34)], [0.22, H(0.06, -0.5, 0.3)], [0.32, H(0.14, -0.55, 0.05)], [0.4, H(0.04, -0.3, 0.3)],
+        [0.46, H(0, -0.16, 0.34)], [0.62, H(0, -0.15, 0.34)], [0.88, H(-0.04, 0.07, 0.28)], [1.05, H(-0.04, 0.07, 0.12)], [1.36, H(-0.04, 0.07, 0.28)], [this.reloadDur, cfg.gripL],
+      ];
+      let j = 1;
+      while (j < KF.length - 1 && KF[j]![0] < t) j++;
+      const k0 = KF[j - 1]!, k1 = KF[j]!;
+      const f = sm(THREE.MathUtils.clamp((t - k0[0]) / Math.max(1e-6, k1[0] - k0[0]), 0, 1), 0, 1);
+      const hand = k0[1].clone().lerp(k1[1], f);
+      this.ovLeft = { lr: hand.sub(cfg.gripR).applyQuaternion(q), w };
+    }
     return { pos, q };
   }
 

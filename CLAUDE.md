@@ -519,3 +519,7 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 
 ## Rodada: círculo da voz a 60% e linha fina
 - `HEAR_RANGE` 5 → 3 m (60%; o círculo no chão acompanha), conecta a 3,4 m (`CONNECT_RANGE`) e desliga a 4,5 m (`DROP_RANGE`); volume cheio até 0,75 m. A linha branca do anel ficou bem fina: ±0,03 m (era ±0,2) em `voiceRing.ts`.
+
+## Rodada: Honey Badger 2x, som de recarga nela e animação de recarregar os fuzis
+- Honey Badger: tiro sintetizado no DOBRO (estalo 0,105 → 0,21, estrondo 0,075 → 0,15) e agora também toca o som de recarga (`reload-rifle.mp3`; ids 0, 12, 13 e 14 em `combat.ts`; a pistola segue sem).
+- Animação de recarregar fuzil (anim.ts, fim de `weaponFrame`, usa `reloadT`/`ovLeft`, os mesmos da pistola): a arma inclina (giro de 0,45 rad em volta do próprio eixo, até ~0,55 s) e a mão esquerda, em pontos no espaço da arma (`KF`: guarda-mão → carregador → puxa para baixo → bolso → encaixa → ferrolho em cima → puxa para trás → solta → guarda-mão), segue os tempos do som (0, 0,42, 0,92, 1,36 s); o cano sobe um pouco ao puxar o ferrolho. Só aparece no jogador local (a recarga não vai pela rede). Em teste automático o `setReloading(false)` do main zera `reloadT` a cada quadro: para ver a animação, aperte R de verdade (mag < cheio) e leia `animator.reloadT`.
