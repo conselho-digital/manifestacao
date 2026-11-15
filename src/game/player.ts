@@ -1002,7 +1002,7 @@ export class Player {
     const dist = driving ? (this.car?.bike ? 6.2 : 8) * near : THREE.MathUtils.lerp(CAM_DISTANCE * near, CAM_AIM_DISTANCE, aimK);
     const shoulder = driving ? 0 : THREE.MathUtils.lerp(CAM_SHOULDER * near, CAM_AIM_SHOULDER, aimK); // a pé: sempre à direita do personagem
     const fp = mode === 2 && !snap;
-    const nearPlane = fp ? 0.1 : 1;
+    const nearPlane = fp ? 0.1 : CAM_NEAR;
     if (camera.near !== nearPlane) { camera.near = nearPlane; camera.updateProjectionMatrix(); }
     if (fp) {
       const eye = new THREE.Vector3();
@@ -1028,7 +1028,7 @@ export class Player {
     const back = dir.clone().negate();
     for (const b of COLLIDERS) {
       const t = rayBox(from.x, from.y, from.z, back.x, back.y, back.z, b.minX - 0.25, b.bottom ?? 0, b.minZ - 0.25, b.maxX + 0.25, b.top + 0.25, b.maxZ + 0.25);
-      if (t !== null && t < d) d = Math.max(Math.min(1.6, dist), t - 0.1);
+      if (t !== null && t < d) d = Math.max(0.3, t - 0.1); // parede perto: a câmera encosta no personagem em vez de passar para dentro dela
     }
     // copas de árvores: a câmera para antes de entrar (se o jogador já está debaixo da copa, ela não atrapalha)
     for (const tr of TREES) {
@@ -1045,10 +1045,12 @@ export class Player {
       if (t > 0 && t < d) d = Math.max(Math.min(1.6, dist), t - 0.1);
     }
     const desired = from.clone().addScaledVector(back, d);
+    pushOutOfBoxes(desired);
     desired.y = Math.max(desired.y, terrainHeight(desired.x, desired.z) + 0.35);
     // segue rápido (a câmera acompanha o dedo sem "atraso" perceptível)
     if (snap) camera.position.copy(desired); // voo de entrada: o main mistura com a câmera do menu
     else camera.position.lerp(desired, 1 - Math.exp(-dt * 22));
+    pushOutOfBoxes(camera.position); // o suavizado nunca atravessa quina de prédio: a câmera fica sempre a CAM_WALL_PAD de qualquer parede
     camera.lookAt(camera.position.x + dir.x, camera.position.y + dir.y, camera.position.z + dir.z);
   }
 
@@ -1056,6 +1058,26 @@ export class Player {
   setAimPitch(pitch: number): void {
     this.weaponVis?.setPitch(pitch);
     this.animator?.setAimPitch(pitch);
+  }
+}
+
+/** Plano próximo da câmera em 3ª pessoa e folga mínima até qualquer parede (com plano 0,4 e a vista larga, 0,9 m garante que a parede nunca é cortada e deixa ver o interior). */
+const CAM_NEAR = 0.4;
+const CAM_WALL_PAD = 0.9;
+/** Empurra o ponto para fora de qualquer caixa (prédio, muro...) engordada por CAM_WALL_PAD, pelo lado mais curto (duas passadas, para quinas). */
+function pushOutOfBoxes(v: THREE.Vector3): void {
+  for (let pass = 0; pass < 2; pass++) {
+    let moved = false;
+    for (const b of COLLIDERS) {
+      const x0 = b.minX - CAM_WALL_PAD, x1 = b.maxX + CAM_WALL_PAD, z0 = b.minZ - CAM_WALL_PAD, z1 = b.maxZ + CAM_WALL_PAD;
+      const y0 = (b.bottom ?? 0) - CAM_WALL_PAD, y1 = b.top + CAM_WALL_PAD;
+      if (v.x <= x0 || v.x >= x1 || v.z <= z0 || v.z >= z1 || v.y <= y0 || v.y >= y1) continue;
+      const dx0 = v.x - x0, dx1 = x1 - v.x, dz0 = v.z - z0, dz1 = z1 - v.z, dy1 = y1 - v.y, dy0 = v.y - y0;
+      const m = Math.min(dx0, dx1, dz0, dz1, dy0, dy1);
+      if (m === dx0) v.x = x0; else if (m === dx1) v.x = x1; else if (m === dz0) v.z = z0; else if (m === dz1) v.z = z1; else if (m === dy1) v.y = y1; else v.y = y0;
+      moved = true;
+    }
+    if (!moved) break;
   }
 }
 
