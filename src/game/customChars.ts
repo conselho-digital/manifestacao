@@ -7,7 +7,6 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { supabase } from '../net/supabase';
 import { CHARACTER_HEIGHT, createCharacter, loadBase } from './characters';
 import { RIGGED_NAMES } from './autoRig';
-import { buildFelipeHead } from './proceduralHead';
 
 export type Part = 'head' | 'torso' | 'legs';
 export const PARTS: Part[] = ['head', 'torso', 'legs'];
@@ -35,8 +34,6 @@ export interface CharRecipe {
   face?: FaceRecipe;
   /** cor da pele do corpo: pescoço e mãos do tronco são repintados nesta cor (combina com o rosto) */
   skin?: string;
-  /** cabeça modelada por código no lugar da cabeça do modelo (ver proceduralHead.ts): só 'felipe'; usa `face` (foto e cor da pele) */
-  mod?: 'felipe';
 }
 /** Fotos do rosto (endereços https) e como cada uma se encaixa na cabeça: [zoom, deslocamento x, deslocamento y]; `m` = área do rosto [largura, altura, altura do centro] */
 export interface FaceRecipe {
@@ -105,7 +102,6 @@ export function cleanRecipe(v: unknown): CharRecipe | null {
   if (typeof r.skin === 'string' && HEX.test(r.skin)) out.skin = r.skin.toLowerCase();
   const face = cleanFace(r.face);
   if (face && !isHeadId(head)) out.face = face;
-  if (r.mod === 'felipe' && out.face) out.mod = 'felipe';
   const hp = vec3(r.hp, 1);
   const hr = vec3(r.hr, 360);
   if (hp) out.hp = hp;
@@ -128,21 +124,8 @@ export function forgetHead(id: string): void { heads.delete(id); }
 /** avisa quando a lista de personagens novos muda (carregou do servidor) */
 export function onCustomChange(cb: () => void): () => void { listeners.add(cb); return () => { listeners.delete(cb); }; }
 
-/**
- * Personagens que já vêm no jogo (não dependem do servidor): o Felipe, feito de uma foto do dono (agente com rosto projetado, cabeça pelada,
- * barba pintada e pescoço/mãos na cor da pele). A foto está em public/characters/felipe.webp (fundo branco trocado pela cor da pele).
- */
-const BUILTIN: CustomChar[] = [{
-  id: 'c_felipe',
-  name: 'Felipe',
-  face: '/faces/Felipe.webp',
-  recipe: {
-    head: 'Law5', torso: 'Law5', legs: 'Law5',
-    skin: '#e0a584',
-    mod: 'felipe', // cabeça modelada por código (proceduralHead.ts): crânio liso e redondo (careca) e barba em 3D
-    face: { f: '/characters/felipe.webp', pf: [0.531, 0, 0.1445, 1], pl: [0.7, 0, 0], pr: [0.7, 0, 0], m: [0.7, 0.9, 0, 1], base: '#eab38f' },
-  },
-}];
+/** Personagens que já vêm no jogo (não dependem do servidor); hoje nenhum. */
+const BUILTIN: CustomChar[] = [];
 for (const c of BUILTIN) chars.set(c.id, c);
 
 const SAFE_URL = /^https:\/\/[^\s]+$/;
@@ -566,11 +549,10 @@ export async function buildCustom(rec: CharRecipe): Promise<THREE.Group> {
     return s;
   };
   const customHead = isHeadId(rec.head);
-  const procHead = rec.mod === 'felipe' && !!rec.face;
   for (let i = 0; i < 3; i++) {
     const part = PARTS[i]!;
     const from = part === 'head' ? rec.head : part === 'torso' ? rec.torso : rec.legs;
-    if (part === 'head' && (customHead || procHead)) continue;
+    if (part === 'head' && customHead) continue;
     const info = await source(from);
     for (const e of info.entries) {
       const geom = e.geoms[i]!;
@@ -610,21 +592,6 @@ export async function buildCustom(rec: CharRecipe): Promise<THREE.Group> {
   const root = new THREE.Group();
   root.add(model);
 
-  if (procHead) {
-    const hb = findBone(model, /^Head$/);
-    if (hb) {
-      const skinBase = new THREE.MeshBasicMaterial({ vertexColors: true });
-      const { group } = buildFelipeHead(faceMaterial(skinBase, rec.face!), rec.skin ?? rec.face!.base ?? '#e0a584');
-      root.updateMatrixWorld(true);
-      const hp = hb.getWorldPosition(new THREE.Vector3());
-      const p = rec.hp ?? [0, 0.085, 0.005];
-      group.position.set(hp.x + p[0], hp.y + p[1], hp.z + p[2]);
-      group.scale.setScalar(rec.hs ?? 1);
-      root.add(group);
-      root.updateMatrixWorld(true);
-      hb.attach(group);
-    }
-  }
   if (customHead) {
     const def = headOf(rec.head);
     const hb = findBone(model, /^Head$/);
