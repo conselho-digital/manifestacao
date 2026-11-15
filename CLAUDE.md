@@ -539,3 +539,7 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 
 ## Rodada: ped.ifp já carregado na página de animações
 - A página `public/load-animation.html` (PC e celular) abre com o `ped.ifp` do GTA SA já carregado (`public/tools/ped.ifp`, 294 animações, o mesmo de `assets-src/ifp/ped-arrestgun.ifp`; baixado de `/tools/ped.ifp` ao abrir, só quando a página vem de http/https e ninguém escolheu outro arquivo antes). O botão de escolher/trocar o .ifp (e arrastar um arquivo) continua valendo e substitui o padrão. `scripts/size-report.mjs` conta `dist/tools/` à parte (os jogadores nunca baixam; fora do orçamento de 15 MB do jogo). Os scripts de bake abrem a página por `file://` e escolhem o arquivo na mão: não são afetados.
+
+## Rodada: sons de moto em MP3
+- Os 7 sons de moto (`moto-start/idle/rise/rev`, `harley-start/idle/rev`) agora são MP3 mono 22 kHz de 96 kbps (LAME, com o cabeçalho de emenda sem folga): 666 KB → 189 KB. Os WAV (cortes feitos dos áudios do dono) foram para `assets-src/sounds-wav/`, fora do build. Conferido no Chromium: o `decodeAudioData` do MP3 tem o mesmo número de amostras do WAV (harley-start +2), sem deslocamento, e as emendas dos laços (idle/rev) são as mesmas; a moto BMW criou partida + laços normalmente. Para refazer: `ffmpeg -i x.wav -codec:a libmp3lame -b:a 96k -ar 22050 -ac 1 x.mp3` (mantenha o cabeçalho LAME: é ele que deixa o laço sem estalo). A frase antiga "sons de moto continuam em WAV" não vale mais.
+

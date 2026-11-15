@@ -102,8 +102,8 @@ function noise(c: AudioContext): AudioBuffer {
 // Sons gravados (enviados pelo dono): partida (ao subir), marcha lenta (loop) e aceleração (loop). 'sport' = BMW e Suzuki; 'harley' = Harley.
 const SAMPLE_SETS = {
   // sport: a gravação tem uma SUBIDA de giro de verdade (o tom dobra em ~3 s): `rise` toca uma vez quando aperta o acelerador e vira o patamar `rev` (loop de tom achatado)
-  sport: { start: '/sounds/moto-start.wav', idle: '/sounds/moto-idle.wav', rev: '/sounds/moto-rev.wav', rise: '/sounds/moto-rise.wav', idleRate: [0.9, 0.35], revRate: [0.85, 0.25] },
-  harley: { start: '/sounds/harley-start.wav', idle: '/sounds/harley-idle.wav', rev: '/sounds/harley-rev.wav', idleRate: [0.95, 0.2], revRate: [0.8, 0.45] },
+  sport: { start: '/sounds/moto-start.mp3', idle: '/sounds/moto-idle.mp3', rev: '/sounds/moto-rev.mp3', rise: '/sounds/moto-rise.mp3', idleRate: [0.9, 0.35], revRate: [0.85, 0.25] },
+  harley: { start: '/sounds/harley-start.mp3', idle: '/sounds/harley-idle.mp3', rev: '/sounds/harley-rev.mp3', idleRate: [0.95, 0.2], revRate: [0.8, 0.45] },
 } as const satisfies Record<string, { start: string; idle: string; rev: string; rise?: string; idleRate: readonly number[]; revRate: readonly number[] }>;
 type SampleName = keyof typeof SAMPLE_SETS;
 type SampleSet = { start: AudioBuffer; idle: AudioBuffer; rev: AudioBuffer; rise?: AudioBuffer };
