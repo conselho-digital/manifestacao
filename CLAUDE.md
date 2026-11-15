@@ -502,3 +502,6 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 
 ## Rodada: som da M16 mais lento, com eco
 - `ShotKind` ganhou `'m16'` (audio.ts; `combat.ts` manda `'m16'` para `kind === 'q'`, local e remoto): toca o mesmo `ak47.wav` a 0,84x da velocidade (mais lento e grave) e acrescenta um ECO feito de 3 repetições atrasadas (0,11, 0,23 e 0,37 s) mais fracas (volumes 0,30/0,17/0,09) e abafadas (passa-baixa 3200/2400/1800 Hz, mais fechado com a distância), sem laço de realimentação (some sozinho). Testado: a M16 dispara o buffer da AK + 3 repetições. Ajuste `slow` e a lista de ecos em `playShotAt` se quiser mais ou menos.
+
+## Rodada: Honey Badger 50% mais alto
+- Tiro sintetizado do Honey Badger (`'silenced'` em `playShotAt`): volume do estalo 0,07 → 0,105 e do estrondo grave 0,05 → 0,075 (+50%); filtro e duração iguais.

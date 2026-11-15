@@ -484,7 +484,7 @@ export function playShotAt(x: number, z: number, kind: ShotKind): void {
     // longe, o ar come os agudos
     lp.frequency.value = (rifle ? 2600 : quiet ? 1300 : 4200) * (0.35 + 0.65 * prox.gain);
     const g = c.createGain();
-    g.gain.value = (rifle ? 0.3 : quiet ? 0.07 : 0.24) * prox.gain;
+    g.gain.value = (rifle ? 0.3 : quiet ? 0.105 : 0.24) * prox.gain;
     const pan = c.createStereoPanner();
     pan.pan.value = prox.pan;
     src.connect(lp).connect(g).connect(pan).connect(out);
@@ -495,7 +495,7 @@ export function playShotAt(x: number, z: number, kind: ShotKind): void {
     boom.type = 'sine';
     boom.frequency.setValueAtTime(rifle ? 120 : 170, c.currentTime);
     boom.frequency.exponentialRampToValueAtTime(40, c.currentTime + dur);
-    bg.gain.setValueAtTime((quiet ? 0.05 : 0.22) * prox.gain, c.currentTime);
+    bg.gain.setValueAtTime((quiet ? 0.075 : 0.22) * prox.gain, c.currentTime);
     bg.gain.exponentialRampToValueAtTime(0.001, c.currentTime + dur);
     boom.connect(bg).connect(pan);
     boom.start();
