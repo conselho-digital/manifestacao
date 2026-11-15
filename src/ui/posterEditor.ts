@@ -1,4 +1,4 @@
-// Cartazes das vitrines: chegue na frente do cartaz (a menos de 4 m aparece o cartão; só BEM perto aparece o preço e o botão), escolha uma imagem,
+// Cartazes das vitrines: chegue na frente do cartaz e toque no botão "Ad" (ao lado do microfone) para abrir o cartão (ele NÃO abre sozinho), escolha uma imagem,
 // veja a prévia (só você vê) e pague para publicar. A 1ª imagem custa $2 e fica 24 h; antes disso só sai se alguém pagar mais.
 // Se você se afastar antes de salvar, a prévia some, nada é salvo e nada é cobrado. O administrador não paga.
 import { FIRST_PRICE, clearPoster, hasPosterPreview, nearestPoster, posterHasImage, posterInfo, posterMinPrice, posterName, savePoster, setPosterPreview } from '../game/shops';
@@ -13,6 +13,7 @@ export function initPosterEditor(deps: PosterDeps): PosterEditor {
   let pending: { id: string; blob: Blob } | null = null;
   let busy = false;
   let shownFor = '';
+  let open = false; // o cartão só aparece depois que o jogador toca no botão Ad
   let t = 0;
 
   const style = document.createElement('style');
@@ -29,12 +30,22 @@ export function initPosterEditor(deps: PosterDeps): PosterEditor {
   .pe-bid input{width:84px;font:inherit;color:#eef2f7;background:#10151c;border:1px solid #4a586c;border-radius:6px;padding:5px 8px}
   .pe-msg{color:#f2c230;font-size:13px}
   .pe-toast{position:fixed;left:50%;bottom:150px;transform:translateX(-50%);z-index:61;background:rgba(18,22,28,.94);color:#f2c230;border:1px solid #3a4658;border-radius:10px;padding:9px 14px;font:14px system-ui,sans-serif;pointer-events:none}
-  .pe-toast[hidden]{display:none}`;
+  .pe-toast[hidden]{display:none}
+  .pe-ad{position:fixed;z-index:59;left:calc(50% + var(--u,6px)*5.4);bottom:calc(var(--u,6px)*1.5);width:calc(var(--u,6px)*8);height:calc(var(--u,6px)*8);min-width:40px;min-height:40px;border-radius:50%;border:2px solid rgba(255,255,255,.55);background:rgba(20,70,40,.88);color:#fff;font:800 calc(var(--u,6px)*3) system-ui,sans-serif;display:flex;align-items:center;justify-content:center;touch-action:manipulation;cursor:pointer;padding:0}
+  .pe-ad.on{background:#3fbf6f;color:#07130c}
+  .pe-ad[hidden]{display:none}`;
   document.head.appendChild(style);
   const card = document.createElement('div');
   card.className = 'pe-card';
   card.hidden = true;
   document.body.appendChild(card);
+  const adBtn = document.createElement('button');
+  adBtn.type = 'button';
+  adBtn.className = 'pe-ad';
+  adBtn.textContent = 'Ad';
+  adBtn.title = 'Trocar a imagem do cartaz da loja (chegue perto de um cartaz)';
+  adBtn.hidden = true; // aparece quando o jogo começa
+  document.body.appendChild(adBtn);
   const file = document.createElement('input');
   file.type = 'file';
   file.accept = 'image/*';
@@ -62,6 +73,24 @@ export function initPosterEditor(deps: PosterDeps): PosterEditor {
   let lastKey = '';
 
   const left = (ms: number): string => { const m = Math.max(1, Math.ceil(ms / 60000)); return m >= 60 ? `${Math.floor(m / 60)} h ${String(m % 60).padStart(2, '0')} min` : `${m} min`; };
+
+  function setOpen(v: boolean): void {
+    open = v;
+    adBtn.classList.toggle('on', v);
+    if (!v) { if (pending) { setPosterPreview(pending.id, null); pending = null; } shownFor = ''; msg = ''; }
+    lastKey = '';
+    render();
+  }
+  adBtn.addEventListener('pointerdown', (e) => e.stopPropagation()); // o toque no botão não vira tiro/giro da câmera
+  adBtn.addEventListener('click', () => {
+    if (open) { setOpen(false); return; }
+    const pos = getPos();
+    const near = pos ? nearestPoster(pos.x, pos.z, false) : null;
+    if (!near) { toast('Chegue bem perto de um cartaz de loja (1 m) e toque em Ad.'); return; }
+    shownFor = near.id;
+    if (document.pointerLockElement) document.exitPointerLock(); // libera o mouse para clicar no cartão
+    setOpen(true);
+  });
 
   function chooseFile(): void { if (!busy && shownFor && !pending) file.click(); }
 
@@ -129,6 +158,7 @@ export function initPosterEditor(deps: PosterDeps): PosterEditor {
           if (!admin) deps.spend(price);
           pending = null;
           flash(admin ? 'Cartaz salvo! Todos já veem.' : `Cartaz publicado por $${price}! Fica 24 h no ar.`);
+          setOpen(false);
         });
       };
       const cancelB = el('button', 'Cancelar');
@@ -147,6 +177,9 @@ export function initPosterEditor(deps: PosterDeps): PosterEditor {
         row.append(del);
       }
     }
+    const close = el('button', 'Fechar');
+    close.onclick = () => setOpen(false);
+    if (!pending) row.append(close);
     card.append(row);
     if (msg) card.append(el('div', msg, 'pe-msg'));
   }
@@ -170,10 +203,15 @@ export function initPosterEditor(deps: PosterDeps): PosterEditor {
         // a prévia só vale enquanto você está na frente do cartaz (um pouco de folga na borda)
         if (nearestPoster(p.x, p.z, true)?.id !== pending.id) { cancel('Você se afastou: a imagem não foi salva e nada foi cobrado.'); shownFor = ''; lastKey = ''; }
       }
+      adBtn.hidden = false;
       if (!pending) {
-        const near = nearestPoster(p.x, p.z, shownFor !== '')?.id ?? '';
-        if (near !== shownFor) msg = '';
-        shownFor = near;
+        if (open) {
+          // aberto: segue o cartão mais perto; se você se afastar, fecha
+          const near = nearestPoster(p.x, p.z, shownFor !== '')?.id ?? '';
+          if (!near) { setOpen(false); return; }
+          if (near !== shownFor) msg = '';
+          shownFor = near;
+        } else shownFor = '';
       }
       const id = pending?.id ?? shownFor;
       const info = id ? posterInfo(id) : null;
