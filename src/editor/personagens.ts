@@ -351,12 +351,12 @@ function applyFaceUniforms(): void {
     if (!(o as THREE.SkinnedMesh).isSkinnedMesh || o.name !== 'part_head') return;
     const mm = (o as THREE.SkinnedMesh).material;
     const m = Array.isArray(mm) ? mm[0] : mm;
-    const u = m?.userData.face as { pF: { value: THREE.Vector4 }; pL: { value: THREE.Vector4 }; pR: { value: THREE.Vector4 }; mk: { value: THREE.Vector3 } } | undefined;
+    const u = m?.userData.face as { pF: { value: THREE.Vector4 }; pL: { value: THREE.Vector4 }; pR: { value: THREE.Vector4 }; mk: { value: THREE.Vector4 } } | undefined;
     if (!u) return;
     u.pF.value.set(face.pf[0], face.pf[1], face.pf[2], u.pF.value.w);
     u.pL.value.set(face.pl[0], face.pl[1], face.pl[2], u.pL.value.w);
     u.pR.value.set(face.pr[0], face.pr[1], face.pr[2], u.pR.value.w);
-    u.mk.value.set(face.m[0], face.m[1], face.m[2]);
+    u.mk.value.set(face.m[0], face.m[1], face.m[2], face.m[3] ?? 1);
   });
 }
 
@@ -585,6 +585,7 @@ async function start(): Promise<void> {
     set: (r: CharRecipe) => { rec = r; buildList(); buildControls(); schedule(); },
     get: () => rec,
     obj: () => obj,
+    cam: (p: [number, number, number], t: [number, number, number]) => { camera.position.set(...p); orbit.target.set(...t); },
     face: async () => { const b = await faceShot(); return new Promise<string>((res) => { const r = new FileReader(); r.onload = () => res(String(r.result)); r.readAsDataURL(b); }); },
     setAdmin: (a: boolean) => { admin = a; buildList(); buildControls(); },
   };

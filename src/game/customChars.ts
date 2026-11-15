@@ -32,12 +32,20 @@ export interface CharRecipe {
   hs?: number;
   /** rosto a partir de fotos (projetadas na cabeça do modelo escolhido em `head`) */
   face?: FaceRecipe;
+  /** cor da pele do corpo: pescoço e mãos do tronco são repintados nesta cor (combina com o rosto) */
+  skin?: string;
 }
 /** Fotos do rosto (endereços https) e como cada uma se encaixa na cabeça: [zoom, deslocamento x, deslocamento y]; `m` = área do rosto [largura, altura, altura do centro] */
 export interface FaceRecipe {
   f: string; l?: string; r?: string;
-  pf: [number, number, number]; pl: [number, number, number]; pr: [number, number, number];
-  m: [number, number, number];
+  /** [zoom, mover x, mover y, esticar y (opcional, 1 = igual)] */
+  pf: [number, number, number, number?]; pl: [number, number, number, number?]; pr: [number, number, number, number?];
+  /** [largura, altura, posição, compressão da parte de baixo do rosto (opcional; 1 = sem)] */
+  m: [number, number, number, number?];
+  /** cor lisa da cabeça fora das fotos (pele; some o cabelo do modelo) */
+  base?: string;
+  /** cor da barba pintada na parte de baixo do rosto (mandíbula e queixo) fora da foto */
+  beard?: string;
 }
 export const FACE_DEFAULT: Omit<FaceRecipe, 'f'> = { pf: [0.7, 0, 0], pl: [0.7, 0, 0], pr: [0.7, 0, 0], m: [0.3, 0.34, -0.03] };
 export interface HeadDef { id: string; name: string; url: string }
@@ -55,7 +63,7 @@ const vec3 = (v: unknown, lim: number): [number, number, number] | undefined => 
 const HTTPS = /^https:\/\/[^\s]{4,400}$/;
 const nums = (v: unknown, n: number, lo: number, hi: number, d: number[]): number[] => {
   const a = Array.isArray(v) ? v : [];
-  return d.slice(0, n).map((x, i) => (typeof a[i] === 'number' && Number.isFinite(a[i]) ? Math.max(lo, Math.min(hi, a[i] as number)) : x));
+  return Array.from({ length: Math.max(n, Math.min(4, a.length)) }, (_, i) => d[i] ?? 1).map((x, i) => (typeof a[i] === 'number' && Number.isFinite(a[i]) ? Math.max(lo, Math.min(hi, a[i] as number)) : x));
 };
 /** Valida o rosto por fotos (só endereços https; o editor usa blob: só na prévia, sem passar por aqui). */
 export function cleanFace(v: unknown): FaceRecipe | null {
@@ -64,11 +72,13 @@ export function cleanFace(v: unknown): FaceRecipe | null {
   if (typeof o.f !== 'string' || !HTTPS.test(o.f)) return null;
   const out: FaceRecipe = {
     f: o.f,
-    pf: nums(o.pf, 3, -1.5, 1.5, FACE_DEFAULT.pf) as FaceRecipe['pf'],
-    pl: nums(o.pl, 3, -1.5, 1.5, FACE_DEFAULT.pl) as FaceRecipe['pl'],
-    pr: nums(o.pr, 3, -1.5, 1.5, FACE_DEFAULT.pr) as FaceRecipe['pr'],
-    m: nums(o.m, 3, -1, 1, FACE_DEFAULT.m) as FaceRecipe['m'],
+    pf: nums(o.pf, 3, -1.5, 1.5, FACE_DEFAULT.pf as number[]) as FaceRecipe['pf'],
+    pl: nums(o.pl, 3, -1.5, 1.5, FACE_DEFAULT.pl as number[]) as FaceRecipe['pl'],
+    pr: nums(o.pr, 3, -1.5, 1.5, FACE_DEFAULT.pr as number[]) as FaceRecipe['pr'],
+    m: nums(o.m, 3, -1, 3, FACE_DEFAULT.m as number[]) as FaceRecipe['m'],
   };
+  if (typeof o.base === 'string' && HEX.test(o.base)) out.base = o.base.toLowerCase();
+  if (typeof o.beard === 'string' && HEX.test(o.beard)) out.beard = o.beard.toLowerCase();
   if (typeof o.l === 'string' && HTTPS.test(o.l)) out.l = o.l;
   if (typeof o.r === 'string' && HTTPS.test(o.r)) out.r = o.r;
   return out;
@@ -89,6 +99,7 @@ export function cleanRecipe(v: unknown): CharRecipe | null {
     for (const p of PARTS) if (typeof t[p] === 'string' && HEX.test(t[p] as string) && (t[p] as string).toLowerCase() !== '#ffffff') tint[p] = (t[p] as string).toLowerCase();
     if (Object.keys(tint).length) out.tint = tint;
   }
+  if (typeof r.skin === 'string' && HEX.test(r.skin)) out.skin = r.skin.toLowerCase();
   const face = cleanFace(r.face);
   if (face && !isHeadId(head)) out.face = face;
   const hp = vec3(r.hp, 1);
@@ -113,6 +124,22 @@ export function forgetHead(id: string): void { heads.delete(id); }
 /** avisa quando a lista de personagens novos muda (carregou do servidor) */
 export function onCustomChange(cb: () => void): () => void { listeners.add(cb); return () => { listeners.delete(cb); }; }
 
+/**
+ * Personagens que já vêm no jogo (não dependem do servidor): o Felipe, feito de uma foto do dono (agente com rosto projetado, cabeça pelada,
+ * barba pintada e pescoço/mãos na cor da pele). A foto está em public/characters/felipe.webp (fundo branco trocado pela cor da pele).
+ */
+const BUILTIN: CustomChar[] = [{
+  id: 'c_felipe',
+  name: 'Felipe',
+  face: '/faces/Felipe.webp',
+  recipe: {
+    head: 'Law5', torso: 'Law5', legs: 'Law5',
+    skin: '#e0a584',
+    face: { f: '/characters/felipe.webp', pf: [0.58, 0, 0.13, 1.2], pl: [0.7, 0, 0], pr: [0.7, 0, 0], m: [0.55, 0.65, 0, 1], base: '#eab38f', beard: '#2a2623' },
+  },
+}];
+for (const c of BUILTIN) chars.set(c.id, c);
+
 const SAFE_URL = /^https:\/\/[^\s]+$/;
 let loading: Promise<void> | null = null;
 /** Lê personagens e cabeças novas do servidor (uma vez; `force` lê de novo). Sem servidor ou sem as tabelas, a lista fica vazia. */
@@ -127,6 +154,7 @@ export function loadCustom(force = false): Promise<void> {
       ]);
       heads.clear();
       chars.clear();
+      for (const c of BUILTIN) chars.set(c.id, c);
       for (const row of (h.data ?? []) as { id: string; name: string; url: string }[]) {
         if (isHeadId(row.id) && SAFE_URL.test(row.url)) heads.set(row.id, { id: row.id, name: String(row.name).slice(0, 30), url: row.url });
       }
@@ -352,11 +380,15 @@ function faceMaterial(base: THREE.Material, face: FaceRecipe): THREE.Material {
     pF: { value: new THREE.Vector4(face.pf[0], face.pf[1], face.pf[2], 0) },
     pL: { value: new THREE.Vector4(face.pl[0], face.pl[1], face.pl[2], 0) },
     pR: { value: new THREE.Vector4(face.pr[0], face.pr[1], face.pr[2], 0) },
-    mk: { value: new THREE.Vector3(face.m[0], face.m[1], face.m[2]) },
+    mk: { value: new THREE.Vector4(face.m[0], face.m[1], face.m[2], face.m[3] ?? 1) },
+    br: { value: face.beard ? new THREE.Vector4(...(() => { const c = new THREE.Color(face.beard); return [c.r, c.g, c.b]; })(), 1) : new THREE.Vector4(0, 0, 0, 0) },
+    asp: { value: new THREE.Vector3(1, 1, 1) },
+    sy: { value: new THREE.Vector3(face.pf[3] ?? 1, face.pl[3] ?? 1, face.pr[3] ?? 1) },
+    bs: { value: face.base ? new THREE.Vector4(...(() => { const c = new THREE.Color(face.base); return [c.r, c.g, c.b]; })(), 1) : new THREE.Vector4(1, 1, 1, 0) },
   };
   mat.userData.face = u;
   mat.onBeforeCompile = (sh) => {
-    Object.assign(sh.uniforms, { uTF: u.tF, uTL: u.tL, uTR: u.tR, uPF: u.pF, uPL: u.pL, uPR: u.pR, uMK: u.mk });
+    Object.assign(sh.uniforms, { uTF: u.tF, uTL: u.tL, uTR: u.tR, uPF: u.pF, uPL: u.pL, uPR: u.pR, uMK: u.mk, uBS: u.bs, uAS: u.asp, uSY: u.sy, uBR: u.br });
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nattribute vec3 fP;\nattribute vec3 fN;\nvarying vec3 vFP;\nvarying vec3 vFN;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvFP = fP;\nvFN = fN;');
@@ -370,19 +402,32 @@ uniform sampler2D uTR;
 uniform vec4 uPF;
 uniform vec4 uPL;
 uniform vec4 uPR;
-uniform vec3 uMK;
+uniform vec4 uMK;
+uniform vec4 uBS;
+uniform vec3 uAS;
+uniform vec3 uSY;
+uniform vec4 uBR;
 float inUV(vec2 t) { return step(0.0, t.x) * step(t.x, 1.0) * step(0.0, t.y) * step(t.y, 1.0); }`)
       .replace('#include <map_fragment>', `#include <map_fragment>
       {
+        if (uBS.a > 0.5) diffuseColor.rgb = uBS.rgb;
         float a = vFP.x; float b = vFP.y; float c = vFP.z;
+        if (uBR.a > 0.5) {
+          float bt = uMK.z - 0.04;
+          float bm = (1.0 - smoothstep(bt - 0.1, bt, b)) * smoothstep(-0.2, 0.0, c);
+          diffuseColor.rgb = mix(diffuseColor.rgb, uBR.rgb, bm);
+        }
         vec3 n = normalize(vFN + vec3(1e-5));
         float rb = (b - uMK.z) / uMK.y;
         // área do rosto: oval na frente; nas laterais, faixa entre a testa e o queixo, da frente até a orelha
-        float mFront = 1.0 - smoothstep(0.7, 1.0, length(vec2(a / uMK.x, rb)));
+        vec2 q4 = pow(abs(vec2(a / uMK.x, rb)), vec2(4.0));
+        float mFront = 1.0 - smoothstep(0.75, 1.0, pow(q4.x + q4.y, 0.25));
         float mSide = (1.0 - smoothstep(0.75, 1.0, abs(rb))) * smoothstep(-0.18, 0.02, c);
-        vec2 tF = vec2(0.5 - a * uPF.x + uPF.y, 0.5 + b * uPF.x + uPF.z);
-        vec2 tL = vec2(0.5 - c * uPL.x + uPL.y, 0.5 + b * uPL.x + uPL.z);
-        vec2 tR = vec2(0.5 + c * uPR.x + uPR.y, 0.5 + b * uPR.x + uPR.z);
+        float bl = uMK.z - 0.12;
+        float bb = b < bl ? bl + (b - bl) * uMK.w : b;
+        vec2 tF = vec2(0.5 - a * uPF.x / uAS.x + uPF.y, 0.5 + bb * uPF.x * uSY.x + uPF.z);
+        vec2 tL = vec2(0.5 - c * uPL.x / uAS.y + uPL.y, 0.5 + b * uPL.x * uSY.y + uPL.z);
+        vec2 tR = vec2(0.5 + c * uPR.x / uAS.z + uPR.y, 0.5 + b * uPR.x * uSY.z + uPR.z);
         float wF = pow(max(n.z, 0.0), 3.0) * mFront * inUV(tF) * uPF.w;
         float wL = pow(max(-n.x, 0.0), 2.0) * mSide * inUV(tL) * uPL.w;
         float wR = pow(max(n.x, 0.0), 2.0) * mSide * inUV(tR) * uPR.w;
@@ -394,11 +439,50 @@ float inUV(vec2 t) { return step(0.0, t.x) * step(t.x, 1.0) * step(0.0, t.y) * s
       }`);
   };
   mat.customProgramCacheKey = () => 'face';
-  const set = (key: 'tF' | 'tL' | 'tR', pk: 'pF' | 'pL' | 'pR', url: string | undefined): void => {
+  const set = (key: 'tF' | 'tL' | 'tR', pk: 'pF' | 'pL' | 'pR', ai: 'x' | 'y' | 'z', url: string | undefined): void => {
     if (!url) return;
-    void loadPhoto(url).then((t) => { u[key].value = t; u[pk].value.w = 1; }).catch(() => undefined);
+    void loadPhoto(url).then((t) => {
+      const im = t.image as { width: number; height: number };
+      u.asp.value[ai] = im.width / Math.max(1, im.height); // largura/altura da foto: a escala vale em alturas da cabeça nos dois eixos
+      u[key].value = t; u[pk].value.w = 1;
+    }).catch(() => undefined);
   };
-  set('tF', 'pF', face.f); set('tL', 'pL', face.l); set('tR', 'pR', face.r);
+  set('tF', 'pF', 'x', face.f); set('tL', 'pL', 'y', face.l); set('tR', 'pR', 'z', face.r);
+  return mat;
+}
+
+
+// ---------- pele do corpo (pescoço e mãos) ----------
+const SKIN_BONE = /^(Neck|[LR] Hand|[LR] Finger|Bip01 [LR] Finger)/;
+/** peso (0..1) de cada vértice nos ossos de pele (pescoço, mãos, dedos), guardado no atributo `skW` da geometria */
+function skinWeights(e: Entry, g: THREE.BufferGeometry): void {
+  if (g.getAttribute('skW')) return;
+  const si = g.getAttribute('skinIndex');
+  const sw = g.getAttribute('skinWeight');
+  const isSkin = e.joints.map((j) => SKIN_BONE.test(j));
+  const out = new Float32Array(si.count);
+  for (let i = 0; i < si.count; i++) for (let k = 0; k < 4; k++) if (isSkin[si.getComponent(i, k)]) out[i] += sw.getComponent(i, k);
+  g.setAttribute('skW', new THREE.BufferAttribute(out, 1));
+}
+/** Repinta (na cor da pele) os vértices ligados a pescoço e mãos, mantendo o sombreado da textura. */
+function skinMaterial(base: THREE.Material, hex: string): THREE.Material {
+  const mat = base.clone();
+  const c = new THREE.Color(hex);
+  const uni = { value: new THREE.Vector3(c.r, c.g, c.b) };
+  mat.onBeforeCompile = (sh) => {
+    sh.uniforms.uSkin = uni;
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute float skW;\nvarying float vSkW;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvSkW = skW;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vSkW;\nuniform vec3 uSkin;')
+      .replace('#include <map_fragment>', `#include <map_fragment>
+      {
+        float lum = dot(diffuseColor.rgb, vec3(0.299, 0.587, 0.114));
+        diffuseColor.rgb = mix(diffuseColor.rgb, uSkin * (0.45 + 0.9 * lum), smoothstep(0.3, 0.7, vSkW));
+      }`);
+  };
+  mat.customProgramCacheKey = () => 'skin';
   return mat;
 }
 
@@ -490,7 +574,9 @@ export async function buildCustom(rec: CharRecipe): Promise<THREE.Group> {
         const c = m.clone();
         const tint = rec.tint?.[part];
         if (tint && (c as THREE.MeshBasicMaterial).color) (c as THREE.MeshBasicMaterial).color.set(tint);
-        return part === 'head' && rec.face ? faceMaterial(c, rec.face) : c;
+        if (part === 'head' && rec.face) return faceMaterial(c, rec.face);
+        if (part === 'torso' && rec.skin) { skinWeights(e, geom); return skinMaterial(c, rec.skin); }
+        return c;
       };
       const material = Array.isArray(e.material) ? e.material.map(cl) : cl(e.material);
       const mesh = new THREE.SkinnedMesh(part === 'head' && rec.face ? faceGeometry(info, e) : geom, material);

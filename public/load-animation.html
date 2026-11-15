@@ -120,7 +120,6 @@
 <nav class="tabs" role="tablist">
   <button id="tabAnim" class="on" role="tab" aria-selected="true">Animações</button>
   <button id="tabGrip" role="tab" aria-selected="false">Armas nas mãos</button>
-  <button id="tabChar" role="tab" aria-selected="false">Criar personagens</button>
 </nav>
 <div id="mob">
   <section class="mcol" id="mL">
@@ -134,7 +133,6 @@
 </div>
 <div id="mRot" role="alert"><div class="ico">📱</div><b>Gire o celular para o lado</b><span class="muted">A ferramenta funciona em paisagem.</span></div>
 <div id="gripTab" hidden></div>
-<div id="charTab" hidden></div>
 <div class="page" id="animTab">
   <!-- 1. arquivo -->
   <section id="drop">
@@ -1550,8 +1548,7 @@ const CarlosRetarget = (function () {
 (function () {
   var tabs = [
     { btn: document.getElementById('tabAnim'), box: document.getElementById('animTab'), hash: '', src: '', title: '' },
-    { btn: document.getElementById('tabGrip'), box: document.getElementById('gripTab'), hash: '#armas', src: '/armas.html', title: 'Armas nas mãos' },
-    { btn: document.getElementById('tabChar'), box: document.getElementById('charTab'), hash: '#personagens', src: '/personagens.html', title: 'Criar personagens' }
+    { btn: document.getElementById('tabGrip'), box: document.getElementById('gripTab'), hash: '#armas', src: '/armas.html', title: 'Armas nas mãos' }
   ];
   function show(i) {
     tabs.forEach(function (t, k) {

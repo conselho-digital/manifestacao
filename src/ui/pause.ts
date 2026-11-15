@@ -372,9 +372,8 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
   /** Controle do outdoor da praça: vídeo/live do YouTube, play/pause, parar, ±10 s e linha do tempo. */
   /** páginas de ferramentas do site (abrem em outra aba; só o admin vê esta aba) */
   const TOOLS: { name: string; desc: string; url: string }[] = [
-    { name: 'Criar personagens', desc: 'Mistura cabeça, tronco e pernas, pinta as partes, põe cabeça 3D nova e publica para todos.', url: '/personagens' },
     { name: 'Armas nas mãos', desc: 'Ajusta a posição, o giro e o tamanho de cada arma na mão do personagem (e o giro das mãos).', url: '/armas' },
-    { name: 'Animações', desc: 'Troca as animações do Carlos a partir de arquivos .ifp do GTA (as três ferramentas ficam em abas nesta página).', url: '/load-animation' },
+    { name: 'Animações', desc: 'Troca as animações do Carlos a partir de arquivos .ifp do GTA (as ferramentas ficam em abas nesta página).', url: '/load-animation' },
   ];
 
   /** No celular a ferramenta abre POR CIMA do jogo (iframe em tela cheia): assim a tela cheia e a paisagem do jogo continuam; o ✕ fecha. */
