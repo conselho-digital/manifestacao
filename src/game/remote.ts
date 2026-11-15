@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { applyOutfit, type Outfit } from './outfit';
 import { createCharacter } from './characters';
 import { ARMED_FROM_CODE, Animator } from './anim';
 import { CARS, PERSONAL, type Car } from './vehicle';
@@ -100,6 +101,7 @@ export class RemotePlayer {
       this.root.add(this.pivot);
       this.pivot.add(m);
       this.model = m;
+      applyOutfit(m, this.info.outfit ?? null);
       this.weaponVis = new WeaponVisual(this.root);
       this.applyFlag();
       void Animator.create(m).then((a) => { this.animator = a; if (a) this.weaponVis?.bind(a); });
@@ -244,6 +246,12 @@ export class RemotePlayer {
     if (!look) { this.weaponVis?.setFlagTeam(null, '', '#ffffff'); return; }
     const team: Team = teamByName(look.name) ?? { id: '', name: look.name, c1: look.c1, c2: look.c2 };
     this.weaponVis?.setFlagTeam(team, team.name, look.c1);
+  }
+
+  /** Trocou de roupa. */
+  setOutfit(o: Outfit | null): void {
+    this.info.outfit = o;
+    if (this.model) applyOutfit(this.model, o);
   }
 
   /** Trocou de equipe: refaz o nome e o anel. */

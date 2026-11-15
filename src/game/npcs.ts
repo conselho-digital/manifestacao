@@ -4,6 +4,7 @@ import * as THREE from 'three';
 import { Animator } from './anim';
 import { createCharacter, type BuiltinName } from './characters';
 import { CITY, COLLIDERS, ROADS, terrainHeight, waterDepth } from './map';
+import { applyOutfit, randomOutfit } from './outfit';
 import { IS_TOUCH } from './scene';
 
 const COUNT = IS_TOUCH ? 8 : 16;
@@ -53,6 +54,7 @@ class Npc {
     this.root.visible = false;
     this.wait = Math.random() * 3;
     void createCharacter(name).then(async (m) => {
+      if (Math.random() < 0.8) applyOutfit(m, randomOutfit()); // roupa sorteada (a variedade vem das cores)
       this.root.add(m);
       this.animator = await Animator.create(m);
       this.ready = true;
