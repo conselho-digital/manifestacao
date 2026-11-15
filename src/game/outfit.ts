@@ -52,12 +52,31 @@ function ensureWeights(mesh: THREE.SkinnedMesh): boolean {
   const si = g.getAttribute('skinIndex');
   const sw = g.getAttribute('skinWeight');
   if (!si || !sw || !mesh.skeleton) return false;
-  const groups = mesh.skeleton.bones.map((b) => groupOf(b.name));
+  const bones = mesh.skeleton.bones;
+  const groups = bones.map((b) => groupOf(b.name));
+  // posição de cada osso na pose de montagem (mesmo espaço dos vértices levados por bindMatrix)
+  const at = (re: RegExp): THREE.Vector3 | null => {
+    const i = bones.findIndex((b) => re.test(b.name.toLowerCase()));
+    return i < 0 ? null : new THREE.Vector3().setFromMatrixPosition(mesh.skeleton.boneInverses[i]!.clone().invert());
+  };
+  const neck = at(/neck/);
+  const pelvis = at(/pelvis|hips/);
+  // a camisa não passa do pescoço: vértices acima dele (queixo, boca) ficam sem cor de camisa, mesmo com peso do tronco
+  const up = neck && pelvis ? neck.clone().sub(pelvis) : null;
+  const torso = up ? up.length() : 0;
+  if (up) up.normalize();
+  const cut = torso * 0.1;
   const out = new Float32Array(si.count * 3);
+  const pa = g.getAttribute('position');
+  const v = new THREE.Vector3();
   for (let i = 0; i < si.count; i++) {
     for (let k = 0; k < 4; k++) {
       const gr = groups[si.getComponent(i, k)] ?? -1;
       if (gr >= 0) out[i * 3 + gr] += sw.getComponent(i, k);
+    }
+    if (up && neck && out[i * 3]! > 0) {
+      v.fromBufferAttribute(pa, i).applyMatrix4(mesh.bindMatrix);
+      if (v.sub(neck).dot(up) > cut) out[i * 3] = 0;
     }
   }
   g.setAttribute('outfitW', new THREE.BufferAttribute(out, 3));
