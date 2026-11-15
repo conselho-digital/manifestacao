@@ -370,12 +370,31 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     { name: 'Animações', desc: 'Troca as animações do Carlos a partir de arquivos .ifp do GTA (as três ferramentas ficam em abas nesta página).', url: '/load-animation' },
   ];
 
+  /** No celular a ferramenta abre POR CIMA do jogo (iframe em tela cheia): assim a tela cheia e a paisagem do jogo continuam; o ✕ fecha. */
+  function openToolOverlay(url: string, title: string): void {
+    const box = document.createElement('div');
+    box.style.cssText = 'position:fixed;inset:0;z-index:100000;background:#12141a';
+    const fr = document.createElement('iframe');
+    fr.src = url;
+    fr.title = title;
+    fr.allow = 'fullscreen; clipboard-write';
+    fr.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;border:0;background:#12141a';
+    const x = document.createElement('button');
+    x.type = 'button';
+    x.textContent = '✕';
+    x.setAttribute('aria-label', 'Fechar a ferramenta');
+    x.style.cssText = 'position:absolute;top:calc(env(safe-area-inset-top,0px) + 6px);right:calc(env(safe-area-inset-right,0px) + 6px);z-index:2;width:38px;height:38px;border-radius:50%;border:1px solid #4a5166;background:rgba(27,30,38,.9);color:#fff;font:700 18px system-ui;cursor:pointer';
+    x.onclick = () => box.remove();
+    box.append(fr, x);
+    document.body.appendChild(box);
+  }
+
   function renderTools(): void {
     body.append(el('p', 'ps-note', 'Ferramentas do jogo. Cada uma abre numa nova aba do navegador (o login de admin vale nelas).'));
     for (const t of TOOLS) {
       const open = el('button', 'ps-save', 'Abrir');
       open.type = 'button';
-      open.onclick = () => { window.open(t.url, '_blank', 'noopener'); };
+      open.onclick = () => { if (matchMedia('(pointer: coarse)').matches) openToolOverlay(t.url, t.name); else window.open(t.url, '_blank', 'noopener'); };
       body.appendChild(el('div', 'ps-row', el('div', 'ps-grow', el('b', '', t.name), el('p', 'ps-note', t.desc)), open));
     }
   }

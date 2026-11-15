@@ -2,7 +2,8 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<script>try{if(matchMedia("(pointer: coarse)").matches||/[?&]m=1/.test(location.search))document.documentElement.classList.add("m")}catch(e){}</script>
 <meta name="robots" content="noindex">
 <title>Load Animation</title>
 <!--
@@ -75,6 +76,36 @@
   #replList button { padding: 3px 9px; }
   #jsonOut { width: 100%; font: 12px ui-monospace, Menlo, Consolas, monospace; background: #0d0f14; color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
   @media (max-width: 520px) { .arrow { width: 34px; } .card { width: 132px; } #tools button { padding: 4px 8px; font-size: 12px; } }
+
+  /* ===== versão celular (html.m): paisagem, tela cheia; lista do arquivo | personagem | lista do jogo; um botão só: Substituir ===== */
+  #mob, #mRot { display: none; }
+  html.m, html.m body { height: 100%; margin: 0; overflow: hidden; overscroll-behavior: none; -webkit-user-select: none; user-select: none; -webkit-tap-highlight-color: transparent; }
+  html.m .tabs, html.m #animTab, html.m #gripTab, html.m #charTab { display: none !important; }
+  html.m #mob { position: fixed; inset: 0; display: grid; grid-template-columns: minmax(120px, 27%) minmax(0, 1fr) minmax(120px, 27%); background: var(--bg);
+    padding: env(safe-area-inset-top, 0px) env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px); }
+  .mcol { display: flex; flex-direction: column; min-width: 0; min-height: 0; background: var(--panel); }
+  #mL { border-right: 1px solid var(--line); } #mR { border-left: 1px solid var(--line); }
+  .mhead { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--line); min-height: 40px; }
+  .mhead h2 { font-size: 11px; flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .mhead button { padding: 5px 9px; font-size: 12px; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #mR .mhead { padding-right: 52px; }
+  html.m .track.vert { flex: 1 1 auto; min-height: 0; flex-direction: column; overflow-x: hidden; overflow-y: auto; scroll-snap-type: y proximity; gap: 6px; padding: 6px; -webkit-overflow-scrolling: touch; }
+  html.m .track.vert .card { width: 100%; min-height: 46px; padding: 7px 9px; font-size: 13px; scroll-snap-align: center; }
+  html.m .track.vert .card small { font-size: 11px; }
+  .mcat { flex: 0 0 auto; padding: 6px 4px 0; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+  #mC { position: relative; min-width: 0; min-height: 0; }
+  html.m #mC #stage { position: absolute; inset: 0; height: auto; border: 0; border-radius: 0; }
+  html.m #mC #tools { display: none; }
+  html.m #mC #now { left: 50%; top: 6px; transform: translateX(-50%); max-width: 80%; font-size: 12px; text-align: center; pointer-events: none; padding: 3px 9px; }
+  html.m #mC #btnReplace { position: absolute; left: 10px; right: 10px; bottom: calc(10px + env(safe-area-inset-bottom, 0px)); z-index: 3; padding: 14px 10px; font-size: 17px; border-radius: 12px; }
+  #mCap { position: absolute; left: 10px; right: 10px; bottom: calc(66px + env(safe-area-inset-bottom, 0px)); z-index: 3; text-align: center; font-size: 12px; color: var(--text); background: rgba(18,20,26,.78); border-radius: 8px; padding: 4px 8px; pointer-events: none; overflow-wrap: anywhere; }
+  #mToast { position: absolute; left: 10px; right: 10px; top: 36px; z-index: 4; text-align: center; font-size: 12px; background: rgba(18,20,26,.92); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; pointer-events: none; }
+  #mToast.err { color: var(--err); } #mToast.ok { color: var(--ok); } #mToast.warn { color: var(--warn); }
+  #mEmpty { padding: 14px 10px; color: var(--muted); font-size: 12px; text-align: center; }
+  @media (orientation: portrait) {
+    html.m #mRot { position: fixed; inset: 0; z-index: 50; display: flex; flex-direction: column; gap: 14px; align-items: center; justify-content: center; background: var(--bg); text-align: center; padding: 24px; }
+    #mRot b { font-size: 18px; } #mRot .ico { font-size: 54px; transform: rotate(90deg); }
+  }
   @media (prefers-reduced-motion: reduce) { .track { scroll-behavior: auto; } }
   /* abas: Animações (esta página) e Armas nas mãos (editor /armas, embutido) */
   .tabs { position: sticky; top: 0; z-index: 20; display: flex; gap: 4px; padding: 8px 16px 0; background: var(--bg); border-bottom: 1px solid var(--line); }
@@ -91,6 +122,17 @@
   <button id="tabGrip" role="tab" aria-selected="false">Armas nas mãos</button>
   <button id="tabChar" role="tab" aria-selected="false">Criar personagens</button>
 </nav>
+<div id="mob">
+  <section class="mcol" id="mL">
+    <div class="mhead"><h2 id="mLh">Animações do arquivo</h2><button type="button" id="mPick">Abrir</button></div>
+    <div class="track vert" id="mLlist" role="listbox" aria-label="Animações do arquivo"><div id="mEmpty">Toque em “Abrir” para escolher um arquivo .ifp.</div></div>
+  </section>
+  <section id="mC"><div id="mCap"></div><div id="mToast" hidden></div></section>
+  <section class="mcol" id="mR">
+    <div class="mhead"><h2>Animações do jogo</h2></div>
+  </section>
+</div>
+<div id="mRot" role="alert"><div class="ico">📱</div><b>Gire o celular para o lado</b><span class="muted">A ferramenta funciona em paisagem.</span></div>
 <div id="gripTab" hidden></div>
 <div id="charTab" hidden></div>
 <div class="page" id="animTab">
@@ -893,7 +935,17 @@ const CarlosRetarget = (function () {
 'use strict';
 (function () {
   const $ = (s) => document.querySelector(s);
-  const status = (msg, kind) => { const el = $('#status'); el.textContent = msg || ''; el.className = kind || ''; };
+  const MOBILE = document.documentElement.classList.contains('m');
+  let toastTimer = 0;
+  const status = (msg, kind) => {
+    const el = $('#status'); el.textContent = msg || ''; el.className = kind || '';
+    if (MOBILE) {
+      const t = $('#mToast');
+      clearTimeout(toastTimer);
+      t.textContent = msg || ''; t.className = kind || ''; t.hidden = !msg;
+      if (msg) toastTimer = setTimeout(() => { t.hidden = true; }, kind === 'err' || kind === 'warn' ? 6000 : 2800);
+    }
+  };
 
   if (typeof THREE === 'undefined' || !THREE.OrbitControls || !THREE.GLTFLoader) {
     status('Não consegui carregar o Three.js (internet ou bloqueio do CDN).', 'err');
@@ -1039,6 +1091,7 @@ const CarlosRetarget = (function () {
   const reduceMotion = () => window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   /** Centraliza um cartão no carrossel sem rolar a página. */
   function centerCard(trk, card) {
+    if (trk.classList.contains('vert')) { trk.scrollTo({ top: card.offsetTop - (trk.clientHeight - card.offsetHeight) / 2, behavior: reduceMotion() ? 'auto' : 'smooth' }); return; }
     trk.scrollTo({ left: card.offsetLeft - (trk.clientWidth - card.offsetWidth) / 2, behavior: reduceMotion() ? 'auto' : 'smooth' });
   }
   let activeCar = 'new'; // qual carrossel as setas do teclado controlam
@@ -1102,6 +1155,7 @@ const CarlosRetarget = (function () {
     for (const l of order) { box.appendChild(makeCarousel(l, groups.get(l))); S.order.push(...groups.get(l)); }
     $('#empty').hidden = true;
     box.hidden = false;
+    if (MOBILE) buildMobileList(order, groups);
   }
 
   function select(i, playIt) {
@@ -1110,7 +1164,7 @@ const CarlosRetarget = (function () {
     i = Math.max(0, Math.min(n - 1, i));
     S.sel = i;
     let chosen = null;
-    document.querySelectorAll('#carousels .card').forEach((c) => {
+    document.querySelectorAll('#carousels .card, #mLlist .card').forEach((c) => {
       const on = Number(c.dataset.i) === i;
       c.setAttribute('aria-selected', on ? 'true' : 'false');
       if (on) chosen = c;
@@ -1230,7 +1284,8 @@ const CarlosRetarget = (function () {
     const b = $('#btnReplace');
     const a = S.ifp && S.sel >= 0 ? S.ifp.anims[S.sel].name : '';
     b.disabled = !(S.gameSel && a);
-    b.textContent = S.gameSel && a ? 'Substituir «' + (LABEL[S.gameSel] || S.gameSel) + '» por «' + a + '»' : 'Escolha uma animação do jogo';
+    b.textContent = MOBILE ? 'Substituir' : S.gameSel && a ? 'Substituir «' + (LABEL[S.gameSel] || S.gameSel) + '» por «' + a + '»' : 'Escolha uma animação do jogo';
+    if (MOBILE) $('#mCap').textContent = !a ? 'Escolha a animação do arquivo (esquerda)' : !S.gameSel ? 'Agora escolha a animação do jogo (direita)' : (LABEL[S.gameSel] || S.gameSel) + '  ←  ' + a;
     $('#btnSeeNew').disabled = !a;
   }
 
@@ -1247,6 +1302,7 @@ const CarlosRetarget = (function () {
     S.repl.set(S.gameSel, { ifp: S.ifp.anims[S.sel].name, dur: S.ifp.anims[S.sel].duration });
     markGame();
     refreshReplacements();
+    if (MOBILE) saveMobile();
   };
 
   /* ---------- Substituições escolhidas ---------- */
@@ -1425,6 +1481,58 @@ const CarlosRetarget = (function () {
       out.lr.push(...[le.x, le.y, le.z].map((v) => +v.toFixed(4)));
     }
     return out;
+  }
+
+  /* ---------- Versão celular ---------- */
+  /** Lista vertical (à esquerda) com todas as animações do arquivo, agrupadas por tipo; usa os mesmos cartões (`.card`, `data-i`) do carrossel. */
+  function buildMobileList(order, groups) {
+    const list = $('#mLlist');
+    list.textContent = '';
+    for (const l of order) {
+      const h = document.createElement('div'); h.className = 'mcat'; h.textContent = l + ' · ' + groups.get(l).length;
+      list.appendChild(h);
+      for (const i of groups.get(l)) {
+        const a = S.ifp.anims[i];
+        const card = document.createElement('button');
+        card.type = 'button'; card.className = 'card'; card.dataset.i = String(i);
+        card.setAttribute('role', 'option'); card.setAttribute('aria-selected', 'false');
+        const b = document.createElement('b'); b.textContent = a.name;
+        const sm = document.createElement('small'); sm.textContent = fmt(a.duration);
+        card.append(b, sm);
+        card.onclick = () => select(i);
+        list.appendChild(card);
+      }
+    }
+    $('#mLh').textContent = S.ifpName;
+    $('#mPick').textContent = 'Trocar';
+  }
+  /** Substituir já SALVA: guarda no navegador (volta na próxima vez) e copia o JSON das trocas. */
+  function saveMobile() {
+    const data = buildJson();
+    try { localStorage.setItem('carlos-animation-replacements', JSON.stringify(data)); } catch (e) { /* sem armazenamento */ }
+    const msg = 'Salvo · ' + S.repl.size + (S.repl.size === 1 ? ' troca' : ' trocas');
+    const done = () => status(msg + ' (JSON copiado)', 'ok');
+    try { navigator.clipboard.writeText(JSON.stringify(data, null, 2)).then(done, () => status(msg, 'ok')); } catch (e) { status(msg, 'ok'); }
+  }
+  if (MOBILE) {
+    $('#mC').prepend($('#stage'));
+    $('#mC').appendChild($('#btnReplace'));
+    $('#mR').appendChild($('#gameTrack'));
+    $('#gameTrack').classList.add('vert');
+    $('#mob').appendChild($('#fileInput'));
+    $('#mPick').onclick = () => {
+      // o toque é o gesto que o navegador exige para a tela cheia e a trava em paisagem (fora de um iframe: dentro do jogo ele já está em tela cheia)
+      if (window.top === window && !document.fullscreenElement) {
+        try { const r = document.documentElement.requestFullscreen({ navigationUI: 'hide' }); if (r && r.then) r.then(() => screen.orientation && screen.orientation.lock && screen.orientation.lock('landscape').catch(() => {}), () => {}); } catch (e) { /* sem tela cheia */ }
+      }
+      $('#fileInput').click();
+    };
+    try {
+      const old = JSON.parse(localStorage.getItem('carlos-animation-replacements') || 'null');
+      if (old && Array.isArray(old.replacements)) for (const r of old.replacements) if (r && r.game && r.ifp) S.repl.set(r.game, { ifp: r.ifp, dur: +r.ifpDuration || 0 });
+    } catch (e) { /* ignora */ }
+    updateReplaceButton();
+    loadGame().then((ok) => { if (ok) buildGameList(); });
   }
 
   // Gancho para testes automáticos
