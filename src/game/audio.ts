@@ -427,7 +427,7 @@ export class EngineSound {
 
 // ---------- tiros ----------
 
-export type ShotKind = 'rifle' | 'm4' | 'pistol' | 'silenced';
+export type ShotKind = 'rifle' | 'm4' | 'm16' | 'pistol' | 'silenced';
 const SHOT_RANGE = 130;
 
 /** Tiro no ponto (x, z): volume e lado vêm da distância ao ouvinte. O fuzil é grave e longo; a pistola, seca e curta. */
@@ -438,23 +438,39 @@ export function playShotAt(x: number, z: number, kind: ShotKind): void {
   const out = audioOut();
   if (!c || !out) return;
   try {
-    const sample = kind === 'pistol' ? revolverBuf : kind === 'rifle' ? rifleBuf : kind === 'm4' ? m4Buf : null;
+    const sample = kind === 'pistol' ? revolverBuf : kind === 'rifle' || kind === 'm16' ? rifleBuf : kind === 'm4' ? m4Buf : null;
     if (sample) {
       const src = c.createBufferSource();
       src.buffer = sample;
-      src.playbackRate.value = 0.97 + Math.random() * 0.06; // cada tiro um pouquinho diferente
+      const slow = kind === 'm16' ? 0.84 : 1; // M16: o mesmo áudio da AK, mais lento (mais grave) e com eco
+      src.playbackRate.value = slow * (0.97 + Math.random() * 0.06); // cada tiro um pouquinho diferente
       const lp = c.createBiquadFilter();
       lp.type = 'lowpass';
       lp.frequency.value = 9000 * (0.25 + 0.75 * prox.gain); // longe, o ar come os agudos
       const g = c.createGain();
-      g.gain.value = (kind === 'rifle' || kind === 'm4' ? 0.5 : 0.6) * prox.gain;
+      g.gain.value = (kind === 'rifle' || kind === 'm4' || kind === 'm16' ? 0.5 : 0.6) * prox.gain;
       const pan = c.createStereoPanner();
       pan.pan.value = prox.pan;
       src.connect(lp).connect(g).connect(pan).connect(out);
       src.start();
+      if (kind === 'm16') {
+        // eco: três repetições mais fracas e abafadas (sem laço de realimentação, então some sozinho)
+        [[0.11, 0.3, 3200], [0.23, 0.17, 2400], [0.37, 0.09, 1800]].forEach(([dt, gv, cut]) => {
+          const e = c.createBufferSource();
+          e.buffer = sample;
+          e.playbackRate.value = src.playbackRate.value;
+          const el = c.createBiquadFilter();
+          el.type = 'lowpass';
+          el.frequency.value = cut! * (0.4 + 0.6 * prox.gain);
+          const eg = c.createGain();
+          eg.gain.value = gv! * prox.gain;
+          e.connect(el).connect(eg).connect(pan);
+          e.start(c.currentTime + dt!);
+        });
+      }
       return;
     }
-    const rifle = kind === 'rifle' || kind === 'm4';
+    const rifle = kind === 'rifle' || kind === 'm4' || kind === 'm16';
     const quiet = kind === 'silenced'; // Honey Badger: tiro baixo e abafado
     const dur = rifle ? 0.16 : quiet ? 0.07 : 0.09;
     const len = Math.floor(c.sampleRate * dur);

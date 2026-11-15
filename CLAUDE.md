@@ -499,3 +499,6 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 
 ## Rodada: som da AK-47 refeito
 - `public/sounds/ak47.wav` agora vem do áudio `Ak.m4a` do dono (5,9 s: rajada contínua de ~20 tiros/s de 0,31 s a 3,3 s, sem tiro isolado). Cortado o ÚLTIMO tiro da rajada (3,364 s) com a cauda que morre sozinha (0,44 s; 6 ms de entrada suave, 120 ms de saída), porque nenhum outro tiro vem depois. O arquivo antigo (do áudio do revólver) foi substituído; o nome é o mesmo, então AK-47 e M16 (`'rifle'` em `playShotAt`) usam o novo. M4A1 tem `m4a1.wav`, revólver `revolver.wav`, Honey Badger sintetizado.
+
+## Rodada: som da M16 mais lento, com eco
+- `ShotKind` ganhou `'m16'` (audio.ts; `combat.ts` manda `'m16'` para `kind === 'q'`, local e remoto): toca o mesmo `ak47.wav` a 0,84x da velocidade (mais lento e grave) e acrescenta um ECO feito de 3 repetições atrasadas (0,11, 0,23 e 0,37 s) mais fracas (volumes 0,30/0,17/0,09) e abafadas (passa-baixa 3200/2400/1800 Hz, mais fechado com a distância), sem laço de realimentação (some sozinho). Testado: a M16 dispara o buffer da AK + 3 repetições. Ajuste `slow` e a lista de ecos em `playShotAt` se quiser mais ou menos.
