@@ -4,6 +4,7 @@ let master: GainNode | null = null;
 
 // Tiro do revólver (pistola): gravação enviada pelo dono, cortada em 1 disparo (public/sounds/revolver.wav, 0,69 s). Até carregar vale o tiro sintetizado.
 let revolverBuf: AudioBuffer | null = null;
+let reloadBuf: AudioBuffer | null = null; // recarga dos fuzis (AK-47, M4A1, M16): 4 sons do áudio da M4A1 do dono (soltar o carregador, encaixar, puxar o ferrolho, soltar), em 1,6 s = RELOAD_TIME
 let m4Buf: AudioBuffer | null = null; // M4A1: o áudio próprio do dono (public/sounds/m4a1.wav, 0,47 s: o último tiro de uma rajada, com a cauda)
 let rifleBuf: AudioBuffer | null = null; // fuzis (AK-47, M4A1, M16): um tiro do mesmo áudio, cortado antes do próximo da rajada (public/sounds/ak47.wav, 0,31 s)
 let gunsLoading = false;
@@ -11,9 +12,10 @@ function loadRevolver(c: AudioContext): void {
   if (gunsLoading) return;
   gunsLoading = true;
   const get = (url: string, set: (b: AudioBuffer) => void): void => { fetch(url).then((r) => r.arrayBuffer()).then((b) => c.decodeAudioData(b)).then(set).catch(() => { gunsLoading = false; }); };
-  get('/sounds/revolver.wav', (b) => { revolverBuf = b; });
-  get('/sounds/ak47.wav', (b) => { rifleBuf = b; });
-  get('/sounds/m4a1.wav', (b) => { m4Buf = b; });
+  get('/sounds/revolver.mp3', (b) => { revolverBuf = b; });
+  get('/sounds/ak47.mp3', (b) => { rifleBuf = b; });
+  get('/sounds/m4a1.mp3', (b) => { m4Buf = b; });
+  get('/sounds/reload-rifle.mp3', (b) => { reloadBuf = b; });
 }
 
 /** AudioContext único do jogo (motores, tiros e voz passam todos pelo ganho mestre). */
@@ -426,6 +428,21 @@ export class EngineSound {
 }
 
 // ---------- tiros ----------
+
+/** Som da recarga dos fuzis (toca ao começar a recarregar; é o seu próprio, sem distância). */
+export function playReloadSound(): void {
+  const c = audioCtx();
+  const out = audioOut();
+  if (!c || !out || !reloadBuf) return;
+  try {
+    const src = c.createBufferSource();
+    src.buffer = reloadBuf;
+    const g = c.createGain();
+    g.gain.value = 0.7;
+    src.connect(g).connect(out);
+    src.start();
+  } catch { /* sem áudio */ }
+}
 
 export type ShotKind = 'rifle' | 'm4' | 'm16' | 'pistol' | 'silenced';
 const SHOT_RANGE = 130;

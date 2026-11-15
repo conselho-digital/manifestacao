@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { COLLIDERS, rayBox, terrainHeight } from './map';
-import { playClick, playShotAt } from './audio';
+import { playClick, playReloadSound, playShotAt } from './audio';
 import { Tracers } from './weapons';
 import { hittables } from './vehicle';
 import type { Player } from './player';
@@ -262,6 +262,7 @@ export class Combat {
     if (this.isGun && !this.reloading && this.mag < this.magSize && this.reserve > 0) {
       this.reloading = true;
       this.reloadT = RELOAD_TIME;
+      if (this.weapon === 0 || this.weapon === 12 || this.weapon === 13) playReloadSound(); // AK-47, M4A1 e M16 (o Honey Badger e a pistola ficam sem som de recarga)
     }
   }
 

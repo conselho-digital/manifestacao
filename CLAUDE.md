@@ -505,3 +505,7 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 
 ## Rodada: Honey Badger 50% mais alto
 - Tiro sintetizado do Honey Badger (`'silenced'` em `playShotAt`): volume do estalo 0,07 → 0,105 e do estrondo grave 0,05 → 0,075 (+50%); filtro e duração iguais.
+
+## Rodada: som de recarga dos fuzis; sons de tiro em mp3
+- Recarga (audio.ts `playReloadSound`, combat.ts `startReload`): `public/sounds/reload-rifle.mp3` (1,6 s = `RELOAD_TIME`) feito do áudio `M4a1.mp3` do dono, que traz 4 sons de recarga espalhados em 4 s (1,10 s soltar o carregador, 3,60 s encaixar, 4,52 s puxar o ferrolho, 5,03 s soltar): cortei os 4 e juntei em 1,6 s (em 0, 0,42, 0,92 e 1,36 s). Toca quando a recarga COMEÇA (tecla R, botão ou tiro seco) com AK-47 (id 0), M4A1 (12) e M16 (13); Honey Badger e pistola ficam sem som de recarga. Só você ouve (a recarga não vai pela rede). Testado: o buffer de 1,6 s dispara nas 3 armas e em nenhuma das outras.
+- Para caber nos 15 MB, os sons de tiro e a recarga (curtos, sem laço) são MP3 mono de 96 kbps (`ak47.mp3`, `m4a1.mp3`, `revolver.mp3`, `reload-rifle.mp3`; ~40 KB no total contra ~280 KB em WAV; o ataque não se desloca: conferido por posição do pico). Os sons de moto continuam em WAV porque têm laços (o MP3 deixa folga nas emendas).
