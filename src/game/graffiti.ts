@@ -29,7 +29,7 @@ const ray = new THREE.Raycaster();
 const nrm = new THREE.Vector3();
 
 /** Primeiro ponto de parede (superfície sólida quase vertical) que o raio acerta, ou null. Ignora folhagem, sprites e instâncias (árvores). */
-export function wallAt(city: THREE.Object3D, o: THREE.Vector3, d: THREE.Vector3): { dist: number; point: THREE.Vector3; nx: number; nz: number } | null {
+export function wallAt(city: THREE.Object3D, o: THREE.Vector3, d: THREE.Vector3): { dist: number; point: THREE.Vector3; nx: number; nz: number; shop: boolean } | null {
   ray.set(o, d);
   ray.far = REACH + 0.6;
   for (const h of ray.intersectObject(city, true)) {
@@ -44,7 +44,7 @@ export function wallAt(city: THREE.Object3D, o: THREE.Vector3, d: THREE.Vector3)
     if (nrm.dot(d) > 0) nrm.negate(); // sempre voltada para quem pinta
     if (Math.abs(nrm.y) > 0.35) return null; // chão, telhado ou beiral: não é parede
     const len = Math.hypot(nrm.x, nrm.z) || 1;
-    return { dist: h.distance, point: h.point.clone(), nx: nrm.x / len, nz: nrm.z / len };
+    return { dist: h.distance, point: h.point.clone(), nx: nrm.x / len, nz: nrm.z / len, shop: m.userData.shop === true };
   }
   return null;
 }
@@ -61,9 +61,10 @@ export function findWall(city: THREE.Object3D, ox: number, oy: number, oz: numbe
   const dir = new THREE.Vector3(ux, 0, uz);
   const side = new THREE.Vector3(-uz, 0, ux);
   const STEP = 0.2;
-  const hits: ({ dist: number; point: THREE.Vector3; nx: number; nz: number } | null)[] = [];
+  const hits: ({ dist: number; point: THREE.Vector3; nx: number; nz: number; shop: boolean } | null)[] = [];
   for (let h = 0.2; h <= 2.6 + 1e-6; h += STEP) hits.push(wallAt(city, new THREE.Vector3(ox, oy + h, oz), dir));
-  const ok = (a: (typeof hits)[number], b: (typeof hits)[number]): boolean => !!a && !!b && Math.abs(a.dist - b.dist) < 0.15 && a.nx * b.nx + a.nz * b.nz > 0.95;
+  // vitrine de loja: vidro, pilastras e fundo ficam a profundidades diferentes (até ~0,3 m), então ali a tolerância é maior (a loja pode ser pichada; o cartaz não)
+  const ok = (a: (typeof hits)[number], b: (typeof hits)[number]): boolean => !!a && !!b && Math.abs(a.dist - b.dist) < (a.shop && b.shop ? 0.32 : 0.15) && a.nx * b.nx + a.nz * b.nz > 0.95;
   // maior trecho contínuo de alturas com a mesma parede (de preferência o que passa pela altura do peito)
   let best: [number, number] | null = null;
   let score = 0;

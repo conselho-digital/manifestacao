@@ -18,6 +18,12 @@ const BAY_SIDE = 9.55;
 const PROJ = 0.35; // quanto o pilar sai da linha da fachada
 const GLASS_IN = 0.45; // o vidro fica recuado em relação ao pilar
 
+/** Vãos livres entre os pilares, em metros desde a quina ao longo de cada fachada (frente/trás e laterais): é onde as lojas cabem sem ficar escondidas atrás dos pilares. */
+export const TOWER_BAYS = {
+  front: [[EDGE, EDGE + BAY_FRONT], [EDGE + BAY_FRONT + MID, EDGE + 2 * BAY_FRONT + MID], [EDGE + 2 * (BAY_FRONT + MID), EDGE + 3 * BAY_FRONT + 2 * MID]] as [number, number][],
+  side: [[EDGE, EDGE + BAY_SIDE], [EDGE + BAY_SIDE + MID, EDGE + 2 * BAY_SIDE + MID]] as [number, number][],
+};
+
 function tex(w: number, h: number, draw: (g: CanvasRenderingContext2D, w: number, h: number) => void): THREE.CanvasTexture {
   const c = document.createElement('canvas');
   c.width = w;

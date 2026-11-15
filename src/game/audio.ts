@@ -4,11 +4,14 @@ let master: GainNode | null = null;
 
 // Tiro do revólver (pistola): gravação enviada pelo dono, cortada em 1 disparo (public/sounds/revolver.wav, 0,69 s). Até carregar vale o tiro sintetizado.
 let revolverBuf: AudioBuffer | null = null;
-let revolverLoading = false;
+let rifleBuf: AudioBuffer | null = null; // fuzis (AK-47, M4A1, M16): um tiro do mesmo áudio, cortado antes do próximo da rajada (public/sounds/ak47.wav, 0,31 s)
+let gunsLoading = false;
 function loadRevolver(c: AudioContext): void {
-  if (revolverBuf || revolverLoading) return;
-  revolverLoading = true;
-  fetch('/sounds/revolver.wav').then((r) => r.arrayBuffer()).then((b) => c.decodeAudioData(b)).then((buf) => { revolverBuf = buf; }).catch(() => { revolverLoading = false; });
+  if (gunsLoading) return;
+  gunsLoading = true;
+  const get = (url: string, set: (b: AudioBuffer) => void): void => { fetch(url).then((r) => r.arrayBuffer()).then((b) => c.decodeAudioData(b)).then(set).catch(() => { gunsLoading = false; }); };
+  get('/sounds/revolver.wav', (b) => { revolverBuf = b; });
+  get('/sounds/ak47.wav', (b) => { rifleBuf = b; });
 }
 
 /** AudioContext único do jogo (motores, tiros e voz passam todos pelo ganho mestre). */
@@ -433,15 +436,16 @@ export function playShotAt(x: number, z: number, kind: ShotKind): void {
   const out = audioOut();
   if (!c || !out) return;
   try {
-    if (kind === 'pistol' && revolverBuf) {
+    const sample = kind === 'pistol' ? revolverBuf : kind === 'rifle' ? rifleBuf : null;
+    if (sample) {
       const src = c.createBufferSource();
-      src.buffer = revolverBuf;
+      src.buffer = sample;
       src.playbackRate.value = 0.97 + Math.random() * 0.06; // cada tiro um pouquinho diferente
       const lp = c.createBiquadFilter();
       lp.type = 'lowpass';
       lp.frequency.value = 9000 * (0.25 + 0.75 * prox.gain); // longe, o ar come os agudos
       const g = c.createGain();
-      g.gain.value = 0.6 * prox.gain;
+      g.gain.value = (kind === 'rifle' ? 0.5 : 0.6) * prox.gain;
       const pan = c.createStereoPanner();
       pan.pan.value = prox.pan;
       src.connect(lp).connect(g).connect(pan).connect(out);

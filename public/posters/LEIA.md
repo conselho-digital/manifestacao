@@ -14,7 +14,7 @@ No jogo qualquer jogador pode pôr uma imagem pagando: 1ª imagem $2, fica 24 h;
 
 As vagas sem imagem continuam com o cartaz de exemplo. Para ver onde fica cada vaga: ande pelo mapa, o número está escrito no cartaz.
 
-## Todas as vagas (253)
+## Todas as vagas (248)
 
 No jogo cada cartaz tem um número ("Cartaz 01", "Cartaz 02"...). O nome interno (depois do número) só é usado nos arquivos e no servidor.
 
@@ -55,4 +55,4 @@ No jogo cada cartaz tem um número ("Cartaz 01", "Cartaz 02"...). O nome interno
 - **SR2**: 222 = `SR2_zp1`, 223 = `SR2_zn1`, 224 = `SR2_xn1`, 225 = `SR2_xn2`
 - **SR3**: 226 = `SR3_zp1`, 227 = `SR3_zp2`, 228 = `SR3_zn1`, 229 = `SR3_zn2`, 230 = `SR3_xn1`, 231 = `SR3_xn2`, 232 = `SR3_xn3`, 233 = `SR3_xn4`, 234 = `SR3_xn5`
 - **SR4**: 235 = `SR4_zn1`, 236 = `SR4_zn2`, 237 = `SR4_xn1`, 238 = `SR4_xn2`, 239 = `SR4_xn3`
-- **SD**: 240 = `SD_zp1`, 241 = `SD_zp2`, 242 = `SD_zp3`, 243 = `SD_zp4`, 244 = `SD_zn1`, 245 = `SD_zn2`, 246 = `SD_zn3`, 247 = `SD_zn4`, 248 = `SD_xp1`, 249 = `SD_xp2`, 250 = `SD_xp3`, 251 = `SD_xn1`, 252 = `SD_xn2`, 253 = `SD_xn3`
+- **SD**: 240 = `SD_zp1`, 241 = `SD_zp2`, 242 = `SD_zn1`, 243 = `SD_zn2`, 244 = `SD_zn3`, 245 = `SD_xp1`, 246 = `SD_xp2`, 247 = `SD_xn1`, 248 = `SD_xn2`

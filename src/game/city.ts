@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import { addBox, COLLIDERS, PARKS, PLACES, ROADS, TREES, type Rect } from './map';
-import { buildGrayTower, TOWER } from './tower';
+import { buildGrayTower, TOWER, TOWER_BAYS } from './tower';
 import { registerCullChildren, FAR_TREES } from './culling';
 import { addShops } from './shops';
 import { placeSafraSign } from './safra';
@@ -311,7 +311,7 @@ function widenSidewalks(sx0: number, sx1: number, sz0: number, sz1: number): { s
   return { sx0: mx(sx0), sx1: mx(sx1), sz0: mz(sz0), sz1: mz(sz1) };
 }
 
-const footprints: { name: string; r: Rect; allowWalk?: boolean; off?: number; bay?: number; col?: number; shops?: boolean; top?: number; house?: boolean }[] = [];
+const footprints: { name: string; r: Rect; allowWalk?: boolean; off?: number; bay?: number; col?: number; shops?: boolean; top?: number; house?: boolean; spans?: Partial<Record<'zp' | 'zn' | 'xp' | 'xn', [number, number][]>> }[] = [];
 /** postes e abrigos (para a verificação de desenvolvimento: nada no meio da rua) */
 const propSpots: [string, number, number][] = [];
 
@@ -633,7 +633,8 @@ export function createCity(): THREE.Group {
     const cx = -44;
     const cz = -33;
     const rect: Rect = { x0: cx - TOWER.w / 2, x1: cx + TOWER.w / 2, z0: cz - TOWER.d / 2, z1: cz + TOWER.d / 2 };
-    footprints.push({ name: 'SD', r: rect });
+    // lojas só nos vãos entre os pilares da torre (antes ficavam por trás dos pilares); na frente (zp) o vão do meio é a entrada e fica sem loja
+    footprints.push({ name: 'SD', r: rect, spans: { zp: [TOWER_BAYS.front[0]!, TOWER_BAYS.front[2]!], zn: TOWER_BAYS.front, xp: TOWER_BAYS.side, xn: TOWER_BAYS.side } });
     addBox(rect.x0, rect.x1, rect.z0, rect.z1, TOWER.h, '#6b7f94');
     const tw = buildGrayTower();
     tw.position.set(cx, 0, cz);
@@ -804,7 +805,7 @@ export function createCity(): THREE.Group {
   placeSafraSign(city, -23, 15.6, Math.PI / 2);
 
   // Lojas no térreo de cada prédio (vitrine com cartaz, porta, letreiro e toldo); sem colisão
-  addShops(city, footprints.map((f) => ({ name: f.name, r: f.r, off: f.off ?? 0, bay: f.bay ?? 4.2, col: f.col ?? 0, shops: f.shops, top: f.top, house: f.house })), { hx: HX, hz: HZ });
+  addShops(city, footprints.map((f) => ({ name: f.name, r: f.r, off: f.off ?? 0, bay: f.bay ?? 4.2, col: f.col ?? 0, shops: f.shops, top: f.top, house: f.house, spans: f.spans })), { hx: HX, hz: HZ });
 
   validate();
   void loadMasp(city);

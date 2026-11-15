@@ -7,7 +7,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { supabase } from '../net/supabase';
 
 /** `bay` = largura da baia da parede do térreo (a conta da textura em city.ts), `col` = onde fica o centro da coluna dentro da baia (0 = na divisa), `shops` false = sem lojas (casas) */
-export interface ShopBuilding { name: string; r: { x0: number; x1: number; z0: number; z1: number }; off: number; bay: number; col: number; shops?: boolean; /** altura da loja (m); padrão 7; casas: até a linha marrom (2 andares da textura) */ top?: number; house?: boolean }
+export interface ShopBuilding { name: string; r: { x0: number; x1: number; z0: number; z1: number }; off: number; bay: number; col: number; shops?: boolean; /** altura da loja (m); padrão 7; casas: até a linha marrom (2 andares da textura) */ top?: number; house?: boolean; /** lojas só nestes vãos (m desde a quina ao longo da fachada), por lado: a torre cinza, que tem pilares */ spans?: Partial<Record<'zp' | 'zn' | 'xp' | 'xn', [number, number][]>> }
 export interface PosterSlot { id: string; building: string; face: 'zp' | 'zn' | 'xp' | 'xn'; n: number; /** número do cartaz (1, 2, 3...): "Cartaz 01" */ num: number; x: number; z: number; nx: number; nz: number; page: number; cell: number; /** centro do cartaz no mundo (x, z) e altura */ cx: number; cz: number; cy: number; /** largura do cartaz (m) */ pw: number }
 
 const POSTER_W = 3.0;
@@ -462,7 +462,10 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
       const c = b.col * bw;
       // lojas de 2 baias; nas casas, a baia que sobra (nb ímpar) vira uma loja pequena de 1 baia (aproveita o espaço)
       const cells: [number, number][] = [];
-      if (!house && nb === 3) {
+      const fixed = b.spans?.[s.k];
+      if (fixed) {
+        for (const sp of fixed) cells.push([sp[0], sp[1]]);
+      } else if (!house && nb === 3) {
         // parede de 3 baias: duas lojas iguais (50% cada), em vez de uma de 2 baias e um pedaço de parede sem loja
         cells.push([c, c + 1.5 * bw], [c + 1.5 * bw, Math.min(L, c + 3 * bw)]);
       } else {
@@ -518,10 +521,10 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
         };
         // base de pedra e pilastras escuras: a da esquerda fica em cima da coluna do prédio; a da direita só na última loja (nas outras é a da vizinha)
         if (!house) box('plinth', W, 0.6, 0.5, 0, 0, 0.27);
-        const inL = Math.max(0, 0.3 - uA); // a pilastra da ponta fica a 10 cm da quina do prédio, nunca passa dela
-        const inR = Math.max(0, 0.3 - (L - uB));
+        const inL = fixed ? 0.2 : Math.max(0, 0.3 - uA); // a pilastra da ponta fica a 10 cm da quina do prédio, nunca passa dela (vão entre pilares: toda dentro do vão)
+        const inR = fixed ? 0.2 : Math.max(0, 0.3 - (L - uB));
         box('frame', 0.4, pTop - gy, 0.5, -W / 2 + inL, gy, 0.27);
-        if (i === cells.length - 1) box('frame', 0.4, pTop - gy, 0.5, W / 2 - inR, gy, 0.27);
+        if (i === cells.length - 1 || fixed) box('frame', 0.4, pTop - gy, 0.5, W / 2 - inR, gy, 0.27);
         // interior pintado atrás do vidro
         const ip = new THREE.PlaneGeometry(Wi, gh);
         cellUV(ip, kind % 2, Math.floor(kind / 2), INT_W, INT_H, INT_W * 2, INT_H * 4);
@@ -576,7 +579,7 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
       : mat(colors[k] ?? 0x888888);
     const m = new THREE.Mesh(geo, material);
     m.receiveShadow = k !== 'glass';
-    m.userData.noSpray = true; // não dá para pichar a loja
+    m.userData.shop = true; // a loja pode ser pichada (o cartaz não: `noSpray`)
     if (k === 'glass') m.renderOrder = 2;
     city.add(m);
   }
@@ -594,7 +597,7 @@ export function addShops(city: THREE.Object3D, buildings: ShopBuilding[], bounds
   NAMES.forEach((nm, k) => drawSign(sg, (k % 2) * SIGN_W, Math.floor(k / 2) * SIGN_H, nm, ACCENT[Math.floor(k / 2)]));
   for (const [list, canvas] of [[interiorGeos, intCanvas], [signGeos, signCanvas]] as const) {
     const geo = mergeGeometries(list as THREE.BufferGeometry[], false);
-    if (geo) { const am = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: atlasTexture(canvas) })); am.userData.noSpray = true; city.add(am); }
+    if (geo) { const am = new THREE.Mesh(geo, new THREE.MeshBasicMaterial({ map: atlasTexture(canvas) })); am.userData.shop = true; city.add(am); }
   }
 
   // atlas de cartazes: cartaz de exemplo em todas as vagas (as imagens publicadas entram por cima)
