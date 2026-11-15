@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { buildCustom, customOf, isCustomId } from './customChars';
+import { buildRigged, RIGGED_NAMES } from './autoRig';
 
 export const CHARACTERS = [
   'Helena', 'Stewart', 'Bennyse', 'Amanda', 'Garota1', 'Carlos', 'Gordao', 'Cesar',
@@ -51,13 +52,20 @@ function measure(model: THREE.Object3D, out = new THREE.Box3()): THREE.Box3 {
   return out.setFromObject(model, true);
 }
 
-/** Retorna um clone com altura de 1,8 m e origem nos pés. */
+/** Retorna um clone com altura de 1,8 m e origem nos pés. Os modelos sem esqueleto ganham o do Law1 (ver autoRig.ts) e animam como os outros. */
 export async function createCharacter(name: CharacterName): Promise<THREE.Group> {
   if (isCustomId(name)) {
     const rec = customOf(name);
     if (rec) return buildCustom(rec.recipe);
     return createCharacter('Carlos'); // personagem novo que não está na lista (ainda não carregou ou foi apagado)
   }
+  const still = await createStatic(name);
+  if (!RIGGED_NAMES.has(name)) return still;
+  try { return await buildRigged(still, name); } catch (e) { console.warn('auto-rig falhou, usando o modelo parado', name, e); return still; }
+}
+
+/** O modelo como está no arquivo (1,8 m, pés no chão, olhando para +Z). */
+async function createStatic(name: CharacterName): Promise<THREE.Group> {
   const source = await loadBase(name);
   const model = SkeletonUtils.clone(source);
   model.traverse((o) => {
