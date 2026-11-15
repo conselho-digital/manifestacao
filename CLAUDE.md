@@ -496,3 +496,6 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 
 ## Rodada: som próprio da M4A1
 - `public/sounds/m4a1.wav` (0,47 s, 44 kHz mono): do áudio `M4a1.mp3` do dono (21 s, com cliques de carregador e rajadas de ~750 tiros/min); cortado o último tiro da 1ª rajada (5,79 s: ataque limpo e cauda até o silêncio, 8 ms de entrada suave e 120 ms de saída). `ShotKind` ganhou `'m4'` (audio.ts) e `combat.ts` manda `'m4'` quando a arma é a M4A1 (`kind === 'm'`, local e dos outros jogadores); AK-47 e M16 seguem com `ak47.wav`, Honey Badger sintetizado. Testado: a M4A1 dispara o buffer de 0,47 s.
+
+## Rodada: som da AK-47 refeito
+- `public/sounds/ak47.wav` agora vem do áudio `Ak.m4a` do dono (5,9 s: rajada contínua de ~20 tiros/s de 0,31 s a 3,3 s, sem tiro isolado). Cortado o ÚLTIMO tiro da rajada (3,364 s) com a cauda que morre sozinha (0,44 s; 6 ms de entrada suave, 120 ms de saída), porque nenhum outro tiro vem depois. O arquivo antigo (do áudio do revólver) foi substituído; o nome é o mesmo, então AK-47 e M16 (`'rifle'` em `playShotAt`) usam o novo. M4A1 tem `m4a1.wav`, revólver `revolver.wav`, Honey Badger sintetizado.
