@@ -3,7 +3,7 @@
 import * as THREE from 'three';
 import { CITY, COLLIDERS, MAP_ID, terrainHeight, waterDepth } from './map';
 
-export const HEALTH_COUNT = 50;
+export const HEALTH_COUNT = 30;
 export const ARMOR_COUNT = 30;
 /** vida que cada ícone dá (de 400) e colete (de 100) */
 export const HEALTH_GIVES = 100;
@@ -60,7 +60,7 @@ function pickSpots(): Spot[] {
     if (!free(x, z, y)) continue;
     const gap = tries < 8000 ? MIN_GAP : 7; // se não couber tudo com folga, aperta
     if (spots.some((s) => (s.x - x) ** 2 + (s.z - z) ** 2 < gap * gap)) continue;
-    // alterna para as duas espécies ficarem misturadas: os 50 primeiros do sorteio com mais vida, o resto colete, embaralhado
+    // alterna para as duas espécies ficarem misturadas: os pontos do sorteio com mais vida, o resto colete, embaralhado
     spots.push({ kind: 'health', x, y, z, back: 0, phase: rand() * 6.28 });
     i++;
   }
