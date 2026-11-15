@@ -124,7 +124,7 @@ const graffiti = new Graffiti(scene);
 const billboard = new Billboard(scene);
 onMapChange(() => billboard.moveToMap()); // só começa (billboard.start) depois da cidade: a cidade zera as colisões ao ser criada
 if (import.meta.env.DEV) (window as unknown as { __net: Net; __game: { ready: () => boolean } }).__net = net;
-if (import.meta.env.DEV) (window as unknown as { __game: { ready: () => boolean; camera: THREE.PerspectiveCamera; scene: THREE.Scene; renderer: THREE.WebGLRenderer; combat: () => Combat | null; player: () => Player | null; sim: { TRAFFIC: typeof TRAFFIC; CARS: typeof CARS; updateTraffic: typeof updateTraffic; spawnPersonal: typeof spawnPersonal } } }).__game = { ready: () => !!player, camera, scene, renderer, combat: () => combat, player: () => player, sim: { TRAFFIC, CARS, updateTraffic, spawnPersonal } };
+if (import.meta.env.DEV) (window as unknown as { __game: { ready: () => boolean; camera: THREE.PerspectiveCamera; scene: THREE.Scene; renderer: THREE.WebGLRenderer; combat: () => Combat | null; player: () => Player | null; remotes: () => Map<string, RemotePlayer>; sim: { TRAFFIC: typeof TRAFFIC; CARS: typeof CARS; updateTraffic: typeof updateTraffic; spawnPersonal: typeof spawnPersonal } } }).__game = { ready: () => !!player, camera, scene, renderer, combat: () => combat, player: () => player, remotes: () => remotes, sim: { TRAFFIC, CARS, updateTraffic, spawnPersonal } };
 let profileName = 'Jogador';
 carEvents.onCrash = (x, z) => net.sendHorn(x, z, 5); // batida do meu carro: os outros ouvem
 let lastHornAt = 0; // última buzina minha (ms)
@@ -558,7 +558,7 @@ function loop(): void {
     net.sendMove(
       p.position.x, p.position.y, p.position.z, p.rotation.y,
       combat.dead ? 'dead' : player.animName, player.isDriving ? player.carId : -1, player.isDriving ? player.carOwner : '',
-      combat.dead ? 0 : player.weaponCode, pitch, (combat.health / MAX_HEALTH) * 100, combat.protectT > 0, performance.now(),
+      combat.dead ? 0 : player.weaponCode, pitch, (combat.health / MAX_HEALTH) * 100, combat.protectT > 0, combat.reloading && !combat.dead, performance.now(),
     );
   }
   // quem barra o trânsito: veículos em uso (as duas pontas), jogadores; os parados na pista são contornados

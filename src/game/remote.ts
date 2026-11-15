@@ -80,6 +80,7 @@ export class RemotePlayer {
   private readonly pivot = new THREE.Group();
   private weaponVis: WeaponVisual | null = null;
   private weapon = 0;
+  private reloading = false;
   private pitch = 0;
   private lie = 0;
   private modelBaseY: number | null = null;
@@ -114,6 +115,7 @@ export class RemotePlayer {
     this.anim = m.a || 'idle';
     this.hp = m.hp;
     this.shield = m.pr;
+    this.reloading = m.rl;
     this.carId = m.v;
     this.carOwner = m.vo;
     this.weapon = m.w;
@@ -179,6 +181,7 @@ export class RemotePlayer {
       this.animator.setRifleKind(rf?.kind ?? 'ak');
       this.animator.setArmed(rf ? (rf.aiming ? 'aim' : 'rifle') : ARMED_FROM_CODE[this.weapon] ?? 'none');
       this.animator.setAimPitch(this.pitch);
+      this.animator.setReloading(this.reloading && !dead);
       this.animator.play(dead ? 'idle' : this.anim);
       this.animator.update(dt);
     }
