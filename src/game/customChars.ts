@@ -5,13 +5,17 @@ import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { supabase } from '../net/supabase';
-import { CHARACTER_HEIGHT, loadBase } from './characters';
+import { CHARACTER_HEIGHT, createCharacter, loadBase } from './characters';
+import { RIGGED_NAMES } from './autoRig';
 
 export type Part = 'head' | 'torso' | 'legs';
 export const PARTS: Part[] = ['head', 'torso', 'legs'];
 export const PART_LABEL: Record<Part, string> = { head: 'Cabeça', torso: 'Tronco e braços', legs: 'Pernas e pés' };
 export const LAW_SOURCES = ['Law1', 'Law2', 'Law3', 'Law4', 'Law5', 'Law6', 'Law7', 'Law8', 'Law9'] as const;
-const LAW_RE = /^Law[1-9]$/;
+/** Os 8 personagens sem esqueleto próprio (ganham o do Law1 em runtime, ver autoRig.ts) também servem de corpo e de cabeça-base. */
+export const RIGGED_SOURCES = ['Helena', 'Stewart', 'Bennyse', 'Amanda', 'Garota1', 'Gordao', 'Cesar', 'Akiyama'] as const;
+export const ALL_SOURCES: readonly string[] = [...LAW_SOURCES, ...RIGGED_SOURCES];
+const LAW_RE = new RegExp(`^(${ALL_SOURCES.join('|')})$`);
 const HEAD_ID_RE = /^h_[a-z0-9]{4,16}$/;
 const HEX = /^#[0-9a-f]{6}$/i;
 
@@ -35,7 +39,7 @@ export interface FaceRecipe {
   pf: [number, number, number]; pl: [number, number, number]; pr: [number, number, number];
   m: [number, number, number];
 }
-export const FACE_DEFAULT: Omit<FaceRecipe, 'f'> = { pf: [0.7, 0, 0], pl: [0.7, 0, 0], pr: [0.7, 0, 0], m: [0.3, 0.38, -0.04] };
+export const FACE_DEFAULT: Omit<FaceRecipe, 'f'> = { pf: [0.7, 0, 0], pl: [0.7, 0, 0], pr: [0.7, 0, 0], m: [0.3, 0.34, -0.03] };
 export interface HeadDef { id: string; name: string; url: string }
 export interface CustomChar { id: string; name: string; recipe: CharRecipe; face: string }
 
@@ -145,17 +149,19 @@ const LEG_BONE = /^(Pelvis|R Thigh|L Thigh|R Calf|L Calf|R Foot|L Foot|R Toe|L T
 /** a que parte pertence um osso: pescoço, ombros, braços e dedos ficam no tronco (a "ponta do pescoço" assim sempre existe, mesmo com cabeça nova) */
 const partOfBone = (name: string): number => (HEAD_BONE.test(name) ? 0 : LEG_BONE.test(name) ? 2 : 1);
 
-interface SrcInfo {
+interface Entry {
   geoms: THREE.BufferGeometry[]; // 0 cabeça, 1 tronco, 2 pernas
   joints: string[];
   ibms: THREE.Matrix4[];
   bind: THREE.Matrix4;
-  material: THREE.Material;
+  material: THREE.Material | THREE.Material[];
   pos: THREE.Vector3;
   quat: THREE.Quaternion;
   scale: THREE.Vector3;
   faceGeom?: THREE.BufferGeometry;
 }
+/** Um modelo-fonte: uma ou mais malhas (o Akiyama tem 7), todas ligadas ao mesmo esqueleto GTA SA. */
+interface SrcInfo { entries: Entry[]; frame?: HeadFrame }
 const srcCache = new Map<string, Promise<SrcInfo>>();
 
 function splitMesh(sm: THREE.SkinnedMesh): THREE.BufferGeometry[] {
@@ -186,12 +192,20 @@ function splitMesh(sm: THREE.SkinnedMesh): THREE.BufferGeometry[] {
 function source(name: string): Promise<SrcInfo> {
   let p = srcCache.get(name);
   if (!p) {
-    p = loadBase(name).then((scene) => {
-      let sm: THREE.SkinnedMesh | null = null;
-      scene.traverse((o) => { if (!sm && (o as THREE.SkinnedMesh).isSkinnedMesh) sm = o as THREE.SkinnedMesh; });
-      if (!sm) throw new Error(`${name} sem malha`);
-      const m = sm as THREE.SkinnedMesh;
-      return {
+    p = (RIGGED_NAMES.has(name) ? riggedSource(name) : lawSource(name));
+    srcCache.set(name, p);
+  }
+  return p;
+}
+
+function lawSource(name: string): Promise<SrcInfo> {
+  return loadBase(name).then((scene) => {
+    let sm: THREE.SkinnedMesh | null = null;
+    scene.traverse((o) => { if (!sm && (o as THREE.SkinnedMesh).isSkinnedMesh) sm = o as THREE.SkinnedMesh; });
+    if (!sm) throw new Error(`${name} sem malha`);
+    const m = sm as THREE.SkinnedMesh;
+    return {
+      entries: [{
         geoms: splitMesh(m),
         joints: m.skeleton.bones.map((b) => norm(b.name)),
         ibms: m.skeleton.boneInverses.map((x) => x.clone()),
@@ -200,68 +214,119 @@ function source(name: string): Promise<SrcInfo> {
         pos: m.position.clone(),
         quat: m.quaternion.clone(),
         scale: m.scale.clone(),
-      };
-    });
-    srcCache.set(name, p);
-  }
-  return p;
+      }],
+    };
+  });
 }
 
+/**
+ * Personagem sem esqueleto: monta o rigado (autoRig) e leva as malhas e as matrizes de volta ao espaço "cru" do Law1 (sem a escala/posição que o
+ * autoRig aplica ao esqueleto), que é o espaço que `buildCustom` usa para todas as fontes.
+ */
+async function riggedSource(name: string): Promise<SrcInfo> {
+  const root = await createCharacter(name as never);
+  root.updateMatrixWorld(true);
+  const rig = root.children[0]!;
+  const G = rig.matrixWorld.clone();
+  const Ginv = G.clone().invert();
+  const entries: Entry[] = [];
+  root.traverse((o) => {
+    const sm = o as THREE.SkinnedMesh;
+    if (!sm.isSkinnedMesh) return;
+    entries.push({
+      geoms: splitMesh(sm),
+      joints: sm.skeleton.bones.map((b) => norm(b.name)),
+      ibms: sm.skeleton.boneInverses.map((x) => x.clone().multiply(G)),
+      bind: Ginv.clone().multiply(sm.bindMatrix),
+      material: sm.material,
+      pos: sm.position.clone(),
+      quat: sm.quaternion.clone(),
+      scale: sm.scale.clone(),
+    });
+  });
+  if (!entries.length) throw new Error(`${name} não ficou rigado`);
+  return { entries };
+}
 
 // ---------- rosto por fotos ----------
 // A cabeça do modelo escolhido ganha, em cada vértice, a posição e a normal num sistema da própria cabeça (x = direita do personagem, y = cima,
 // z = frente, tudo dividido pela altura da cabeça): `fP` e `fN`. O shader projeta até 3 fotos (frente, perfil esquerdo e direito) por essas
 // coordenadas e as mistura pelo lado para onde a superfície aponta, só dentro de uma "área do rosto" oval; fora dela vale a textura do modelo.
-const boneAt = (info: SrcInfo, re: RegExp): THREE.Vector3 => {
-  const i = info.joints.findIndex((j) => re.test(j));
-  if (i < 0) throw new Error(`osso ${re} não existe`);
-  return new THREE.Vector3().setFromMatrixPosition(info.ibms[i]!.clone().invert());
+interface HeadFrame { right: THREE.Vector3; up: THREE.Vector3; fwd: THREE.Vector3; cen: THREE.Vector3; size: number }
+
+const boneAt = (e: Entry, re: RegExp): THREE.Vector3 | null => {
+  const i = e.joints.findIndex((j) => re.test(j));
+  return i < 0 ? null : new THREE.Vector3().setFromMatrixPosition(e.ibms[i]!.clone().invert());
 };
 
-function faceGeometry(info: SrcInfo): THREE.BufferGeometry {
-  if (info.faceGeom) return info.faceGeom;
-  const g = info.geoms[0]!;
-  const up = boneAt(info, /^Head$/).sub(boneAt(info, /^Neck$/)).normalize();
-  const right = boneAt(info, /^R Brow$/).sub(boneAt(info, /^L Brow$/));
+/** Eixos da cabeça (direita, cima, frente), centro e altura, medidos nos vértices da cabeça de todas as malhas da fonte. */
+function headFrame(info: SrcInfo): HeadFrame {
+  if (info.frame) return info.frame;
+  const e0 = info.entries[0]!;
+  const head = boneAt(e0, /^Head$/);
+  const neck = boneAt(e0, /^Neck$/);
+  if (!head || !neck) throw new Error('modelo sem pescoço/cabeça');
+  const up = head.clone().sub(neck).normalize();
+  const rb = boneAt(e0, /^R Brow$/) ?? boneAt(e0, /R Clavicle$/);
+  const lb = boneAt(e0, /^L Brow$/) ?? boneAt(e0, /L Clavicle$/);
+  if (!rb || !lb) throw new Error('modelo sem referência para o lado direito');
+  const right = rb.sub(lb);
   right.addScaledVector(up, -right.dot(up)).normalize();
   const fwd = new THREE.Vector3().crossVectors(up, right).normalize();
-  const pos = g.getAttribute('position');
-  const used = new Set<number>();
-  const ix = g.index!;
-  for (let i = 0; i < ix.count; i++) used.add(ix.getX(i));
-  const w = new Float32Array(pos.count * 3);
   const mn = new THREE.Vector3(1e9, 1e9, 1e9);
   const mx = new THREE.Vector3(-1e9, -1e9, -1e9);
   const v = new THREE.Vector3();
-  for (const i of used) {
-    v.fromBufferAttribute(pos, i).applyMatrix4(info.bind);
-    w[i * 3] = v.dot(right); w[i * 3 + 1] = v.dot(up); w[i * 3 + 2] = v.dot(fwd);
-    mn.min(new THREE.Vector3(w[i * 3], w[i * 3 + 1], w[i * 3 + 2]));
-    mx.max(new THREE.Vector3(w[i * 3], w[i * 3 + 1], w[i * 3 + 2]));
+  const q = new THREE.Vector3();
+  for (const e of info.entries) {
+    const g = e.geoms[0]!;
+    const pos = g.getAttribute('position');
+    const ix = g.index!;
+    for (let i = 0; i < ix.count; i++) {
+      v.fromBufferAttribute(pos, ix.getX(i)).applyMatrix4(e.bind);
+      q.set(v.dot(right), v.dot(up), v.dot(fwd));
+      mn.min(q); mx.max(q);
+    }
   }
   const size = Math.max(1e-6, mx.y - mn.y);
-  const cen = mn.clone().add(mx).multiplyScalar(0.5);
+  info.frame = { right, up, fwd, cen: mn.clone().add(mx).multiplyScalar(0.5), size };
+  return info.frame;
+}
+
+function faceGeometry(info: SrcInfo, e: Entry): THREE.BufferGeometry {
+  if (e.faceGeom) return e.faceGeom;
+  const g = e.geoms[0]!;
+  const f = headFrame(info);
+  const pos = g.getAttribute('position');
+  const ix = g.index!;
+  const used = new Set<number>();
+  for (let i = 0; i < ix.count; i++) used.add(ix.getX(i));
   const ng = new THREE.BufferGeometry();
   for (const k of Object.keys(g.attributes)) ng.setAttribute(k, g.attributes[k]!);
   ng.setIndex(g.index);
   const fP = new Float32Array(pos.count * 3);
-  for (const i of used) for (let k = 0; k < 3; k++) fP[i * 3 + k] = (w[i * 3 + k]! - cen.getComponent(k)) / size;
+  const v = new THREE.Vector3();
+  for (const i of used) {
+    v.fromBufferAttribute(pos, i).applyMatrix4(e.bind);
+    fP[i * 3] = (v.dot(f.right) - f.cen.x) / f.size;
+    fP[i * 3 + 1] = (v.dot(f.up) - f.cen.y) / f.size;
+    fP[i * 3 + 2] = (v.dot(f.fwd) - f.cen.z) / f.size;
+  }
   // normais do pedaço da cabeça, levadas ao mesmo sistema
   const nrm = new THREE.BufferGeometry();
   nrm.setAttribute('position', pos);
   nrm.setIndex(g.index);
   nrm.computeVertexNormals();
   const na = nrm.getAttribute('normal');
-  const nm = new THREE.Matrix3().getNormalMatrix(info.bind);
+  const nm = new THREE.Matrix3().getNormalMatrix(e.bind);
   const fN = new Float32Array(pos.count * 3);
   const n = new THREE.Vector3();
   for (const i of used) {
     n.fromBufferAttribute(na, i).applyMatrix3(nm).normalize();
-    fN[i * 3] = n.dot(right); fN[i * 3 + 1] = n.dot(up); fN[i * 3 + 2] = n.dot(fwd);
+    fN[i * 3] = n.dot(f.right); fN[i * 3 + 1] = n.dot(f.up); fN[i * 3 + 2] = n.dot(f.fwd);
   }
   ng.setAttribute('fP', new THREE.BufferAttribute(fP, 3));
   ng.setAttribute('fN', new THREE.BufferAttribute(fN, 3));
-  info.faceGeom = ng;
+  e.faceGeom = ng;
   return ng;
 }
 
@@ -417,21 +482,28 @@ export async function buildCustom(rec: CharRecipe): Promise<THREE.Group> {
     const from = part === 'head' ? rec.head : part === 'torso' ? rec.torso : rec.legs;
     if (part === 'head' && customHead) continue;
     const info = await source(from);
-    const skeleton = new THREE.Skeleton(info.joints.map(boneFor), info.ibms);
-    const material = (info.material as THREE.MeshBasicMaterial).clone();
-    const tint = rec.tint?.[part];
-    if (tint && (material as THREE.MeshBasicMaterial).color) (material as THREE.MeshBasicMaterial).color.set(tint);
-    const withFace = part === 'head' && rec.face;
-    const mesh = new THREE.SkinnedMesh(withFace ? faceGeometry(info) : info.geoms[i]!, withFace ? faceMaterial(material, rec.face!) : material);
-    mesh.position.copy(info.pos);
-    mesh.quaternion.copy(info.quat);
-    mesh.scale.copy(info.scale);
-    mesh.name = `part_${part}`;
-    parent.add(mesh);
-    mesh.updateMatrixWorld(true);
-    mesh.bind(skeleton, info.bind);
-    mesh.castShadow = true;
-    mesh.frustumCulled = false;
+    for (const e of info.entries) {
+      const geom = e.geoms[i]!;
+      if (!geom.index || geom.index.count === 0) continue; // esta malha não tem triângulos desta parte
+      const skeleton = new THREE.Skeleton(e.joints.map(boneFor), e.ibms);
+      const cl = (m: THREE.Material): THREE.Material => {
+        const c = m.clone();
+        const tint = rec.tint?.[part];
+        if (tint && (c as THREE.MeshBasicMaterial).color) (c as THREE.MeshBasicMaterial).color.set(tint);
+        return part === 'head' && rec.face ? faceMaterial(c, rec.face) : c;
+      };
+      const material = Array.isArray(e.material) ? e.material.map(cl) : cl(e.material);
+      const mesh = new THREE.SkinnedMesh(part === 'head' && rec.face ? faceGeometry(info, e) : geom, material);
+      mesh.position.copy(e.pos);
+      mesh.quaternion.copy(e.quat);
+      mesh.scale.copy(e.scale);
+      mesh.name = `part_${part}`;
+      parent.add(mesh);
+      mesh.updateMatrixWorld(true);
+      mesh.bind(skeleton, e.bind);
+      mesh.castShadow = true;
+      mesh.frustumCulled = false;
+    }
   }
   model.rotation.y = -Math.PI / 2; // modelos GTA SA olham para +X
   model.scale.multiplyScalar(await refScale());

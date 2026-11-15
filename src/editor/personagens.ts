@@ -6,7 +6,7 @@ import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
 import { Animator } from '../game/anim';
 import { supabase } from '../net/supabase';
 import { isAdmin } from '../game/teams';
-import { buildCustom, FACE_DEFAULT, type FaceRecipe, customList, forgetHead, headList, headOf, isHeadId, LAW_SOURCES, loadCustom, loadHeadModel, PART_LABEL, PARTS, registerLocalHead, type CharRecipe, type CustomChar } from '../game/customChars';
+import { buildCustom, FACE_DEFAULT, type FaceRecipe, customList, forgetHead, headList, headOf, isHeadId, ALL_SOURCES, loadCustom, loadHeadModel, PART_LABEL, PARTS, registerLocalHead, type CharRecipe, type CustomChar } from '../game/customChars';
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
 const mk = <K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', text = ''): HTMLElementTagNameMap[K] => {
@@ -105,13 +105,13 @@ const tileFor = (src: string): HTMLButtonElement => {
 function buildList(): void {
   list.textContent = '';
   list.append(mk('div', 'title', 'Criar personagem'));
-  const hint = mk('div', 'hint', 'Escolha de qual modelo vem cada parte. Todos têm o mesmo esqueleto, então andam e lutam igual.');
+  const hint = mk('div', 'hint', 'Escolha de qual personagem vem cada parte (cabeça-base, tronco e pernas). Todos andam e lutam igual.');
   hint.style.padding = '4px 14px 0';
   list.append(hint);
   for (const part of PARTS) {
     list.append(mk('h2', '', PART_LABEL[part]));
     const g = mk('div', 'grid');
-    for (const s of LAW_SOURCES) {
+    for (const s of ALL_SOURCES) {
       const b = tileFor(s);
       b.classList.toggle('on', rec[part] === s);
       b.onclick = () => { rec = { ...rec, [part]: s }; if (part === 'head') { delete rec.hp; delete rec.hr; delete rec.hs; } buildList(); buildControls(); schedule(); };
@@ -348,7 +348,9 @@ function applyFaceUniforms(): void {
   const face = rec.face;
   if (!face || !obj) return;
   obj.traverse((o) => {
-    const m = (o as THREE.SkinnedMesh).isSkinnedMesh && o.name === 'part_head' ? (o as THREE.SkinnedMesh).material as THREE.Material : null;
+    if (!(o as THREE.SkinnedMesh).isSkinnedMesh || o.name !== 'part_head') return;
+    const mm = (o as THREE.SkinnedMesh).material;
+    const m = Array.isArray(mm) ? mm[0] : mm;
     const u = m?.userData.face as { pF: { value: THREE.Vector4 }; pL: { value: THREE.Vector4 }; pR: { value: THREE.Vector4 }; mk: { value: THREE.Vector3 } } | undefined;
     if (!u) return;
     u.pF.value.set(face.pf[0], face.pf[1], face.pf[2], u.pF.value.w);
