@@ -44,7 +44,7 @@ export function initPosterEditor(deps: PosterDeps): PosterEditor {
   adBtn.className = 'pe-ad';
   adBtn.textContent = 'Ad';
   adBtn.title = 'Trocar a imagem do cartaz da loja (chegue perto de um cartaz)';
-  adBtn.hidden = true; // aparece quando o jogo começa
+  adBtn.hidden = true; // só aparece na frente de um cartaz
   document.body.appendChild(adBtn);
   const file = document.createElement('input');
   file.type = 'file';
@@ -203,7 +203,8 @@ export function initPosterEditor(deps: PosterDeps): PosterEditor {
         // a prévia só vale enquanto você está na frente do cartaz (um pouco de folga na borda)
         if (nearestPoster(p.x, p.z, true)?.id !== pending.id) { cancel('Você se afastou: a imagem não foi salva e nada foi cobrado.'); shownFor = ''; lastKey = ''; }
       }
-      adBtn.hidden = false;
+      // o botão Ad só aparece na frente de um cartaz (com folga enquanto já está visível, para não piscar)
+      adBtn.hidden = !(open || pending || nearestPoster(p.x, p.z, !adBtn.hidden));
       if (!pending) {
         if (open) {
           // aberto: segue o cartão mais perto; se você se afastar, fecha
