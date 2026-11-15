@@ -516,3 +516,6 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 ## Rodada: volume dos motores e Clover vira Opala
 - Volume do motor (`PROFILES[...].vol`, audio.ts): Gol (`blistac`) 1 → 0,5 (metade); Buffalo 1,15 → 1,7 e Clover 1,05 → 1,6 (mais altos). A Harley usa o mesmo arquivo de som mas tem `vol` próprio (1,2), não mudou.
 - O Clover agora se chama **Opala** na loja/garagem (`inventory.ts`); o id interno `clover`, o modelo e o ícone não mudam.
+
+## Rodada: círculo da voz a 60% e linha fina
+- `HEAR_RANGE` 5 → 3 m (60%; o círculo no chão acompanha), conecta a 3,4 m (`CONNECT_RANGE`) e desliga a 4,5 m (`DROP_RANGE`); volume cheio até 0,75 m. A linha branca do anel ficou bem fina: ±0,03 m (era ±0,2) em `voiceRing.ts`.
