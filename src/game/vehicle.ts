@@ -16,7 +16,7 @@ export const BIKE_MODELS = ['harley', 'triumph', 'bmw', 'suzuki'] as const;
 /** Assento do piloto (z = para a frente, y = para cima), no espaço do modelo antes de subir até o chão. */
 const SEATS: Record<string, [number, number]> = { harley: [-0.46, 0.14], triumph: [-0.51, 0.42], bmw: [-0.4, 0.47], suzuki: [-0.4, 0.57] };
 /** Pontas do guidão (x lateral, z para a frente, y para cima), mesmo espaço dos assentos. */
-const BARS: Record<string, [number, number, number]> = { harley: [0.37, 0.15, 0.76], triumph: [0.37, 0.17, 0.5], bmw: [0.31, 0.43, 0.4], suzuki: [0.29, 0.46, 0.46] };
+const BARS: Record<string, [number, number, number]> = { harley: [0.37, 0.15, 0.76], triumph: [0.37, 0.29, 0.45], bmw: [0.31, 0.43, 0.4], suzuki: [0.29, 0.46, 0.46] };
 /** quanto o piloto deita o tronco (0 ereto … 1,5 peito no tanque): custom/clássica quase ereto, esportiva deitado */
 const RIDER_LEAN: Record<string, number> = { harley: 0.35, triumph: 0.5, bmw: 1.0, suzuki: 1.1 };
 /** quanto o piloto escorrega para a frente no banco (m): ombros mais perto do guidão, costas mais retas e braços um pouco dobrados */
@@ -25,7 +25,7 @@ const RIDER_POSE: Record<string, RiderPose> = {
   suzuki: { torso: 28, thigh: -6, shin: 50 },
   triumph: { torso: 55, thigh: -4, shin: 52 },
 };
-const RIDER_SHIFT: Record<string, number> = { harley: 0, triumph: 0.06, bmw: 0.13, suzuki: 0.17 };
+const RIDER_SHIFT: Record<string, number> = { harley: 0, triumph: 0.16, bmw: 0.13, suzuki: 0.17 };
 /** Banco do motorista dos carros (x para a esquerda, z para a frente, y para cima) e volante. */
 const CAR_SEATS: Record<string, [number, number, number]> = { blistac: [0.48, -0.25, -0.12], buffalo: [0.54, -0.35, -0.16], clover: [0.51, -0.15, -0.12], duster: [0.5, 0.15, -0.16] };
 const isBikeModel = (m?: string): boolean => (BIKE_MODELS as readonly string[]).includes(m ?? '');

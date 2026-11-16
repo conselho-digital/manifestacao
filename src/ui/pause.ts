@@ -220,7 +220,14 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
       const finish = (): void => {
         api.close();
         // PC: esconde o mouse de novo para jogar (o clique é o gesto que o navegador exige)
-        if (!('ontouchstart' in window) && navigator.maxTouchPoints === 0) document.querySelector('canvas')?.requestPointerLock?.();
+        if (!('ontouchstart' in window) && navigator.maxTouchPoints === 0) {
+          // o jogo ganha o foco: tira o foco do botão clicado (senão Espaço/Enter apertariam o botão de novo) e prende o mouse
+          (document.activeElement as HTMLElement | null)?.blur?.();
+          const canvas = document.querySelector('canvas');
+          canvas?.focus?.();
+          canvas?.requestPointerLock?.();
+          requestAnimationFrame(() => { if (!document.pointerLockElement) canvas?.requestPointerLock?.(); }); // 2ª tentativa (a janela ainda estava fechando)
+        }
       };
       const go = el('button', 'ps-buy', here ? 'Guardar' : 'Chamar');
       go.type = 'button';

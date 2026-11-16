@@ -138,11 +138,11 @@ export class Npc {
     this.health -= Math.min(100, 20 + speed * 5);
     this.flinchFrom(fromX, fromZ);
     this.root.rotation.y = Math.atan2(this.fx, this.fz); // voa na direção do veículo
-    const h = Math.min(13, speed * 0.85);
+    const h = Math.min(20, speed * 1.2); // quanto mais rápido o veículo, mais longe ele vai
     this.kx = this.fx * h;
     this.kz = this.fz * h;
-    this.vy = 5.5 + Math.min(3.5, speed * 0.25);
-    this.root.position.y += 0.6;
+    this.vy = 2.2 + Math.min(2, speed * 0.12); // voo baixo (cerca de 1 m de altura) e comprido
+    this.root.position.y += 0.3;
     this.st = 'fly';
     this.t = 0;
     this.animator?.setFlail(1);

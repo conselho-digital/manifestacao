@@ -176,7 +176,7 @@ export function readInput(): InputState {
     gas: keys.has('KeyW') || keys.has('ArrowUp') || padGas,
     brake: keys.has('KeyS') || keys.has('ArrowDown') || padBrake,
     handbrake: keys.has('Space') || padHand,
-    horn: keys.has('KeyH') || padHorn,
+    horn: keys.has('KeyH') || padHorn || mouseFire, // dirigindo no PC o botão esquerdo do mouse também buzina
     lights: lightsQ,
     wheelie: keys.has('ShiftLeft') || keys.has('ShiftRight') || padWheelie,
   };

@@ -481,6 +481,7 @@ function loop(): void {
     }
     const look = takeLook();
     const input = readInput();
+    if (view.mode === 2 && combat.isRifle && !player.isDriving && !intro) input.aim = true; // primeira pessoa com fuzil: sempre na posição de mira (a arma não tapa a tela ao atirar e o corpo gira com a câmera)
     if (intro) { // durante o voo o jogador espera (sem comandos)
       look.dx = 0; look.dy = 0;
       Object.assign(input, { x: 0, y: 0, mag: 0, fire: false, aim: false, jump: false, climb: false, crouch: false, interact: false, reload: false, switchWeapon: false, weaponStep: 0, weaponPick: null, sprint: false, gas: false, brake: false, handbrake: false, wheelie: false });

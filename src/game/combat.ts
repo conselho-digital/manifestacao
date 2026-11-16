@@ -11,7 +11,7 @@ import type { InputState } from './input';
 import type { Net, ShotMsg, KillMsg } from '../net/sync';
 import { isGunId, type Inventory, type ShopItem, type WeaponId } from './inventory';
 import type { RifleKind } from './rifles';
-import type { Armed } from './anim';
+import { isBatLike, type Armed } from './anim';
 import { findWall, SPRAY_DURATION, type Graffiti } from './graffiti';
 import { showNotice } from '../ui/toast';
 
@@ -26,7 +26,8 @@ const AMMO_REFILL_MS = 30 * 60 * 1000;
 const GUN_IDS = [0, 3, 12, 13, 14] as const;
 const PISTOL_DAMAGE = 15;
 const PISTOL_GAP = 0.28;
-const BAT_DAMAGE = 30;
+const BAT_DAMAGE = 7.5; // armas brancas (faca, taco, foice...): 25% do dano de antes (30)
+const BAT_HIT_DELAY = 0.3; // a tacada de duas mãos só acerta quando a arma passa pelo alvo (a subida do golpe não machuca)
 const BAT_GAP = 0.9;
 const BAT_RANGE = 2.5;
 const AK_DAMAGE = 20;
@@ -99,6 +100,8 @@ export class Combat {
   get reserve(): number { return this.ammo[this.weapon]!.reserve; }
   /** tem mira (fuzil ou pistola) */
   get isGun(): boolean { return isGunId(this.weapon); }
+  /** fuzil (AK, M4A1, M16, Honey Badger): em 1ª pessoa fica sempre na posição de mira; a pistola só mira ao apertar */
+  get isRifle(): boolean { return !!RIFLE_OF[this.weapon]; }
   reloading = false;
   dead = false;
   respawnIn = 0;
@@ -112,6 +115,7 @@ export class Combat {
   private sprayTo = new THREE.Vector3();
   private cd = 0;
   private fireHold = 0;
+  private hitDelay = 0; // tempo até a tacada acertar
   private invuln = 0;
   /** segundos restantes de proteção depois de renascer (sem arma, sem dano) */
   protectT = 0;
@@ -307,6 +311,7 @@ export class Combat {
       }
     }
     this.cd -= dt;
+    if (this.hitDelay > 0) { this.hitDelay -= dt; if (this.hitDelay <= 0) this.melee(player, BAT_RANGE, 'b'); }
     // atirando: o fuzil sobe para a posição de tiro (cano para a frente) e fica assim um instante depois do último tiro
     this.fireHold = input.fire ? AIM_HOLD : input.sprint && !input.aim ? 0 : Math.max(0, this.fireHold - dt);
     const aiming = input.aim || this.fireHold > 0;
@@ -327,7 +332,10 @@ export class Combat {
           if (a.mag === 0 && a.reserve === 0) this.warnEmpty(); // acabou o último tiro
         } else { this.cd = 0.3; playClick(); this.startReload(); if (a.reserve === 0) this.warnEmpty(); }
       } else if (this.weapon === 15) this.spray(player);
-      else if (MELEE_ARMED[this.weapon]) { this.cd = BAT_GAP; player.swing(); this.melee(player, BAT_RANGE, 'b'); }
+      else if (MELEE_ARMED[this.weapon]) {
+        this.cd = BAT_GAP; player.swing();
+        if (isBatLike(MELEE_ARMED[this.weapon]!)) this.hitDelay = BAT_HIT_DELAY; else this.melee(player, BAT_RANGE, 'b');
+      }
       else { this.cd = FIST_GAP; const kind = player.punch(); this.melee(player, kind === 'k' ? FIST_RANGE + 0.3 : FIST_RANGE, kind); }
     }
   }
@@ -520,7 +528,7 @@ export class Combat {
     this.hurtTick++;
     if (this.health <= 0) {
       this.health = 0;
-      this.dead = true;
+      this.dead = true; this.hitDelay = 0;
       this.respawnIn = RESPAWN_TIME;
       this.player?.die();
       this.d.net.sendKill(this.d.net.id, attacker, weapon);

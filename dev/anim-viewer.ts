@@ -122,6 +122,40 @@ const V = {
     weapon.setRifleKind(k);
   },
   /** Para onde aponta a lâmina/cabeça de uma arma branca em relação ao cabo (espaço do personagem: x esquerda, z frente). */
+  /** Por quadro de um golpe: centro da cabeça/lâmina da arma extra e a direção da lâmina (para ver se bate com o fio ou com as costas). */
+  track(clip: string, armed: Armed): { f: number; c: number[]; hd: number[] }[] {
+    animator.setArmed(armed);
+    weapon.setMode(armed);
+    animator.setAimPitch(0);
+    animator.play('idle');
+    for (let i = 0; i < 20; i++) animator.update(1 / 30);
+    animator.restart(clip);
+    const total = Math.round(animator.duration(clip) * 30);
+    const holder = (weapon as unknown as { extraInner: Map<string, THREE.Object3D> }).extraInner.get(armed)!;
+    const anchor = (weapon as unknown as { batAnchor: THREE.Object3D }).batAnchor;
+    const out: { f: number; c: number[]; hd: number[] }[] = [];
+    for (let f = 0; f <= total; f++) {
+      animator.update(1 / 30);
+      obj.updateMatrixWorld(true);
+      const grip = new THREE.Vector3().setFromMatrixPosition(anchor.matrixWorld);
+      const pts: THREE.Vector3[] = [];
+      holder.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh) return;
+        const a = m.geometry.getAttribute('position');
+        for (let i = 0; i < a.count; i += 2) pts.push(new THREE.Vector3().fromBufferAttribute(a, i).applyMatrix4(m.matrixWorld));
+      });
+      let md = 0;
+      for (const q of pts) md = Math.max(md, q.distanceTo(grip));
+      const c = new THREE.Vector3();
+      let n = 0;
+      for (const q of pts) if (q.distanceTo(grip) > md * 0.6) { c.add(q); n++; }
+      c.multiplyScalar(1 / Math.max(1, n));
+      out.push({ f, c: c.toArray(), hd: V.headDir(armed) });
+    }
+    return out;
+  },
+
   headDir(w: string): number[] {
     const holder = (weapon as unknown as { extraInner: Map<string, THREE.Object3D> }).extraInner.get(w)!;
     const anchor = (weapon as unknown as { batAnchor: THREE.Object3D }).batAnchor;

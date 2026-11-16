@@ -435,7 +435,8 @@ export class Player {
       this.moveL = dir.x * Math.cos(yaw) - dir.z * Math.sin(yaw);
     }
     // Armado (em pé, andando, mirando ou atirando): o corpo acompanha para onde a câmera aponta
-    if (facesAim(this.armed) && !this.crouching) this.heading = yaw; // agachado o corpo segue o movimento (andar agachado de lado ficava torto)
+    // primeira pessoa: o corpo sempre vira junto com a câmera (inclusive parado e agachado)
+    if (view.mode === 2 || (facesAim(this.armed) && !this.crouching)) this.heading = yaw; // agachado e sem 1ª pessoa o corpo segue o movimento (andar agachado de lado ficava torto)
 
     // Vertical
     const support = supportHeight(pos.x, pos.z, pos.y);
@@ -470,7 +471,7 @@ export class Player {
     const dir = fwd.multiplyScalar(input.y).add(right.multiplyScalar(input.x));
     if (dir.lengthSq() < 1e-6) return false;
     dir.normalize();
-    if (!facesAim(this.armed)) this.heading = Math.atan2(dir.x, dir.z); // sem mirar o corpo já olha para onde anda: rola para a frente
+    if (!facesAim(this.armed) && view.mode !== 2) this.heading = Math.atan2(dir.x, dir.z); // sem mirar (e fora da 1ª pessoa) o corpo já olha para onde anda: rola para a frente
     const fx = Math.sin(this.heading);
     const fz = Math.cos(this.heading);
     const ang = Math.atan2(dir.x * fz - dir.z * fx, dir.x * fx + dir.z * fz) * 180 / Math.PI; // + = esquerda do corpo
@@ -499,7 +500,8 @@ export class Player {
     }
     if (this.combatT > 0) this.combatT -= dt;
     if (this.swingT > 0) { this.swingT -= dt; return; } // golpe de taco em andamento
-    const armed = facesAim(this.armed) && !this.crouching; // só o fuzil e a pistola mirando usam os passos de arma (de frente, de costas e de lado)
+    const gunHeld = this.armed === 'rifle' || this.armed === 'aim' || this.armed === 'pistol' || this.armed === 'pistol_aim';
+    const armed = (facesAim(this.armed) || (view.mode === 2 && gunHeld)) && !this.crouching; // só o fuzil e a pistola mirando usam os passos de arma (de frente, de costas e de lado)
     if (this.crouching) {
       // agachado: andar para a frente ou para trás (de lado usa o andar para a frente)
       a.play(moving ? (armed && this.moveF < -0.5 ? 'crouch_bwd' : 'crouch_fwd') : 'crouch_idle');

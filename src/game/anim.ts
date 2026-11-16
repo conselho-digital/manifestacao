@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { gripOf, type GripKey } from './grips';
-import { rifleGeo, type RifleKind } from './rifles';
+import { AK_DX, AK_DY, rifleGeo, type RifleKind } from './rifles';
 
 interface GtaTrack { id: number; t: number[]; q: number[] }
 interface BoneTrack { bone: string; t: number[]; q: number[] }
@@ -105,7 +105,7 @@ interface Hand { fingers: THREE.Bone[]; side: 1 | -1 }
 interface Leg { thigh: THREE.Bone; calf: THREE.Bone; foot: THREE.Bone }
 
 /** Para onde o piloto olha na moto: levemente para baixo (graus abaixo da horizontal). */
-const RIDER_GAZE = 9;
+const RIDER_GAZE = 24; // graus abaixo da horizontal: a cabeça acompanha mais a linha da coluna inclinada (era 9)
 /** Postura do piloto de moto esportiva: costas retas a `torso` graus acima da horizontal, coxas na horizontal e canelas para trás, como no desenho do dono. */
 export interface RiderPose { torso: number; thigh: number; shin: number }
 interface Spine { mid: THREE.Bone; chest: THREE.Bone; neck: THREE.Bone; head: THREE.Bone }
@@ -124,8 +124,8 @@ const CFG: Record<'rifle' | 'pistol', WeaponCfg> = {
     low: { pos: P3(-0.02, 1.24, 0.2), pitch: -0.12, yaw: 1.1 }, // 6 cm mais baixo e o cano um pouco mais para cima
     // coronha no ombro direito, bochecha na coronha; yaw negativo: o cano converge para o ponto da mira (a câmera fica à direita)
     aim: { pos: P3(-0.17, 1.47, 0.24), pitch: 0, yaw: -0.05 },
-    gripR: P3(0, -0.055, 0.17), // empunhadura (coronha→cano: a arma tem 0,88 m e começa em z=-0,14)
-    gripL: P3(0, -0.02, 0.58), // guarda-mão de madeira (nas fotos a mão de apoio segura na ponta dele, braço quase esticado)
+    gripR: P3(AK_DX, -0.055 + AK_DY, 0.17), // empunhadura (coronha→cano: a arma tem 0,88 m e começa em z=-0,14)
+    gripL: P3(AK_DX, -0.02 + AK_DY, 0.58), // guarda-mão de madeira (nas fotos a mão de apoio segura na ponta dele, braço quase esticado)
     crouchLow: P3(0, 0.08, -0.04),
     crouchAim: P3(0, -0.04, 0),
   },
@@ -185,6 +185,7 @@ export class Animator {
   private climbW = 0;
   private armW = 0; // 0 = braços do clipe, 1 = braços segurando o fuzil
   private carryW = 0; // 1 = arma branca carregada em pé (andando/correndo): braços por IK, arma para cima
+  private fpOn = false; // câmera em 1ª pessoa
   private aimK = 0; // 0 = fuzil baixo, 1 = fuzil no ombro
   private jabT = -1; // soco em andamento (0..1), -1 = nenhum
   private recoil = 0; // coice do último tiro (1 -> 0)
@@ -520,6 +521,7 @@ export class Animator {
     const head = this.spine?.head;
     if (!head) return false;
     head.scale.setScalar(on ? 0.001 : 1);
+    this.fpOn = on;
     if (!on) return false;
     // a câmera fica na altura do peito (e não dos olhos), para a arma aparecer na tela
     const chest = this.spine!.chest;
@@ -1160,6 +1162,7 @@ export class Animator {
       pos.lerp(byHands, 1 - k);
       q.slerp(qh, 1 - k);
     }
+    if (this.fpOn && cfg === CFG.pistol) pos.y -= 0.13 * k; // 1ª pessoa: o revólver mirando fica mais embaixo na tela, para ver os tiros saindo dele e indo para a frente
     pos.addScaledVector(new THREE.Vector3(0, 0, -1).applyQuaternion(q), 0.05 * this.recoil); // recua no coice
     this.ovLeft = null;
     // animações curtas nas mãos da pistola: recarregar (colt45_reload) e sacar até mirar (ARRESTgun)

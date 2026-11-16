@@ -6,7 +6,7 @@ import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
 
 export type ArmedMode = Armed;
 
-import { rifleGeo, RIFLE_KINDS, type RifleKind } from './rifles';
+import { AK_DX, AK_DY, rifleGeo, RIFLE_KINDS, type RifleKind } from './rifles';
 import { EXTRA_MELEE_KEYS, isBatLike, type Animator, type Armed, type ExtraMelee } from './anim';
 
 const loader = new GLTFLoader();
@@ -224,7 +224,7 @@ export class WeaponVisual {
     root.add(this.batAnchor);
     this.flashSprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: flashTexture(), transparent: true, blending: THREE.AdditiveBlending, depthWrite: false }));
     this.flashSprite.scale.setScalar(0.5);
-    this.flashSprite.position.set(-0.017, 0.019, 0.75);
+    this.flashSprite.position.set(-0.017 + AK_DX, 0.019 + AK_DY, 0.75);
     this.flashSprite.visible = false;
     this.anchor.add(this.flashSprite);
     for (const k of RIFLE_KINDS) {
@@ -263,7 +263,7 @@ export class WeaponVisual {
       inner.add(model);
       inner.scale.setScalar(0.88 / Math.max(size.x, size.y, size.z));
       inner.rotation.y = -Math.PI / 2; // cano para +Z (frente)
-      inner.position.z = 0.3;
+      inner.position.set(AK_DX, AK_DY, 0.3);
       inner.traverse((o) => { o.castShadow = true; });
       this.mount(this.anchor, 'ak', inner);
       this.rifleInner = inner;
