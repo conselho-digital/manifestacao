@@ -108,7 +108,7 @@ function noise(c: AudioContext): AudioBuffer {
 
 // Sons gravados (enviados pelo dono): partida (ao subir), marcha lenta (loop) e aceleração (loop). 'sport' = BMW e Suzuki; 'harley' = Harley.
 const SAMPLE_SETS = {
-  // sport: a gravação tem uma SUBIDA de giro de verdade (o tom dobra em ~3 s): `rise` é percorrida pela velocidade (0% = começo, 100% = fim; ver Scrub)
+  // sport: a gravação tem uma SUBIDA de giro de verdade (o tom dobra em ~3 s): `rise` toca contínua, no ritmo da aceleração do veículo (0% da velocidade = começo, 100% = fim; ver Scrub)
   sport: { start: '/sounds/moto-start.mp3', idle: '/sounds/moto-idle.mp3', rev: '/sounds/moto-rev.mp3', rise: '/sounds/moto-rise.mp3', idleRate: [0.9, 0.35], revRate: [0.85, 0.25] },
   harley: { start: '/sounds/harley-start.mp3', idle: '/sounds/harley-idle.mp3', rev: '/sounds/harley-rev.mp3', idleRate: [0.95, 0.2], revRate: [0.8, 0.45] },
 } as const satisfies Record<string, { start: string; idle: string; rev: string; rise?: string; idleRate: readonly number[]; revRate: readonly number[] }>;
@@ -130,12 +130,14 @@ function loadSamples(name: SampleName): void {
 }
 
 /** Moto esportiva: o som de aceleração gravado (a SUBIDA de giro inteira) é percorrido pela VELOCIDADE: 0% = começo do som, 100% = fim. Toca sempre na velocidade original (o tom é o da gravação naquele ponto); como um trecho curto em loop, que troca de lugar (com fade) conforme a velocidade sobe ou desce. */
-interface Scrub { src: AudioBufferSourceNode; g: GainNode; ws: number }
+interface Scrub { src: AudioBufferSourceNode; g: GainNode; pos: number; lastT: number; rate: number; looping: boolean }
 const GEAR_START = 0.02; // começo do som (fração da duração) na velocidade 0
 const RISE_END = 0.97; // fim do som na velocidade máxima
-const SCRUB_WIN = 0.42; // tamanho do trecho em loop (s)
-const SCRUB_STEP = 0.1; // quanto o ponto precisa andar para trocar de trecho (s)
-const SCRUB_FADE = 0.12; // fade entre trechos (s)
+/** Tempo (s) que o veículo leva para ir de 0 à velocidade máxima: o som toca na velocidade `duração / ACCEL_TIME` para os dois chegarem ao fim juntos (ex.: som de 10 s e moto de 15 s = som a 0,67x). */
+const ACCEL_TIME = 12;
+const SYNC_K = 3; // quão forte a velocidade do som corrige a diferença para o ponto que combina com a velocidade do veículo
+const RESYNC = 0.7; // se o som ficou mais de 0,7 s fora do ponto (o veículo freou), recomeça no ponto certo
+const FADE = 0.12;
 
 interface SampleVoice {
   mix: GainNode; pan: StereoPannerNode; idle: AudioBufferSourceNode; idleG: GainNode; revG: GainNode;
@@ -329,29 +331,39 @@ export class EngineSound {
     if (sv.rev) sv.rev.playbackRate.setTargetAtTime(holdRate, t, 0.1);
     if (S.rise) {
       const dur = S.rise.duration;
-      const tp = (GEAR_START + gf * (RISE_END - GEAR_START)) * dur; // ponto do som que combina com a velocidade de agora
-      const ws = clamp(tp - SCRUB_WIN / 2, 0, dur - SCRUB_WIN);
-      const cur = sv.press;
+      const target = (GEAR_START + gf * (RISE_END - GEAR_START)) * dur; // ponto do som que combina com a velocidade de agora (50% da velocidade = metade do som)
+      const base = dur / ACCEL_TIME;
+      let cur = sv.press;
+      const start = (): Scrub => {
+        const src = c.createBufferSource();
+        src.buffer = S.rise!;
+        const g = c.createGain();
+        g.gain.setValueAtTime(0, t);
+        g.gain.linearRampToValueAtTime(1, t + FADE);
+        src.connect(g).connect(sv.revG);
+        src.start(t, Math.min(target, dur - 0.05));
+        return { src, g, pos: target, lastT: t, rate: base, looping: false };
+      };
+      const stop = (v: Scrub, fade: number): void => {
+        v.g.gain.cancelScheduledValues(t);
+        v.g.gain.setValueAtTime(v.g.gain.value, t);
+        v.g.gain.linearRampToValueAtTime(0, t + fade);
+        v.src.stop(t + fade + 0.05);
+      };
       if (a >= 0.5 && live) {
-        if (!cur || Math.abs(ws - cur.ws) > SCRUB_STEP) {
-          // novo trecho (começa pelo ponto da velocidade de agora, também depois de soltar e voltar a acelerar) e o antigo sai
-          const src = c.createBufferSource();
-          src.buffer = S.rise;
-          src.loop = true;
-          src.loopStart = ws;
-          src.loopEnd = ws + SCRUB_WIN;
-          const g = c.createGain();
-          g.gain.setValueAtTime(0, t);
-          g.gain.linearRampToValueAtTime(1, t + SCRUB_FADE);
-          src.connect(g).connect(sv.revG);
-          src.start(t, ws);
-          if (cur) { cur.g.gain.cancelScheduledValues(t); cur.g.gain.setValueAtTime(cur.g.gain.value, t); cur.g.gain.linearRampToValueAtTime(0, t + SCRUB_FADE); cur.src.stop(t + SCRUB_FADE + 0.05); }
-          sv.press = { src, g, ws };
+        // o som toca CONTÍNUO (sem recomeçar) e a velocidade dele acompanha o veículo; ao acelerar de novo continua do ponto da velocidade de agora
+        if (!cur) cur = sv.press = start();
+        const now = Math.max(t, cur.lastT);
+        cur.pos = Math.min(dur, cur.pos + cur.rate * (now - cur.lastT));
+        cur.lastT = now;
+        if (cur.pos - target > RESYNC) { stop(cur, FADE); cur = sv.press = start(); } // o veículo freou sem soltar o acelerador
+        else {
+          cur.rate = clamp(base + SYNC_K * (target - cur.pos), 0.25, 2.2);
+          cur.src.playbackRate.setValueAtTime(cur.rate, t); // troca na hora: a posição estimada (pos) fica exata
+          if (!cur.looping && cur.pos >= dur - 0.5) { cur.looping = true; cur.src.loop = true; cur.src.loopStart = dur - 0.5; cur.src.loopEnd = dur; } // no fim do som (velocidade máxima) segura o trecho final
         }
       } else if (a < 0.25 && cur) {
-        cur.g.gain.cancelScheduledValues(t);
-        cur.g.gain.setTargetAtTime(0, t, 0.03);
-        cur.src.stop(t + 0.3); // soltou o acelerador: volta ao motor parado
+        stop(cur, 0.1); // soltou o acelerador: volta ao motor parado
         sv.press = null;
       }
     }
