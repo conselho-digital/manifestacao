@@ -4,6 +4,8 @@ import { terrainHeight } from './map';
 
 /** Volume mínimo (0..1) que ainda conta como "dá para ouvir": o círculo vai até onde o som cai a esse nível. */
 const AUDIBLE = 0.04;
+/** o círculo mostra só 30% do alcance real do som (pedido do dono: o círculo cheio era grande demais; o som continua chegando onde chegava) */
+const RING_SCALE = 0.3;
 
 /**
  * Distância (m) até onde um som de amplitude `amp` (0..1) ainda se ouve, com o mesmo cálculo de volume do `proximity` (cheio a menos de `near`,
@@ -28,13 +30,14 @@ const HOLD_GRACE_MS = 220; // som contínuo some se ninguém renová-lo nesse te
 export function noiseHold(key: string, x: number, z: number, r: number): void {
   const now = performance.now();
   const h = holds.get(key);
+  r *= RING_SCALE;
   if (h) { h.x = x; h.z = z; h.r = r; h.seen = now; } else holds.set(key, { x, z, r, shown: 0, seen: now });
 }
 
 /** Som curto (tiro, buzina, batida): o círculo abre no raio cheio e encolhe até sumir em `dur` s. */
 export function noiseBurst(x: number, z: number, r: number, dur = 0.5): void {
   if (bursts.length > 64) bursts.shift();
-  bursts.push({ x, z, r, t0: performance.now(), dur: dur * 1000 });
+  bursts.push({ x, z, r: r * RING_SCALE, t0: performance.now(), dur: dur * 1000 });
 }
 
 /** Círculos a desenhar agora (só os que passam de `minR` e estão a menos de `maxDist` do ouvinte). */
