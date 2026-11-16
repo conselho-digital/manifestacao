@@ -185,9 +185,6 @@ export class Animator {
   private climbW = 0;
   private armW = 0; // 0 = braços do clipe, 1 = braços segurando o fuzil
   private carryW = 0; // 1 = arma branca carregada em pé (andando/correndo): braços por IK, arma para cima
-  private akFp: WeaponCfg | null = null;
-  private pistolFp: WeaponCfg | null = null;
-  private fpOn = false; // câmera em 1ª pessoa
   private aimK = 0; // 0 = fuzil baixo, 1 = fuzil no ombro
   private jabT = -1; // soco em andamento (0..1), -1 = nenhum
   private recoil = 0; // coice do último tiro (1 -> 0)
@@ -518,20 +515,6 @@ export class Animator {
     this.aimPitch = p;
   }
 
-  /** Primeira pessoa: esconde a cabeça (a câmera fica na altura do peito) e devolve a posição do peito no mundo; false se o modelo não tem esqueleto. */
-  firstPerson(on: boolean, out: THREE.Vector3): boolean {
-    const head = this.spine?.head;
-    if (!head) return false;
-    head.scale.setScalar(on ? 0.001 : 1);
-    this.fpOn = on;
-    if (!on) return false;
-    // a câmera fica na altura do peito (e não dos olhos), para a arma aparecer na tela
-    const chest = this.spine!.chest;
-    chest.updateWorldMatrix(true, false);
-    chest.getWorldPosition(out);
-    return true;
-  }
-
   /** Escalada: coloca as duas mãos em cima da borda (altura `rel` acima dos pés), palmas para baixo; null desliga. */
   setClimbHands(rel: number | null, w = 1): void {
     this.climbRel = rel;
@@ -546,16 +529,8 @@ export class Animator {
   /** Posições de arma em uso: poses do fuzil/pistola e, no fuzil, as mãos do modelo atual. */
   private cfgNow(): WeaponCfg {
     if (isSpray(this.armed)) return CFG_SPRAY;
-    if (kindOf(this.armed) === 'pistol') {
-      // 1ª pessoa: o revólver mirando fica no mesmo lugar da tela que a M4A1 (onde a mão direita dela segura: x -0,17, y 1,42, z 0,45)
-      if (this.fpOn && !isSpray(this.armed)) return (this.pistolFp ??= { ...CFG.pistol, aim: { ...CFG.pistol.aim, pos: P3(-0.17, 1.42, 0.45) } });
-      return CFG.pistol;
-    }
-    if (this.rifleKind === 'ak') {
-      // 1ª pessoa: a mão de apoio segura o guarda-mão na mesma altura/distância que na M4A1 (z 0,48 em vez de 0,58: o braço não alcançava e a mão ficava longe da arma)
-      if (this.fpOn) return (this.akFp ??= { ...CFG.rifle, gripL: P3(AK_DX, -0.075, 0.476) });
-      return CFG.rifle;
-    }
+    if (kindOf(this.armed) === 'pistol') return CFG.pistol;
+    if (this.rifleKind === 'ak') return CFG.rifle;
     const g = rifleGeo(this.rifleKind);
     return { ...CFG.rifle, gripR: g.gripR, gripL: g.gripL };
   }

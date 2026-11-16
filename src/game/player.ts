@@ -435,8 +435,7 @@ export class Player {
       this.moveL = dir.x * Math.cos(yaw) - dir.z * Math.sin(yaw);
     }
     // Armado (em pé, andando, mirando ou atirando): o corpo acompanha para onde a câmera aponta
-    // primeira pessoa: o corpo sempre vira junto com a câmera (inclusive parado e agachado)
-    if (view.mode === 2 || (facesAim(this.armed) && !this.crouching)) this.heading = yaw; // agachado e sem 1ª pessoa o corpo segue o movimento (andar agachado de lado ficava torto)
+    if (facesAim(this.armed) && !this.crouching) this.heading = yaw; // agachado o corpo segue o movimento (andar agachado de lado ficava torto)
 
     // Vertical
     const support = supportHeight(pos.x, pos.z, pos.y);
@@ -471,7 +470,7 @@ export class Player {
     const dir = fwd.multiplyScalar(input.y).add(right.multiplyScalar(input.x));
     if (dir.lengthSq() < 1e-6) return false;
     dir.normalize();
-    if (!facesAim(this.armed) && view.mode !== 2) this.heading = Math.atan2(dir.x, dir.z); // sem mirar (e fora da 1ª pessoa) o corpo já olha para onde anda: rola para a frente
+    if (!facesAim(this.armed)) this.heading = Math.atan2(dir.x, dir.z); // sem mirar o corpo já olha para onde anda: rola para a frente
     const fx = Math.sin(this.heading);
     const fz = Math.cos(this.heading);
     const ang = Math.atan2(dir.x * fz - dir.z * fx, dir.x * fx + dir.z * fz) * 180 / Math.PI; // + = esquerda do corpo
@@ -500,8 +499,7 @@ export class Player {
     }
     if (this.combatT > 0) this.combatT -= dt;
     if (this.swingT > 0) { this.swingT -= dt; return; } // golpe de taco em andamento
-    const gunHeld = this.armed === 'rifle' || this.armed === 'aim' || this.armed === 'pistol' || this.armed === 'pistol_aim';
-    const armed = (facesAim(this.armed) || (view.mode === 2 && gunHeld)) && !this.crouching; // só o fuzil e a pistola mirando usam os passos de arma (de frente, de costas e de lado)
+    const armed = facesAim(this.armed) && !this.crouching; // só o fuzil e a pistola mirando usam os passos de arma (de frente, de costas e de lado)
     if (this.crouching) {
       // agachado: andar para a frente ou para trás (de lado usa o andar para a frente)
       a.play(moving ? (armed && this.moveF < -0.5 ? 'crouch_bwd' : 'crouch_fwd') : 'crouch_idle');
@@ -998,27 +996,11 @@ export class Player {
   followCamera(camera: THREE.PerspectiveCamera, dt: number, yaw: number, pitch: number, aimK: number, snap = false): void {
     const p = this.object.position;
     const driving = this.mode === 'drive';
-    // tecla C: 0 = terceira pessoa, 1 = terceira pessoa perto (metade da distância), 2 = primeira pessoa (só a pé)
-    const mode = driving && view.mode === 2 ? 0 : view.mode;
-    const near = mode === 1 ? 0.5 : 1;
+    // tecla G: 0 = terceira pessoa, 1 = terceira pessoa perto (metade da distância)
+    const near = view.mode === 1 ? 0.5 : 1;
     const dist = driving ? (this.car?.bike ? 6.2 : 8) * near : THREE.MathUtils.lerp(CAM_DISTANCE * near, CAM_AIM_DISTANCE, aimK);
     const shoulder = driving ? 0 : THREE.MathUtils.lerp(CAM_SHOULDER * near, CAM_AIM_SHOULDER, aimK); // a pé: sempre à direita do personagem
-    const fp = mode === 2 && !snap;
-    const nearPlane = fp ? 0.1 : CAM_NEAR;
-    if (camera.near !== nearPlane) { camera.near = nearPlane; camera.updateProjectionMatrix(); }
-    if (fp) {
-      const eye = new THREE.Vector3();
-      const fpDir = new THREE.Vector3(Math.sin(yaw) * Math.cos(pitch), -Math.sin(pitch), Math.cos(yaw) * Math.cos(pitch));
-      const low = 1 - aimK; // arma abaixada: a câmera desce e vai um pouco para trás, para o cano aparecer embaixo da tela; mirando, fica no peito
-      if (this.animator?.firstPerson(true, eye)) eye.y += 0.22 - 0.13 * low; else eye.set(p.x, p.y + 1.35 - 0.4 * this.crouchK - 0.1 * low, p.z); // altura do peito: a arma aparece na tela
-      const fwd = 0.25 - 0.2 * low;
-      eye.x += Math.sin(yaw) * fwd;
-      eye.z += Math.cos(yaw) * fwd;
-      camera.position.copy(eye);
-      camera.lookAt(eye.x + fpDir.x, eye.y + fpDir.y, eye.z + fpDir.z);
-      return;
-    }
-    this.animator?.firstPerson(false, new THREE.Vector3());
+    if (camera.near !== CAM_NEAR) { camera.near = CAM_NEAR; camera.updateProjectionMatrix(); }
     this.crouchK += ((this.crouching && !driving ? 1 : 0) - this.crouchK) * Math.min(1, dt * 8);
     const target = new THREE.Vector3(p.x, p.y + (driving ? 1.35 : THREE.MathUtils.lerp(CAM_LOOK_HEIGHT, CAM_AIM_HEIGHT, aimK) - 0.5 * this.crouchK), p.z);
     const cp = Math.cos(pitch);

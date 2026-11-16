@@ -100,7 +100,7 @@ export class Combat {
   get reserve(): number { return this.ammo[this.weapon]!.reserve; }
   /** tem mira (fuzil ou pistola) */
   get isGun(): boolean { return isGunId(this.weapon); }
-  /** fuzil (AK, M4A1, M16, Honey Badger): em 1ª pessoa fica sempre na posição de mira; a pistola só mira ao apertar */
+  /** fuzil (AK, M4A1, M16, Honey Badger) */
   get isRifle(): boolean { return !!RIFLE_OF[this.weapon]; }
   reloading = false;
   dead = false;

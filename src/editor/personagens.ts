@@ -268,7 +268,7 @@ function buildControls(): void {
     slider(pad, 'Girar Y', () => hr[1], (v) => setR(1, v), -180, 180, 1, '(°)');
     slider(pad, 'Girar Z', () => hr[2], (v) => setR(2, v), -180, 180, 1, '(°)');
     slider(pad, 'Tamanho', () => Math.round((rec.hs ?? 1) * 100), (v) => { rec = { ...rec, hs: v / 100 }; }, 40, 220, 1, '(%)');
-    pad.append(mk('div', 'hint', 'A cabeça nova fica presa ao osso da cabeça: acompanha o corpo e some na 1ª pessoa. Olhando de frente, ela deve cobrir o pescoço.'));
+    pad.append(mk('div', 'hint', 'A cabeça nova fica presa ao osso da cabeça: acompanha o corpo. Olhando de frente, ela deve cobrir o pescoço.'));
   }
 
   pad.append(mk('h2', '', 'Nome'));

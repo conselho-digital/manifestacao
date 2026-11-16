@@ -34,6 +34,6 @@ export function saveSettings(): void {
   try { localStorage.setItem(KEY, JSON.stringify({ ...settings, fpsV: 2 })); } catch { /* sem armazenamento: vale só nesta sessão */ }
 }
 
-/** Câmera: 0 = terceira pessoa (padrão), 1 = terceira pessoa perto (metade da distância), 2 = primeira pessoa. Tecla C no PC. */
+/** Câmera: 0 = terceira pessoa (padrão), 1 = terceira pessoa perto (metade da distância). Tecla G no PC. */
 export const view = { mode: 0 };
-export const CAMERA_MODES = 3;
+export const CAMERA_MODES = 2;

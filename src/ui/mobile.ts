@@ -414,7 +414,7 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   const keys = make('m-keys', hud);
   const KEYS_FOOT: [string, string][] = [
     ['W A S D', 'Mover'], ['Shift / Q', 'Correr'], ['Espaço', 'Pular'], ['E', 'Escalar'], ['Ctrl / C', 'Agachar'], ['F', 'Entrar no carro'],
-    ['Clique', 'Atirar / bater'], ['Botão direito', 'Mirar'], ['R', 'Recarregar'], ['Scroll', 'Trocar de arma'], ['B', 'Loja'], ['V', 'Veículos'], ['G', 'Câmera: 1ª/3ª pessoa'], ['Alt', 'Mostrar o mouse (segure)'],
+    ['Clique', 'Atirar / bater'], ['Botão direito', 'Mirar'], ['R', 'Recarregar'], ['Scroll', 'Trocar de arma'], ['B', 'Loja'], ['V', 'Veículos'], ['G', 'Câmera: perto / longe'], ['Alt', 'Mostrar o mouse (segure)'],
     ['T', 'Falar (segure)'], ['M', 'Mapa'], ['L', 'Esconder esta legenda'], ['P', 'Menu / configurações'],
   ];
   const KEYS_CAR: [string, string][] = [
