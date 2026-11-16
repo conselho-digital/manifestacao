@@ -130,6 +130,7 @@ const CSS = `
 /* tiro: no canto inferior DIREITO do joystick (abaixo dele); mirar: no canto inferior ESQUERDO (o joystick é um círculo de 28u em left 8u, bottom 9u) */
 .m-fire{left:calc(var(--u)*30.5);bottom:calc(var(--u)*.5);width:calc(var(--u)*14);height:calc(var(--u)*14)}
 .m-fire.m-fire2{left:auto;right:calc(var(--u)*17.5);bottom:calc(var(--u)*24);width:calc(var(--u)*15.5);height:calc(var(--u)*15.5)}
+.m-aim.m-aim2{left:auto;right:calc(var(--u)*2.5);bottom:calc(var(--u)*29);width:calc(var(--u)*13.5);height:calc(var(--u)*13.5)}
 .m-aim{left:calc(var(--u)*.65);bottom:calc(var(--u)*1.65);width:calc(var(--u)*13);height:calc(var(--u)*13)}
 .m-jump{right:calc(var(--u)*1.2);bottom:calc(var(--u)*9.5);width:calc(var(--u)*17);height:calc(var(--u)*17)}
 /* a pé: entrar no carro fica à esquerda do Sprint (não o substitui) */
@@ -515,8 +516,10 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   const fireBtns = [circle(hud, 'm-fire foot', ICON.bullet, null), circle(hud, 'm-fire m-fire2 foot', ICON.bullet, null)];
   for (const b of fireBtns) holdButton(b, fireDown, fireUp, true);
   let aimOn = false;
-  const aim = circle(hud, 'm-aim foot', ICON.crosshair, null);
-  aim.addEventListener('pointerdown', (e) => { e.preventDefault(); aimOn = !aimOn; setAim(aimOn); aim.classList.toggle('on', aimOn); });
+  // dois botões de mirar (junto ao joystick e na posição de sempre): tocar em qualquer um liga/desliga a mira dos dois
+  const aimBtns = [circle(hud, 'm-aim foot', ICON.crosshair, null), circle(hud, 'm-aim m-aim2 foot', ICON.crosshair, null)];
+  const syncAim = (): void => { for (const b of aimBtns) b.classList.toggle('on', aimOn); };
+  for (const b of aimBtns) b.addEventListener('pointerdown', (e) => { e.preventDefault(); aimOn = !aimOn; setAim(aimOn); syncAim(); });
   holdButton(circle(hud, 'm-jump foot', ICON.run, null), queueJump, undefined, true);
   holdButton(circle(hud, 'm-door', ICON.door, null), queueInteract);
   holdButton(circle(hud, 'm-sprint small foot', null, 'Sprint'), () => setSprint(true), () => setSprint(false), true);
@@ -679,7 +682,7 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
         cache.fireGun = gun;
         for (const b of fireBtns) { const ico = b.querySelector('.ico'); if (ico) { ico.textContent = ''; ico.insertAdjacentHTML('beforeend', gun ? ICON.bullet : ICON.fist); } }
       }
-      if (!gun && aimOn) { aimOn = false; setAim(false); aim.classList.remove('on'); }
+      if (!gun && aimOn) { aimOn = false; setAim(false); syncAim(); }
       cross.classList.toggle('show', gun && !s.driving && !s.dead);
       cross.classList.toggle('aim', s.aiming);
       crouchBtn.classList.toggle('on', s.crouching);
