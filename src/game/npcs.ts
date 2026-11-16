@@ -11,7 +11,8 @@ const NEAR_FIRST = 8; // os primeiros nascem perto de quem entrou, para a rua n�
 const WALK_SPEED = 2.1; // o mesmo do jogador: o passo do clipe 'walk' foi ajustado para essa velocidade
 const ACTIVE_R = 75; // além disso o NPC fica parado e escondido (sem gastar com animação)
 const HIDE_R = 110;
-const CHARS: BuiltinName[] = ['Vini', 'Xandao', 'PF', 'Gang1', 'Gang2', 'Gang3', 'Gang4', 'MaiBrasil', 'MaiMexico'];
+// as Mai (11–14 mil triângulos) ficam de fora dos pedestres: são só para os jogadores
+const CHARS: BuiltinName[] = ['Vini', 'Xandao', 'PF', 'Gang1', 'Gang2', 'Gang3', 'Gang4'];
 
 const inRect = (r: { x0: number; x1: number; z0: number; z1: number }, x: number, z: number): boolean => x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1;
 
@@ -84,6 +85,8 @@ export class Npc {
   private fx = 0; // direção de fuga (vetor unitário)
   private fz = 0;
   private ready = false;
+  private readonly meshes: THREE.Mesh[] = [];
+  private shadowOn = true; // só projeta sombra a menos de 40 m (a passada de sombra repete o custo da malha)
   private model: BuiltinName;
 
   constructor(name: BuiltinName, x: number, z: number) {
@@ -95,6 +98,16 @@ export class Npc {
     void createCharacter(name).then(async (m) => {
       this.root.add(m);
       this.animator = await Animator.create(m);
+      this.root.traverse((o) => {
+        const m = o as THREE.SkinnedMesh;
+        if (!m.isMesh) return;
+        this.meshes.push(m);
+        if (m.isSkinnedMesh) { // pedestre fora da tela não é desenhado: esfera de corte do pose atual + 1,2 m de folga (rolar, mergulhar, cair)
+          m.skeleton.update();
+          m.computeBoundingSphere();
+          if (m.boundingSphere) { m.boundingSphere.radius += 1.2; m.frustumCulled = true; }
+        }
+      });
       this.ready = true;
       this.root.visible = true;
     }).catch(() => undefined);
@@ -248,6 +261,8 @@ export class Npc {
     const p = this.root.position;
     const d = Math.hypot(p.x - px, p.z - pz);
     this.root.visible = d < HIDE_R;
+    const wantShadow = d < (this.shadowOn ? 46 : 40);
+    if (wantShadow !== this.shadowOn) { this.shadowOn = wantShadow; for (const m of this.meshes) m.castShadow = wantShadow; }
     if (d >= ACTIVE_R && this.st !== 'dead') return;
     switch (this.st) {
       case 'idle':

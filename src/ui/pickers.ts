@@ -51,7 +51,6 @@ export function createCharacterPicker(initial: CharacterName, onPick: (n: Charac
       const img = el('img');
       img.src = faceUrl(n);
       img.alt = '';
-      img.loading = 'lazy';
       img.draggable = false;
       const b = el('button', 'pk-item', img, el('span', '', labelOf(n)));
       b.type = 'button';
@@ -80,7 +79,6 @@ export function createCharacterPicker(initial: CharacterName, onPick: (n: Charac
       const img = el('img');
       img.src = faceUrl(c.id as CharacterName);
       img.alt = '';
-      img.loading = 'lazy';
       img.draggable = false;
       const b = el('button', 'pk-item', img, el('span', '', c.name));
       b.type = 'button';
