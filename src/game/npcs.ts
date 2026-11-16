@@ -15,13 +15,20 @@ const CHARS: BuiltinName[] = ['Helena', 'Stewart', 'Bennyse', 'Amanda', 'Garota1
 
 const inRect = (r: { x0: number; x1: number; z0: number; z1: number }, x: number, z: number): boolean => x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1;
 
-/** Chão livre para um pedestre: sem prédio/poste/árvore (com folga), sem água. */
-function free(x: number, z: number, pad: number): boolean {
+/** Círculos de todos os veículos (parados e em movimento), atualizados a cada quadro: os veículos também são objetos, ninguém atravessa. */
+let vehCircles: [number, number, number][] = [];
+
+/** Chão livre para um pedestre: sem prédio/poste/árvore/veículo (com folga), sem água. `skip` = ponto de um veículo que está atropelando (ignora os círculos dele). */
+function free(x: number, z: number, pad: number, skip?: [number, number]): boolean {
   if (Math.abs(x) > CITY.halfX - 3 || Math.abs(z) > CITY.halfZ - 3) return false;
   if (waterDepth(x, z) > 0.02) return false;
   const y = terrainHeight(x, z);
   for (const b of COLLIDERS) {
     if (x > b.minX - pad && x < b.maxX + pad && z > b.minZ - pad && z < b.maxZ + pad && (b.bottom ?? 0) < y + 1.4 && b.top > y + 0.35) return false;
+  }
+  for (const [cx, cz, r] of vehCircles) {
+    if (skip && Math.hypot(cx - skip[0], cz - skip[1]) < 3.5) continue;
+    if (Math.hypot(x - cx, z - cz) < r + pad) return false;
   }
   return true;
 }
@@ -154,7 +161,7 @@ export class Npc {
     const p = this.root.position;
     const nx = p.x + this.kx * dt;
     const nz = p.z + this.kz * dt;
-    if (free(nx, nz, 0.4)) { p.x = nx; p.z = nz; } else { this.kx *= 0.1; this.kz *= 0.1; }
+    if (free(nx, nz, 0.4, [this.hx, this.hz])) { p.x = nx; p.z = nz; } else { this.kx *= 0.1; this.kz *= 0.1; }
     this.vy -= FLY_GRAVITY * dt;
     const gy = terrainHeight(p.x, p.z);
     p.y += this.vy * dt;
@@ -332,7 +339,7 @@ export class Npc {
     const p = this.root.position;
     const nx = p.x + this.kx * dt;
     const nz = p.z + this.kz * dt;
-    if (free(nx, nz, 0.4)) { p.x = nx; p.z = nz; p.y = terrainHeight(nx, nz); } else { this.kx = this.kz = 0; }
+    if (free(nx, nz, 0.4, this.st === 'tumble' ? [this.hx, this.hz] : undefined)) { p.x = nx; p.z = nz; p.y = terrainHeight(nx, nz); } else { this.kx = this.kz = 0; }
     const k = Math.exp(-dt * decay);
     this.kx *= k; this.kz *= k;
   }
@@ -386,6 +393,8 @@ export class Npcs {
   /** `vehicles`: veículos em movimento (círculos e velocidade) para atropelar quem estiver na frente. */
   update(dt: number, px: number, pz: number, vehicles: { circles: [number, number, number][]; vx: number; vz: number }[] = []): void {
     this.px = px; this.pz = pz;
+    vehCircles = [];
+    for (const v of vehicles) for (const c of v.circles) vehCircles.push(c);
     if (this.list.length < COUNT) { this.spawnT -= dt; if (this.spawnT <= 0) { this.spawnT = this.list.length < NEAR_FIRST ? 0.2 : 0.5; this.spawnOne(); } }
     for (const n of this.list) {
       n.update(dt, px, pz, this.respawn);
