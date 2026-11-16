@@ -15,6 +15,11 @@ const CONNECT_RANGE = 3.4;
 const DROP_RANGE = 4.5;
 /** a voz some em 3 m; a menos de 0,75 m é cheia */
 export const HEAR_RANGE = 3;
+/** altura do som: o nível do microfone (dBFS) vira 0..1 e o alcance da voz vai de 10% a 100% de HEAR_RANGE conforme o volume */
+const DB_QUIET = -58;
+const DB_LOUD = -18;
+const MIN_RANGE_K = 0.1;
+const GATE = 0.03; // abaixo disso é silêncio (sem círculo)
 const TICK = 0.5;
 const RETRY_AFTER_MS = 6000;
 const MAX_PEERS = 8; // malha completa só com os mais próximos
@@ -28,7 +33,27 @@ interface Peer {
   queue: RTCIceCandidateInit[];
   hasRemote: boolean;
   born: number;
+  meter: Meter | null;
 }
+
+/** Mede o volume de um fluxo de áudio (RMS suavizado: sobe rápido, desce devagar). */
+class Meter {
+  level = 0;
+  private readonly buf: Float32Array<ArrayBuffer>;
+  constructor(private readonly node: AnalyserNode) { node.fftSize = 512; this.buf = new Float32Array(node.fftSize); }
+  step(dt: number): void {
+    this.node.getFloatTimeDomainData(this.buf);
+    let sum = 0;
+    for (let i = 0; i < this.buf.length; i++) sum += this.buf[i]! * this.buf[i]!;
+    const db = 20 * Math.log10(Math.sqrt(sum / this.buf.length) + 1e-9);
+    const f = Math.max(0, Math.min(1, (db - DB_QUIET) / (DB_LOUD - DB_QUIET)));
+    this.level += (f - this.level) * (1 - Math.exp(-dt * (f > this.level ? 40 : 6)));
+  }
+  disconnect(): void { try { this.node.disconnect(); } catch { /* já solto */ } }
+}
+
+/** Alcance da voz (m) para um volume 0..1. */
+export const rangeOfLevel = (f: number): number => HEAR_RANGE * (MIN_RANGE_K + (1 - MIN_RANGE_K) * f);
 
 type Pos = { x: number; z: number };
 
@@ -57,6 +82,7 @@ export class Voice {
   private active = false;
   private tick = 0;
   private lastFail = new Map<string, number>();
+  private myMeter: Meter | null = null;
   state: VoiceState = 'off';
 
   constructor(
@@ -74,6 +100,18 @@ export class Voice {
       out.push({ id, state: p.pc.connectionState, inBytes });
     }
     return out;
+  }
+
+  /** Alcance da MINHA voz agora (m): 0 se não estou transmitindo som. */
+  myRange(): number {
+    const m = this.myMeter;
+    return m && this.track?.enabled && m.level > GATE ? rangeOfLevel(m.level) : 0;
+  }
+
+  /** Alcance da voz de quem está conectado comigo (m): 0 se está calado. */
+  rangeOf(id: string): number {
+    const m = this.peers.get(id)?.meter;
+    return m && m.level > GATE ? rangeOfLevel(m.level) : 0;
   }
 
   get peerCount(): number {
@@ -106,9 +144,11 @@ export class Voice {
       this.active = true;
       try {
         this.local = await navigator.mediaDevices.getUserMedia({
-          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true },
+          audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: false }, // sem ganho automático: o círculo mostra o volume de verdade
         });
         this.track = this.local.getAudioTracks()[0] ?? null;
+        const c = audioCtx();
+        if (c && this.track) { const an = c.createAnalyser(); c.createMediaStreamSource(this.local).connect(an); this.myMeter = new Meter(an); }
         if (this.track) { this.track.enabled = false; this.peers.forEach((p) => this.giveTrack(p.pc)); }
       } catch {
         // sem microfone: continua ouvindo quem estiver perto
@@ -136,7 +176,7 @@ export class Voice {
 
   private makePeer(id: string): Peer {
     const pc = new RTCPeerConnection(ICE);
-    const peer: Peer = { id, pc, gain: null, pan: null, audio: null, queue: [], hasRemote: false, born: performance.now() };
+    const peer: Peer = { id, pc, gain: null, pan: null, audio: null, queue: [], hasRemote: false, born: performance.now(), meter: null };
     pc.onicecandidate = (e) => { if (e.candidate) this.send(id, 'ice', e.candidate.toJSON()); };
     pc.ontrack = (e) => this.attach(peer, e.track);
     pc.onconnectionstatechange = () => {
@@ -167,6 +207,9 @@ export class Voice {
     peer.gain.gain.value = 0;
     peer.pan = c.createStereoPanner();
     src.connect(peer.gain).connect(peer.pan).connect(out);
+    const an = c.createAnalyser(); // volume de quem fala (antes do ajuste por distância)
+    src.connect(an);
+    peer.meter = new Meter(an);
   }
 
   private drop(id: string): void {
@@ -178,6 +221,7 @@ export class Voice {
     if (p.audio) p.audio.srcObject = null;
     p.gain?.disconnect();
     p.pan?.disconnect();
+    p.meter?.disconnect();
     this.onState(this.state, this.peerCount);
   }
 
@@ -243,6 +287,8 @@ export class Voice {
   /** Todo quadro: posições de todos, abre/fecha conversas por distância e ajusta o volume de cada voz. */
   update(dt: number, me: Pos, others: Map<string, Pos>): void {
     if (!this.active) return;
+    this.myMeter?.step(dt);
+    for (const peer of this.peers.values()) peer.meter?.step(dt);
     this.me = me;
     this.pos = others;
     this.tick += dt;
@@ -266,7 +312,12 @@ export class Voice {
     for (const [id, peer] of this.peers) {
       const p = others.get(id);
       if (!p || !peer.gain || !peer.pan) continue;
-      const prox = proximity(p.x, p.z, HEAR_RANGE, 0.75);
+      const reach = rangeOfLevel(peer.meter?.level ?? 1); // quem fala baixo só é ouvido de perto; gritar chega mais longe
+      const prox = proximity(p.x, p.z, HEAR_RANGE, 0.75); // só o lado (pan) vem daqui
+      const near = reach * 0.25;
+      const d = Math.hypot(p.x - this.me.x, p.z - this.me.z);
+      const k = Math.min(1, Math.max(0, 1 - (d - near) / Math.max(0.05, reach - near)));
+      prox.gain = k * k; // volume pela distância ATÉ onde a voz chega agora (a menos de 'reach')
       const c = audioCtx();
       if (!c) continue;
       peer.gain.gain.setTargetAtTime(Math.min(1.4, prox.gain * 1.6), c.currentTime, 0.1);

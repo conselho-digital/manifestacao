@@ -600,8 +600,11 @@ function loop(): void {
   if (player) {
     updatePosterOverlays(dt, player.object.position.x, player.object.position.z);
     posterEditor.update(dt);
-    const spots = [{ x: player.object.position.x, y: player.object.position.y, z: player.object.position.z }];
-    remotes.forEach((r) => spots.push({ x: r.root.position.x, y: r.root.position.y, z: r.root.position.z }));
+    // círculo só de quem está com som saindo (eu no microfone, ou alguém conectado comigo que está falando)
+    const spots: { x: number; y: number; z: number; r: number }[] = [];
+    const mine = voice.myRange();
+    if (mine > 0) spots.push({ x: player.object.position.x, y: player.object.position.y, z: player.object.position.z, r: mine });
+    remotes.forEach((r, id) => { const rr = voice.rangeOf(id); if (rr > 0) spots.push({ x: r.root.position.x, y: r.root.position.y, z: r.root.position.z, r: rr }); });
     voiceRings.update(spots);
   }
   if (player) {
