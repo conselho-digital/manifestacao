@@ -26,6 +26,9 @@ function distSeg(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3, tmp: THRE
   return tmp.length();
 }
 
+/** Giro extra dos braços para perto do corpo (graus, no plano da frente, em volta do ombro): o Vini tem os braços mais abertos que o esqueleto do Law1. */
+const ARM_IN: Record<string, number> = { Vini: 11, Xandao: 6 };
+const Z_AXIS = new THREE.Vector3(0, 0, 1);
 const smooth = (x: number, a: number, b: number): number => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
 /**
@@ -100,7 +103,8 @@ export async function buildRigged(source: THREE.Object3D, name: string): Promise
     for (let i = 0; i < pa.count; i++) maxX = Math.max(maxX, Math.abs(tmpV.fromBufferAttribute(pa, i).applyMatrix4(m.matrixWorld).x));
   }
   let fixArms: ((v: THREE.Vector3) => void) | null = null;
-  if (maxX > 0.75) {
+  const armIn = ((ARM_IN[name] ?? 0) * Math.PI) / 180;
+  if (maxX > 0.75 || armIn > 0) {
     const sh = { r: P('r upperarm'), l: P('l upperarm') };
     const hand = { r: P('r hand'), l: P('l hand') };
     // direção atual do braço: do ombro até o centro dos vértices do braço (longe do corpo)
@@ -118,14 +122,17 @@ export async function buildRigged(source: THREE.Object3D, name: string): Promise
       if (!cnt[s]) continue;
       const cur = acc[s].multiplyScalar(1 / cnt[s]).sub(sh[s]).normalize();
       const want = hand[s].clone().sub(sh[s]).normalize();
-      rots[s].setFromUnitVectors(cur, want);
+      if (maxX > 0.75) rots[s].setFromUnitVectors(cur, want);
     }
     fixArms = (v) => {
       const s = v.x < 0 ? 'r' : 'l';
-      const a = smooth(Math.abs(v.x) - Math.abs(sh[s].x), 0.0, 0.16) * smooth(v.y, 1.1, 1.3);
+      const a = smooth(Math.abs(v.x) - Math.abs(sh[s].x), 0.0, 0.16) * (maxX > 0.75 ? smooth(v.y, 1.1, 1.3) : 1 - smooth(v.y, sh[s].y - 0.12, sh[s].y + 0.02));
       if (a <= 0) return;
       const q = new THREE.Quaternion().slerp(rots[s], a);
-      v.sub(sh[s]).applyQuaternion(q).add(sh[s]);
+      v.sub(sh[s]).applyQuaternion(q);
+      // para perto do corpo: gira em volta do eixo Z (frente do modelo); fora do ombro mais, junto ao peito nada
+      if (armIn > 0) v.applyAxisAngle(Z_AXIS, s === 'l' ? -armIn * a : armIn * a);
+      v.add(sh[s]);
     };
   }
 

@@ -2,7 +2,7 @@
 const KEY = 'arena-settings';
 
 export interface Settings {
-  /** multiplicador da sensibilidade ao girar a câmera (1 = padrão) */
+  /** multiplicador da sensibilidade ao girar a câmera (padrão 0,3 = 30% da antiga) */
   sens: number;
   /** limitar os quadros por segundo (ligado por padrão) */
   fpsCapOn: boolean;
@@ -14,12 +14,13 @@ export interface Settings {
 
 export const FPS_CAPS = [30, 45, 60, 90, 120] as const;
 
-const DEFAULTS: Settings = { sens: 1, fpsCapOn: false, fpsCap: 30, voiceRing: true };
+const DEFAULTS: Settings = { sens: 0.3, fpsCapOn: false, fpsCap: 30, voiceRing: true };
 
 function load(): Settings {
   try {
     const o = JSON.parse(localStorage.getItem(KEY) ?? '{}') as Partial<Settings>;
-    const sens = typeof o.sens === 'number' && Number.isFinite(o.sens) ? Math.min(3, Math.max(0.2, o.sens)) : DEFAULTS.sens;
+    // quem salvou antes da versão 3 volta ao padrão (30%); a escolha feita depois é respeitada
+    const sens = (o as { sensV?: number }).sensV === 3 && typeof o.sens === 'number' && Number.isFinite(o.sens) ? Math.min(3, Math.max(0.2, o.sens)) : DEFAULTS.sens;
     const fpsCap = (FPS_CAPS as readonly number[]).includes(o.fpsCap as number) ? (o.fpsCap as number) : DEFAULTS.fpsCap;
     // quem salvou antes da versão 2 volta ao padrão (sem limite)
     return { sens, fpsCapOn: (o as { fpsV?: number }).fpsV === 2 && typeof o.fpsCapOn === 'boolean' ? o.fpsCapOn : DEFAULTS.fpsCapOn, fpsCap, voiceRing: typeof o.voiceRing === 'boolean' ? o.voiceRing : DEFAULTS.voiceRing };
@@ -31,7 +32,7 @@ function load(): Settings {
 export const settings: Settings = load();
 
 export function saveSettings(): void {
-  try { localStorage.setItem(KEY, JSON.stringify({ ...settings, fpsV: 2 })); } catch { /* sem armazenamento: vale só nesta sessão */ }
+  try { localStorage.setItem(KEY, JSON.stringify({ ...settings, fpsV: 2, sensV: 3 })); } catch { /* sem armazenamento: vale só nesta sessão */ }
 }
 
 /** Câmera: 0 = terceira pessoa (padrão), 1 = terceira pessoa perto (metade da distância). Tecla G no PC. */
