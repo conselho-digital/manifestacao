@@ -1,5 +1,6 @@
 import { enterLandscape } from './orientation';
-import { SELECTABLE, labelOf, type CharacterName } from '../game/characters';
+import { SELECTABLE, canUseCharacter, labelOf, onCharAdmin, setCharAdmin, type CharacterName } from '../game/characters';
+import { isAdmin } from '../game/teams';
 import { customOf, isCustomId, onCustomChange } from '../game/customChars';
 import { authAvailable, currentUser, renderGoogleButton, signOut, type AuthUser } from '../net/auth';
 import { createCharacterPicker, createTeamPicker, el, faceUrl, PICKER_CSS } from './pickers';
@@ -139,7 +140,18 @@ export function showLobby(): Promise<Profile> {
   const root = el('div', 'lobby', home, select);
   document.body.appendChild(root);
 
+  // personagem só do administrador escolhido numa conta comum (ou antes de saber quem é admin): volta ao padrão e lembra do pedido
+  let wantedAdmin: CharacterName | null = null;
+  function guard(): void {
+    if (!canUseCharacter(selected)) { wantedAdmin = selected; selected = DEFAULT_CHARACTER; }
+    else if (wantedAdmin && canUseCharacter(wantedAdmin)) { selected = wantedAdmin; wantedAdmin = null; }
+  }
+  const devAdmin = import.meta.env.DEV && new URLSearchParams(location.search).has('admin');
+  const checkAdmin = (): void => { void isAdmin().then((a) => setCharAdmin(a || devAdmin)); };
+  const offAdmin = onCharAdmin(() => { if (!root.isConnected) { offAdmin(); return; } refresh(); });
+
   function refresh(): void {
+    guard();
     faceImg.src = faceUrl(selected);
     faceName.textContent = labelOf(selected);
     miniFace.src = faceUrl(selected);
@@ -164,7 +176,7 @@ export function showLobby(): Promise<Profile> {
     if (user) {
       const out = el('button', '', 'trocar conta');
       out.type = 'button';
-      out.onclick = () => { void signOut().then(() => { user = null; renderUser(); refresh(); }); };
+      out.onclick = () => { void signOut().then(() => { user = null; setCharAdmin(false); renderUser(); refresh(); }); };
       who.append(user.name ? `Conectado: ${user.name} · ` : 'Conectado com Google · ', out);
     } else {
       who.textContent = authAvailable() ? 'Para entrar no jogo, entre com sua conta Google.' : 'Login indisponível (Supabase não configurado).';
@@ -186,6 +198,7 @@ export function showLobby(): Promise<Profile> {
 
   void currentUser().then((u) => {
     user = u;
+    if (u) checkAdmin();
     if (u && !nameInput.value.trim() && u.name) nameInput.value = u.name.split(' ')[0]!.slice(0, MAX_NAME); // sugere o primeiro nome da conta
     renderUser();
     refresh();
@@ -195,6 +208,7 @@ export function showLobby(): Promise<Profile> {
   const onGoogle = (u: AuthUser | null, msg?: string): void => {
     if (msg) { err.textContent = msg; return; }
     user = u;
+    if (u) checkAdmin();
     err.textContent = '';
     if (u && !nameInput.value.trim() && u.name) nameInput.value = u.name.split(' ')[0]!.slice(0, MAX_NAME);
     renderUser();
@@ -210,6 +224,7 @@ export function showLobby(): Promise<Profile> {
     const submit = (): void => {
       const name = nameInput.value.trim();
       if (!name || !user) return; // só entra quem fez login e escolheu um nome
+      guard();
       void enterLandscape(); // só mostra o aviso de girar se estiver em pé; tela cheia/giro só ao confirmar no botão do aviso
       const profile: Profile = { name, character: selected, team: teamId, userId: user.id };
       saveProfile({ name, character: selected });

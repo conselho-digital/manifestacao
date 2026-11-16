@@ -20,6 +20,20 @@ export const CATEGORIES: { title: string; names: BuiltinName[] }[] = [
   { title: 'Gangue', names: ['Gang1', 'Gang2', 'Gang3', 'Gang4'] },
   { title: 'Meninas', names: ['MaiBrasil', 'MaiMexico'] },
 ];
+/** Personagens que SÓ a conta de administrador vê e escolhe (nem aparecem na seleção das outras contas). */
+export const ADMIN_ONLY: ReadonlySet<string> = new Set(['Felipe']);
+let charAdmin = import.meta.env.DEV && new URLSearchParams(location.search).has('admin'); // ?admin=1 só no npm run dev
+const adminListeners = new Set<() => void>();
+/** Chamado quando se descobre se a conta logada é administrador. */
+export function setCharAdmin(a: boolean): void {
+  if (a === charAdmin) return;
+  charAdmin = a;
+  adminListeners.forEach((f) => f());
+}
+export function onCharAdmin(f: () => void): () => void { adminListeners.add(f); return () => { adminListeners.delete(f); }; }
+/** Esta conta pode escolher esse personagem? (a trava é do cliente, como o resto do jogo) */
+export const canUseCharacter = (n: string): boolean => !ADMIN_ONLY.has(n) || charAdmin;
+
 /** Os personagens que o jogador pode escolher (todos os das categorias). */
 export const SELECTABLE: BuiltinName[] = CATEGORIES.flatMap((c) => c.names);
 

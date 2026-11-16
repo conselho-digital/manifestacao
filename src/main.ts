@@ -6,7 +6,7 @@ import { Npcs } from './game/npcs';
 import { Pickups, HEALTH_GIVES, ARMOR_GIVES } from './game/pickups';
 import { createEsplanada, esplanadaReady } from './game/esplanada';
 import { MAP_ID, onMapChange, spawnPoint } from './game/map';
-import { createCharacter, type CharacterName } from './game/characters';
+import { canUseCharacter, createCharacter, type CharacterName } from './game/characters';
 import { loadCustom } from './game/customChars';
 import { settings } from './game/settings';
 import { initMouse, readInput, takeLook, type InputState } from './game/input';
@@ -258,7 +258,7 @@ function wirePlayer(p: Player): void {
 }
 
 async function setMyCharacter(name: CharacterName): Promise<void> {
-  if (!player || name === character) return;
+  if (!player || name === character || !canUseCharacter(name)) return;
   if (player.isDriving) { hud?.addChat('Sistema: saia do veículo para trocar de personagem.'); return; }
   const old = player;
   const next = await makePlayer(name, old);
@@ -276,6 +276,7 @@ void showLobby().then(async (profile) => {
   loadingScreen = true;
   await nextPaint();
   profileName = profile.name;
+  if (!canUseCharacter(profile.character)) profile.character = 'Vini';
   character = profile.character;
   teamId = validTeamId(profile.team);
   inv.load(profile.userId);

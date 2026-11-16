@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { BIKE_MODELS, buildCarVisual, CAR_MODELS, loadModel, POLICE_LOOK, POLICE_MODEL } from './vehicle';
 import { loadWeaponModels } from './weapons';
 import { preloadAnimations } from './anim';
-import { createCharacter, CHARACTERS } from './characters';
+import { canUseCharacter, createCharacter, CHARACTERS } from './characters';
 
 /**
  * Pré-carrega tudo o que o jogo usa (carros, motos, armas, animações, personagens) enquanto o jogador
@@ -37,7 +37,7 @@ export async function warmUp(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
     renderer.render(scene, camera); // sobe geometrias e texturas
     scene.remove(group);
     // demais personagens: só baixa os arquivos
-    for (const name of CHARACTERS) void createCharacter(name).catch(() => undefined);
+    for (const name of CHARACTERS) if (canUseCharacter(name)) void createCharacter(name).catch(() => undefined);
   } catch (e) {
     console.warn('Pré-carregamento falhou (segue sem ele):', e);
   }

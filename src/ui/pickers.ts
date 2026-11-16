@@ -1,5 +1,5 @@
 // Seletores reutilizados no menu inicial e no menu de pausa: personagem (carrosséis por categoria) e equipe (duas cores).
-import { CATEGORIES, labelOf, type CharacterName } from '../game/characters';
+import { CATEGORIES, canUseCharacter, labelOf, onCharAdmin, type CharacterName } from '../game/characters';
 import { customList, customOf, isCustomId, onCustomChange } from '../game/customChars';
 import type { Team } from '../game/teams';
 
@@ -21,6 +21,7 @@ export const PICKER_CSS = `
 .pk-track{display:flex;gap:12px;overflow-x:auto;scroll-snap-type:x mandatory;padding:4px 16px 8px;scrollbar-width:none;scroll-behavior:smooth}
 .pk-track::-webkit-scrollbar{display:none}
 .pk-item{flex:0 0 auto;width:clamp(104px,22vw,140px);scroll-snap-align:start;border:3px solid #3b4358;border-radius:14px;background:#1b2130;color:#fff;padding:0;overflow:hidden;text-align:center;cursor:pointer;font-family:inherit}
+.pk-item[hidden]{display:none}
 .pk-item img{display:block;width:100%;aspect-ratio:1;object-fit:cover}
 .pk-item span{display:block;padding:6px 2px;font-size:13px;font-weight:600}
 .pk-item.sel{border-color:#4cc2ff;background:#25415a;transform:scale(1.04)}
@@ -49,12 +50,15 @@ export function createCharacterPicker(initial: CharacterName, onPick: (n: Charac
     const track = el('div', 'pk-track');
     for (const n of cat.names) {
       const img = el('img');
-      img.src = faceUrl(n);
       img.alt = '';
       img.draggable = false;
       const b = el('button', 'pk-item', img, el('span', '', labelOf(n)));
       b.type = 'button';
       b.onclick = () => { current = n; mark(); onPick(n); };
+      // personagem só do administrador: o botão fica escondido e a foto nem é baixada nas outras contas
+      const gate = (): void => { const ok = canUseCharacter(n); b.hidden = !ok; if (ok && !img.src) img.src = faceUrl(n); };
+      gate();
+      const off = onCharAdmin(() => { if (!root.isConnected) { off(); return; } gate(); });
       items.set(n, b);
       track.appendChild(b);
     }
