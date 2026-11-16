@@ -21,8 +21,8 @@ export const MAG_SIZE = 30;
 const RESERVE_START = 120;
 const PISTOL_MAG = 12;
 const PISTOL_RESERVE = 60;
-/** a munição é de graça, mas só enche de novo a cada 30 minutos */
-const AMMO_REFILL_MS = 30 * 60 * 1000;
+/** a munição é de graça, mas só enche de novo a cada 15 minutos (a conta de administrador não tem esse limite) */
+const AMMO_REFILL_MS = 15 * 60 * 1000;
 const GUN_IDS = [0, 3, 12, 13, 14] as const;
 const PISTOL_DAMAGE = 15;
 const PISTOL_GAP = 0.28;
@@ -144,7 +144,7 @@ export class Combat {
   private ammoSaveT = 0;
   private lastEmptyWarn = -1e9;
 
-  /** Começa com a munição guardada desta conta; se já passaram 30 min desde o último enchimento, enche. (Recarregar a página não enche.) */
+  /** Começa com a munição guardada desta conta; se já passaram 15 min desde o último enchimento, enche. (Recarregar a página não enche.) */
   private loadAmmo(): void {
     const key = `arena-ammo:${this.d.inv.userKey}`;
     try {
@@ -182,7 +182,7 @@ export class Combat {
     const now = performance.now();
     if (now - this.lastEmptyWarn < 6000) return;
     this.lastEmptyWarn = now;
-    showNotice(`Sem munição! A munição é de graça, mas só enche 1 vez a cada 30 minutos. Faltam ${this.refillMinutes()} min.`, 6000);
+    showNotice(`Sem munição! A munição é de graça, mas só enche 1 vez a cada 15 minutos. Faltam ${this.refillMinutes()} min.`, 6000);
   }
 
   /** Cura (ícone de vida no mapa). Devolve false se a vida já está cheia ou o jogador morreu. */
@@ -269,12 +269,18 @@ export class Combat {
   update(dt: number, input: InputState, player: Player): void {
     this.player = player;
     this.tracers.update(dt);
-    // a cada 30 minutos a munição enche de novo (também enquanto o jogador está morto ou dirigindo)
+    // a cada 15 minutos a munição enche de novo (também enquanto o jogador está morto ou dirigindo)
     if (Date.now() - this.lastRefill >= AMMO_REFILL_MS) {
       this.refillGuns();
       this.lastRefill = Date.now();
       this.ammoDirty = true;
-      showNotice('Munição reabastecida! Ela enche de novo em 30 minutos.', 5000);
+      showNotice('Munição reabastecida! Ela enche de novo em 15 minutos.', 5000);
+    }
+    // conta de administrador: munição infinita (a reserva da arma na mão nunca acaba)
+    if (this.d.inv.admin && this.isGun) {
+      const a = this.ammo[this.weapon]!;
+      const full = this.startAmmo(this.weapon).reserve;
+      if (a.reserve < full) { a.reserve = full; this.ammoDirty = true; }
     }
     this.ammoSaveT -= dt;
     if (this.ammoDirty && this.ammoSaveT <= 0) { this.ammoSaveT = 2; this.saveAmmo(); }
@@ -356,7 +362,19 @@ export class Combat {
     this.d.net.sendSpray(msg);
   }
 
+  /** Na 1ª vez que a conta recarrega, avisa que a munição só enche de novo a cada 15 minutos (uma vez por conta, neste navegador). */
+  private reloadInfo(): void {
+    if (this.d.inv.admin) return;
+    const key = `arena-ammo-info:${this.d.inv.userKey}`;
+    try {
+      if (localStorage.getItem(key)) return;
+      localStorage.setItem(key, '1');
+    } catch { /* sem armazenamento: avisa de novo na próxima sessão */ }
+    showNotice('Atenção: a munição é de graça e é reabastecida a cada 15 minutos. Economize os tiros!', 8000);
+  }
+
   private startReload(): void {
+    if (this.isGun) this.reloadInfo();
     if (this.isGun && !this.reloading && this.mag < this.magSize && this.reserve > 0) {
       this.reloading = true;
       this.reloadT = RELOAD_TIME;

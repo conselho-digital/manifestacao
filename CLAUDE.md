@@ -659,3 +659,7 @@ Multiplayer no navegador. Mapa: cidade inspirada na Av. Paulista (SP), com o MAS
 - Buzina: dirigindo no PC o botão esquerdo do mouse também buzina (`horn: ... || mouseFire`; legenda "H / clique").
 - Atropelo de NPC: voo mais baixo (~0,5 m) e mais comprido, conforme a velocidade (`vy` 2,2 + até 2; horizontal até 1,2× a velocidade, máx. 20 m/s): a 8 m/s cai a ~7 m e rola até ~11 m; a 14 m/s cai a ~9 m e rola até ~18 m.
 - Triumph: guidão em `BARS.triumph` [0,37; 0,29; 0,45] e piloto 16 cm à frente (`RIDER_SHIFT`), mãos no guidão (marcadas pelo dono); cabeça do piloto 24° para baixo (`RIDER_GAZE`, era 9°). Garagem: depois de Chamar/Guardar o jogo tira o foco do botão e prende o mouse de novo (2 tentativas).
+
+## Rodada: munição enche a cada 15 minutos; admin sem limite; aviso na 1ª recarga
+- A munição de graça agora enche de novo a cada 15 minutos (`AMMO_REFILL_MS` em combat.ts, era 30); os avisos de "Sem munição" e "Munição reabastecida" falam 15 min. A conta de ADMINISTRADOR (`inv.admin`) não tem esse limite: a reserva da arma na mão nunca acaba (`update` repõe a reserva cheia).
+- Na 1ª vez que a conta recarrega (tecla R, botão ou tiro seco) aparece o aviso "Atenção: a munição é de graça e é reabastecida a cada 15 minutos. Economize os tiros!" (`reloadInfo`, 8 s; uma vez por conta neste navegador em `arena-ammo-info:<conta>`; o admin não vê). Testado: conta comum mostra o aviso e fica sem reserva; admin recebe a reserva de volta (120). Substitui as notas "enche a cada 30 minutos".
