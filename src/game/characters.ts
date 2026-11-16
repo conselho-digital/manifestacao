@@ -4,27 +4,29 @@ import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { buildCustom, customOf, isCustomId } from './customChars';
 import { buildRigged, RIGGED_NAMES } from './autoRig';
 
+/** Personagens do jogo. Carlos e Law1 ficam só como base interna (Carlos: ferramentas de animação; Law1: esqueleto que os outros ganham em tempo de execução, ver autoRig.ts) e NÃO aparecem na seleção. */
 export const CHARACTERS = [
-  'Helena', 'Stewart', 'Bennyse', 'Amanda', 'Garota1', 'Carlos', 'Gordao', 'Cesar',
-  'Akiyama',
-  'Law1', 'Law2', 'Law3', 'Law4', 'Law5', 'Law6', 'Law7', 'Law8', 'Law9',
+  'Vini', 'Xandao', 'PF', 'Gang1', 'Gang2', 'Gang3', 'Gang4', 'MaiBrasil', 'MaiMexico',
+  'Carlos', 'Law1',
 ] as const;
 export type BuiltinName = (typeof CHARACTERS)[number];
-/** personagem do jogo (`Carlos`...) ou criado na ferramenta /personagens (`c_xxxx`, ver customChars.ts) */
+/** personagem do jogo (`Vini`...) ou criado na ferramenta /personagens (`c_xxxx`, ver customChars.ts) */
 export type CharacterName = BuiltinName | `c_${string}`;
 
-/** Categorias da tela de seleção (um carrossel por categoria). Todo personagem aparece em exatamente uma. */
+/** Categorias da tela de seleção (um carrossel por categoria). Todo personagem da seleção aparece em exatamente uma. */
 export const CATEGORIES: { title: string; names: BuiltinName[] }[] = [
-  { title: 'Rua', names: ['Carlos', 'Cesar', 'Gordao', 'Garota1', 'Amanda'] },
-  { title: 'Civis', names: ['Akiyama', 'Helena', 'Stewart', 'Bennyse'] },
-  { title: 'Polícia', names: ['Law1', 'Law2', 'Law3', 'Law4', 'Law6', 'Law7'] },
-  { title: 'Forças especiais', names: ['Law5', 'Law8', 'Law9'] },
+  { title: 'Famosos', names: ['Vini', 'Xandao'] },
+  { title: 'Polícia', names: ['PF'] },
+  { title: 'Gangue', names: ['Gang1', 'Gang2', 'Gang3', 'Gang4'] },
+  { title: 'Meninas', names: ['MaiBrasil', 'MaiMexico'] },
 ];
+/** Os personagens que o jogador pode escolher (todos os das categorias). */
+export const SELECTABLE: BuiltinName[] = CATEGORIES.flatMap((c) => c.names);
 
-/** Nome mostrado na seleção (os modelos Law não têm nome próprio). */
+/** Nome mostrado na seleção. */
 export const LABELS: Partial<Record<BuiltinName, string>> = {
-  Garota1: 'Garota', Law1: 'Policial', Law2: 'Delegado', Law3: 'Patrulheiro', Law4: 'Oficial',
-  Law5: 'Agente', Law6: 'Xerife', Law7: 'Xerife 2', Law8: 'Tático', Law9: 'Soldado',
+  Vini: 'Vini Jr', Xandao: 'Xandão', PF: 'Polícia Federal', Gang1: 'Gangue 1', Gang2: 'Gangue 2', Gang3: 'Gangue 3', Gang4: 'Gangue 4',
+  MaiBrasil: 'Mai Brasil', MaiMexico: 'Mai México',
 };
 export const labelOf = (n: CharacterName): string => (isCustomId(n) ? customOf(n)?.name ?? 'Personagem' : LABELS[n as BuiltinName] ?? n);
 
@@ -57,7 +59,7 @@ export async function createCharacter(name: CharacterName): Promise<THREE.Group>
   if (isCustomId(name)) {
     const rec = customOf(name);
     if (rec) return buildCustom(rec.recipe);
-    return createCharacter('Carlos'); // personagem novo que não está na lista (ainda não carregou ou foi apagado)
+    return createCharacter('Vini'); // personagem novo que não está na lista (ainda não carregou ou foi apagado)
   }
   const still = await createStatic(name);
   if (!RIGGED_NAMES.has(name)) return still;
@@ -75,9 +77,8 @@ async function createStatic(name: CharacterName): Promise<THREE.Group> {
     }
   });
 
-  // Modelos GTA SA (Law) olham para +X; gira para olhar para +Z
+  // Modelos GTA SA (Law) olham para +X; gira para olhar para +Z (os personagens novos já saem do conversor olhando para +Z)
   if (name.startsWith('Law')) model.rotation.y = -Math.PI / 2;
-  if (name === 'Akiyama') model.rotation.y = Math.PI; // o modelo olha para -Z
   const box = measure(model);
   const size = box.getSize(new THREE.Vector3());
   const scale = CHARACTER_HEIGHT / size.y;

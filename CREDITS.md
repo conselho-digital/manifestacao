@@ -1,23 +1,32 @@
 # Créditos dos modelos 3D
 
 Modelos licenciados CC-BY-4.0 (https://creativecommons.org/licenses/by/4.0/).
-Alterações: texturas reduzidas para 512x512 (WebP); Akiyama com malha simplificada; "Law Members" dividido em 9 arquivos.
+Alterações: texturas reduzidas para 512x512 (WebP). Do "Law Members" só o `Law1` ficou no jogo (base interna do esqueleto).
 
 | Arquivos | Título | Autor | Fonte |
 | --- | --- | --- | --- |
-| `characters/Law1..Law9.glb` | GTA SA Law Members | Diddy_Blud_117 | https://sketchfab.com/marcosacevez57 |
+| `characters/Law1.glb` | GTA SA Law Members | Diddy_Blud_117 | https://sketchfab.com/marcosacevez57 |
 | `weapons/AK47.glb` | GTA SA AK-47 | Diddy_Blud_117 | https://sketchfab.com/marcosacevez57 |
-| `characters/Akiyama.glb` | cj akiyama | Nxrmalman. | https://sketchfab.com/releon__evil |
 
-Os 8 primeiros personagens (Helena, Stewart, Bennyse, Amanda, Garota1, Carlos, Gordao, Cesar) ainda **não têm licença verificada**.
+O `Carlos` (base interna das ferramentas de animação) ainda **não tem licença verificada**.
 Os originais ficam em `assets-src/`; os otimizados, em `public/models/`.
+
+## Personagens da seleção (mods de GTA enviados pelo dono do projeto; convertidos para GLB por `scripts/models/chars/dff2glb.mjs`)
+**Licença/autoria não verificadas** (mods de GTA San Andreas): conferir antes de publicar.
+| Arquivos | Personagem | Autor (pelos arquivos do mod) |
+| --- | --- | --- |
+| `characters/Vini.glb` | Vini Jr (camisa do Brasil) | "Vini Jr fortnite" (autor não informado no pacote) |
+| `characters/Xandao.glb` | Agent 47 (Hitman Blood Money), `47DEFAULT` | JasonSX (pacote "47 Hitman Blood Money by JasonSX") |
+| `characters/PF.glb` | Polícia Federal (`fbi.dff`) | autor não informado (pacote `police-brazil`) |
+| `characters/Gang1..Gang4.glb` | Brazilian Gang (`br01`, `br01-v2`, `br02`, `br03`) | ElChango |
+| `characters/MaiBrasil.glb`, `MaiMexico.glb` | Mai Shiranui Brazil / Mexico | modelo Team Ninja/Tecmo por alex189, texturas INSANOGAMES, adaptação para GTA SA por Misaki Yutsuki / Miyata Yutsuki |
 
 ## Animações
 
 `public/anims/ped.json` foi convertido do `ped.ifp` (pacote "Re Anims Custom Ped", de JB RE ANIMS;
 créditos do próprio pacote: Sprinting Stories — Calm, SlingShot753, HackMan128).
 Clips usados: `IDLE_stance`, `WALK_civi`, `run_civi`. **Licença não verificada** (animações derivadas de GTA San Andreas).
-Funcionam só em esqueletos GTA SA padrão (Law1 a Law9). Carlos e os demais ainda não têm animação.
+Funcionam em esqueletos GTA SA padrão (Law1); os personagens da seleção ganham o esqueleto do Law1 em tempo de execução (`autoRig.ts`).
 
 ## Mapa
 

@@ -149,7 +149,7 @@ if (import.meta.env.DEV) (window as unknown as { __voice: () => Voice }).__voice
 // ---------- equipe, personagem, pausa e loja ----------
 const inv = new Inventory();
 if (import.meta.env.DEV && new URLSearchParams(location.search).has('admin')) inv.admin = true; // ?admin=1 (só no npm run dev): todos os itens para testar
-let character: CharacterName = 'Carlos';
+let character: CharacterName = 'Vini';
 let teamId = '';
 let myRing: THREE.Group = makeTeamRing(null);
 let pauseMenu: PauseMenu | null = null;

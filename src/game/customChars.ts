@@ -11,7 +11,7 @@ import { RIGGED_NAMES } from './autoRig';
 export type Part = 'head' | 'torso' | 'legs';
 export const PARTS: Part[] = ['head', 'torso', 'legs'];
 export const PART_LABEL: Record<Part, string> = { head: 'Cabeça', torso: 'Tronco e braços', legs: 'Pernas e pés' };
-export const LAW_SOURCES = ['Law1', 'Law2', 'Law3', 'Law4', 'Law5', 'Law6', 'Law7', 'Law8', 'Law9'] as const;
+export const LAW_SOURCES = ['Law1'] as const;
 /** Os 8 personagens sem esqueleto próprio (ganham o do Law1 em runtime, ver autoRig.ts) também servem de corpo e de cabeça-base. */
 export const RIGGED_SOURCES = ['Helena', 'Stewart', 'Bennyse', 'Amanda', 'Garota1', 'Gordao', 'Cesar', 'Akiyama'] as const;
 export const ALL_SOURCES: readonly string[] = [...LAW_SOURCES, ...RIGGED_SOURCES];

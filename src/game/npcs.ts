@@ -11,7 +11,7 @@ const NEAR_FIRST = 8; // os primeiros nascem perto de quem entrou, para a rua n�
 const WALK_SPEED = 2.1; // o mesmo do jogador: o passo do clipe 'walk' foi ajustado para essa velocidade
 const ACTIVE_R = 75; // além disso o NPC fica parado e escondido (sem gastar com animação)
 const HIDE_R = 110;
-const CHARS: BuiltinName[] = ['Helena', 'Stewart', 'Bennyse', 'Amanda', 'Garota1', 'Gordao', 'Cesar', 'Akiyama', 'Carlos'];
+const CHARS: BuiltinName[] = ['Vini', 'Xandao', 'PF', 'Gang1', 'Gang2', 'Gang3', 'Gang4', 'MaiBrasil', 'MaiMexico'];
 
 const inRect = (r: { x0: number; x1: number; z0: number; z1: number }, x: number, z: number): boolean => x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1;
 

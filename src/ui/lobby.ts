@@ -1,5 +1,5 @@
 import { enterLandscape } from './orientation';
-import { CHARACTERS, labelOf, type CharacterName } from '../game/characters';
+import { SELECTABLE, labelOf, type CharacterName } from '../game/characters';
 import { customOf, isCustomId, onCustomChange } from '../game/customChars';
 import { authAvailable, currentUser, renderGoogleButton, signOut, type AuthUser } from '../net/auth';
 import { createCharacterPicker, createTeamPicker, el, faceUrl, PICKER_CSS } from './pickers';
@@ -17,12 +17,12 @@ export interface Profile {
 
 const STORAGE_KEY = 'arena-profile';
 const MAX_NAME = 16;
-const DEFAULT_CHARACTER: CharacterName = 'Carlos';
+const DEFAULT_CHARACTER: CharacterName = 'Vini';
 
 function loadSaved(): { name: string; character: CharacterName } {
   try {
     const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? '{}') as { name?: string; character?: string };
-    const character = CHARACTERS.includes(raw.character as never) || isCustomId(raw.character) ? (raw.character as CharacterName) : DEFAULT_CHARACTER;
+    const character = SELECTABLE.includes(raw.character as never) || isCustomId(raw.character) ? (raw.character as CharacterName) : DEFAULT_CHARACTER;
     return { name: (raw.name ?? '').slice(0, MAX_NAME), character };
   } catch {
     return { name: '', character: DEFAULT_CHARACTER };

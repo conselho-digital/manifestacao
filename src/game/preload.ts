@@ -22,7 +22,7 @@ export async function warmUp(renderer: THREE.WebGLRenderer, scene: THREE.Scene, 
     [...models, ...painted].forEach((m, i) => { m.position.x = (i % 14) * 3 - 20; m.position.z = Math.floor(i / 14) * 6; group.add(m); });
     for (const w of await loadWeaponModels()) group.add(w);
     // um personagem com esqueleto (Carlos) e um sem (qualquer outro)
-    for (const name of ['Carlos', CHARACTERS[0]] as const) group.add(await createCharacter(name));
+    for (const name of ['Vini', 'Gang1'] as const) group.add(await createCharacter(name));
     void preloadAnimations();
     group.traverse((o) => { o.frustumCulled = false; });
     group.position.copy(camera.localToWorld(new THREE.Vector3(0, -2, -10)));

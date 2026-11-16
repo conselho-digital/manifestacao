@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { CHARACTER_HEIGHT, loadBase } from './characters';
 
-export const RIGGED_NAMES: ReadonlySet<string> = new Set(['Helena', 'Stewart', 'Bennyse', 'Amanda', 'Garota1', 'Gordao', 'Cesar', 'Akiyama']);
+export const RIGGED_NAMES: ReadonlySet<string> = new Set(['Vini', 'Xandao', 'PF', 'Gang1', 'Gang2', 'Gang3', 'Gang4', 'MaiBrasil', 'MaiMexico']);
 
 /** "_R_Thigh_07" → "r thigh"; "Bip01_R_Clavicle_021" → "r clavicle" */
 const key = (n: string): string => n.replace(/^_+/, '').replace(/^Bip01_/i, '').replace(/_\d+$/, '').replace(/_/g, ' ').trim().toLowerCase();
