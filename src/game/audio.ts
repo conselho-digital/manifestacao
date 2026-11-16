@@ -108,7 +108,7 @@ function noise(c: AudioContext): AudioBuffer {
 
 // Sons gravados (enviados pelo dono): partida (ao subir), marcha lenta (loop) e aceleração (loop). 'sport' = BMW e Suzuki; 'harley' = Harley.
 const SAMPLE_SETS = {
-  // sport: a gravação tem uma SUBIDA de giro de verdade (o tom dobra em ~3 s): `rise` toca uma vez quando aperta o acelerador e vira o patamar `rev` (loop de tom achatado)
+  // sport: a gravação tem uma SUBIDA de giro de verdade (o tom dobra em ~3 s): `rise` é percorrida pela velocidade (0% = começo, 100% = fim; ver Scrub)
   sport: { start: '/sounds/moto-start.mp3', idle: '/sounds/moto-idle.mp3', rev: '/sounds/moto-rev.mp3', rise: '/sounds/moto-rise.mp3', idleRate: [0.9, 0.35], revRate: [0.85, 0.25] },
   harley: { start: '/sounds/harley-start.mp3', idle: '/sounds/harley-idle.mp3', rev: '/sounds/harley-rev.mp3', idleRate: [0.95, 0.2], revRate: [0.8, 0.45] },
 } as const satisfies Record<string, { start: string; idle: string; rev: string; rise?: string; idleRate: readonly number[]; revRate: readonly number[] }>;
@@ -129,18 +129,20 @@ function loadSamples(name: SampleName): void {
     .catch(() => { sampleLoading.delete(name); });
 }
 
-/** Uma "puxada" do acelerador na moto esportiva: a subida de giro (`rise`) toca acompanhando a velocidade e, perto do fim, entra o patamar (`hold`). */
-interface RisePress { rise: AudioBufferSourceNode; riseG: GainNode; hold: AudioBufferSourceNode | null; holdG: GainNode | null; pos: number; lastT: number; rate: number }
-/** SEM marchas: o som de aceleração tem um começo e um fim e acompanha a velocidade de 0% a 100% (ao soltar o acelerador volta ao motor parado; ao acelerar de novo continua do ponto que combina com a velocidade: perto do começo se está devagar, perto do fim se está rápido). */
-const GEAR_START = 0.02; // onde a subida gravada começa (fração da duração)
-const RISE_END = 0.9; // e onde chega na velocidade máxima
+/** Moto esportiva: o som de aceleração gravado (a SUBIDA de giro inteira) é percorrido pela VELOCIDADE: 0% = começo do som, 100% = fim. Toca sempre na velocidade original (o tom é o da gravação naquele ponto); como um trecho curto em loop, que troca de lugar (com fade) conforme a velocidade sobe ou desce. */
+interface Scrub { src: AudioBufferSourceNode; g: GainNode; ws: number }
+const GEAR_START = 0.02; // começo do som (fração da duração) na velocidade 0
+const RISE_END = 0.97; // fim do som na velocidade máxima
+const SCRUB_WIN = 0.42; // tamanho do trecho em loop (s)
+const SCRUB_STEP = 0.1; // quanto o ponto precisa andar para trocar de trecho (s)
+const SCRUB_FADE = 0.12; // fade entre trechos (s)
 
 interface SampleVoice {
   mix: GainNode; pan: StereoPannerNode; idle: AudioBufferSourceNode; idleG: GainNode; revG: GainNode;
   /** conjuntos sem `rise`: loop contínuo da aceleração */
   rev: AudioBufferSourceNode | null;
-  /** conjuntos com `rise`: a subida de giro de agora (uma por aperto do acelerador) e o patamar que entra no fim dela */
-  press: RisePress | null;
+  /** conjuntos com `rise`: o trecho do som de aceleração que toca agora (some ao soltar o acelerador) */
+  press: Scrub | null;
 }
 
 /** Motor sintético por veículo + chiado de pneu ao derrapar. Um par por carro; o volume e o lado seguem a posição do veículo. */
@@ -231,7 +233,7 @@ export class EngineSound {
   dispose(): void {
     try {
       this.osc?.stop(); this.osc2?.stop(); this.lope?.stop(); this.skidSrc?.stop();
-      this.samp?.idle.stop(); this.samp?.rev?.stop(); this.samp?.press?.rise.stop(); this.samp?.press?.hold?.stop(); this.samp?.pan.disconnect();
+      this.samp?.idle.stop(); this.samp?.rev?.stop(); this.samp?.press?.src.stop(); this.samp?.pan.disconnect();
       this.pan?.disconnect(); this.skidPan?.disconnect();
     } catch { /* já parado */ }
     this.osc = this.osc2 = this.lope = this.skidSrc = null;
@@ -327,47 +329,29 @@ export class EngineSound {
     if (sv.rev) sv.rev.playbackRate.setTargetAtTime(holdRate, t, 0.1);
     if (S.rise) {
       const dur = S.rise.duration;
-      const target = (GEAR_START + gf * (RISE_END - GEAR_START)) * dur; // ponto da subida que combina com a velocidade (0% = começo, 100% = perto do fim)
-      const stopPress = (pr: RisePress): void => {
-        pr.riseG.gain.setTargetAtTime(0, t, 0.03);
-        pr.holdG?.gain.setTargetAtTime(0, t, 0.03);
-        pr.rise.stop(t + 0.4);
-        pr.hold?.stop(t + 0.4);
-      };
-      const begin = (when: number, off: number): RisePress => {
-        const rise = c.createBufferSource();
-        rise.buffer = S.rise!;
-        const riseG = c.createGain();
-        rise.connect(riseG).connect(sv.revG);
-        rise.start(when, Math.min(off, dur - 0.05));
-        return { rise, riseG, hold: null, holdG: null, pos: off, lastT: when, rate: 1 };
-      };
-      let pr = sv.press;
+      const tp = (GEAR_START + gf * (RISE_END - GEAR_START)) * dur; // ponto do som que combina com a velocidade de agora
+      const ws = clamp(tp - SCRUB_WIN / 2, 0, dur - SCRUB_WIN);
+      const cur = sv.press;
       if (a >= 0.5 && live) {
-        if (!pr) pr = sv.press = begin(t, target); // (re)começa no ponto que combina com a velocidade de agora
-        // a velocidade de reprodução puxa a posição do som para o ponto da velocidade atual (o tom sobe e desce junto)
-        const now = Math.max(t, pr.lastT);
-        pr.pos = Math.min(dur, pr.pos + pr.rate * (now - pr.lastT));
-        pr.lastT = now;
-        pr.rate = clamp(1 + (target - pr.pos) * 3, 0.3, 2.2);
-        pr.rise.playbackRate.setTargetAtTime(pr.rate, t, 0.05);
-        if (!pr.hold && pr.pos >= dur * 0.86 && t >= pr.lastT - 0.001) {
-          // chegou perto do fim da subida: entra o patamar em loop (no meio do som) e a subida sai
-          pr.hold = c.createBufferSource();
-          pr.hold.buffer = S.rev;
-          pr.hold.loop = true;
-          pr.hold.playbackRate.value = 1;
-          pr.holdG = c.createGain();
-          pr.hold.connect(pr.holdG).connect(sv.revG);
-          pr.holdG.gain.setValueAtTime(0, t);
-          pr.holdG.gain.linearRampToValueAtTime(1, t + 0.4);
-          pr.riseG.gain.setValueAtTime(1, t);
-          pr.riseG.gain.linearRampToValueAtTime(0, t + 0.4);
-          pr.hold.start(t);
+        if (!cur || Math.abs(ws - cur.ws) > SCRUB_STEP) {
+          // novo trecho (começa pelo ponto da velocidade de agora, também depois de soltar e voltar a acelerar) e o antigo sai
+          const src = c.createBufferSource();
+          src.buffer = S.rise;
+          src.loop = true;
+          src.loopStart = ws;
+          src.loopEnd = ws + SCRUB_WIN;
+          const g = c.createGain();
+          g.gain.setValueAtTime(0, t);
+          g.gain.linearRampToValueAtTime(1, t + SCRUB_FADE);
+          src.connect(g).connect(sv.revG);
+          src.start(t, ws);
+          if (cur) { cur.g.gain.cancelScheduledValues(t); cur.g.gain.setValueAtTime(cur.g.gain.value, t); cur.g.gain.linearRampToValueAtTime(0, t + SCRUB_FADE); cur.src.stop(t + SCRUB_FADE + 0.05); }
+          sv.press = { src, g, ws };
         }
-        pr.hold?.playbackRate.setTargetAtTime(holdRate, t, 0.3);
-      } else if (a < 0.25 && pr) {
-        stopPress(pr); // soltou o acelerador
+      } else if (a < 0.25 && cur) {
+        cur.g.gain.cancelScheduledValues(t);
+        cur.g.gain.setTargetAtTime(0, t, 0.03);
+        cur.src.stop(t + 0.3); // soltou o acelerador: volta ao motor parado
         sv.press = null;
       }
     }
