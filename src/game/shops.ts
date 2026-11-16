@@ -224,6 +224,7 @@ export async function savePoster(id: string, blob: Blob, price: number): Promise
       return { error: `Alguém pagou mais. O mínimo agora é $${res.min ?? '?'}.` };
     }
     if (res?.error === 'login') return { error: 'Entre com a sua conta para pôr um cartaz.' };
+    if (res?.error === 'limite') return { error: 'Você já tem 3 cartazes no ar. Espere um vencer.' };
     return { error: error?.message ?? 'O servidor não aceitou o cartaz.' };
   }
   const old = previewUrl.get(id);
