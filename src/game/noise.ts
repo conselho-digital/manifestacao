@@ -4,8 +4,8 @@ import { terrainHeight } from './map';
 
 /** Volume mínimo (0..1) que ainda conta como "dá para ouvir": o círculo vai até onde o som cai a esse nível. */
 const AUDIBLE = 0.04;
-/** o círculo mostra só 30% do alcance real do som (pedido do dono: o círculo cheio era grande demais; o som continua chegando onde chegava) */
-const RING_SCALE = 0.3;
+/** o círculo mostra só 30% do alcance real do som (pedido do dono: o círculo era grande demais; depois mais 30% menor; o som continua chegando onde chegava) */
+const RING_SCALE = 0.21; // 0,3 x 0,7: duas reduções pedidas (30% e depois 70% do que sobrou)
 
 /**
  * Distância (m) até onde um som de amplitude `amp` (0..1) ainda se ouve, com o mesmo cálculo de volume do `proximity` (cheio a menos de `near`,
