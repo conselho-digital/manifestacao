@@ -13,6 +13,8 @@ const JOBS = JSON.parse(fs.readFileSync(path.join(__dirname, 'bake-carlos-ifp.jo
 // sem dedos (25/26/35/36): o jogo fecha a mão por `curlHand`, como nos clipes do Carlos
 const KNOWN = new Set([1, 2, 3, 4, 5, 6, 7, 8, 21, 22, 23, 24, 31, 32, 33, 34, 41, 42, 43, 44, 51, 52, 53, 54, 201]);
 // candidatos medidos e não usados no jogo (ver CLAUDE.md): não vão para o arquivo
+// clipes em que o corpo deita/rola: levam também a rotação do osso Root (id 0), que é quem tomba o corpo no IFP (sem ela o personagem cai e fica em pé)
+const LYING = /^(ko|getup|roll_|dive|hitk_2|bike_fall)/;
 const SKIP = new Set(['car_sit2', 'sprint_civi', 'drive_l', 'drive_r', 'walk_player']);
 const r3 = (n) => Math.round(n * 1000) / 1000;
 
@@ -39,7 +41,7 @@ const r3 = (n) => Math.round(n * 1000) / 1000;
       }, from);
       if (SKIP.has(to)) continue;
       if (!raw) { console.warn('não achei', from, 'em', file); continue; }
-      const tracks = raw.nodes.filter((n) => KNOWN.has(n.id) && n.keys.length).map((n) => ({ id: n.id, t: n.keys.map((k) => r3(k.t)), q: n.keys.flatMap((k) => k.q.map(r3)) }));
+      const tracks = raw.nodes.filter((n) => (KNOWN.has(n.id) || (n.id === 0 && LYING.test(to))) && n.keys.length).map((n) => ({ id: n.id, t: n.keys.map((k) => r3(k.t)), q: n.keys.flatMap((k) => k.q.map(r3)) }));
       const clip = { duration: r3(Math.max(...tracks.map((t) => t.t[t.t.length - 1]), raw.duration)), tracks };
       const ce = carlosExtra[to];
       if (ce && ce.move) clip.move = ce.move;

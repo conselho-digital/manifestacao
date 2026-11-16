@@ -6,7 +6,8 @@ import { createCharacter, type BuiltinName } from './characters';
 import { CITY, COLLIDERS, ROADS, terrainHeight, waterDepth } from './map';
 import { IS_TOUCH } from './scene';
 
-const COUNT = IS_TOUCH ? 8 : 16;
+const COUNT = IS_TOUCH ? 18 : 26; // +10 em cada (o jogador via só um ou dois)
+const NEAR_FIRST = 8; // os primeiros nascem perto de quem entrou, para a rua não parecer vazia
 const WALK_SPEED = 2.1; // o mesmo do jogador: o passo do clipe 'walk' foi ajustado para essa velocidade
 const ACTIVE_R = 75; // além disso o NPC fica parado e escondido (sem gastar com animação)
 const HIDE_R = 110;
@@ -238,6 +239,7 @@ export class Npcs {
       const x = (Math.random() * 2 - 1) * (CITY.halfX - 6);
       const z = (Math.random() * 2 - 1) * (CITY.halfZ - 6);
       if (onRoad(x, z) || !free(x, z, 1.2)) continue;
+      if (this.list.length < NEAR_FIRST) { const d = Math.hypot(x - this.px, z - this.pz); if (d < 10 || d > 45) continue; }
       if (this.spawnedAt.some(([sx, sz]) => (sx - x) ** 2 + (sz - z) ** 2 < 100)) continue;
       const n = new Npc(name, x, z);
       this.spawnedAt.push([x, z]);
@@ -255,7 +257,7 @@ export class Npcs {
   /** `vehicles`: veículos em movimento (círculos e velocidade) para atropelar quem estiver na frente. */
   update(dt: number, px: number, pz: number, vehicles: { circles: [number, number, number][]; vx: number; vz: number }[] = []): void {
     this.px = px; this.pz = pz;
-    if (this.list.length < COUNT) { this.spawnT -= dt; if (this.spawnT <= 0) { this.spawnT = 0.5; this.spawnOne(); } }
+    if (this.list.length < COUNT) { this.spawnT -= dt; if (this.spawnT <= 0) { this.spawnT = this.list.length < NEAR_FIRST ? 0.2 : 0.5; this.spawnOne(); } }
     for (const n of this.list) {
       n.update(dt, px, pz, this.respawn);
       if (!n.alive || dt <= 0) continue;

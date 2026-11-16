@@ -52,7 +52,7 @@ const TIME_SCALE: Record<string, number> = { ko: 1.8, getup: 1.1, ko_front: 1.5,
 
 /** Nome do osso (padrão GTA SA, sem sufixo numérico) -> ID usado no ped.ifp. */
 const GTA_BONE_IDS: Record<string, number> = {
-  pelvis: 1, spine: 2, spine1: 3, neck: 4, head: 5, 'l brow': 6, 'r brow': 7, jaw: 8,
+  root: 0, pelvis: 1, spine: 2, spine1: 3, neck: 4, head: 5, 'l brow': 6, 'r brow': 7, jaw: 8,
   'l thigh': 41, 'l calf': 42, 'l foot': 43, 'l toe0': 44,
   'r thigh': 51, 'r calf': 52, 'r foot': 53, 'r toe0': 54,
   belly: 201,
@@ -384,6 +384,7 @@ export class Animator {
       tracks[pi] = new THREE.QuaternionKeyframeTrack(pt.name, Array.from(pt.times), pv);
       tracks[si] = new THREE.QuaternionKeyframeTrack(st.name, Array.from(st.times), sv);
     };
+    let rootRest: THREE.Quaternion | null = null;
     a.addClips = (file) => {
       for (const [name, clip] of Object.entries(file)) {
         const tracks: THREE.KeyframeTrack[] = [];
@@ -393,9 +394,11 @@ export class Animator {
             const b = byGta.get(k);
             if (b) idToBone.set(id, b);
           }
+          if (!rootRest && idToBone.get(0)) rootRest = idToBone.get(0)!.quaternion.clone(); // pose de repouso do osso Root (antes de qualquer clipe de tombo mexer nele)
           for (const tr of (clip as ClipData<GtaTrack>).tracks) {
             const bone = idToBone.get(tr.id);
             if (!bone) continue;
+            if (tr.id === 0) { tracks.push(new THREE.QuaternionKeyframeTrack(`${bone.name}.quaternion`, tr.t, rootConvert(tr.q, rootRest))); continue; }
             const inv = tr.id === 1 && bone.parent ? bone.parent.quaternion.clone().invert() : null;
             tracks.push(new THREE.QuaternionKeyframeTrack(`${bone.name}.quaternion`, tr.t, gtaConvert(tr.q, inv)));
           }
@@ -1312,6 +1315,24 @@ function buildArm(side: 1 | -1, u: THREE.Bone, f: THREE.Bone, h: THREE.Bone, c: 
  * O IFP guarda a rotação local de cada osso exatamente como o osso do glTF usa (x, y, z, w), sem inverter.
  * Única exceção: a pélvis. No IFP ela vem no espaço do pai da raiz ("Root"), então tira a rotação do osso Root.
  */
+/** Em pé o osso Root do IFP gira 90° em Z (frente = +y no GTA); o tombo é o quanto ele gira a partir disso, no espaço do mundo. */
+const ROOT_STAND = new THREE.Quaternion(0, 0, Math.SQRT1_2, Math.SQRT1_2);
+/**
+ * Rotação do osso Root (id 0) do IFP para o osso Root do glTF: giro a partir da pose em pé (d · stand⁻¹) aplicado sobre o repouso do osso.
+ * Só os clipes de tombo (ko, getup, roll, dive) levam esse osso; sem ele o personagem caía e ficava em pé.
+ */
+function rootConvert(q: number[], rest: THREE.Quaternion | null): number[] {
+  const out = new Array<number>(q.length);
+  const t = new THREE.Quaternion();
+  const sInv = ROOT_STAND.clone().invert();
+  for (let i = 0; i < q.length; i += 4) {
+    t.set(q[i]!, q[i + 1]!, q[i + 2]!, q[i + 3]!).multiply(sInv);
+    if (rest) t.multiply(rest);
+    out[i] = t.x; out[i + 1] = t.y; out[i + 2] = t.z; out[i + 3] = t.w;
+  }
+  return out;
+}
+
 function gtaConvert(q: number[], parentInv: THREE.Quaternion | null): number[] {
   if (!parentInv) return q;
   const out = new Array<number>(q.length);

@@ -127,8 +127,9 @@ const CSS = `
 .m-wopt.sel{border-color:#4cc2ff;background:rgba(37,90,125,.95)}
 .m-wopt img,.m-wopt svg{width:100%;height:calc(var(--u)*6.5);object-fit:contain;fill:#fff}
 .m-wopt span{font-size:calc(var(--u)*1.7);line-height:1.1;text-align:center;text-transform:none;font-weight:800}
-.m-fire{right:calc(var(--u)*17.5);bottom:calc(var(--u)*24);width:calc(var(--u)*15.5);height:calc(var(--u)*15.5)}
-.m-aim{right:calc(var(--u)*2.5);bottom:calc(var(--u)*29);width:calc(var(--u)*13.5);height:calc(var(--u)*13.5)}
+/* tiro: no canto inferior DIREITO do joystick (abaixo dele); mirar: no canto inferior ESQUERDO (o joystick é um círculo de 28u em left 8u, bottom 9u) */
+.m-fire{left:calc(var(--u)*30.5);bottom:calc(var(--u)*.5);width:calc(var(--u)*14);height:calc(var(--u)*14)}
+.m-aim{left:calc(var(--u)*.65);bottom:calc(var(--u)*1.65);width:calc(var(--u)*13);height:calc(var(--u)*13)}
 .m-jump{right:calc(var(--u)*1.2);bottom:calc(var(--u)*9.5);width:calc(var(--u)*17);height:calc(var(--u)*17)}
 /* a pé: entrar no carro fica à esquerda do Sprint (não o substitui) */
 .m-door{right:calc(var(--u)*3.2);bottom:calc(var(--u)*43.5);width:calc(var(--u)*12);height:calc(var(--u)*12)}
