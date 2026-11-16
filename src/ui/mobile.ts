@@ -129,6 +129,7 @@ const CSS = `
 .m-wopt span{font-size:calc(var(--u)*1.7);line-height:1.1;text-align:center;text-transform:none;font-weight:800}
 /* tiro: no canto inferior DIREITO do joystick (abaixo dele); mirar: no canto inferior ESQUERDO (o joystick é um círculo de 28u em left 8u, bottom 9u) */
 .m-fire{left:calc(var(--u)*30.5);bottom:calc(var(--u)*.5);width:calc(var(--u)*14);height:calc(var(--u)*14)}
+.m-fire.m-fire2{left:auto;right:calc(var(--u)*17.5);bottom:calc(var(--u)*24);width:calc(var(--u)*15.5);height:calc(var(--u)*15.5)}
 .m-aim{left:calc(var(--u)*.65);bottom:calc(var(--u)*1.65);width:calc(var(--u)*13);height:calc(var(--u)*13)}
 .m-jump{right:calc(var(--u)*1.2);bottom:calc(var(--u)*9.5);width:calc(var(--u)*17);height:calc(var(--u)*17)}
 /* a pé: entrar no carro fica à esquerda do Sprint (não o substitui) */
@@ -507,7 +508,12 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   holdButton(crouchBtn, () => { queueCrouch(); setCrouchHeld(true); }, () => setCrouchHeld(false));
 
   // Ações da direita (a pé)
-  holdButton(circle(hud, 'm-fire foot', ICON.bullet, null), () => setFire(true), () => setFire(false), true);
+  // dois botões de atirar (o de baixo, junto ao joystick, e o da direita, onde sempre ficou): segurar qualquer um atira
+  let fireHeld = 0;
+  const fireDown = (): void => { fireHeld++; setFire(true); };
+  const fireUp = (): void => { fireHeld = Math.max(0, fireHeld - 1); if (fireHeld === 0) setFire(false); };
+  const fireBtns = [circle(hud, 'm-fire foot', ICON.bullet, null), circle(hud, 'm-fire m-fire2 foot', ICON.bullet, null)];
+  for (const b of fireBtns) holdButton(b, fireDown, fireUp, true);
   let aimOn = false;
   const aim = circle(hud, 'm-aim foot', ICON.crosshair, null);
   aim.addEventListener('pointerdown', (e) => { e.preventDefault(); aimOn = !aimOn; setAim(aimOn); aim.classList.toggle('on', aimOn); });
@@ -610,7 +616,7 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   let speed = 0;
   let lastHit = 0;
   let lastHurt = 0;
-  const cache = { l1: '', score: '', list: '', money: '', ammo: '', weapon: '' };
+  const cache = { l1: '', score: '', list: '', money: '', ammo: '', weapon: '', fireGun: true };
   const retrigger = (el: El): void => { el.classList.remove('go'); void el.offsetWidth; el.classList.add('go'); };
 
   return {
@@ -669,6 +675,10 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
       if (am !== cache.ammo) { cache.ammo = am; ammo.textContent = am; }
 
       hud.classList.toggle('nogun', !gun); // sem arma de fogo: nada de mirar nem recarregar
+      if (gun !== cache.fireGun) { // os botões de atirar: munição com arma de fogo, mão fechada sem ela (soco, arma branca)
+        cache.fireGun = gun;
+        for (const b of fireBtns) { const ico = b.querySelector('.ico'); if (ico) { ico.textContent = ''; ico.insertAdjacentHTML('beforeend', gun ? ICON.bullet : ICON.fist); } }
+      }
       if (!gun && aimOn) { aimOn = false; setAim(false); aim.classList.remove('on'); }
       cross.classList.toggle('show', gun && !s.driving && !s.dead);
       cross.classList.toggle('aim', s.aiming);
