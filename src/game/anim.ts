@@ -1311,28 +1311,29 @@ function buildArm(side: 1 | -1, u: THREE.Bone, f: THREE.Bone, h: THREE.Bone, c: 
   };
 }
 
-/**
- * O IFP guarda a rotação local de cada osso exatamente como o osso do glTF usa (x, y, z, w), sem inverter.
- * Única exceção: a pélvis. No IFP ela vem no espaço do pai da raiz ("Root"), então tira a rotação do osso Root.
- */
-/** Em pé o osso Root do IFP gira 90° em Z (frente = +y no GTA); o tombo é o quanto ele gira a partir disso, no espaço do mundo. */
+/** Em pé o osso Root do IFP gira 90° em Z (frente = +y no GTA); o tombo é o quanto ele gira a partir disso, medido nos eixos do próprio Root (stand⁻¹ · d). */
 const ROOT_STAND = new THREE.Quaternion(0, 0, Math.SQRT1_2, Math.SQRT1_2);
 /**
- * Rotação do osso Root (id 0) do IFP para o osso Root do glTF: giro a partir da pose em pé (d · stand⁻¹) aplicado sobre o repouso do osso.
+ * Rotação do osso Root (id 0) do IFP para o osso Root do glTF: giro a partir da pose em pé (stand⁻¹ · d, nos eixos do Root) aplicado sobre o repouso do osso. Conferido contra o rolar do Carlos (tronco para o mesmo lado a cada instante); a ordem d · stand⁻¹ fazia rolar de lado.
  * Só os clipes de tombo (ko, getup, roll, dive) levam esse osso; sem ele o personagem caía e ficava em pé.
  */
 function rootConvert(q: number[], rest: THREE.Quaternion | null): number[] {
   const out = new Array<number>(q.length);
   const t = new THREE.Quaternion();
+  const d = new THREE.Quaternion();
   const sInv = ROOT_STAND.clone().invert();
   for (let i = 0; i < q.length; i += 4) {
-    t.set(q[i]!, q[i + 1]!, q[i + 2]!, q[i + 3]!).multiply(sInv);
+    t.copy(sInv).multiply(d.set(q[i]!, q[i + 1]!, q[i + 2]!, q[i + 3]!));
     if (rest) t.multiply(rest);
     out[i] = t.x; out[i + 1] = t.y; out[i + 2] = t.z; out[i + 3] = t.w;
   }
   return out;
 }
 
+/**
+ * O IFP guarda a rotação local de cada osso exatamente como o osso do glTF usa (x, y, z, w), sem inverter.
+ * Única exceção: a pélvis. No IFP ela vem no espaço do pai da raiz ("Root"), então tira a rotação do osso Root.
+ */
 function gtaConvert(q: number[], parentInv: THREE.Quaternion | null): number[] {
   if (!parentInv) return q;
   const out = new Array<number>(q.length);
