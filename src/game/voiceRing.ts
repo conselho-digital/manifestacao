@@ -1,12 +1,11 @@
-// Círculo no chão em volta de quem está falando: mostra até onde a voz chega AGORA (quem está dentro dele escuta).
-// Só aparece enquanto há som saindo; o raio acompanha o volume (voz baixinha = círculo pequeno, grito = círculo grande).
+// Círculos no chão que mostram até onde um som chega AGORA (quem está dentro dele escuta): a voz de quem fala e os barulhos (tiros, motores, buzina...).
+// Só aparecem enquanto há som; o raio acompanha o volume (voz baixinha = círculo pequeno, grito ou tiro = círculo grande).
 // Um anel por jogador, no mundo (não filho do personagem), com geometria própria atualizada no lugar (poucos vértices).
 import * as THREE from 'three';
-import { HEAR_RANGE } from '../net/voice';
 import { settings } from './settings';
 
 const SEG = 96;
-const HALF = 0.03; // meia espessura da linha (m)
+const half = (r: number): number => Math.max(0.03, r * 0.005); // meia espessura da linha (m): fina nos círculos da voz, mais grossa nos grandes para continuar visível
 const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.7, depthWrite: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -5, polygonOffsetUnits: -5 });
 
 interface RingMesh { mesh: THREE.Mesh; pos: THREE.BufferAttribute; r: number }
@@ -19,7 +18,7 @@ function makeRing(): RingMesh {
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position', pos);
   geo.setIndex(idx);
-  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), HEAR_RANGE + 1);
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 300);
   const mesh = new THREE.Mesh(geo, mat);
   mesh.frustumCulled = false;
   mesh.renderOrder = 2;
@@ -29,11 +28,12 @@ function makeRing(): RingMesh {
 }
 
 function setRadius(ring: RingMesh, r: number): void {
-  if (Math.abs(r - ring.r) < 0.004) return;
+  if (Math.abs(r - ring.r) < Math.max(0.004, r * 0.003)) return;
   ring.r = r;
   const a = ring.pos.array as Float32Array;
-  const inner = Math.max(0.01, r - HALF);
-  const outer = r + HALF;
+  const h = half(r);
+  const inner = Math.max(0.01, r - h);
+  const outer = r + h;
   for (let i = 0; i <= SEG; i++) {
     const ang = (i / SEG) * Math.PI * 2;
     const c = Math.cos(ang);
@@ -49,7 +49,7 @@ export class VoiceRings {
 
   constructor() { this.group.name = 'voiceRings'; }
 
-  /** Põe um anel em cada posição (pés de quem está com som); `r` é o alcance da voz agora (m). Os que sobram somem. */
+  /** Põe um anel em cada ponto (pés de quem fala, ou onde há barulho); `r` é até onde o som chega agora (m). Os que sobram somem. */
   update(spots: { x: number; y: number; z: number; r: number }[]): void {
     this.group.visible = settings.voiceRing;
     if (!settings.voiceRing) return;

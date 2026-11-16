@@ -36,6 +36,8 @@ export function audioOut(): AudioNode | null {
   return audioCtx() ? master : null;
 }
 
+import { audibleRadius, noiseBurst, noiseHold } from './noise';
+
 // ---------- proximidade ----------
 
 /** Posição e direção de quem ouve (a câmera). O main atualiza todo quadro. */
@@ -137,7 +139,10 @@ interface SampleVoice {
 }
 
 /** Motor sintético por veículo + chiado de pneu ao derrapar. Um par por carro; o volume e o lado seguem a posição do veículo. */
+let noiseIds = 0;
+
 export class EngineSound {
+  private readonly nid = ++noiseIds; // chave do círculo de barulho deste motor
   private readonly p: EngineProfile;
   constructor(model?: string) {
     this.p = (model && PROFILES[model]) || FALLBACK;
@@ -382,6 +387,12 @@ export class EngineSound {
     const rpmEff = pushing ? gf : 0; // solto o acelerador: volta ao som do motor parado
     const f = p.idle + (p.top - p.idle) * rpmEff;
     const prox = proximity(x, z, ENGINE_RANGE);
+    // círculo do barulho: motor (mais forte com o giro e mais alto nos perfis barulhentos) e pneu cantando; vale o maior dos dois
+    if (on) {
+      const ampE = Math.min(1, (pushing ? 0.2 + 0.8 * rpmEff : 0.05) * (0.6 + 0.4 * Math.min(1, p.vol / 1.7))); // marcha lenta quase não se ouve; a todo giro, o máximo
+      const ampS = Math.min(1, skid) * 0.8;
+      noiseHold(`e${this.nid}`, x, z, Math.max(audibleRadius(ENGINE_RANGE, 3, ampE), ampS > 0.05 ? audibleRadius(SKID_RANGE, 3, ampS) : 0));
+    }
     const set = p.sample ? sampleBufs.get(p.sample) : undefined;
     if (on && !this.wasOnSynth && !set) this.crank(c, t, prox, bike); // sem som gravado: toca uma partida sintetizada (motor de arranque) ao ligar
     this.wasOnSynth = on;
@@ -431,7 +442,9 @@ const SHOT_RANGE = 130;
 
 /** Tiro no ponto (x, z): volume e lado vêm da distância ao ouvinte. O fuzil é grave e longo; a pistola, seca e curta. */
 export function playShotAt(x: number, z: number, kind: ShotKind): void {
-  const prox = proximity(x, z, kind === 'silenced' ? SHOT_RANGE * 0.4 : SHOT_RANGE, 4);
+  const shotRange = kind === 'silenced' ? SHOT_RANGE * 0.4 : SHOT_RANGE;
+  noiseBurst(x, z, audibleRadius(shotRange, 4, kind === 'silenced' ? 0.5 : 1), 0.5); // círculo do barulho do tiro
+  const prox = proximity(x, z, shotRange, 4);
   if (prox.gain < 0.01) return;
   const c = audioCtx();
   const out = audioOut();
@@ -536,6 +549,7 @@ export function playSprayAt(x: number, z: number): void {
  * Ouve-se até ~80 m (a de caminhão, 120 m).
  */
 export function playHornAt(x: number, z: number, bike: boolean, truck = false): void {
+  noiseBurst(x, z, audibleRadius(truck ? 120 : 80, 6, 1), 0.6);
   const prox = proximity(x, z, truck ? 120 : 80, 6);
   if (prox.gain < 0.02) return;
   const c = audioCtx();
@@ -581,6 +595,7 @@ export function playHornAt(x: number, z: number, bike: boolean, truck = false): 
 
 /** Batida de lataria (metal amassando): estalo de ruído + "clanks" metálicos; `k` 0..1 = força. */
 export function playCrashAt(x: number, z: number, k: number): void {
+  noiseBurst(x, z, audibleRadius(90, 5, Math.min(1, 0.35 + k)), 0.6);
   const prox = proximity(x, z, 90, 5);
   const v = prox.gain * Math.min(1, 0.35 + k);
   if (v < 0.02) return;
@@ -624,6 +639,7 @@ export function playCrashAt(x: number, z: number, k: number): void {
 
 /** Metal raspando na parede (lata riscando): ruído rascante contínuo; `update(k, x, z)` com k 0..1 a cada quadro (0 = parado). */
 export class ScrapeSound {
+  private readonly nid = ++noiseIds;
   private src: AudioBufferSourceNode | null = null;
   private gain: GainNode | null = null;
   private pan: StereoPannerNode | null = null;
@@ -674,6 +690,7 @@ export class ScrapeSound {
     }
     const c = audioCtx();
     if (!c || !this.start() || !this.gain || !this.pan || !this.filt) return;
+    noiseHold(`r${this.nid}`, x, z, audibleRadius(70, 5, k * 0.8));
     const prox = proximity(x, z, 70, 5);
     const t = c.currentTime;
     this.gain.gain.setTargetAtTime(0.22 * k * prox.gain, t, 0.04);
@@ -684,6 +701,7 @@ export class ScrapeSound {
 
 /** Sirene da viatura (lamento que sobe e desce): um par por carro; volume e lado seguem a posição do veículo (ouve-se até ~160 m). */
 export class SirenSound {
+  private readonly nid = ++noiseIds;
   private osc: OscillatorNode | null = null;
   private lfo: OscillatorNode | null = null;
   private gain: GainNode | null = null;
@@ -737,6 +755,7 @@ export class SirenSound {
     if (!on) { if (this.osc) this.stop(); return; }
     const c = audioCtx();
     if (!c || !this.start() || !this.gain || !this.pan) return;
+    noiseHold(`s${this.nid}`, x, z, audibleRadius(160, 8, 0.6));
     const prox = proximity(x, z, 160, 8);
     const t = c.currentTime;
     this.gain.gain.setTargetAtTime(0.11 * prox.gain, t, 0.08);

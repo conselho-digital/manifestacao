@@ -592,7 +592,7 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     ring.type = 'checkbox'; ring.checked = settings.voiceRing;
     ring.onchange = () => { settings.voiceRing = ring.checked; saveSettings(); };
     body.append(el('h3', 'ps-h3', 'Voz'));
-    body.append(el('label', 'ps-row', ring, el('span', '', 'Círculo da voz no chão')));
+    body.append(el('label', 'ps-row', ring, el('span', '', 'Círculo do som no chão (voz, tiros e motores)')));
     body.append(el('p', 'ps-note', 'Mostra em volta de cada personagem até onde a voz dele chega (10 m): quem está dentro do círculo ouve.'));
     body.append(el('h3', 'ps-h3', 'Desempenho'));
     const on = el('input') as HTMLInputElement;

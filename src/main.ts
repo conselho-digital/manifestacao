@@ -27,6 +27,7 @@ import { updateCulling } from './game/culling';
 import { WeaponVisual } from './game/weapons';
 import { loadGrips } from './game/grips';
 import { VoiceRings } from './game/voiceRing';
+import { activeNoises } from './game/noise';
 import { updatePosterOverlays } from './game/shops';
 import { initPosterEditor } from './ui/posterEditor';
 import { warmUp } from './game/preload';
@@ -605,6 +606,7 @@ function loop(): void {
     const mine = voice.myRange();
     if (mine > 0) spots.push({ x: player.object.position.x, y: player.object.position.y, z: player.object.position.z, r: mine });
     remotes.forEach((r, id) => { const rr = voice.rangeOf(id); if (rr > 0) spots.push({ x: r.root.position.x, y: r.root.position.y, z: r.root.position.z, r: rr }); });
+    for (const n of activeNoises(player.object.position.x, player.object.position.z, 160, dt)) spots.push(n); // tiros, motores, buzina... (audio.ts)
     voiceRings.update(spots);
   }
   if (player) {
