@@ -6,7 +6,7 @@ import * as THREE from 'three';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { CHARACTER_HEIGHT, loadBase } from './characters';
 
-export const RIGGED_NAMES: ReadonlySet<string> = new Set(['Vini', 'Xandao', 'PF', 'Gang1', 'Gang2', 'Gang3', 'Gang4', 'MaiBrasil', 'MaiMexico']);
+export const RIGGED_NAMES: ReadonlySet<string> = new Set(['Vini', 'Xandao', 'Felipe', 'PF', 'Gang1', 'Gang2', 'Gang3', 'Gang4', 'MaiBrasil', 'MaiMexico']);
 
 /** "_R_Thigh_07" → "r thigh"; "Bip01_R_Clavicle_021" → "r clavicle" */
 const key = (n: string): string => n.replace(/^_+/, '').replace(/^Bip01_/i, '').replace(/_\d+$/, '').replace(/_/g, ' ').trim().toLowerCase();
@@ -27,7 +27,7 @@ function distSeg(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3, tmp: THRE
 }
 
 /** Giro extra dos braços para perto do corpo (graus, no plano da frente, em volta do ombro): o Vini tem os braços mais abertos que o esqueleto do Law1. */
-const ARM_IN: Record<string, number> = { Vini: 11, Xandao: 6 };
+const ARM_IN: Record<string, number> = { Vini: 11, Xandao: 6, Felipe: 6 };
 const Z_AXIS = new THREE.Vector3(0, 0, 1);
 const smooth = (x: number, a: number, b: number): number => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 

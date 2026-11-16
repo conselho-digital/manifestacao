@@ -17,6 +17,7 @@ Os originais ficam em `assets-src/`; os otimizados, em `public/models/`.
 | --- | --- | --- |
 | `characters/Vini.glb` | Vini Jr (camisa do Brasil) | "Vini Jr fortnite" (autor não informado no pacote) |
 | `characters/Xandao.glb` | Agent 47 (Hitman Blood Money), `47DEFAULT` | JasonSX (pacote "47 Hitman Blood Money by JasonSX") |
+| `characters/Felipe.glb` | Corpo do Xandão (Agent 47) com o rosto do dono do jogo pintado na textura da cabeça | derivado do pacote acima + foto enviada pelo dono |
 | `characters/PF.glb` | Polícia Federal (`fbi.dff`) | autor não informado (pacote `police-brazil`) |
 | `characters/Gang1..Gang4.glb` | Brazilian Gang (`br01`, `br01-v2`, `br02`, `br03`) | ElChango |
 | `characters/MaiBrasil.glb`, `MaiMexico.glb` | Mai Shiranui Brazil / Mexico | modelo Team Ninja/Tecmo por alex189, texturas INSANOGAMES, adaptação para GTA SA por Misaki Yutsuki / Miyata Yutsuki |
