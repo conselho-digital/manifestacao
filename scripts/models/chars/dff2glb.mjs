@@ -110,7 +110,7 @@ const pack = (AW, scale) => { // prateleiras, da mais alta para a mais baixa; de
   return { cells, H: y + rowH };
 };
 let atlas = null;
-for (const [AW, AH, minS] of [[512, 512, 0.5], [1024, 512, 0.5], [1024, 1024, 0.35]]) {
+for (const [AW, AH, minS] of (process.env.BIGATLAS === '1' ? [[1024, 1024, 0.35]] : [[512, 512, 0.5], [1024, 512, 0.5], [1024, 1024, 0.35]])) { // BIGATLAS=1: só 1024x1024 (personagem principal, rosto mais nítido)
   for (let sc = 1; sc >= minS - 1e-6 && !atlas; sc -= 0.05) { const r = pack(AW, sc); if (r && r.H <= AH) atlas = { ...r, AW, AH }; }
   if (atlas) break;
 }
@@ -172,9 +172,13 @@ const bg = { r: Math.round(ar / Math.max(1, an)), g: Math.round(ag / Math.max(1,
 const atlasPng = await sharp({ create: { width: atlas.AW, height: atlas.AH, channels: 4, background: bg } }).composite(comps).png().toBuffer();
 // ---- vértices por grupo (opaco / recorte): um vértice por (vértice, material), com a UV levada para o atlas ----
 let outside = 0;
-const groups = [{ alpha: false, key: new Map(), P: [], N: [], T: [], I: [] }, { alpha: true, key: new Map(), P: [], N: [], T: [], I: [] }];
+const HEADY = process.env.HEADY ? +process.env.HEADY : null; // altura (m) a partir da qual os triângulos opacos vão para a malha "cabeça" (simplificada com menos força: os detalhes do rosto somem fácil)
+const mkGroup = (alpha, name) => ({ alpha, name, key: new Map(), P: [], N: [], T: [], I: [] });
+const groups = [mkGroup(false, 'opaco'), mkGroup(true, 'recorte'), mkGroup(false, 'cabeca')];
 for (const t of tri) {
-  const c = cellOf.get(t[3]); const g = groups[c.e.alpha ? 1 : 0];
+  const c = cellOf.get(t[3]);
+  const gy = HEADY === null || c.e.alpha ? 0 : (pos[t[0] * 3 + 1] + pos[t[1] * 3 + 1] + pos[t[2] * 3 + 1]) / 3;
+  const g = groups[c.e.alpha ? 1 : HEADY !== null && gy >= HEADY ? 2 : 0];
   // textura repetida: o deslocamento inteiro (de 1 em 1) é escolhido por triângulo, pelo centro dele, e tirado das UV antes de levar para o atlas
   const cu = (UV[t[0] * 2] + UV[t[1] * 2] + UV[t[2] * 2]) / 3, cv = (UV[t[0] * 2 + 1] + UV[t[1] * 2 + 1] + UV[t[2] * 2 + 1]) / 3;
   const ou = Math.floor(cu), ov = Math.floor(cv);
@@ -203,21 +207,47 @@ const mesh = doc.createMesh(); node.setMesh(mesh);
 const atlasTex = doc.createTexture('atlas').setImage(new Uint8Array(atlasPng)).setMimeType('image/png');
 for (const g of groups) {
   if (!g.I.length) continue;
-  const material = doc.createMaterial(g.alpha ? 'recorte' : 'opaco').setBaseColorTexture(atlasTex).setBaseColorFactor([1, 1, 1, 1]);
+  const material = doc.createMaterial(g.name).setBaseColorTexture(atlasTex).setBaseColorFactor([1, 1, 1, 1]);
   material.setDoubleSided(g.alpha || process.env.DOUBLE === '1');
   if (g.alpha) material.setAlphaMode('MASK').setAlphaCutoff(0.5);
   material.setExtension('KHR_materials_unlit', unlit.createUnlit());
   const acc = (type, arr, Arr) => doc.createAccessor().setType(type).setArray(new Arr(arr)).setBuffer(buf);
-  mesh.addPrimitive(doc.createPrimitive().setMaterial(material)
+  mesh.addPrimitive(doc.createPrimitive().setName(g.name).setMaterial(material)
     .setAttribute('POSITION', acc('VEC3', g.P, Float32Array)).setAttribute('NORMAL', acc('VEC3', g.N, Float32Array)).setAttribute('TEXCOORD_0', acc('VEC2', g.T, Float32Array))
     .setIndices(acc('SCALAR', g.I, Uint32Array)));
 }
 const count = () => { let t = 0; for (const p of mesh.listPrimitives()) t += p.getIndices().getCount() / 3; return t; };
 const before = count();
 const steps = [weld({ tolerance: 0.0005 })];
-if (before > TARGET * 1.03) steps.push(simplify({ simplifier: MeshoptSimplifier, ratio: TARGET / before, error: +(process.env.ERR ?? 0.08) }));
+if (before > TARGET * 1.03 && HEADY === null) steps.push(simplify({ simplifier: MeshoptSimplifier, ratio: TARGET / before, error: +(process.env.ERR ?? 0.08) }));
 steps.push(prune(), dedup(), textureCompress({ encoder: sharp, targetFormat: 'webp', resize: [1024, 1024], quality: 80 }));
 await doc.transform(...steps);
+if (HEADY !== null) { // corpo e cabeça com alvos separados; na cabeça as bordas ficam travadas (sobrancelhas, olhos e brincos são cascas soltas que sumiam)
+  const HT = +(process.env.HEADTRIS ?? 5000);
+  const prims = mesh.listPrimitives(); const headP = prims.find((p) => p.getName() === 'cabeca');
+  const headN = headP ? headP.getIndices().getCount() / 3 : 0;
+  const bodyN = prims.filter((p) => p !== headP && p.getName() === 'opaco').reduce((a, p) => a + p.getIndices().getCount() / 3, 0);
+  for (const p of prims) {
+    if (p.getName() === 'recorte') continue;
+    const isHead = p === headP; const n = p.getIndices().getCount() / 3;
+    const want = Math.round(isHead ? Math.min(n, HT) : Math.min(n, Math.max(200, TARGET - Math.min(headN, HT))));
+    if (want >= n) continue;
+    const pa = p.getAttribute('POSITION'); const pos2 = new Float32Array(pa.getCount() * 3); const tmp = [0, 0, 0];
+    for (let i = 0; i < pa.getCount(); i++) { pa.getElement(i, tmp); pos2.set(tmp, i * 3); }
+    const [out] = MeshoptSimplifier.simplify(p.getIndices().getArray(), pos2, 3, want * 3, +(process.env.ERR ?? 0.08), ['LockBorder']); // bordas travadas nas duas malhas: a emenda do pescoço não abre
+    p.getIndices().setArray(new Uint32Array(out));
+    // tira os vértices que sobraram sem uso (a simplificação só mexe nos índices)
+    const ids = p.getIndices().getArray(); const remap = new Map(); const keep = [];
+    for (let i = 0; i < ids.length; i++) if (!remap.has(ids[i])) { remap.set(ids[i], keep.length); keep.push(ids[i]); }
+    for (const sem of p.listSemantics()) {
+      const a = p.getAttribute(sem); const n = a.getElementSize(); const na = a.getArray().constructor; const arr = new na(keep.length * n); const tmp = new Array(n).fill(0);
+      keep.forEach((src, j) => { a.getElement(src, tmp); for (let k = 0; k < n; k++) arr[j * n + k] = tmp[k]; });
+      a.setArray(arr);
+    }
+    p.getIndices().setArray(new Uint32Array(ids.map((v) => remap.get(v))));
+  }
+  await doc.transform(prune());
+}
 if (count() > TARGET * 1.3 && process.env.SLOPPY === '1') { // malhas de cascas separadas (roupas por cima do corpo) não colapsam pelo método normal: simplificação "sloppy" só nas peças do corpo (a cabeça e o cabelo, de 1,45 m para cima, ficam como estão: o rosto estraga)
   const headFrac = (p) => { const ix = p.getIndices().getArray(), pa = p.getAttribute('POSITION'); let n = 0, h = 0; const t = [0, 0, 0]; for (let i = 0; i < ix.length; i += 3) { pa.getElement(ix[i], t); n++; if (t[1] > 1.45) h++; } return h / Math.max(1, n); };
   const prims = mesh.listPrimitives(); const heads = prims.filter((p) => headFrac(p) > 0.3);
