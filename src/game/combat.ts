@@ -33,7 +33,7 @@ const AK_DAMAGE = 20;
 const FIST_DAMAGE = 12;
 const KICK_DAMAGE = 20;
 const RELOAD_TIME = 1.6;
-const AIM_HOLD = 3; // depois de atirar, continua mirando por 3 s
+const AIM_HOLD = 0.6; // depois de atirar, a arma continua levantada só 0,6 s e então baixa suavemente (correr cancela na hora)
 /** fuzis: tipo de modelo, código do tiro na rede, dano e intervalo entre tiros (s) */
 const RIFLE_OF: Partial<Record<number, { kind: RifleKind; shot: 'r' | 'm' | 'q' | 'h'; damage: number; gap: number }>> = {
   0: { kind: 'ak', shot: 'r', damage: 20, gap: 0.11 },
@@ -308,7 +308,7 @@ export class Combat {
     }
     this.cd -= dt;
     // atirando: o fuzil sobe para a posição de tiro (cano para a frente) e fica assim um instante depois do último tiro
-    this.fireHold = input.fire ? AIM_HOLD : Math.max(0, this.fireHold - dt);
+    this.fireHold = input.fire ? AIM_HOLD : input.sprint && !input.aim ? 0 : Math.max(0, this.fireHold - dt);
     const aiming = input.aim || this.fireHold > 0;
     const rf = RIFLE_OF[this.weapon];
     if (rf) player.setRifleKind(rf.kind);

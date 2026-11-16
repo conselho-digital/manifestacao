@@ -670,7 +670,7 @@ export class Animator {
     this.handBend = hb !== undefined ? hb * (Math.PI / 180) : isSpray(this.armed) ? SPRAY_HAND_BEND : 0;
     const ikTarget = !this.holdsWeapon || kind === 'bat' || !kind ? 0 : 1; // braços sempre por IK nas empunhaduras (pose da foto de referência)
     this.armW += (ikTarget - this.armW) * Math.min(1, dt * 10);
-    this.aimK += ((isAimPose(this.armed) ? 1 : 0) - this.aimK) * Math.min(1, dt * 9);
+    this.aimK += ((isAimPose(this.armed) ? 1 : 0) - this.aimK) * Math.min(1, dt * 7);
     this.recoil = Math.max(0, this.recoil - dt * 9);
     if (this.reloadT >= 0) { this.reloadT += dt; if (this.reloadT >= this.reloadDur) this.reloadT = -1; }
     if (this.drawT >= 0) { this.drawT += dt; if (this.drawT >= this.drawDur) this.drawT = -1; }
