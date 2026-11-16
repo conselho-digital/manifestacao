@@ -28,10 +28,9 @@ const SPECS: Record<Exclude<RifleKind, 'ak'>, Spec> = {
 
 /** altura do eixo do cano no espaço da arma (igual à do AK, para a mira e a coronha ficarem no mesmo lugar) */
 const AXIS_Y = 0.019;
-/** o modelo do AK fica 4 cm mais baixo (o topo e a mira ficavam acima dos da M4A1 ao mirar) */
-export const AK_DY = -0.07;
-/** e 9 cm para a esquerda (+x = esquerda do personagem), mais perto da mão de apoio */
-export const AK_DX = 0.09;
+/** o modelo do AK fica 4 cm mais baixo (o topo e a mira ficavam acima dos da M4A1 ao mirar); AK_DX = 0: no mesmo lugar da M4A1 (de lado) */
+export const AK_DY = -0.04;
+export const AK_DX = 0;
 /** o modelo é puxado 0,3 m para a frente (o AK também): a coronha fica atrás da origem */
 const Z0 = 0.3;
 
