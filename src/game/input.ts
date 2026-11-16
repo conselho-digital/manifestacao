@@ -76,7 +76,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyE') climbQ = true;
   if (e.code === 'KeyF') interactQ = true;
   if (e.code === 'KeyG' && !e.repeat && !e.ctrlKey && !e.metaKey) view.mode = (view.mode + 1) % CAMERA_MODES;
-  if (e.code === 'KeyL' && !e.repeat) lightsQ = true;
+  if (e.code === 'KeyE' && !e.repeat) lightsQ = true;
   if (e.code === 'KeyC' || e.code === 'ControlLeft' || e.code === 'ControlRight') { if (!e.repeat) crouchQ = true; if (e.code !== 'KeyC') e.preventDefault(); } // agachar: só Ctrl ou C
   if (e.code === 'KeyR') reloadQ = true;
   if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'KeyX') switchQ = true;

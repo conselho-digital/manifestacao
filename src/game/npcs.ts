@@ -42,7 +42,10 @@ const FLEE_SPEED = 5.2; // um pouco abaixo da corrida do jogador (6,2 m/s)
 const NPC_HEALTH = 60;
 const CORPSE_S = 9; // quanto tempo o corpo fica no chão antes de outro pedestre nascer
 
-type St = 'idle' | 'walk' | 'flee' | 'hurt' | 'down' | 'getup' | 'dead';
+type St = 'idle' | 'walk' | 'flee' | 'hurt' | 'down' | 'getup' | 'dead' | 'fly' | 'tumble' | 'hide';
+
+const FLY_GRAVITY = 22; // m/s² (o mesmo peso do voo do jogador atropelado)
+const TUMBLE_S = 1.0; // quanto tempo rola no chão depois de cair
 
 /** Um lugar livre (fora das pistas) a pelo menos `minD` m de (ax, az). */
 function pickSpot(ax: number, az: number, minD: number): [number, number] | null {
@@ -67,6 +70,10 @@ export class Npc {
   private health = NPC_HEALTH;
   private kx = 0; // empurrão do golpe/tiro (m/s) que vai acabando: o corpo escorrega para longe de quem bateu
   private kz = 0;
+  private vy = 0; // velocidade vertical no voo do atropelamento
+  private hx = 0; // de onde veio a ameaça (tiro, golpe, veículo)
+  private hz = 0;
+  private hiding = false; // foge para um esconderijo (tx, tz) em vez de só correr em linha reta
   private fx = 0; // direção de fuga (vetor unitário)
   private fz = 0;
   private ready = false;
@@ -86,7 +93,7 @@ export class Npc {
     }).catch(() => undefined);
   }
 
-  get alive(): boolean { return this.ready && this.st !== 'dead' && this.st !== 'down'; }
+  get alive(): boolean { return this.ready && this.st !== 'dead' && this.st !== 'down' && this.st !== 'fly' && this.st !== 'tumble'; }
   get pos(): THREE.Vector3 { return this.root.position; }
 
   /** De que lado veio o golpe em relação a para onde o pedestre olha: 'front' | 'back' | 'l' | 'r', mais o produto escalar com a frente. */
@@ -125,24 +132,70 @@ export class Npc {
     this.animator?.restart(clip);
   }
 
-  /** Atropelado a `speed` m/s: cai, levanta e foge (ou morre se o golpe foi forte). */
+  /** Atropelado a `speed` m/s: é lançado no ar (braços e pernas soltos), cai, rola no chão e então levanta e foge (ou fica caído se o golpe foi forte). */
   runOver(speed: number, fromX: number, fromZ: number): void {
-    if (this.st === 'dead' || this.st === 'down' || this.st === 'getup') return;
+    if (this.st === 'dead' || this.st === 'down' || this.st === 'getup' || this.st === 'fly' || this.st === 'tumble') return;
     this.health -= Math.min(100, 20 + speed * 5);
     this.flinchFrom(fromX, fromZ);
-    this.root.rotation.y = Math.atan2(-this.fx, -this.fz); // de frente para o veículo: cai de costas, para longe dele
-    if (this.health <= 0) { this.st = 'dead'; this.t = CORPSE_S; this.kx = this.fx * Math.min(8, speed * 0.7); this.kz = this.fz * Math.min(8, speed * 0.7); this.animator?.restart('ko_skid_back'); return; }
-    this.st = 'down';
-    this.t = 1.7;
-    this.animator?.restart('ko_skid_back');
+    this.root.rotation.y = Math.atan2(this.fx, this.fz); // voa na direção do veículo
+    const h = Math.min(13, speed * 0.85);
+    this.kx = this.fx * h;
+    this.kz = this.fz * h;
+    this.vy = 5.5 + Math.min(3.5, speed * 0.25);
+    this.root.position.y += 0.6;
+    this.st = 'fly';
+    this.t = 0;
+    this.animator?.setFlail(1);
+    this.animator?.restart('dive');
+  }
+
+  /** Voo do atropelamento; ao pousar começa a rolar. */
+  private flyStep(dt: number): void {
+    const p = this.root.position;
+    const nx = p.x + this.kx * dt;
+    const nz = p.z + this.kz * dt;
+    if (free(nx, nz, 0.4)) { p.x = nx; p.z = nz; } else { this.kx *= 0.1; this.kz *= 0.1; }
+    this.vy -= FLY_GRAVITY * dt;
+    const gy = terrainHeight(p.x, p.z);
+    p.y += this.vy * dt;
+    if (p.y > gy) return;
+    p.y = gy;
+    this.vy = 0;
+    this.st = 'tumble';
+    this.t = TUMBLE_S;
+    this.animator?.restart('roll_f');
   }
 
   /** Barulho (tiro) a `d` m: se não está ferido, sai correndo no sentido contrário. */
   scare(fromX: number, fromZ: number): void {
-    if (this.st === 'idle' || this.st === 'walk' || this.st === 'flee') { this.flinchFrom(fromX, fromZ); this.st = 'flee'; this.t = 5 + Math.random() * 3; }
+    if (this.st === 'hide') { this.hx = fromX; this.hz = fromZ; this.t = Math.max(this.t, 8 + Math.random() * 6); return; } // já escondido: fica quieto mais um tempo
+    if (this.st === 'idle' || this.st === 'walk' || this.st === 'flee') { this.flinchFrom(fromX, fromZ); this.startHide(); }
+  }
+
+  /** Corre para um esconderijo: um ponto livre a 6–32 m, fora da linha de visão da ameaça (atrás de prédio, poste, árvore, carro), com caminho livre. Sem lugar bom, só foge. */
+  private startHide(): void {
+    const p = this.root.position;
+    let best: [number, number] | null = null;
+    let bestScore = Infinity;
+    for (let k = 0; k < 40; k++) {
+      const a = Math.random() * Math.PI * 2;
+      const r = 6 + Math.random() * 26;
+      const x = p.x + Math.cos(a) * r;
+      const z = p.z + Math.sin(a) * r;
+      if (Math.abs(x) > CITY.halfX - 4 || Math.abs(z) > CITY.halfZ - 4 || onRoad(x, z) || !free(x, z, 0.8)) continue;
+      if (Math.hypot(x - this.hx, z - this.hz) < Math.hypot(p.x - this.hx, p.z - this.hz)) continue; // não vai em direção à ameaça
+      if (!clear(p.x, p.z, x, z)) continue;
+      const seen = clear(this.hx, this.hz, x, z); // a ameaça enxerga o ponto?
+      const score = r + (seen ? 60 : 0);
+      if (score < bestScore) { bestScore = score; best = [x, z]; }
+    }
+    this.st = 'flee';
+    this.t = 12;
+    if (best) { this.tx = best[0]; this.tz = best[1]; this.hiding = true; } else this.hiding = false;
   }
 
   private flinchFrom(fromX: number, fromZ: number): void {
+    this.hx = fromX; this.hz = fromZ;
     const dx = this.root.position.x - fromX;
     const dz = this.root.position.z - fromZ;
     const l = Math.hypot(dx, dz) || 1;
@@ -205,6 +258,17 @@ export class Npc {
       }
       case 'flee': {
         this.t -= dt;
+        if (this.hiding) {
+          // corre até o esconderijo e se agacha lá
+          const dx = this.tx - p.x;
+          const dz = this.tz - p.z;
+          const dist = Math.hypot(dx, dz);
+          if (dist < FLEE_SPEED * dt + 0.2) { this.st = 'hide'; this.hiding = false; this.t = 10 + Math.random() * 8; break; }
+          if (!this.step(dx / dist, dz / dist, FLEE_SPEED, dt)) { this.st = 'hide'; this.hiding = false; this.t = 8 + Math.random() * 6; break; }
+          this.face(dx, dz, dt);
+          if (this.t <= 0) { this.st = 'hide'; this.hiding = false; this.t = 8; }
+          break;
+        }
         if (!this.step(this.fx, this.fz, FLEE_SPEED, dt)) {
           // bateu: tenta outra direção (gira até 60° para cada lado)
           const a = (Math.random() < 0.5 ? -1 : 1) * (0.5 + Math.random() * 0.6);
@@ -217,19 +281,36 @@ export class Npc {
         if (this.t <= 0) { this.st = 'idle'; this.wait = 1 + Math.random() * 3; }
         break;
       }
+      case 'hide':
+        this.t -= dt;
+        if (this.t <= 0) { this.st = 'idle'; this.wait = 1 + Math.random() * 3; }
+        break;
+      case 'fly':
+        this.flyStep(dt);
+        break;
+      case 'tumble':
+        this.slide(dt, 2.2);
+        this.animator?.setFlail(Math.max(0, this.t / TUMBLE_S) * 0.7);
+        this.t -= dt;
+        if (this.t <= 0) {
+          this.animator?.setFlail(0);
+          if (this.health <= 0) { this.st = 'dead'; this.t = CORPSE_S; } else { this.st = 'down'; this.t = 1.1; }
+          this.animator?.restart('ko_skid_front');
+        }
+        break;
       case 'hurt':
         this.slide(dt);
         this.t -= dt;
-        if (this.t <= 0) { this.st = 'flee'; this.t = 6 + Math.random() * 3; }
+        if (this.t <= 0) this.startHide();
         break;
       case 'down':
         this.slide(dt);
         this.t -= dt;
-        if (this.t <= 0) { this.st = 'getup'; this.t = 1.4; this.animator?.restart('getup'); }
+        if (this.t <= 0) { this.st = 'getup'; this.t = 1.4; this.animator?.restart('getup_front'); }
         break;
       case 'getup':
         this.t -= dt;
-        if (this.t <= 0) { this.st = 'flee'; this.t = 6; }
+        if (this.t <= 0) this.startHide();
         break;
       case 'dead':
         this.slide(dt);
@@ -240,18 +321,19 @@ export class Npc {
     if (this.st === 'idle') this.animator?.play('idle');
     else if (this.st === 'walk') this.animator?.play('walk');
     else if (this.st === 'flee') this.animator?.play('sprint');
+    else if (this.st === 'hide') this.animator?.play('crouch_idle');
     this.animator?.update(dt);
   }
 
   /** Escorrega com o empurrão do golpe (some em ~0,5 s); para se bater em algo. */
-  private slide(dt: number): void {
+  private slide(dt: number, decay = 5): void {
     const sp = Math.hypot(this.kx, this.kz);
     if (sp < 0.05) { this.kx = this.kz = 0; return; }
     const p = this.root.position;
     const nx = p.x + this.kx * dt;
     const nz = p.z + this.kz * dt;
     if (free(nx, nz, 0.4)) { p.x = nx; p.z = nz; p.y = terrainHeight(nx, nz); } else { this.kx = this.kz = 0; }
-    const k = Math.exp(-dt * 5);
+    const k = Math.exp(-dt * decay);
     this.kx *= k; this.kz *= k;
   }
 
@@ -259,6 +341,9 @@ export class Npc {
   reset(x: number, z: number): void {
     this.health = NPC_HEALTH;
     this.kx = this.kz = 0;
+    this.vy = 0;
+    this.hiding = false;
+    this.animator?.setFlail(0);
     this.st = 'idle';
     this.wait = Math.random() * 2;
     this.root.position.set(x, terrainHeight(x, z), z);

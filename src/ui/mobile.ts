@@ -418,8 +418,8 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
     ['T', 'Falar (segure)'], ['M', 'Mapa'], ['L', 'Esconder esta legenda'], ['P', 'Menu / configurações'],
   ];
   const KEYS_CAR: [string, string][] = [
-    ['W / S', 'Acelerar / freio'], ['A / D', 'Virar'], ['Espaço', 'Freio de mão'], ['H', 'Buzina'], ['Shift', 'Empinar (moto)'], ['L', 'Luzes da viatura'],
-    ['F', 'Sair do veículo'], ['V', 'Veículos'], ['G', 'Câmera'], ['Alt', 'Mostrar o mouse'], ['B', 'Loja'], ['M', 'Mapa'], ['P', 'Menu'],
+    ['W / S', 'Acelerar / freio'], ['A / D', 'Virar'], ['Espaço', 'Freio de mão'], ['H', 'Buzina'], ['Shift', 'Empinar (moto)'], ['E', 'Luzes da viatura'],
+    ['L', 'Esconder legenda'], ['F', 'Sair do veículo'], ['V', 'Veículos'], ['G', 'Câmera'], ['Alt', 'Mostrar o mouse'], ['B', 'Loja'], ['M', 'Mapa'], ['P', 'Menu'],
   ];
   for (const [list, cls] of [[KEYS_FOOT, 'foot-k'], [KEYS_CAR, 'car-k']] as const) {
     for (const [k, t] of list) {
@@ -432,9 +432,9 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   esc.textContent = 'Esc';
   make('', keys, 'span').textContent = 'Mostrar o mouse';
   make('free', keys).textContent = 'Mouse livre: clique no jogo para voltar';
-  // L mostra/esconde a legenda das teclas (dirigindo, L continua sendo as luzes da viatura)
+  // L mostra/esconde a legenda das teclas (a pé e dirigindo; as luzes da viatura são a tecla E)
   window.addEventListener('keydown', (e) => {
-    if (e.target instanceof HTMLInputElement || e.repeat || e.code !== 'KeyL' || hud.classList.contains('driving')) return;
+    if (e.target instanceof HTMLInputElement || e.repeat || e.code !== 'KeyL') return;
     keys.classList.toggle('hidden', !keys.classList.contains('hidden'));
   });
   const syncLock = (): void => { keys.classList.toggle('unlocked', !document.pointerLockElement); };

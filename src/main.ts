@@ -481,7 +481,6 @@ function loop(): void {
     }
     const look = takeLook();
     const input = readInput();
-    if (view.mode === 2 && combat.isGun && !player.isDriving && !intro) input.aim = true; // primeira pessoa: a arma de fogo fica sempre levantada à frente (aparece na tela)
     if (intro) { // durante o voo o jogador espera (sem comandos)
       look.dx = 0; look.dy = 0;
       Object.assign(input, { x: 0, y: 0, mag: 0, fire: false, aim: false, jump: false, climb: false, crouch: false, interact: false, reload: false, switchWeapon: false, weaponStep: 0, weaponPick: null, sprint: false, gas: false, brake: false, handbrake: false, wheelie: false });
