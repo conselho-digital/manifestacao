@@ -36,7 +36,7 @@ export function audioOut(): AudioNode | null {
   return audioCtx() ? master : null;
 }
 
-import { audibleRadius, noiseBurst, noiseHold } from './noise';
+import { audibleRadius, noiseBurst, noiseHold, RING_SCALE } from './noise';
 
 // ---------- proximidade ----------
 
@@ -44,6 +44,11 @@ import { audibleRadius, noiseBurst, noiseHold } from './noise';
 const listener = { x: 0, z: 0, yaw: 0 };
 export function setListener(x: number, z: number, yaw: number): void {
   listener.x = x; listener.z = z; listener.yaw = yaw;
+}
+
+/** Como `proximity`, mas para os barulhos do mundo (tiro, motor, buzina, sirene...): o alcance é o do CÍRCULO do som (`RING_SCALE` do original), então quem está fora do círculo não ouve. */
+function world(x: number, z: number, range: number, near = 3): { gain: number; pan: number } {
+  return proximity(x, z, range * RING_SCALE, near * RING_SCALE);
 }
 
 /** Volume (0..1) e lado (-1 esquerda .. +1 direita) de uma fonte em (x, z); some em `range` metros; perto do ouvinte (< `near`) é cheio. */
@@ -386,7 +391,7 @@ export class EngineSound {
     const pushing = throttle >= 0.5;
     const rpmEff = pushing ? gf : 0; // solto o acelerador: volta ao som do motor parado
     const f = p.idle + (p.top - p.idle) * rpmEff;
-    const prox = proximity(x, z, ENGINE_RANGE);
+    const prox = world(x, z, ENGINE_RANGE);
     // círculo do barulho: motor (mais forte com o giro e mais alto nos perfis barulhentos) e pneu cantando; vale o maior dos dois
     if (on) {
       const ampE = Math.min(1, (pushing ? 0.2 + 0.8 * rpmEff : 0.05) * (0.6 + 0.4 * Math.min(1, p.vol / 1.7))); // marcha lenta quase não se ouve; a todo giro, o máximo
@@ -413,7 +418,7 @@ export class EngineSound {
     this.pan.pan.setTargetAtTime(prox.pan, t, 0.05);
     // pneu cantando: mais agudo e mais forte com a velocidade
     const sk = on ? Math.min(1, skid) : 0;
-    const sp = proximity(x, z, SKID_RANGE);
+    const sp = world(x, z, SKID_RANGE);
     this.skidGain.gain.setTargetAtTime(sk * 0.11 * sp.gain, t, sk > 0 ? 0.05 : 0.12);
     this.skidFilter.frequency.setTargetAtTime(900 + rpm * 900 + (bike ? 250 : 0), t, 0.1);
     this.skidPan.pan.setTargetAtTime(sp.pan, t, 0.05);
@@ -444,7 +449,7 @@ const SHOT_RANGE = 130;
 export function playShotAt(x: number, z: number, kind: ShotKind): void {
   const shotRange = kind === 'silenced' ? SHOT_RANGE * 0.4 : SHOT_RANGE;
   noiseBurst(x, z, audibleRadius(shotRange, 4, kind === 'silenced' ? 0.5 : 1), 0.5); // círculo do barulho do tiro
-  const prox = proximity(x, z, shotRange, 4);
+  const prox = world(x, z, shotRange, 4);
   if (prox.gain < 0.01) return;
   const c = audioCtx();
   const out = audioOut();
@@ -550,7 +555,7 @@ export function playSprayAt(x: number, z: number): void {
  */
 export function playHornAt(x: number, z: number, bike: boolean, truck = false): void {
   noiseBurst(x, z, audibleRadius(truck ? 120 : 80, 6, 1), 0.6);
-  const prox = proximity(x, z, truck ? 120 : 80, 6);
+  const prox = world(x, z, truck ? 120 : 80, 6);
   if (prox.gain < 0.02) return;
   const c = audioCtx();
   const out = audioOut();
@@ -596,7 +601,7 @@ export function playHornAt(x: number, z: number, bike: boolean, truck = false): 
 /** Batida de lataria (metal amassando): estalo de ruído + "clanks" metálicos; `k` 0..1 = força. */
 export function playCrashAt(x: number, z: number, k: number): void {
   noiseBurst(x, z, audibleRadius(90, 5, Math.min(1, 0.35 + k)), 0.6);
-  const prox = proximity(x, z, 90, 5);
+  const prox = world(x, z, 90, 5);
   const v = prox.gain * Math.min(1, 0.35 + k);
   if (v < 0.02) return;
   const c = audioCtx();
@@ -691,7 +696,7 @@ export class ScrapeSound {
     const c = audioCtx();
     if (!c || !this.start() || !this.gain || !this.pan || !this.filt) return;
     noiseHold(`r${this.nid}`, x, z, audibleRadius(70, 5, k * 0.8));
-    const prox = proximity(x, z, 70, 5);
+    const prox = world(x, z, 70, 5);
     const t = c.currentTime;
     this.gain.gain.setTargetAtTime(0.22 * k * prox.gain, t, 0.04);
     this.filt.frequency.setTargetAtTime(1800 + k * 2600, t, 0.05);
@@ -756,7 +761,7 @@ export class SirenSound {
     const c = audioCtx();
     if (!c || !this.start() || !this.gain || !this.pan) return;
     noiseHold(`s${this.nid}`, x, z, audibleRadius(160, 8, 0.6));
-    const prox = proximity(x, z, 160, 8);
+    const prox = world(x, z, 160, 8);
     const t = c.currentTime;
     this.gain.gain.setTargetAtTime(0.11 * prox.gain, t, 0.08);
     this.pan.pan.setTargetAtTime(prox.pan, t, 0.05);
