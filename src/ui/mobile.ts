@@ -413,13 +413,13 @@ export function createMobileHud(opts: MobileHudOptions): MobileHud {
   // PC: legenda das teclas (a pé e dirigindo) no lugar dos botões de toque
   const keys = make('m-keys', hud);
   const KEYS_FOOT: [string, string][] = [
-    ['W A S D', 'Mover'], ['Shift / Q', 'Correr'], ['Espaço', 'Pular'], ['E', 'Escalar'], ['Z / Ctrl', 'Agachar'], ['F', 'Entrar no carro'],
-    ['Clique', 'Atirar / bater'], ['Botão direito', 'Mirar'], ['R', 'Recarregar'], ['Scroll', 'Trocar de arma'], ['B', 'Loja'], ['V', 'Veículos'], ['C', 'Câmera: 1ª/3ª pessoa'],
+    ['W A S D', 'Mover'], ['Shift / Q', 'Correr'], ['Espaço', 'Pular'], ['E', 'Escalar'], ['Ctrl / C', 'Agachar'], ['F', 'Entrar no carro'],
+    ['Clique', 'Atirar / bater'], ['Botão direito', 'Mirar'], ['R', 'Recarregar'], ['Scroll', 'Trocar de arma'], ['B', 'Loja'], ['V', 'Veículos'], ['G', 'Câmera: 1ª/3ª pessoa'], ['Alt', 'Mostrar o mouse (segure)'],
     ['T', 'Falar (segure)'], ['M', 'Mapa'], ['L', 'Esconder esta legenda'], ['P', 'Menu / configurações'],
   ];
   const KEYS_CAR: [string, string][] = [
     ['W / S', 'Acelerar / freio'], ['A / D', 'Virar'], ['Espaço', 'Freio de mão'], ['H', 'Buzina'], ['Shift', 'Empinar (moto)'], ['L', 'Luzes da viatura'],
-    ['F', 'Sair do veículo'], ['V', 'Veículos'], ['C', 'Câmera'], ['B', 'Loja'], ['M', 'Mapa'], ['P', 'Menu'],
+    ['F', 'Sair do veículo'], ['V', 'Veículos'], ['G', 'Câmera'], ['Alt', 'Mostrar o mouse'], ['B', 'Loja'], ['M', 'Mapa'], ['P', 'Menu'],
   ];
   for (const [list, cls] of [[KEYS_FOOT, 'foot-k'], [KEYS_CAR, 'car-k']] as const) {
     for (const [k, t] of list) {

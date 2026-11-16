@@ -65,6 +65,8 @@ export class Npc {
   private st: St = 'idle';
   private t = 0;
   private health = NPC_HEALTH;
+  private kx = 0; // empurrão do golpe/tiro (m/s) que vai acabando: o corpo escorrega para longe de quem bateu
+  private kz = 0;
   private fx = 0; // direção de fuga (vetor unitário)
   private fz = 0;
   private ready = false;
@@ -87,15 +89,40 @@ export class Npc {
   get alive(): boolean { return this.ready && this.st !== 'dead' && this.st !== 'down'; }
   get pos(): THREE.Vector3 { return this.root.position; }
 
-  /** Levou dano (tiro, soco, taco). `fromX/fromZ` = de onde veio: ele foge no sentido contrário. */
+  /** De que lado veio o golpe em relação a para onde o pedestre olha: 'front' | 'back' | 'l' | 'r', mais o produto escalar com a frente. */
+  private side(fromX: number, fromZ: number): { s: 'front' | 'back' | 'l' | 'r'; dot: number } {
+    const y = this.root.rotation.y;
+    const ax = fromX - this.root.position.x;
+    const az = fromZ - this.root.position.z;
+    const l = Math.hypot(ax, az) || 1;
+    const dot = (ax * Math.sin(y) + az * Math.cos(y)) / l; // 1 = veio de frente, -1 = veio por trás
+    const left = (ax * Math.cos(y) - az * Math.sin(y)) / l; // > 0 = veio da esquerda
+    if (dot > 0.55) return { s: 'front', dot };
+    if (dot < -0.55) return { s: 'back', dot };
+    return { s: left > 0 ? 'l' : 'r', dot };
+  }
+
+  /** Levou dano (tiro, soco, taco). `fromX/fromZ` = de onde veio: ele reage pelo lado do golpe, é empurrado para longe e foge (ou cai morto). */
   hurt(dmg: number, fromX: number, fromZ: number): void {
     if (this.st === 'dead') return;
     this.health -= dmg;
+    const { s: side, dot } = this.side(fromX, fromZ);
     this.flinchFrom(fromX, fromZ);
-    if (this.health <= 0) { this.st = 'dead'; this.t = CORPSE_S; this.animator?.restart(Math.random() < 0.5 ? 'ko_skid_back' : 'ko_skid_front'); return; }
+    if (this.health <= 0) {
+      // morre caindo para longe de quem atirou: de costas se levou de frente, de bruços se levou por trás; o corpo escorrega um pouco
+      this.st = 'dead';
+      this.t = CORPSE_S;
+      this.kx = this.fx * 3.2;
+      this.kz = this.fz * 3.2;
+      this.animator?.restart(dot >= 0 ? 'ko_skid_back' : 'ko_skid_front');
+      return;
+    }
     this.st = 'hurt';
-    this.t = 0.55;
-    this.animator?.restart('hitr_front');
+    this.t = 0.6;
+    this.kx = this.fx * 1.8;
+    this.kz = this.fz * 1.8;
+    const clip = side === 'front' ? 'hitr_front' : side === 'back' ? (Math.random() < 0.5 ? 'hitr_back' : 'hitr_behind') : side === 'l' ? 'hitr_l' : 'hitr_r';
+    this.animator?.restart(clip);
   }
 
   /** Atropelado a `speed` m/s: cai, levanta e foge (ou morre se o golpe foi forte). */
@@ -103,7 +130,8 @@ export class Npc {
     if (this.st === 'dead' || this.st === 'down' || this.st === 'getup') return;
     this.health -= Math.min(100, 20 + speed * 5);
     this.flinchFrom(fromX, fromZ);
-    if (this.health <= 0) { this.st = 'dead'; this.t = CORPSE_S; this.animator?.restart('ko_skid_back'); return; }
+    this.root.rotation.y = Math.atan2(-this.fx, -this.fz); // de frente para o veículo: cai de costas, para longe dele
+    if (this.health <= 0) { this.st = 'dead'; this.t = CORPSE_S; this.kx = this.fx * Math.min(8, speed * 0.7); this.kz = this.fz * Math.min(8, speed * 0.7); this.animator?.restart('ko_skid_back'); return; }
     this.st = 'down';
     this.t = 1.7;
     this.animator?.restart('ko_skid_back');
@@ -190,10 +218,12 @@ export class Npc {
         break;
       }
       case 'hurt':
+        this.slide(dt);
         this.t -= dt;
         if (this.t <= 0) { this.st = 'flee'; this.t = 6 + Math.random() * 3; }
         break;
       case 'down':
+        this.slide(dt);
         this.t -= dt;
         if (this.t <= 0) { this.st = 'getup'; this.t = 1.4; this.animator?.restart('getup'); }
         break;
@@ -202,6 +232,7 @@ export class Npc {
         if (this.t <= 0) { this.st = 'flee'; this.t = 6; }
         break;
       case 'dead':
+        this.slide(dt);
         this.t -= dt;
         if (this.t <= 0) respawn(this);
         break;
@@ -212,9 +243,22 @@ export class Npc {
     this.animator?.update(dt);
   }
 
+  /** Escorrega com o empurrão do golpe (some em ~0,5 s); para se bater em algo. */
+  private slide(dt: number): void {
+    const sp = Math.hypot(this.kx, this.kz);
+    if (sp < 0.05) { this.kx = this.kz = 0; return; }
+    const p = this.root.position;
+    const nx = p.x + this.kx * dt;
+    const nz = p.z + this.kz * dt;
+    if (free(nx, nz, 0.4)) { p.x = nx; p.z = nz; p.y = terrainHeight(nx, nz); } else { this.kx = this.kz = 0; }
+    const k = Math.exp(-dt * 5);
+    this.kx *= k; this.kz *= k;
+  }
+
   /** Volta à vida em outro lugar (depois que o corpo ficou um tempo no chão). */
   reset(x: number, z: number): void {
     this.health = NPC_HEALTH;
+    this.kx = this.kz = 0;
     this.st = 'idle';
     this.wait = Math.random() * 2;
     this.root.position.set(x, terrainHeight(x, z), z);

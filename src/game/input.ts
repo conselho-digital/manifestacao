@@ -45,7 +45,7 @@ let touchX = 0;
 let touchY = 0;
 let touchActive = false;
 let sprintHeld = false;
-let sprintUntil = 0; // corre por mais 500 ms depois de soltar o botão
+let sprintUntil = 0; // só no botão de toque: continua por 500 ms depois de soltar (no teclado para assim que solta a tecla)
 const SPRINT_LINGER = 500;
 let jumpQ = false;
 let climbQ = false;
@@ -75,9 +75,9 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') { jumpQ = true; e.preventDefault(); }
   if (e.code === 'KeyE') climbQ = true;
   if (e.code === 'KeyF') interactQ = true;
-  if (e.code === 'KeyC' && !e.repeat && !e.ctrlKey && !e.metaKey) view.mode = (view.mode + 1) % CAMERA_MODES;
+  if (e.code === 'KeyG' && !e.repeat && !e.ctrlKey && !e.metaKey) view.mode = (view.mode + 1) % CAMERA_MODES;
   if (e.code === 'KeyL' && !e.repeat) lightsQ = true;
-  if (e.code === 'KeyZ' || e.code === 'ControlLeft') { crouchQ = true; if (e.code === 'ControlLeft') e.preventDefault(); }
+  if (e.code === 'KeyC' || e.code === 'ControlLeft' || e.code === 'ControlRight') { if (!e.repeat) crouchQ = true; if (e.code !== 'KeyC') e.preventDefault(); } // agachar: só Ctrl ou C
   if (e.code === 'KeyR') reloadQ = true;
   if (e.code === 'Digit1' || e.code === 'Digit2' || e.code === 'KeyX') switchQ = true;
 });
@@ -117,6 +117,18 @@ export function initMouse(canvas: HTMLElement): void {
   if ('ontouchstart' in window || navigator.maxTouchPoints > 0) return;
   const locked = (): boolean => document.pointerLockElement === canvas;
   canvas.addEventListener('click', () => { if (!locked()) void canvas.requestPointerLock?.(); });
+  // Alt: mostra a seta do mouse enquanto estiver apertado (para clicar no menu e nos botões); soltar prende o mouse de novo
+  let altFreed = false;
+  window.addEventListener('keydown', (e) => {
+    if (e.code !== 'AltLeft' && e.code !== 'AltRight') return;
+    e.preventDefault(); // no Windows o Alt sozinho foca a barra de menus do navegador
+    if (!e.repeat && locked()) { altFreed = true; document.exitPointerLock?.(); }
+  });
+  window.addEventListener('keyup', (e) => {
+    if (e.code !== 'AltLeft' && e.code !== 'AltRight') return;
+    e.preventDefault();
+    if (altFreed) { altFreed = false; if (!locked()) { try { void canvas.requestPointerLock?.(); } catch { /* o clique no jogo prende de novo */ } } }
+  });
   window.addEventListener('mousemove', (e) => {
     if (locked() || (e.buttons & 1 && !(e.target instanceof HTMLElement && e.target.closest('.m-hud button, .m-btn')))) { lookDx += e.movementX; lookDy += e.movementY; }
   });
@@ -151,13 +163,13 @@ export function readInput(): InputState {
   if (touchActive && Math.hypot(touchX, touchY) > 0.02) {
     x = touchX; y = touchY; len = Math.min(1, Math.hypot(x, y));
   }
-  const sprintDown = keys.has('KeyQ') || keys.has('ShiftLeft') || keys.has('ShiftRight') || sprintHeld;
+  const sprintKeys = keys.has('KeyQ') || keys.has('ShiftLeft') || keys.has('ShiftRight');
   const now = performance.now();
-  if (sprintDown) sprintUntil = now + SPRINT_LINGER;
+  if (sprintHeld) sprintUntil = now + SPRINT_LINGER;
   const state: InputState = {
     x, y, mag: len, walk,
-    sprint: sprintDown || (now < sprintUntil && len > 0.02),
-    jump: jumpQ, climb: climbQ, crouch: crouchQ, crouchHeld: keys.has('KeyZ') || keys.has('ControlLeft') || crouchTouch, interact: interactQ,
+    sprint: sprintKeys || sprintHeld || (now < sprintUntil && len > 0.02),
+    jump: jumpQ, climb: climbQ, crouch: crouchQ, crouchHeld: keys.has('KeyC') || keys.has('ControlLeft') || keys.has('ControlRight') || crouchTouch, interact: interactQ,
     fire: fireHeld || mouseFire,
     aim: aimOn || mouseAim,
     reload: reloadQ, switchWeapon: switchQ, weaponStep: stepQ, weaponPick: pickQ,

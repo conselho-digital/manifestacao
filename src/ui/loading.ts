@@ -85,22 +85,21 @@ export function showLoading(): Loading {
     async finish(onFade) {
       set(1, 'Pronto!');
       await wait(750); // a cor termina de aparecer
-      // só entra no mapa (e começa o voo de entrada) quando o jogador clica ou toca; no celular o toque também liga a tela cheia em paisagem
-      txt.className = 'ld-txt ld-go';
-      txt.textContent = touch ? 'Toque na tela para entrar em tela cheia' : 'Clique para entrar';
-      await new Promise<void>((resolve) => {
-        const go = (): void => {
-          root.removeEventListener('pointerdown', go);
-          window.removeEventListener('keydown', onKey);
-          if (touch) void goFullscreenLandscape(); // dentro do toque: o navegador só libera tela cheia e travar a rotação assim
-          resolve();
-        };
-        const onKey = (e: KeyboardEvent): void => { if (!touch && (e.code === 'Enter' || e.code === 'Space')) go(); };
-        root.addEventListener('pointerdown', go);
-        window.addEventListener('keydown', onKey);
-      });
-      if (touch) { txt.textContent = 'Entrando...'; await wait(700); } // dá tempo da tela cheia e da rotação acontecerem antes do voo da câmera
-      if (!touch) document.querySelector('canvas')?.requestPointerLock?.(); // PC: o clique também esconde o mouse (gesto que o navegador exige)
+      // PC: entra sozinho assim que o mapa carrega (o primeiro clique no jogo prende o mouse). Celular: espera o toque, que também liga a tela cheia em paisagem
+      if (touch) {
+        txt.className = 'ld-txt ld-go';
+        txt.textContent = 'Toque na tela para entrar em tela cheia';
+        await new Promise<void>((resolve) => {
+          const go = (): void => {
+            root.removeEventListener('pointerdown', go);
+            void goFullscreenLandscape(); // dentro do toque: o navegador só libera tela cheia e travar a rotação assim
+            resolve();
+          };
+          root.addEventListener('pointerdown', go);
+        });
+        txt.textContent = 'Entrando...';
+        await wait(700); // dá tempo da tela cheia e da rotação acontecerem antes do voo da câmera
+      }
       txt.textContent = '';
       onFade?.();
       root.classList.add('out');
