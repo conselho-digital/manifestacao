@@ -331,11 +331,17 @@ export class Combat {
       const a = this.ammo[this.weapon]!;
       if (this.isGun) {
         if (a.mag > 0) {
-          a.mag--;
-          this.ammoDirty = true;
-          this.cd = rf ? rf.gap : PISTOL_GAP;
-          this.fireGun(player, aiming, rf ? rf.shot : 'p');
-          if (a.mag === 0 && a.reserve === 0) this.warnEmpty(); // acabou o último tiro
+          // cadência em relógio fixo: a sobra do quadro entra no próximo intervalo (com FPS baixo a arma não atira mais devagar) e, se o quadro foi
+          // maior que o intervalo, saem até 3 tiros nele; depois de parado (sobra > 1 intervalo) recomeça do zero
+          const gap = rf ? rf.gap : PISTOL_GAP;
+          let burst = 0;
+          do {
+            a.mag--;
+            this.ammoDirty = true;
+            this.cd = this.cd < -gap ? gap : gap + this.cd;
+            this.fireGun(player, aiming, rf ? rf.shot : 'p');
+            if (a.mag === 0 && a.reserve === 0) this.warnEmpty(); // acabou o último tiro
+          } while (this.cd <= 0 && a.mag > 0 && ++burst < 3);
         } else { this.cd = 0.3; playClick(); this.startReload(); if (a.reserve === 0) this.warnEmpty(); }
       } else if (this.weapon === 15) this.spray(player);
       else if (MELEE_ARMED[this.weapon]) {

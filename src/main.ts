@@ -488,8 +488,10 @@ function loop(): void {
     }
     lastInput = input;
     if (!paused) {
-      yaw -= look.dx * 0.006 * settings.sens;
-      pitch = THREE.MathUtils.clamp(pitch + look.dy * 0.005 * settings.sens, PITCH_MIN, PITCH_MAX);
+      // mirando (zoom) a câmera gira mais devagar, na mesma proporção do zoom: tan(fov atual / 2) / tan(fov normal / 2)
+      const adsK = Math.tan((camera.fov * Math.PI) / 360) / Math.tan((BASE_FOV * Math.PI) / 360);
+      yaw -= look.dx * 0.006 * settings.sens * adsK;
+      pitch = THREE.MathUtils.clamp(pitch + look.dy * 0.005 * settings.sens * adsK, PITCH_MIN, PITCH_MAX);
       const dh = player.driveHeading;
       if (dh !== null && Math.abs(player.carSpeed) > 0.8) {
         // Em movimento a câmera fica atrás do carro; parado, dá para olhar para todos os lados
