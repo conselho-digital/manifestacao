@@ -6,7 +6,7 @@ import { buildRigged, RIGGED_NAMES } from './autoRig';
 
 /** Personagens do jogo. Carlos e Law1 ficam só como base interna (Carlos: ferramentas de animação; Law1: esqueleto que os outros ganham em tempo de execução, ver autoRig.ts) e NÃO aparecem na seleção. */
 export const CHARACTERS = [
-  'Vini', 'Xandao', 'Felipe', 'PF', 'Gang1', 'Gang2', 'Gang3', 'Gang4', 'MaiBrasil', 'MaiMexico',
+  'Vini', 'Xandao', 'PF', 'Gang1', 'Gang2', 'Gang3', 'Gang4', 'MaiBrasil', 'MaiMexico',
   'Carlos', 'Law1',
 ] as const;
 export type BuiltinName = (typeof CHARACTERS)[number];
@@ -15,13 +15,13 @@ export type CharacterName = BuiltinName | `c_${string}`;
 
 /** Categorias da tela de seleção (um carrossel por categoria). Todo personagem da seleção aparece em exatamente uma. */
 export const CATEGORIES: { title: string; names: BuiltinName[] }[] = [
-  { title: 'Famosos', names: ['Vini', 'Xandao', 'Felipe'] },
+  { title: 'Famosos', names: ['Vini', 'Xandao'] },
   { title: 'Polícia', names: ['PF'] },
   { title: 'Gangue', names: ['Gang1', 'Gang2', 'Gang3', 'Gang4'] },
   { title: 'Meninas', names: ['MaiBrasil', 'MaiMexico'] },
 ];
 /** Personagens que SÓ a conta de administrador vê e escolhe (nem aparecem na seleção das outras contas). */
-export const ADMIN_ONLY: ReadonlySet<string> = new Set(['Felipe']);
+export const ADMIN_ONLY: ReadonlySet<string> = new Set<string>();
 let charAdmin = import.meta.env.DEV && new URLSearchParams(location.search).has('admin'); // ?admin=1 só no npm run dev
 const adminListeners = new Set<() => void>();
 /** Chamado quando se descobre se a conta logada é administrador. */
@@ -39,7 +39,7 @@ export const SELECTABLE: BuiltinName[] = CATEGORIES.flatMap((c) => c.names);
 
 /** Nome mostrado na seleção. */
 export const LABELS: Partial<Record<BuiltinName, string>> = {
-  Vini: 'Vini Jr', Xandao: 'Xandão', Felipe: 'Felipe', PF: 'Polícia Federal', Gang1: 'Gangue 1', Gang2: 'Gangue 2', Gang3: 'Gangue 3', Gang4: 'Gangue 4',
+  Vini: 'Vini Jr', Xandao: 'Xandão', PF: 'Polícia Federal', Gang1: 'Gangue 1', Gang2: 'Gangue 2', Gang3: 'Gangue 3', Gang4: 'Gangue 4',
   MaiBrasil: 'Mai Brasil', MaiMexico: 'Mai México',
 };
 export const labelOf = (n: CharacterName): string => (isCustomId(n) ? customOf(n)?.name ?? 'Personagem' : LABELS[n as BuiltinName] ?? n);

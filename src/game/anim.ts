@@ -10,6 +10,10 @@ interface ClipData<T> { duration: number; tracks: T[]; /** descida do corpo (m) 
 type Clips<T> = Record<string, ClipData<T>>;
 type Kind = 'gta' | 'carlos';
 
+/** Giro (rad) das clavículas para a frente no idle. */
+const SHOULDER_FWD = -0.35;
+/** Quanto (rad) endireitar mid, chest, neck e head no crouch_idle. */
+const CROUCH_LIFT = [0.25, 0.25, 0.2, 0.15];
 export type Armed = 'none' | 'rifle' | 'aim' | 'pistol' | 'pistol_aim' | 'bat' | 'sign' | 'cricket' | 'spray' | 'spray_aim' | ExtraMelee;
 /** Armas brancas extras (pacote de armas): garrafa quebrada, cano, cutelo, foice e machado. */
 export const EXTRA_MELEE_KEYS = ['bottle', 'pipe', 'cleaver', 'sickle', 'axe', 'knife'] as const;
@@ -202,6 +206,7 @@ export class Animator {
   private batLocal: THREE.Quaternion | null = null;
   private legK = 0; // andando agachado: dobra mais os joelhos
   private heldRollK = 0; // foice e machado: giro em volta do cabo quando NÃO estão batendo (0 batendo, 1 seguro)
+  private idleK = 0; // parado: leva os ombros para a frente (o clipe deixa 4-8 cm atrás do peito)
   private leanK = 0; // sprint e agachado parado: endireita o tronco, que o clipe deixa caído para a esquerda
   private allBones: THREE.Object3D[] | null = null;
   private footRest = 0; // altura do pé mais baixo em repouso (espaço do modelo)
@@ -668,6 +673,7 @@ export class Animator {
     this.legK += ((this.clipName === 'crouch_fwd' || this.clipName === 'crouch_bwd' ? 1 : 0) - this.legK) * Math.min(1, dt * 8);
     const leanT = this.clipName === 'sprint' || this.clipName === 'run' || this.clipName.startsWith('crouch_') ? 1 : 0;
     this.leanK += (leanT - this.leanK) * Math.min(1, dt * 8);
+    this.idleK += ((this.clipName === 'idle' ? 1 : 0) - this.idleK) * Math.min(1, dt * 8);
     let jabW = 0;
     let jabE = 0;
     if (this.jabT >= 0) {
@@ -711,7 +717,7 @@ export class Animator {
     this.carryW = carry ? this.carryW + (1 - this.carryW) * Math.min(1, dt * 10) : 0;
     const flail = this.flailW;
     if (flail > 0) this.flailT += dt;
-    if ((!armed && !holding && !fist && kickW === 0 && flail === 0 && this.crouchK < 0.01 && this.legK < 0.01 && this.leanK < 0.01 && jabW === 0 && this.climbRel === null) || !this.spine) {
+    if ((!armed && !holding && !fist && kickW === 0 && flail === 0 && this.crouchK < 0.01 && this.legK < 0.01 && this.leanK < 0.01 && this.idleK < 0.01 && jabW === 0 && this.climbRel === null) || !this.spine) {
       this.groundFeet(dt);
       for (const b of this.touched) this.clean.set(b, b.quaternion.clone()); // tudo vem do clipe
       return;
@@ -721,7 +727,8 @@ export class Animator {
     this.updateRoot();
     this.bendTorso();
     if (this.legK >= 0.01) this.flexLegs();
-    if (this.clipName === 'crouch_idle' && this.crouchK > 0.01) this.openHips(this.crouchK);
+    if (this.idleK >= 0.01) this.shoulderFwd(this.idleK);
+    if (this.clipName === 'crouch_idle' && this.crouchK > 0.01) { this.openHips(this.crouchK); this.liftCrouchTorso(this.crouchK); }
     if ((this.legK >= 0.01 || this.leanK >= 0.01)) this.uprightTorso(Math.max(this.legK, this.leanK), this.clipName !== 'crouch_idle', this.clipName === 'crouch_idle' ? 1.5 : 1);
     if (kickW > 0) this.applyKick(kickW);
     if (flail > 0) this.applyFlail(flail);
@@ -814,6 +821,26 @@ export class Animator {
       const dy = this.posIn(l.u, new THREE.Vector3()).y - this.posIn(r.u, new THREE.Vector3()).y;
       this.rotateBone(sp.chest, new THREE.Quaternion().setFromAxisAngle(Z, THREE.MathUtils.clamp(-dy * 2.2, -0.25, 0.25) * k));
     }
+  }
+
+  /** Parado: o clipe deixa os ombros atrás do tronco; gira as clavículas para a frente (em Y) para os ombros voltarem ao lado do peito. */
+  private shoulderFwd(k: number): void {
+    for (const a of this.arms) {
+      if (!a.c) continue;
+      this.rotateBone(a.c, new THREE.Quaternion().setFromAxisAngle(Y, a.side * SHOULDER_FWD * k));
+    }
+    this.updateRoot();
+  }
+
+  /** Agachado parado: o clipe joga o tronco muito para a frente (cabeça além dos joelhos, camisa esticada); endireita a coluna e levanta a cabeça. */
+  private liftCrouchTorso(k: number): void {
+    const sp = this.spine!;
+    const up = (b: THREE.Bone, a: number): void => this.rotateBone(b, new THREE.Quaternion().setFromAxisAngle(X, -a * k));
+    up(sp.mid, CROUCH_LIFT[0]);
+    up(sp.chest, CROUCH_LIFT[1]);
+    up(sp.neck, CROUCH_LIFT[2]);
+    up(sp.head, CROUCH_LIFT[3]);
+    this.updateRoot();
   }
 
   /** Agachado parado: o clipe dobra o quadril além do que a pele aguenta e a malha das nádegas se deforma; abre um pouco o ângulo da coxa. */
