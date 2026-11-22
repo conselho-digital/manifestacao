@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createCamera, createRenderer, createScene, handleResize, pixelRatio } from './game/scene';
+import { applyQuality, createCamera, createRenderer, createScene, handleResize, pixelRatio } from './game/scene';
 import { createCity } from './game/city';
 import { startRanking } from './net/ranking';
 import { Npcs } from './game/npcs';
@@ -8,7 +8,7 @@ import { createEsplanada, esplanadaReady } from './game/esplanada';
 import { MAP_ID, onMapChange, spawnPoint } from './game/map';
 import { canUseCharacter, createCharacter, type CharacterName } from './game/characters';
 import { loadCustom } from './game/customChars';
-import { settings } from './game/settings';
+import { onQualityChange, settings } from './game/settings';
 import { initMouse, readInput, takeLook, type InputState } from './game/input';
 import { Player } from './game/player';
 import { showLobby } from './ui/lobby';
@@ -109,7 +109,7 @@ function menuCamera(dt: number): void {
 
 // No menu NÃO se desenha mapa nenhum (fundo liso). Só se pré-carregam, sem mostrar, os modelos (veículos, armas, personagens, animações);
 // a cidade é criada e os gráficos compilados na tela de carregamento, depois de clicar em Entrar.
-const GAME_PIXEL_RATIO = pixelRatio();
+onQualityChange(() => { if (!inMenu) applyQuality(renderer, scene); }); // trocou a qualidade no menu de pausa
 void loadGrips(); // ajustes finos da posição das armas nas mãos (public/weapon-grips.json)
 void loadCustom(); // personagens e cabeças criados na ferramenta /personagens
 const warm = warmUp(renderer, scene, camera, menuFog);
@@ -284,7 +284,7 @@ void showLobby().then(async (profile) => {
   if (!aerial && !fixedCam && new URLSearchParams(location.search).get('intro') !== '0') intro = { t: 0, started: false, pos: new THREE.Vector3(), quat: new THREE.Quaternion(), off: 0 };
   renderer.shadowMap.autoUpdate = true;
   renderer.shadowMap.needsUpdate = true;
-  renderer.setPixelRatio(GAME_PIXEL_RATIO);
+  renderer.setPixelRatio(pixelRatio());
   if (intro) { scene.fog = null; } else { scene.fog = menuFog; camera.clearViewOffset(); camera.fov = BASE_FOV; camera.far = BASE_FAR; camera.updateProjectionMatrix(); }
   // monta a cidade só agora (antes de qualquer outra coisa que dependa das colisões dela)
   loading.set(0.08, 'Montando a cidade...');

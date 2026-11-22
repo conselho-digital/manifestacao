@@ -12,7 +12,7 @@ const WALK_SPEED = 2.1; // o mesmo do jogador: o passo do clipe 'walk' foi ajust
 const ACTIVE_R = 75; // além disso o NPC fica parado e escondido (sem gastar com animação)
 const HIDE_R = 110;
 // as Mai (11–14 mil triângulos) e o Vini (10 mil, rosto detalhado) ficam de fora dos pedestres: são só para os jogadores
-const CHARS: BuiltinName[] = ['Xandao', 'PF', 'Gang1', 'Gang2', 'Gang3', 'Gang4'];
+const CHARS: BuiltinName[] = ['Xandao', 'PF', 'Gang1', 'Gang2']; // Gang3 e Gang4 (9 mil triângulos, rosto detalhado) só para jogadores
 
 const inRect = (r: { x0: number; x1: number; z0: number; z1: number }, x: number, z: number): boolean => x > r.x0 && x < r.x1 && z > r.z0 && z < r.z1;
 

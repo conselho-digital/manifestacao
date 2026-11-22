@@ -2,7 +2,7 @@
 import { fetchMine, fetchTop } from '../net/ranking';
 import { VEHICLE_COLOR, vehicleColors } from '../game/vehicle';
 import { vehiclePreview } from './vehiclePreview';
-import { FPS_CAPS, saveSettings, settings } from '../game/settings';
+import { FPS_CAPS, QUALITIES, saveSettings, setQuality, settings, type Quality } from '../game/settings';
 import type { CharacterName } from '../game/characters';
 import { ALL_WEAPONS, GARAGE_ITEMS, isGunId, SHOP, WEAPON_IMG, WEAPON_NAMES, type Inventory, type ShopItem, type WeaponId } from '../game/inventory';
 import { brl, isReal, loadPrices, loadPurchases, payUrlOf, priceOf, REAL_ITEMS, safeUrl, savePrice } from '../game/shop';
@@ -602,6 +602,13 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     body.append(el('label', 'ps-row', ring, el('span', '', 'Círculo do som no chão (voz, tiros e motores)')));
     body.append(el('p', 'ps-note', 'Mostra em volta de cada personagem até onde a voz dele chega (10 m): quem está dentro do círculo ouve.'));
     body.append(el('h3', 'ps-h3', 'Desempenho'));
+    const qual = el('select') as HTMLSelectElement;
+    const QNAME: Record<Quality, string> = { high: 'Alta (mais bonita)', medium: 'Média (recomendada)', low: 'Baixa (mais leve, sem sombras)' };
+    for (const q of QUALITIES) { const o = el('option', '', QNAME[q]) as HTMLOptionElement; o.value = q; qual.appendChild(o); }
+    qual.value = settings.quality;
+    qual.onchange = () => setQuality(qual.value as Quality);
+    body.append(el('label', 'ps-row', el('span', '', 'Qualidade gráfica'), qual));
+    body.append(el('p', 'ps-note', 'Se o jogo estiver pesado (menos de 60 FPS), escolha Média ou Baixa: desenha com menos pixels e sombras mais leves.'));
     const on = el('input') as HTMLInputElement;
     on.type = 'checkbox'; on.checked = settings.fpsCapOn;
     const cap = el('select') as HTMLSelectElement;

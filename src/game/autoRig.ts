@@ -81,7 +81,10 @@ export async function buildRigged(source: THREE.Object3D, name: string): Promise
       { k: `${s} clavicle`, a: P(`${s} clavicle`), b: P(`${s} upperarm`), r: 0.05 },
       { k: `${s} upperarm`, a: P(`${s} upperarm`), b: P(`${s} forearm`), r: 0.05 },
       { k: `${s} forearm`, a: P(`${s} forearm`), b: P(`${s} hand`), r: 0.04 },
-      { k: `${s} hand`, a: P(`${s} hand`), b: P(`${s} finger01`), r: 0.04 },
+      { k: `${s} hand`, a: P(`${s} hand`), b: P(`${s} finger`), r: 0.04 },
+      // dedos: o Law tem só dois ossos (Finger e Finger01) em cadeia; sem pesos neles a mão nunca fecha (empunhar arma, punho, mão relaxada)
+      { k: `${s} finger`, a: P(`${s} finger`), b: P(`${s} finger01`), r: 0.03 },
+      { k: `${s} finger01`, a: P(`${s} finger01`), b: P(`${s} finger01`).add(P(`${s} finger01`).sub(P(`${s} finger`)).normalize().multiplyScalar(0.08)), r: 0.028 },
       { k: `${s} thigh`, a: P(`${s} thigh`), b: P(`${s} calf`), r: 0.09 },
       { k: `${s} calf`, a: P(`${s} calf`), b: P(`${s} foot`), r: 0.06 },
       { k: `${s} foot`, a: P(`${s} foot`), b: P(`${s} toe0`), r: 0.05 },

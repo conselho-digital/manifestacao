@@ -13,6 +13,8 @@ type Kind = 'gta' | 'carlos';
 /** Giro (rad) das clavículas para a frente no idle. */
 const SHOULDER_FWD = -0.35;
 /** Quanto (rad) endireitar mid, chest, neck e head no crouch_idle. */
+/** Quanto as mãos livres ficam fechadas (0 aberta, 1 punho). */
+const RELAXED_CURL = 0.5;
 const CROUCH_LIFT = [0.25, 0.25, 0.2, 0.15];
 export type Armed = 'none' | 'rifle' | 'aim' | 'pistol' | 'pistol_aim' | 'bat' | 'sign' | 'cricket' | 'spray' | 'spray_aim' | ExtraMelee;
 /** Armas brancas extras (pacote de armas): garrafa quebrada, cano, cutelo, foice e machado. */
@@ -720,6 +722,7 @@ export class Animator {
     if ((!armed && !holding && !fist && kickW === 0 && flail === 0 && this.crouchK < 0.01 && this.legK < 0.01 && this.leanK < 0.01 && this.idleK < 0.01 && jabW === 0 && this.climbRel === null) || !this.spine) {
       this.groundFeet(dt);
       for (const b of this.touched) this.clean.set(b, b.quaternion.clone()); // tudo vem do clipe
+      this.relaxHands(); // mãos livres: meio fechadas
       return;
     }
     for (const b of this.touched) this.clean.get(b)!.copy(b.quaternion);
@@ -742,6 +745,7 @@ export class Animator {
       for (const arm of this.arms) this.solveArm(arm, new THREE.Vector3(arm.side * 0.2, rel + 0.03, 0.42), this.climbW, dt);
       this.updateRoot();
     }
+    if (!holding && !fist) this.relaxHands();
     if (!armed && !holding) return;
     if (kind === 'bat' && this.carryW > 0.01) this.carryBat(dt);
     // foice e machado seguros (parado ou andando) giram em volta do cabo para a lâmina apontar para a frente; ao bater vale o giro do clipe
@@ -1019,6 +1023,13 @@ export class Animator {
       any = true;
     }
     if (any) this.updateRoot();
+  }
+
+  /** Mãos livres (parado, andando, correndo): 50% fechadas, como uma mão solta de verdade. */
+  private relaxHands(): void {
+    this.dirty = true;
+    this.curlHand(1, RELAXED_CURL);
+    this.curlHand(-1, RELAXED_CURL);
   }
 
   /** Fecha a mão em torno do cabo (w: 0 aberta, 1 fechada). Os dedos dobram no eixo local Z do osso. */

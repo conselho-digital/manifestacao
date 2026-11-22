@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { settings, type Quality } from './settings';
 
 /** neblina: começa em FOG_NEAR m e cobre tudo em FOG_FAR; o que passa de FOG_FAR + folga nem é desenhado (câmera) */
 export const FOG_COLOR = 0xe9eff5;
@@ -24,11 +25,35 @@ export function applyBlur(canvas: HTMLCanvasElement, px: number, save = false): 
 
 /** Celular/tablet (toque): tela com muitos pixels e GPU fraca, então desenha com menos pixels e sem suavização de borda (o leve desfoque da imagem já suaviza). */
 export const IS_TOUCH = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
-/** Resolução de desenho: no PC até 2x; no toque até 1,5x (?pr=N força, para testar). */
+/** Resolução de desenho por qualidade: alta = PC 2x / toque 1,5x; média (padrão) = PC 1,5x / toque 1,25x; baixa = 1x (?pr=N força, para testar). */
+const PR_CAP: Record<Quality, number> = { high: IS_TOUCH ? 1.5 : 2, medium: IS_TOUCH ? 1.25 : 1.5, low: 1 };
 export function pixelRatio(): number {
   const q = Number(new URLSearchParams(location.search).get('pr'));
-  const cap = Number.isFinite(q) && q > 0 ? Math.min(q, 3) : IS_TOUCH ? 1.5 : 2;
+  const cap = Number.isFinite(q) && q > 0 ? Math.min(q, 3) : PR_CAP[settings.quality];
   return Math.min(window.devicePixelRatio, cap);
+}
+
+/** Sombras por qualidade: lado do mapa de sombra, meia-largura da área sombreada (m) e se há sombra. */
+function shadowCfg(q: Quality): { size: number; half: number; on: boolean } {
+  if (q === 'low') return { size: 512, half: 36, on: false };
+  if (q === 'medium') return { size: 1024, half: 40, on: true };
+  return { size: IS_TOUCH ? 1024 : 2048, half: 45, on: true };
+}
+
+/** Aplica a qualidade escolhida (resolução e sombras). Chamada ao criar a cena e quando o jogador troca a opção. */
+export function applyQuality(renderer: THREE.WebGLRenderer, scene: THREE.Scene): void {
+  const sun = scene.userData.sun as THREE.DirectionalLight | undefined;
+  if (sun) {
+    const c = shadowCfg(settings.quality);
+    if (sun.shadow.mapSize.x !== c.size) { sun.shadow.map?.dispose(); sun.shadow.map = null; sun.shadow.mapSize.set(c.size, c.size); }
+    const cam = sun.shadow.camera;
+    cam.left = -c.half; cam.right = c.half; cam.top = c.half; cam.bottom = -c.half;
+    cam.updateProjectionMatrix();
+    sun.castShadow = c.on;
+    renderer.shadowMap.needsUpdate = true;
+  }
+  renderer.setPixelRatio(pixelRatio());
+  renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
 export function createRenderer(): THREE.WebGLRenderer {
@@ -51,10 +76,11 @@ export function createScene(): THREE.Scene {
 
   const sun = new THREE.DirectionalLight(0xffffff, 1.6);
   sun.position.set(15, 25, 10);
-  sun.castShadow = true;
-  sun.shadow.mapSize.set(IS_TOUCH ? 1024 : 2048, IS_TOUCH ? 1024 : 2048);
+  const sc = shadowCfg(settings.quality);
+  sun.castShadow = sc.on;
+  sun.shadow.mapSize.set(sc.size, sc.size);
   const cam = sun.shadow.camera;
-  cam.left = -45; cam.right = 45; cam.top = 45; cam.bottom = -45;
+  cam.left = -sc.half; cam.right = sc.half; cam.top = sc.half; cam.bottom = -sc.half;
   cam.near = 1; cam.far = 160;
   scene.add(sun, sun.target);
   scene.userData.sun = sun; // o main faz o sol (e as sombras) seguirem o jogador

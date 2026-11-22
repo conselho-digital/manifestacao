@@ -83,15 +83,16 @@ interface EngineProfile {
   sample?: SampleName;
 }
 
-/** Cada veículo tem seu motor: o Blista (agora Gol no jogo) usa o som gravado do dono, o Buffalo e o Clover V8 graves, etc. */
+/** Cada veículo tem o SEU motor, sintetizado por `scripts/sounds/make-engines.py` (partida, marcha lenta e aceleração em /sounds/<nome>-*.mp3); o oscilador abaixo só vale até os arquivos chegarem. */
 const PROFILES: Record<string, EngineProfile> = {
-  blistac: { a: 'sawtooth', b: 'square', idle: 52, top: 130, ratio: 0.5, cutIdle: 330, cutTop: 900, lope: 0, lopeDepth: 0, vol: 0.5, topSpeed: 33.3, sample: 'harley' },
-  buffalo: { a: 'sawtooth', b: 'sawtooth', idle: 30, top: 78, ratio: 0.5, cutIdle: 220, cutTop: 520, lope: 13, lopeDepth: 0.35, vol: 1.7, topSpeed: 33.3 },
-  clover: { a: 'square', b: 'triangle', idle: 36, top: 96, ratio: 0.5, cutIdle: 260, cutTop: 620, lope: 9, lopeDepth: 0.25, vol: 1.6, topSpeed: 33.3 },
-  harley: { a: 'sawtooth', b: 'square', idle: 26, top: 90, ratio: 0.5, cutIdle: 260, cutTop: 700, lope: 7, lopeDepth: 0.55, vol: 1.2, topSpeed: 36.1, bike: true, sample: 'harley' },
-  triumph: { a: 'sawtooth', b: 'square', idle: 58, top: 210, ratio: 0.5, cutIdle: 520, cutTop: 1500, lope: 0, lopeDepth: 0, vol: 1, topSpeed: 36.1, bike: true },
-  bmw: { a: 'sawtooth', b: 'sawtooth', idle: 84, top: 330, ratio: 1.005, cutIdle: 800, cutTop: 2400, lope: 0, lopeDepth: 0, vol: 0.95, topSpeed: 36.1, bike: true, sample: 'sport' },
-  suzuki: { a: 'square', b: 'sawtooth', idle: 96, top: 380, ratio: 1.003, cutIdle: 900, cutTop: 2800, lope: 0, lopeDepth: 0, vol: 0.95, topSpeed: 36.1, bike: true, sample: 'sport' },
+  blistac: { a: 'sawtooth', b: 'square', idle: 52, top: 130, ratio: 0.5, cutIdle: 330, cutTop: 900, lope: 0, lopeDepth: 0, vol: 0.9, topSpeed: 33.3, sample: 'gol' },
+  buffalo: { a: 'sawtooth', b: 'sawtooth', idle: 30, top: 78, ratio: 0.5, cutIdle: 220, cutTop: 520, lope: 13, lopeDepth: 0.35, vol: 1.2, topSpeed: 33.3, sample: 'buffalo' },
+  clover: { a: 'square', b: 'triangle', idle: 36, top: 96, ratio: 0.5, cutIdle: 260, cutTop: 620, lope: 9, lopeDepth: 0.25, vol: 1.1, topSpeed: 33.3, sample: 'clover' },
+  duster: { a: 'sawtooth', b: 'triangle', idle: 44, top: 110, ratio: 0.5, cutIdle: 300, cutTop: 800, lope: 0, lopeDepth: 0, vol: 1, topSpeed: 33.3, sample: 'duster' },
+  harley: { a: 'sawtooth', b: 'square', idle: 26, top: 90, ratio: 0.5, cutIdle: 260, cutTop: 700, lope: 7, lopeDepth: 0.55, vol: 1.1, topSpeed: 36.1, bike: true, sample: 'harley' },
+  triumph: { a: 'sawtooth', b: 'square', idle: 58, top: 210, ratio: 0.5, cutIdle: 520, cutTop: 1500, lope: 0, lopeDepth: 0, vol: 1, topSpeed: 36.1, bike: true, sample: 'triumph' },
+  bmw: { a: 'sawtooth', b: 'sawtooth', idle: 84, top: 330, ratio: 1.005, cutIdle: 800, cutTop: 2400, lope: 0, lopeDepth: 0, vol: 0.95, topSpeed: 36.1, bike: true, sample: 'bmw' },
+  suzuki: { a: 'square', b: 'sawtooth', idle: 96, top: 380, ratio: 1.003, cutIdle: 900, cutTop: 2800, lope: 0, lopeDepth: 0, vol: 0.9, topSpeed: 36.1, bike: true, sample: 'suzuki' },
 };
 const FALLBACK: EngineProfile = PROFILES.blistac!;
 const ENGINE_RANGE = 70; // metros até sumir
@@ -106,11 +107,21 @@ function noise(c: AudioContext): AudioBuffer {
   return noiseBuf;
 }
 
-// Sons gravados (enviados pelo dono): partida (ao subir), marcha lenta (loop) e aceleração (loop). 'sport' = BMW e Suzuki; 'harley' = Harley.
+// Sons de motor sintetizados (um conjunto por veículo): partida, marcha lenta (loop) e aceleração (loop). `idleRate`/`revRate` = [tom parado, quanto sobe até o topo]:
+// o laço de aceleração foi gerado no giro `rev` e o jogo troca o tom por playbackRate de [marcha lenta/rev] até [topo/rev] (giro de topo = 1,9 x rev).
+const mkSet = (name: string, idleRpm: number, revRpm: number) => ({
+  start: `/sounds/${name}-start.mp3`, idle: `/sounds/${name}-idle.mp3`, rev: `/sounds/${name}-rev.mp3`,
+  idleRate: [1, 1.1] as readonly number[], revRate: [idleRpm / revRpm, (revRpm * 1.9 - idleRpm) / revRpm] as readonly number[],
+});
 const SAMPLE_SETS = {
-  // sport: a gravação tem uma SUBIDA de giro de verdade (o tom dobra em ~3 s): `rise` toca contínua, no ritmo da aceleração do veículo (0% da velocidade = começo, 100% = fim; ver Scrub)
-  sport: { start: '/sounds/moto-start.mp3', idle: '/sounds/moto-idle.mp3', rev: '/sounds/moto-rev.mp3', rise: '/sounds/moto-rise.mp3', idleRate: [0.9, 0.35], revRate: [0.85, 0.25] },
-  harley: { start: '/sounds/harley-start.mp3', idle: '/sounds/harley-idle.mp3', rev: '/sounds/harley-rev.mp3', idleRate: [0.95, 0.2], revRate: [0.8, 0.45] },
+  gol: mkSet('gol', 900, 2600),
+  clover: mkSet('clover', 760, 2300),
+  buffalo: mkSet('buffalo', 640, 2100),
+  duster: mkSet('duster', 800, 2300),
+  harley: mkSet('harley', 900, 2500),
+  triumph: mkSet('triumph', 1000, 3200),
+  bmw: mkSet('bmw', 1250, 3600),
+  suzuki: mkSet('suzuki', 1350, 3900),
 } as const satisfies Record<string, { start: string; idle: string; rev: string; rise?: string; idleRate: readonly number[]; revRate: readonly number[] }>;
 type SampleName = keyof typeof SAMPLE_SETS;
 type SampleSet = { start: AudioBuffer; idle: AudioBuffer; rev: AudioBuffer; rise?: AudioBuffer };
@@ -324,9 +335,10 @@ export class EngineSound {
     this.wasOn = on;
     const live = on && t >= this.gateAt;
     const a = Math.min(1, Math.max(0, throttle));
-    sv.idleG.gain.setTargetAtTime(1 - a * 0.85, t, 0.12);
-    sv.revG.gain.setTargetAtTime(a, t, 0.04);
-    sv.idle.playbackRate.setTargetAtTime(cfg.idleRate[0]!, t, 0.1); // solto o acelerador: sempre o som do motor parado e ligado
+    const rf = S.rise ? 1 : Math.min(1, gf * 2.5); // sem a subida gravada: a marcha lenta cede à aceleração conforme a velocidade
+    sv.idleG.gain.setTargetAtTime(1 - a * 0.9 * rf, t, 0.12);
+    sv.revG.gain.setTargetAtTime(a * rf, t, 0.08);
+    sv.idle.playbackRate.setTargetAtTime(S.rise ? cfg.idleRate[0]! : cfg.idleRate[0]! + a * gf * cfg.idleRate[1]!, t, 0.1); // solto o acelerador: som do motor parado e ligado
     const holdRate = cfg.revRate[0]! + gf * cfg.revRate[1]!; // o tom sobe de 0% a 100% da velocidade
     if (sv.rev) sv.rev.playbackRate.setTargetAtTime(holdRate, t, 0.1);
     if (S.rise) {
