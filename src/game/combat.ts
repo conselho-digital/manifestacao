@@ -43,10 +43,10 @@ const RIFLE_OF: Partial<Record<number, { kind: RifleKind; shot: 'r' | 'm' | 'q' 
   13: { kind: 'm16', shot: 'q', damage: 22, gap: 0.12 },
   14: { kind: 'hb', shot: 'h', damage: 16, gap: 0.1 },
 };
-/** Coice da câmera por tiro (rad): AK, M4A1, M16, Honey Badger e revólver. */
-const RECOIL: Record<string, number> = { r: 0.024, m: 0.017, q: 0.021, h: 0.012, p: 0.045 };
-const RECOIL_MAX = 0.17; // teto do recuo acumulado numa rajada (~10°)
-const RECOIL_RETURN = 6; // por segundo: quão rápido a mira volta
+/** Coice da câmera por tiro (rad), que PUXA A MIRA PARA CIMA: AK (puxa mais) > M4A1 > M16 > Honey Badger > revólver (a arma pequena, puxa menos). */
+const RECOIL: Record<string, number> = { r: 0.07, m: 0.05, q: 0.04, h: 0.03, p: 0.025 };
+const RECOIL_MAX = 0.3; // teto do recuo acumulado numa rajada (~17°)
+const RECOIL_RETURN = 3.5; // por segundo: quão devagar a mira volta (devagar = a rajada vai subindo; o jogador puxa para baixo)
 
 /** Queda de dano por distância (fps-shooter): cheio até `full` m e desce em linha reta até `floor` (fração) no alcance máximo; a pistola cai mais cedo. */
 const FALLOFF: Record<string, { full: number; floor: number }> = { r: { full: 30, floor: 0.7 }, m: { full: 30, floor: 0.7 }, q: { full: 35, floor: 0.75 }, h: { full: 25, floor: 0.65 }, p: { full: 15, floor: 0.55 } };

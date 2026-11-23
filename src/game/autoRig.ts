@@ -32,11 +32,11 @@ const ARM_IN: Record<string, number> = { Vini: 11, Xandao: 6, MaiBrasil: 15, Mai
 const SHOULDER_FWD: Record<string, number> = { Vini: -0.35 };
 /**
  * Corpo mais cheio (só quem pede): as Mai têm braços e pernas finíssimos como gravetos e pés minúsculos. Cada vértice é empurrado para fora do eixo do osso que o move
- * ([radial, axial]: quanto o membro engrossa e, nos pés, quanto alonga a partir do tornozelo), antes de ligar os pesos; vale na pose de repouso, então anima junto.
+ * ([radial, axial, profundidade]: quanto o membro engrossa e, nos pés, quanto alonga a partir do tornozelo), antes de ligar os pesos; vale na pose de repouso, então anima junto.
  */
-const BODY_FIX: Record<string, Record<string, readonly [number, number]>> = {
-  MaiBrasil: { foot: [1.7, 1.5], toe0: [1.7, 1.5] },
-  MaiMexico: { foot: [1.7, 1.5], toe0: [1.7, 1.5] },
+const BODY_FIX: Record<string, Record<string, readonly [number, number, number?]>> = {
+  MaiBrasil: { thigh: [1.05, 1, 1.55], calf: [1.05, 1, 1.5], foot: [1.7, 1.5], toe0: [1.7, 1.5] },
+  MaiMexico: { thigh: [1.05, 1, 1.55], calf: [1.05, 1, 1.5], foot: [1.7, 1.5], toe0: [1.7, 1.5] },
 };
 /** Ordem dos ossos nos atributos `_rigidx`/`_rigw` (pesos de pele NATIVOS do DFF, gravados por scripts/models/chars/dff2glb.mjs com SKIN=1: MESMA lista). */
 const RIG_NAMES = ['pelvis', 'spine', 'spine1', 'neck', 'head', 'r clavicle', 'r upperarm', 'r forearm', 'r hand', 'r finger', 'r finger01', 'l clavicle', 'l upperarm', 'l forearm', 'l hand', 'l finger', 'l finger01', 'r thigh', 'r calf', 'r foot', 'r toe0', 'l thigh', 'l calf', 'l foot', 'l toe0'];
@@ -202,7 +202,7 @@ export async function buildRigged(source: THREE.Object3D, name: string): Promise
           const f = bodyFix[sg.k.replace(/^[rl] /, '')];
           if (!f || wk <= 0) continue;
           distSeg(v, sg.a, sg.b, tmp); // tmp = ponto mais próximo do eixo − v
-          dx -= wk * (f[0] - 1) * tmp.x; dy -= wk * (f[0] - 1) * tmp.y; dz -= wk * (f[0] - 1) * tmp.z;
+          dx -= wk * (f[0] - 1) * tmp.x; dy -= wk * (f[0] - 1) * tmp.y; dz -= wk * ((f[2] ?? f[0]) - 1) * tmp.z; // 3º número: só a profundidade (frente-trás), para pernas "de papel" vistas de lado
           if (f[1] !== 1) { dx += wk * (f[1] - 1) * (v.x - sg.a.x); dy += wk * (f[1] - 1) * (v.y - sg.a.y); dz += wk * (f[1] - 1) * (v.z - sg.a.z); }
         }
         v.x += dx; v.y += dy; v.z += dz;
