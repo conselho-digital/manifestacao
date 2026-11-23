@@ -225,7 +225,7 @@ const count = () => { let t = 0; for (const p of mesh.listPrimitives()) t += p.g
 const before = count();
 const steps = [weld({ tolerance: 0.0005 })];
 if (before > TARGET * 1.03 && HEADY === null) steps.push(simplify({ simplifier: MeshoptSimplifier, ratio: TARGET / before, error: +(process.env.ERR ?? 0.08) }));
-steps.push(prune(), dedup(), textureCompress({ encoder: sharp, targetFormat: 'webp', resize: [1024, 1024], quality: 80 }));
+steps.push(prune(), dedup(), textureCompress({ encoder: sharp, targetFormat: 'webp', resize: [1024, 1024], quality: +(process.env.WQ ?? 80) }));
 await doc.transform(...steps);
 if (HEADY !== null) { // corpo e cabeça com alvos separados; na cabeça as bordas ficam travadas (sobrancelhas, olhos e brincos são cascas soltas que sumiam)
   const HT = +(process.env.HEADTRIS ?? 5000);

@@ -166,7 +166,7 @@ def save(x, path):
         w.setsampwidth(2)
         w.setframerate(FS)
         w.writeframes((x * 32767).astype('<i2').tobytes())
-    subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', str(wav), '-codec:a', 'libmp3lame', '-b:a', '96k', '-ar', str(FS), '-ac', '1', str(path)], check=True)
+    subprocess.run(['ffmpeg', '-y', '-loglevel', 'error', '-i', str(wav), '-codec:a', 'libmp3lame', '-b:a', '64k', '-ar', str(FS), '-ac', '1', str(path)], check=True)
     wav.unlink()
 
 
