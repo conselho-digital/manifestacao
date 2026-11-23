@@ -27,7 +27,9 @@ function distSeg(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3, tmp: THRE
 }
 
 /** Giro extra dos braços para perto do corpo (graus, no plano da frente, em volta do ombro): o Vini tem os braços mais abertos que o esqueleto do Law1. */
-const ARM_IN: Record<string, number> = { Vini: 11, Xandao: 6 };
+const ARM_IN: Record<string, number> = { Vini: 11, Xandao: 6, MaiBrasil: 12, MaiMexico: 12 };
+/** Giro (rad) das clavículas no idle para os ombros voltarem ao lado do peito (`Animator.shoulderFwd`): só o Vini, que tem os ombros atrás do peito; nos outros deixava os braços abertos demais. */
+const SHOULDER_FWD: Record<string, number> = { Vini: -0.35 };
 const Z_AXIS = new THREE.Vector3(0, 0, 1);
 const smooth = (x: number, a: number, b: number): number => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
@@ -195,5 +197,6 @@ export async function buildRigged(source: THREE.Object3D, name: string): Promise
     sm.updateMatrixWorld(true);
     sm.bind(skeleton);
   }
+  if (SHOULDER_FWD[name] !== undefined) root.userData.shoulderFwd = SHOULDER_FWD[name];
   return root;
 }

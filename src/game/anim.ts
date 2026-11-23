@@ -10,8 +10,7 @@ interface ClipData<T> { duration: number; tracks: T[]; /** descida do corpo (m) 
 type Clips<T> = Record<string, ClipData<T>>;
 type Kind = 'gta' | 'carlos';
 
-/** Giro (rad) das clavículas para a frente no idle. */
-const SHOULDER_FWD = -0.35;
+/** Giro padrão (rad) das clavículas no idle: 0. Um personagem pede outro valor com `userData.shoulderFwd` no modelo (autoRig.ts `SHOULDER_FWD`): o Vini tem os ombros atrás do peito. */
 /** Quanto (rad) endireitar mid, chest, neck e head no crouch_idle. */
 /** Quanto as mãos livres ficam fechadas (0 aberta, 1 punho). */
 const RELAXED_CURL = 0.5;
@@ -208,6 +207,7 @@ export class Animator {
   private batLocal: THREE.Quaternion | null = null;
   private legK = 0; // andando agachado: dobra mais os joelhos
   private heldRollK = 0; // foice e machado: giro em volta do cabo quando NÃO estão batendo (0 batendo, 1 seguro)
+  private shoulderFwd = 0;
   private idleK = 0; // parado: leva os ombros para a frente (o clipe deixa 4-8 cm atrás do peito)
   private leanK = 0; // sprint e agachado parado: endireita o tronco, que o clipe deixa caído para a esquerda
   private allBones: THREE.Object3D[] | null = null;
@@ -249,6 +249,7 @@ export class Animator {
     private legs: Leg[],
     private hands: Hand[],
   ) {
+    root.traverse((o) => { if (typeof o.userData.shoulderFwd === 'number') this.shoulderFwd = o.userData.shoulderFwd as number; });
     mixer.addEventListener('finished', (e) => {
       if ((e as unknown as { action: THREE.AnimationAction }).action === this.current) this.done = true;
     });
@@ -719,7 +720,7 @@ export class Animator {
     this.carryW = carry ? this.carryW + (1 - this.carryW) * Math.min(1, dt * 10) : 0;
     const flail = this.flailW;
     if (flail > 0) this.flailT += dt;
-    if ((!armed && !holding && !fist && kickW === 0 && flail === 0 && this.crouchK < 0.01 && this.legK < 0.01 && this.leanK < 0.01 && this.idleK < 0.01 && jabW === 0 && this.climbRel === null) || !this.spine) {
+    if ((!armed && !holding && !fist && kickW === 0 && flail === 0 && this.crouchK < 0.01 && this.legK < 0.01 && this.leanK < 0.01 && (this.idleK < 0.01 || this.shoulderFwd === 0) && jabW === 0 && this.climbRel === null) || !this.spine) {
       this.groundFeet(dt);
       for (const b of this.touched) this.clean.set(b, b.quaternion.clone()); // tudo vem do clipe
       this.relaxHands(); // mãos livres: meio fechadas
@@ -730,7 +731,7 @@ export class Animator {
     this.updateRoot();
     this.bendTorso();
     if (this.legK >= 0.01) this.flexLegs();
-    if (this.idleK >= 0.01) this.shoulderFwd(this.idleK);
+    if (this.idleK >= 0.01 && this.shoulderFwd !== 0) this.shoulderFwdPose(this.idleK);
     if (this.clipName === 'crouch_idle' && this.crouchK > 0.01) { this.openHips(this.crouchK); this.liftCrouchTorso(this.crouchK); }
     if ((this.legK >= 0.01 || this.leanK >= 0.01)) this.uprightTorso(Math.max(this.legK, this.leanK), this.clipName !== 'crouch_idle', this.clipName === 'crouch_idle' ? 1.5 : 1);
     if (kickW > 0) this.applyKick(kickW);
@@ -828,10 +829,11 @@ export class Animator {
   }
 
   /** Parado: o clipe deixa os ombros atrás do tronco; gira as clavículas para a frente (em Y) para os ombros voltarem ao lado do peito. */
-  private shoulderFwd(k: number): void {
+  private shoulderFwdPose(k: number): void {
+    if (this.shoulderFwd === 0) return;
     for (const a of this.arms) {
       if (!a.c) continue;
-      this.rotateBone(a.c, new THREE.Quaternion().setFromAxisAngle(Y, a.side * SHOULDER_FWD * k));
+      this.rotateBone(a.c, new THREE.Quaternion().setFromAxisAngle(Y, a.side * this.shoulderFwd * k));
     }
     this.updateRoot();
   }

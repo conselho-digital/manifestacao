@@ -157,11 +157,12 @@ for (const c of atlas.cells) {
   if (c.e.solid) buf = await sharp({ create: { width: c.cw, height: c.ch, channels: 4, background: { r: Math.round(c.e.def.color[0] * 255), g: Math.round(c.e.def.color[1] * 255), b: Math.round(c.e.def.color[2] * 255), alpha: 1 } } }).png().toBuffer();
   else {
     const rawPx = await sharp(c.e.rgba, { raw: { width: c.e.tn.width, height: c.e.tn.height, channels: 4 } }).resize(c.cw, c.ch, { fit: 'fill' }).raw().toBuffer();
+    if (process.env.BLACKKEY && c.e.tn.textureName.toLowerCase().includes(process.env.BLACKKEY.toLowerCase())) for (let i = 0; i < rawPx.length; i += 4) if (rawPx[i] + rawPx[i + 1] + rawPx[i + 2] < 36) rawPx[i + 3] = 0; // BLACKKEY=<trecho do nome da textura>: preto puro vira transparente (o fundo preto de roupas recortadas, como o top da Mai)
     dilate(rawPx, c.cw, c.ch, triUV.get(c.e.mi) ?? []);
     buf = await sharp(rawPx, { raw: { width: c.cw, height: c.ch, channels: 4 } }).png().toBuffer();
   }
   // borda = a própria textura repetida (como o REPEAT do original): UV um pouco além de 0..1 pega a outra ponta da textura e não a de outro material
-  const tile = await sharp({ create: { width: c.cw * 3, height: c.ch * 3, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 1 } } }).composite([0, 1, 2].flatMap((i) => [0, 1, 2].map((j) => ({ input: buf, left: j * c.cw, top: i * c.ch })))).png().toBuffer();
+  const tile = await sharp({ create: { width: c.cw * 3, height: c.ch * 3, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).composite([0, 1, 2].flatMap((i) => [0, 1, 2].map((j) => ({ input: buf, left: j * c.cw, top: i * c.ch })))).png().toBuffer();
   const ext = await sharp(tile).extract({ left: c.cw - GUT, top: c.ch - GUT, width: c.cw + 2 * GUT, height: c.ch + 2 * GUT }).png().toBuffer();
   comps.push({ input: ext, left: c.x - GUT, top: c.y - GUT });
 }
@@ -169,7 +170,11 @@ for (const c of atlas.cells) {
 let ar = 0, ag = 0, ab = 0, an = 0;
 for (const c of atlas.cells) { if (c.e.solid) { ar += c.e.def.color[0] * 255; ag += c.e.def.color[1] * 255; ab += c.e.def.color[2] * 255; an++; continue; } for (let i = 0; i < c.e.rgba.length; i += 4 * 97) { if (c.e.rgba[i + 3] > 128) { ar += c.e.rgba[i]; ag += c.e.rgba[i + 1]; ab += c.e.rgba[i + 2]; an++; } } }
 const bg = { r: Math.round(ar / Math.max(1, an)), g: Math.round(ag / Math.max(1, an)), b: Math.round(ab / Math.max(1, an)), alpha: 1 };
-const atlasPng = await sharp({ create: { width: atlas.AW, height: atlas.AH, channels: 4, background: bg } }).composite(comps).png().toBuffer();
+const rgbPng = await sharp({ create: { width: atlas.AW, height: atlas.AH, channels: 4, background: bg } }).composite(comps).removeAlpha().png().toBuffer();
+// o ALFA do atlas (cabelo, cílios, roupas com recortes) vem de um atlas à parte, sobre fundo transparente: compor tudo sobre o fundo opaco apagava o alfa e o material de recorte (MASK) mostrava os cartões do cabelo e o preto das roupas
+const transp = await sharp({ create: { width: atlas.AW, height: atlas.AH, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } }).composite(comps).png().toBuffer();
+const alphaRaw = await sharp(transp).ensureAlpha().extractChannel(3).raw().toBuffer();
+const atlasPng = await sharp(rgbPng).joinChannel(alphaRaw, { raw: { width: atlas.AW, height: atlas.AH, channels: 1 } }).png().toBuffer();
 // ---- vértices por grupo (opaco / recorte): um vértice por (vértice, material), com a UV levada para o atlas ----
 let outside = 0;
 const HEADY = process.env.HEADY ? +process.env.HEADY : null; // altura (m) a partir da qual os triângulos opacos vão para a malha "cabeça" (simplificada com menos força: os detalhes do rosto somem fácil)
