@@ -2,6 +2,7 @@
 import { fetchMine, fetchTop } from '../net/ranking';
 import { VEHICLE_COLOR, vehicleColors } from '../game/vehicle';
 import { vehiclePreview } from './vehiclePreview';
+import { applyMasterVolume } from '../game/audio';
 import { FPS_CAPS, QUALITIES, saveSettings, setQuality, settings, type Quality } from '../game/settings';
 import type { CharacterName } from '../game/characters';
 import { ALL_WEAPONS, GARAGE_ITEMS, isGunId, SHOP, WEAPON_IMG, WEAPON_NAMES, type Inventory, type ShopItem, type WeaponId } from '../game/inventory';
@@ -595,6 +596,18 @@ export function createPauseMenu(d: PauseDeps): PauseMenu {
     sens.style.cssText = 'flex:1;min-width:140px';
     sens.oninput = () => { settings.sens = Number(sens.value); val.textContent = `${settings.sens.toFixed(1)}x`; saveSettings(); };
     body.append(el('div', 'ps-row', el('span', '', 'Sensibilidade'), sens, val));
+    const vol = el('input') as HTMLInputElement;
+    vol.type = 'range'; vol.min = '0'; vol.max = '100'; vol.step = '5'; vol.value = String(Math.round(settings.volume * 100));
+    vol.style.cssText = 'flex:1;min-width:140px';
+    const volVal = el('b', '', `${Math.round(settings.volume * 100)}%`);
+    vol.oninput = () => { settings.volume = Number(vol.value) / 100; volVal.textContent = `${vol.value}%`; applyMasterVolume(); saveSettings(); };
+    body.append(el('div', 'ps-row', el('span', '', 'Volume geral'), vol, volVal));
+    const shk = el('input') as HTMLInputElement;
+    shk.type = 'range'; shk.min = '0'; shk.max = '100'; shk.step = '10'; shk.value = String(Math.round(settings.shake * 100));
+    shk.style.cssText = 'flex:1;min-width:140px';
+    const shkVal = el('b', '', `${Math.round(settings.shake * 100)}%`);
+    shk.oninput = () => { settings.shake = Number(shk.value) / 100; shkVal.textContent = `${shk.value}%`; saveSettings(); };
+    body.append(el('div', 'ps-row', el('span', '', 'Recuo e sacudidas da câmera'), shk, shkVal));
     const ring = el('input') as HTMLInputElement;
     ring.type = 'checkbox'; ring.checked = settings.voiceRing;
     ring.onchange = () => { settings.voiceRing = ring.checked; saveSettings(); };

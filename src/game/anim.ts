@@ -80,6 +80,7 @@ function gtaKey(name: string): string {
 }
 
 const FADE = 0.2;
+const CURL_Q = new THREE.Quaternion();
 const CURL_AXIS = new THREE.Vector3(0, 0, 1);
 const JAB_TIME = 0.42;
 /** Distância do osso do pulso até o meio da palma (m): é a palma, não o pulso, que segura o cabo. */
@@ -1045,7 +1046,7 @@ export class Animator {
     hand.fingers.forEach((b, i) => {
       const thumb = this.isCarlos ? i < 2 : false;
       const a = ang * (thumb ? 0.45 : 1) * (this.isCarlos ? 0.75 : 1);
-      b.quaternion.multiply(new THREE.Quaternion().setFromAxisAngle(ax, a));
+      b.quaternion.multiply(CURL_Q.setFromAxisAngle(ax, a)); // sem alocar: roda por mão de cada personagem a cada quadro
       b.updateMatrixWorld(true);
     });
   }

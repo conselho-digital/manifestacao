@@ -2,6 +2,7 @@ import { rankDeath, rankKill } from '../net/ranking';
 import type { Npc, Npcs } from './npcs';
 import * as THREE from 'three';
 import { COLLIDERS, rayBox, terrainHeight } from './map';
+import { settings } from './settings';
 import { playClick, playReloadSound, playShotAt } from './audio';
 import { Tracers } from './weapons';
 import { hittables } from './vehicle';
@@ -24,7 +25,7 @@ const PISTOL_RESERVE = 60;
 /** a munição é de graça, mas só enche de novo a cada 15 minutos (a conta de administrador não tem esse limite) */
 const AMMO_REFILL_MS = 15 * 60 * 1000;
 const GUN_IDS = [0, 3, 12, 13, 14] as const;
-const PISTOL_DAMAGE = 15;
+const PISTOL_DAMAGE = 50; // revólver (era 15: matava em 7 s contra 400 de vida; agora ~2 s, no ritmo dos fuzis)
 const PISTOL_GAP = 0.28;
 const BAT_DAMAGE = 7.5; // armas brancas (faca, taco, foice...): 25% do dano de antes (30)
 const BAT_HIT_DELAY = 0.3; // a tacada de duas mãos só acerta quando a arma passa pelo alvo (a subida do golpe não machuca)
@@ -47,6 +48,16 @@ const RECOIL: Record<string, number> = { r: 0.024, m: 0.017, q: 0.021, h: 0.012,
 const RECOIL_MAX = 0.17; // teto do recuo acumulado numa rajada (~10°)
 const RECOIL_RETURN = 6; // por segundo: quão rápido a mira volta
 
+/** Queda de dano por distância (fps-shooter): cheio até `full` m e desce em linha reta até `floor` (fração) no alcance máximo; a pistola cai mais cedo. */
+const FALLOFF: Record<string, { full: number; floor: number }> = { r: { full: 30, floor: 0.7 }, m: { full: 30, floor: 0.7 }, q: { full: 35, floor: 0.75 }, h: { full: 25, floor: 0.65 }, p: { full: 15, floor: 0.55 } };
+export function falloff(kind: string, dist: number, range: number): number {
+  const f = FALLOFF[kind];
+  if (!f || dist <= f.full) return 1;
+  return 1 - (1 - f.floor) * Math.min(1, (dist - f.full) / Math.max(1, range - f.full));
+}
+/** Padrão fixo de deriva lateral do recuo (fração do coice por tiro da rajada): aprende-se e dá para compensar; volta ao início depois de `RECOIL_RESET` s sem atirar. */
+const RECOIL_YAW = [0, 0.15, -0.25, 0.4, 0.25, -0.35, -0.5, 0.1, 0.45, 0.3, -0.2, -0.45];
+const RECOIL_RESET = 0.4;
 const SHOT_DAMAGE: Record<string, number> = { r: 20, m: 18, q: 22, h: 16 };
 const FIST_GAP = 0.5;
 /** intervalo mínimo entre dois golpes/tiros da mesma arma (s), usado para validar o dano que vem da rede */
@@ -274,6 +285,8 @@ export class Combat {
   /** Recuo da câmera (rad) somado ao giro do jogador: sobe a cada tiro e volta sozinho quando para de atirar. */
   recoilP = 0;
   recoilY = 0;
+  private shotIdx = 0;
+  private lastShotAt = 0;
 
   update(dt: number, input: InputState, player: Player): void {
     this.player = player;
@@ -406,19 +419,36 @@ export class Combat {
 
   /** Coice da câmera: a mira sobe (e desvia um pouco para o lado) a cada tiro; o revólver chuta forte, o Honey Badger silenciado pouco; mirando o coice é menor. */
   private addRecoil(kind: 'r' | 'm' | 'q' | 'h' | 'p', aiming: boolean): void {
-    const k = (RECOIL[kind] ?? 0.02) * (aiming ? 0.65 : 1);
+    const now = performance.now();
+    if (now - this.lastShotAt > RECOIL_RESET * 1000) this.shotIdx = 0; // parou de atirar: o padrão recomeça
+    this.lastShotAt = now;
+    const k = (RECOIL[kind] ?? 0.02) * (aiming ? 0.65 : 1) * settings.shake;
     this.recoilP = Math.min(RECOIL_MAX, this.recoilP + k);
-    this.recoilY = Math.max(-RECOIL_MAX * 0.5, Math.min(RECOIL_MAX * 0.5, this.recoilY + (Math.random() - 0.5) * k * 0.8));
+    const yaw = (RECOIL_YAW[this.shotIdx % RECOIL_YAW.length] ?? 0) * k * 1.6;
+    this.recoilY = Math.max(-RECOIL_MAX * 0.5, Math.min(RECOIL_MAX * 0.5, this.recoilY + yaw));
+    this.shotIdx++;
+  }
+
+  /** Sacudida da câmera ao levar dano (tier "médio" do game-feel): sobe e vira um pouco, proporcional ao dano. */
+  private hitJolt(dmg: number): void {
+    const k = Math.min(0.05, dmg / 400 * 0.4) * settings.shake;
+    this.recoilP = Math.min(RECOIL_MAX, this.recoilP + k);
+    this.recoilY = Math.max(-RECOIL_MAX * 0.5, Math.min(RECOIL_MAX * 0.5, this.recoilY + (Math.random() - 0.5) * k * 2));
   }
 
   private fireGun(player: Player, aiming: boolean, kind: 'r' | 'm' | 'q' | 'h' | 'p'): void {
     const { camera, net } = this.d;
     // Direção da mira = para onde a câmera olha (inclui cima/baixo), com um pouco de dispersão
     const dir = camera.getWorldDirection(this.tmpD);
-    const spread = aiming ? 0.003 : 0.012;
-    dir.x += (Math.random() - 0.5) * spread;
-    dir.y += (Math.random() - 0.5) * spread;
-    dir.z += (Math.random() - 0.5) * spread;
+    // dispersão num DISCO (não num quadrado) que cresce com a rajada: o 1º tiro é quase exato (fps-shooter)
+    const ramp = Math.min(1, this.shotIdx / 6);
+    const spread = aiming ? 0.0008 + 0.0025 * ramp : 0.004 + 0.009 * ramp;
+    const ang = Math.random() * Math.PI * 2;
+    const rad = spread * Math.sqrt(Math.random());
+    const cm = camera.matrixWorld.elements;
+    dir.x += (cm[0]! * Math.cos(ang) + cm[4]! * Math.sin(ang)) * rad;
+    dir.y += (cm[1]! * Math.cos(ang) + cm[5]! * Math.sin(ang)) * rad;
+    dir.z += (cm[2]! * Math.cos(ang) + cm[6]! * Math.sin(ang)) * rad;
     dir.normalize();
 
     // 1) onde o centro da tela aponta; 2) do cano até esse ponto (respeita paredes no meio do caminho)
@@ -441,7 +471,7 @@ export class Combat {
     this.addRecoil(kind, aiming);
     playShotAt(muzzle.x, muzzle.z, kind === 'p' ? 'pistol' : kind === 'h' ? 'silenced' : kind === 'm' ? 'm4' : kind === 'q' ? 'm16' : 'rifle');
     if (hit.id) { this.hitTick++; this.recentHit.set(hit.id, performance.now()); }
-    if (hit.npc) { const dmg = kind === 'p' ? PISTOL_DAMAGE : SHOT_DAMAGE[kind] ?? AK_DAMAGE; hit.npc.hurt(hit.head ? dmg * 2 : dmg, muzzle.x, muzzle.z); this.hitTick++; }
+    if (hit.npc) { const dmg = (kind === 'p' ? PISTOL_DAMAGE : SHOT_DAMAGE[kind] ?? AK_DAMAGE) * falloff(kind, hit.t, RANGE); hit.npc.hurt(hit.head ? dmg * 2 : dmg, muzzle.x, muzzle.z); this.hitTick++; }
     this.d.npcs?.()?.scare(muzzle.x, muzzle.z, kind === 'h' ? 10 : 35); // o barulho do tiro faz a rua fugir
     net.sendShot({ x1: muzzle.x, y1: muzzle.y, z1: muzzle.z, x2: end.x, y2: end.y, z2: end.z, h: hit.id ?? '', k: kind, hs: hit.head });
   }
@@ -524,7 +554,11 @@ export class Combat {
     }
     if (m.h === this.d.net.id && !this.dead && this.invuln <= 0 && this.protectT <= 0 && !this.paused && this.plausible(m, shooter)) {
       const base = m.k === 'k' ? KICK_DAMAGE : m.k === 'f' ? FIST_DAMAGE : m.k === 'b' ? BAT_DAMAGE : m.k === 'p' ? PISTOL_DAMAGE : (SHOT_DAMAGE[m.k] ?? AK_DAMAGE);
-      const dmg = m.hs && m.k !== 'f' && m.k !== 'b' && m.k !== 'k' ? base * 2 : base;
+      const gun = m.k !== 'f' && m.k !== 'b' && m.k !== 'k';
+      const dist = Math.hypot(m.x2 - m.x1, m.y2 - m.y1, m.z2 - m.z1);
+      const scaled = gun ? base * falloff(m.k, dist, RANGE) : base; // a queda por distância vale também para quem leva o tiro
+      const dmg = m.hs && gun ? scaled * 2 : scaled;
+      this.hitJolt(dmg);
       if (m.k === 'f' || m.k === 'b' || m.k === 'k') this.player?.flinch(m.k, shooter?.root.position);
       else if (performance.now() - this.lastFlinchAt > 700) { this.lastFlinchAt = performance.now(); this.player?.flinch('f', shooter?.root.position); } // levou tiro: reage (no máximo a cada 0,7 s)
       this.damage(dmg, m.id, { f: 'PUNHO', k: 'CHUTE', b: 'ARMA BRANCA', p: 'PISTOLA', r: 'AK-47', m: 'M4A1', q: 'M16', h: 'HONEY BADGER' }[m.k]);

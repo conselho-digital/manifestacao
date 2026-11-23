@@ -12,6 +12,10 @@ export interface Settings {
   voiceRing: boolean;
   /** qualidade gráfica: resolução de desenho e sombras (padrão: média) */
   quality: Quality;
+  /** volume geral (0..1; o ganho real é o quadrado, ver audio.ts) */
+  volume: number;
+  /** intensidade do recuo e das sacudidas da câmera (0 = desligado, 1 = padrão); acessibilidade */
+  shake: number;
 }
 
 export type Quality = 'high' | 'medium' | 'low';
@@ -19,7 +23,7 @@ export const QUALITIES: readonly Quality[] = ['high', 'medium', 'low'];
 
 export const FPS_CAPS = [30, 45, 60, 90, 120] as const;
 
-const DEFAULTS: Settings = { sens: 0.6, fpsCapOn: false, fpsCap: 30, voiceRing: true, quality: 'medium' };
+const DEFAULTS: Settings = { sens: 0.6, fpsCapOn: false, fpsCap: 30, voiceRing: true, quality: 'medium', volume: 1, shake: 1 };
 
 function load(): Settings {
   try {
@@ -28,7 +32,7 @@ function load(): Settings {
     const sens = (o as { sensV?: number }).sensV === 4 && typeof o.sens === 'number' && Number.isFinite(o.sens) ? Math.min(3, Math.max(0.2, o.sens)) : DEFAULTS.sens;
     const fpsCap = (FPS_CAPS as readonly number[]).includes(o.fpsCap as number) ? (o.fpsCap as number) : DEFAULTS.fpsCap;
     // quem salvou antes da versão 2 volta ao padrão (sem limite)
-    return { sens, fpsCapOn: (o as { fpsV?: number }).fpsV === 2 && typeof o.fpsCapOn === 'boolean' ? o.fpsCapOn : DEFAULTS.fpsCapOn, fpsCap, voiceRing: typeof o.voiceRing === 'boolean' ? o.voiceRing : DEFAULTS.voiceRing, quality: QUALITIES.includes(o.quality as Quality) ? (o.quality as Quality) : DEFAULTS.quality };
+    return { sens, fpsCapOn: (o as { fpsV?: number }).fpsV === 2 && typeof o.fpsCapOn === 'boolean' ? o.fpsCapOn : DEFAULTS.fpsCapOn, fpsCap, voiceRing: typeof o.voiceRing === 'boolean' ? o.voiceRing : DEFAULTS.voiceRing, quality: QUALITIES.includes(o.quality as Quality) ? (o.quality as Quality) : DEFAULTS.quality, volume: typeof o.volume === 'number' && Number.isFinite(o.volume) ? Math.min(1, Math.max(0, o.volume)) : DEFAULTS.volume, shake: typeof o.shake === 'number' && Number.isFinite(o.shake) ? Math.min(1, Math.max(0, o.shake)) : DEFAULTS.shake };
   } catch {
     return { ...DEFAULTS };
   }

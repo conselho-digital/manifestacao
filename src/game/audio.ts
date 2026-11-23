@@ -1,4 +1,5 @@
 const clamp = (v: number, lo: number, hi: number): number => Math.min(hi, Math.max(lo, v));
+import { settings } from './settings';
 let ctx: AudioContext | null = null;
 let master: GainNode | null = null;
 
@@ -18,13 +19,25 @@ function loadRevolver(c: AudioContext): void {
   get('/sounds/reload-rifle.mp3', (b) => { reloadBuf = b; });
 }
 
+/** Aplica o volume geral das configurações (0..1) ao ganho mestre. */
+export function applyMasterVolume(): void {
+  if (master && ctx) master.gain.setTargetAtTime(settings.volume * settings.volume, ctx.currentTime, 0.03);
+}
+
 /** AudioContext único do jogo (motores, tiros e voz passam todos pelo ganho mestre). */
 export function audioCtx(): AudioContext | null {
   try {
     ctx ??= new AudioContext();
     if (ctx.state === 'suspended') void ctx.resume();
     loadRevolver(ctx);
-    if (!master) { master = ctx.createGain(); master.gain.value = 1; master.connect(ctx.destination); }
+    if (!master) {
+      // ganho mestre (slider de volume: o ganho real é o quadrado, que espalha a variação pelo curso todo) -> limitador de segurança (-3 dB, tiros e motores somados não estouram) -> saída
+      master = ctx.createGain();
+      master.gain.value = settings.volume * settings.volume;
+      const limiter = ctx.createDynamicsCompressor();
+      limiter.threshold.value = -3; limiter.knee.value = 0; limiter.ratio.value = 20; limiter.attack.value = 0.003; limiter.release.value = 0.15;
+      master.connect(limiter).connect(ctx.destination);
+    }
     return ctx;
   } catch {
     return null;
