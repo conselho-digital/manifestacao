@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { MeshoptDecoder } from 'three/examples/jsm/libs/meshopt_decoder.module.js';
 import * as SkeletonUtils from 'three/examples/jsm/utils/SkeletonUtils.js';
 import { buildCustom, customOf, isCustomId } from './customChars';
 import { buildRigged, RIGGED_NAMES } from './autoRig';
@@ -46,7 +47,7 @@ export const labelOf = (n: CharacterName): string => (isCustomId(n) ? customOf(n
 
 export const CHARACTER_HEIGHT = 1.8;
 
-const loader = new GLTFLoader();
+const loader = new GLTFLoader().setMeshoptDecoder(MeshoptDecoder); // modelos comprimidos com meshopt (menos bytes)
 const cache = new Map<string, Promise<THREE.Object3D>>();
 
 /** Cena original (sem clonar) de um modelo de `public/models/characters`. */

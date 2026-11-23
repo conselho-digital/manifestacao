@@ -11,6 +11,9 @@ import sharp from 'sharp';
 const require = createRequire(import.meta.url);
 const { DffParser, TxdParser } = require('rw-parser');
 await MeshoptSimplifier.ready;
+// SKIN=1: leva os pesos de pele NATIVOS do DFF (ped do GTA SA com 33 quadros) como atributos _RIGIDX/_RIGW (4 ossos por vértice; índices em RIG_NAMES, na MESMA ordem do autoRig.ts)
+const RIG_NAMES = ['pelvis', 'spine', 'spine1', 'neck', 'head', 'r clavicle', 'r upperarm', 'r forearm', 'r hand', 'r finger', 'r finger01', 'l clavicle', 'l upperarm', 'l forearm', 'l hand', 'l finger', 'l finger01', 'r thigh', 'r calf', 'r foot', 'r toe0', 'l thigh', 'l calf', 'l foot', 'l toe0'];
+const RJ = [], RW = [];
 const [dffp, txdp, outp, trisArg, texArg, upArg, fwdArg] = process.argv.slice(2);
 const TARGET = +(trisArg ?? 3500), TEX = +(texArg ?? 512);
 const quiet = (fn) => { const l = console.log; console.log = () => {}; try { return fn(); } finally { console.log = l; } };
@@ -39,6 +42,7 @@ for (const at of clump.atomics) {
     const t = g.textureMappingInformation?.[0]?.[i] ?? { u: 0, v: 0 };
     UV.push(t.u, t.v);
   }
+  if (process.env.SKIN === '1' && g.skin && clump.atomics.length === 1) for (let i = 0; i < g.vertexInformation.length; i++) { RJ.push(...g.skin.boneVertexIndices[i]); RW.push(...g.skin.vertexWeights[i]); }
   const mids = g.materialList.materialData.map((m) => {
     const tex = m.texture?.textureName?.toLowerCase() ?? null;
     const key = `${tex}|${m.color.r},${m.color.g},${m.color.b}`;
@@ -87,6 +91,22 @@ for (let i = 0; i < nv; i++) {
   pos[i * 3] = (dot(L, i) - (xmin + xmax) / 2) * S; pos[i * 3 + 1] = (dot(U, i) - ymin) * S; pos[i * 3 + 2] = (dot(F, i) - (zmin + zmax) / 2) * S;
   const nx = N[i * 3], ny = N[i * 3 + 1], nz = N[i * 3 + 2];
   nor[i * 3] = dotv(L, nx, ny, nz); nor[i * 3 + 1] = dotv(U, nx, ny, nz); nor[i * 3 + 2] = dotv(F, nx, ny, nz);
+}
+// pesos nativos: osso do DFF (índice k = quadro k+1) -> nome do rig. Esqueleto padrão de ped do SA (33 quadros): 1 raiz, 2 pélvis, 3 espinha, 4 espinha1, 5 pescoço, 6 cabeça (7-9 mandíbula/sobrancelhas),
+// 10-15 e 16-21 braços (clavícula, braço, antebraço, mão, dedos, polegar), 22-23 seios, 24 barriga, 25-28 e 29-32 pernas (coxa, canela, pé, dedo do pé); lado pelo X de cada osso.
+let boneMap = null;
+if (process.env.SKIN === '1' && RJ.length) {
+  if (clump.frameList.frames.length !== 33) throw new Error('SKIN=1 espera 33 quadros');
+  const cx = (xmin + xmax) / 2;
+  const sideOf = (fr) => { const w = world(fr); return dotv(L, w[0][3], w[1][3], w[2][3]) - cx >= 0 ? 'l' : 'r'; };
+  const names = new Array(33).fill(null);
+  names[1] = 'pelvis'; names[2] = 'pelvis'; names[3] = 'spine'; names[4] = 'spine1'; names[5] = 'neck'; names[6] = 'head'; names[7] = 'head'; names[8] = 'head'; names[9] = 'head';
+  names[22] = 'spine1'; names[23] = 'spine1'; names[24] = 'spine';
+  for (const [a, sideFrame] of [[10, 11], [16, 17]]) { const sd = sideOf(sideFrame); ['clavicle', 'upperarm', 'forearm', 'hand', 'finger', 'finger01'].forEach((n, i) => { names[a + i] = `${sd} ${n}`; }); }
+  for (const [a, sideFrame] of [[25, 25], [29, 29]]) { const sd = sideOf(sideFrame); ['thigh', 'calf', 'foot', 'toe0'].forEach((n, i) => { names[a + i] = `${sd} ${n}`; }); }
+  boneMap = (k) => RIG_NAMES.indexOf(names[k + 1] ?? 'pelvis');
+  const sides = [11, 17, 25, 29].map((f) => `${f}:${sideOf(f)}`).join(' ');
+  console.error('SKIN: lados', sides);
 }
 // ---- atlas: todas as texturas do personagem numa só (1 material opaco + 1 com recorte, para cabelo/dentes) ----
 const texByName = new Map(txd.textureDictionary.textureNatives.map((t) => [t.textureName.toLowerCase(), t]));
@@ -178,7 +198,7 @@ const atlasPng = await sharp(rgbPng).joinChannel(alphaRaw, { raw: { width: atlas
 // ---- vértices por grupo (opaco / recorte): um vértice por (vértice, material), com a UV levada para o atlas ----
 let outside = 0;
 const HEADY = process.env.HEADY ? +process.env.HEADY : null; // altura (m) a partir da qual os triângulos opacos vão para a malha "cabeça" (simplificada com menos força: os detalhes do rosto somem fácil)
-const mkGroup = (alpha, name) => ({ alpha, name, key: new Map(), P: [], N: [], T: [], I: [] });
+const mkGroup = (alpha, name) => ({ alpha, name, key: new Map(), P: [], N: [], T: [], I: [], RI: [], RW: [] });
 const groups = [mkGroup(false, 'opaco'), mkGroup(true, 'recorte'), mkGroup(false, 'cabeca')];
 for (const t of tri) {
   const c = cellOf.get(t[3]);
@@ -197,6 +217,12 @@ for (const t of tri) {
       if (u < -GUT / c.cw || u > 1 + GUT / c.cw || v < -GUT / c.ch || v > 1 + GUT / c.ch) outside++;
       u = Math.min(1 + GUT / c.cw, Math.max(-GUT / c.cw, u)); v = Math.min(1 + GUT / c.ch, Math.max(-GUT / c.ch, v));
       g.T.push((c.x + u * c.cw) / atlas.AW, (c.y + v * c.ch) / atlas.AH);
+      if (boneMap) { // junta os ossos que viram o mesmo nome do rig e fica com os 4 mais fortes
+        const acc4 = new Map();
+        for (let q = 0; q < 4; q++) { const w = RW[vi * 4 + q]; if (w > 0) { const id = boneMap(RJ[vi * 4 + q]); acc4.set(id, (acc4.get(id) ?? 0) + w); } }
+        const top = [...acc4.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4); const sum = top.reduce((a, e) => a + e[1], 0) || 1;
+        for (let q = 0; q < 4; q++) { g.RI.push(top[q] ? top[q][0] : 0); g.RW.push(top[q] ? top[q][1] / sum : 0); }
+      }
     }
     g.I.push(ni);
   }
@@ -220,6 +246,7 @@ for (const g of groups) {
   mesh.addPrimitive(doc.createPrimitive().setName(g.name).setMaterial(material)
     .setAttribute('POSITION', acc('VEC3', g.P, Float32Array)).setAttribute('NORMAL', acc('VEC3', g.N, Float32Array)).setAttribute('TEXCOORD_0', acc('VEC2', g.T, Float32Array))
     .setIndices(acc('SCALAR', g.I, Uint32Array)));
+  if (boneMap) { const pr = mesh.listPrimitives().at(-1); pr.setAttribute('_RIGIDX', acc('VEC4', g.RI, Uint8Array)).setAttribute('_RIGW', acc('VEC4', g.RW.map((w) => Math.round(w * 255)), Uint8Array).setNormalized(true)); }
 }
 const count = () => { let t = 0; for (const p of mesh.listPrimitives()) t += p.getIndices().getCount() / 3; return t; };
 const before = count();

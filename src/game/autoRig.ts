@@ -27,9 +27,19 @@ function distSeg(p: THREE.Vector3, a: THREE.Vector3, b: THREE.Vector3, tmp: THRE
 }
 
 /** Giro extra dos braços para perto do corpo (graus, no plano da frente, em volta do ombro): o Vini tem os braços mais abertos que o esqueleto do Law1. */
-const ARM_IN: Record<string, number> = { Vini: 11, Xandao: 6, MaiBrasil: 12, MaiMexico: 12 };
+const ARM_IN: Record<string, number> = { Vini: 11, Xandao: 6, MaiBrasil: 15, MaiMexico: 15 };
 /** Giro (rad) das clavículas no idle para os ombros voltarem ao lado do peito (`Animator.shoulderFwd`): só o Vini, que tem os ombros atrás do peito; nos outros deixava os braços abertos demais. */
 const SHOULDER_FWD: Record<string, number> = { Vini: -0.35 };
+/**
+ * Corpo mais cheio (só quem pede): as Mai têm braços e pernas finíssimos como gravetos e pés minúsculos. Cada vértice é empurrado para fora do eixo do osso que o move
+ * ([radial, axial]: quanto o membro engrossa e, nos pés, quanto alonga a partir do tornozelo), antes de ligar os pesos; vale na pose de repouso, então anima junto.
+ */
+const BODY_FIX: Record<string, Record<string, readonly [number, number]>> = {
+  MaiBrasil: { foot: [1.7, 1.5], toe0: [1.7, 1.5] },
+  MaiMexico: { foot: [1.7, 1.5], toe0: [1.7, 1.5] },
+};
+/** Ordem dos ossos nos atributos `_rigidx`/`_rigw` (pesos de pele NATIVOS do DFF, gravados por scripts/models/chars/dff2glb.mjs com SKIN=1: MESMA lista). */
+const RIG_NAMES = ['pelvis', 'spine', 'spine1', 'neck', 'head', 'r clavicle', 'r upperarm', 'r forearm', 'r hand', 'r finger', 'r finger01', 'l clavicle', 'l upperarm', 'l forearm', 'l hand', 'l finger', 'l finger01', 'r thigh', 'r calf', 'r foot', 'r toe0', 'l thigh', 'l calf', 'l foot', 'l toe0'];
 const Z_AXIS = new THREE.Vector3(0, 0, 1);
 const smooth = (x: number, a: number, b: number): number => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
 
@@ -145,6 +155,7 @@ export async function buildRigged(source: THREE.Object3D, name: string): Promise
   const tmp = new THREE.Vector3();
   const v = new THREE.Vector3();
   const skeleton = new THREE.Skeleton(skelBones);
+  const bodyFix = BODY_FIX[name];
   const w4 = new Float32Array(segs.length);
   for (const m of meshes) {
     const g = m.geometry;
@@ -153,27 +164,49 @@ export async function buildRigged(source: THREE.Object3D, name: string): Promise
     const pos = new Float32Array(n * 3);
     const si = new Uint16Array(n * 4);
     const sw = new Float32Array(n * 4);
+    const nIdx = g.getAttribute('_rigidx');
+    const nW = g.getAttribute('_rigw');
+    const native = nIdx && nW ? RIG_NAMES.map((nm) => segs.findIndex((sg) => sg.k === nm)) : null;
     for (let i = 0; i < n; i++) {
       v.fromBufferAttribute(pa, i).applyMatrix4(m.matrixWorld);
       if (fixArms) fixArms(v);
-      // pesos: 1 / (distância além do raio do osso)^3, os 4 mais fortes
-      for (let j = 0; j < segs.length; j++) {
-        const s = segs[j]!;
-        const d = Math.max(0, distSeg(v, s.a, s.b, tmp) - s.r);
-        w4[j] = 1 / Math.pow(d + EPS, PSEL);
+      if (native && nIdx && nW) { // pesos de pele do próprio modelo (esqueleto SA do DFF): o braço e a perna deformam como o artista fez
+        let sumN = 0;
+        for (let k = 0; k < 4; k++) { const wk = nW.getComponent(i, k); const jk = native[Math.round(nIdx.getComponent(i, k))] ?? 0; si[i * 4 + k] = Math.max(0, jk); sw[i * 4 + k] = wk; sumN += wk; }
+        for (let k = 0; k < 4; k++) sw[i * 4 + k] = sumN > 0 ? sw[i * 4 + k]! / sumN : k === 0 ? 1 : 0;
+      } else {
+        // pesos: 1 / (distância além do raio do osso)^3, os 4 mais fortes
+        for (let j = 0; j < segs.length; j++) {
+          const s = segs[j]!;
+          const d = Math.max(0, distSeg(v, s.a, s.b, tmp) - s.r);
+          w4[j] = 1 / Math.pow(d + EPS, PSEL);
+        }
+        let sum = 0;
+        for (let k = 0; k < 4; k++) {
+          let best = -1;
+          let bw = 0;
+          for (let j = 0; j < segs.length; j++) if (w4[j]! > bw) { bw = w4[j]!; best = j; }
+          if (best < 0) break;
+          si[i * 4 + k] = best;
+          sw[i * 4 + k] = bw;
+          sum += bw;
+          w4[best] = 0;
+        }
+        for (let k = 0; k < 4; k++) sw[i * 4 + k] = sum > 0 ? sw[i * 4 + k]! / sum : k === 0 ? 1 : 0;
       }
-      let sum = 0;
-      for (let k = 0; k < 4; k++) {
-        let best = -1;
-        let bw = 0;
-        for (let j = 0; j < segs.length; j++) if (w4[j]! > bw) { bw = w4[j]!; best = j; }
-        if (best < 0) break;
-        si[i * 4 + k] = best;
-        sw[i * 4 + k] = bw;
-        sum += bw;
-        w4[best] = 0;
+      if (bodyFix) {
+        let dx = 0, dy = 0, dz = 0;
+        for (let k = 0; k < 4; k++) {
+          const wk = sw[i * 4 + k]!;
+          const sg = segs[si[i * 4 + k]!]!;
+          const f = bodyFix[sg.k.replace(/^[rl] /, '')];
+          if (!f || wk <= 0) continue;
+          distSeg(v, sg.a, sg.b, tmp); // tmp = ponto mais próximo do eixo − v
+          dx -= wk * (f[0] - 1) * tmp.x; dy -= wk * (f[0] - 1) * tmp.y; dz -= wk * (f[0] - 1) * tmp.z;
+          if (f[1] !== 1) { dx += wk * (f[1] - 1) * (v.x - sg.a.x); dy += wk * (f[1] - 1) * (v.y - sg.a.y); dz += wk * (f[1] - 1) * (v.z - sg.a.z); }
+        }
+        v.x += dx; v.y += dy; v.z += dz;
       }
-      for (let k = 0; k < 4; k++) sw[i * 4 + k] = sum > 0 ? sw[i * 4 + k]! / sum : k === 0 ? 1 : 0;
       v.applyMatrix4(inv);
       pos[i * 3] = v.x; pos[i * 3 + 1] = v.y; pos[i * 3 + 2] = v.z;
     }

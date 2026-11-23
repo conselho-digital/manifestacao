@@ -11,7 +11,7 @@ export function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls = '', ...k
   return e;
 }
 
-export const faceUrl = (n: CharacterName): string => (isCustomId(n) ? customOf(n)?.face ?? '' : `/faces/${n}.webp?v=3`);
+export const faceUrl = (n: CharacterName): string => (isCustomId(n) ? customOf(n)?.face ?? '' : `/faces/${n}.webp?v=4`);
 
 export const PICKER_CSS = `
 .pk-cats{width:100%;padding:8px 0 24px}
