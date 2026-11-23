@@ -1159,7 +1159,7 @@ export class Animator {
     const rot = lowRot.slerp(aimRot, k);
     const off = cfg.crouchLow.clone().lerp(cfg.crouchAim, k).multiplyScalar(this.crouchW);
     const pos = cfg.low.pos.clone().lerp(cfg.aim.pos, k).sub(this.chestRest.pos).add(off).applyQuaternion(rot).add(chestPos);
-    const pitch = THREE.MathUtils.lerp(cfg.low.pitch + this.aimPitch * 0.5, this.aimPitch, k) - 0.05 * this.recoil;
+    const pitch = THREE.MathUtils.lerp(cfg.low.pitch + this.aimPitch * 0.5, this.aimPitch, k) - 0.09 * this.recoil;
     const yaw = THREE.MathUtils.lerp(cfg.low.yaw, cfg.aim.yaw, k);
     const q = new THREE.Quaternion().setFromAxisAngle(Y, yaw).multiply(new THREE.Quaternion().setFromAxisAngle(X, pitch));
     // clipe feito para segurar o fuzil: a arma fica entre as duas mãos do clipe (direita na empunhadura, esquerda no guarda-mão)
@@ -1187,7 +1187,7 @@ export class Animator {
       pos.lerp(byHands, 1 - k);
       q.slerp(qh, 1 - k);
     }
-    pos.addScaledVector(new THREE.Vector3(0, 0, -1).applyQuaternion(q), 0.05 * this.recoil); // recua no coice
+    pos.addScaledVector(new THREE.Vector3(0, 0, -1).applyQuaternion(q), 0.09 * this.recoil); // recua no coice
     this.ovLeft = null;
     // animações curtas nas mãos da pistola: recarregar (colt45_reload) e sacar até mirar (ARRESTgun)
     const pistol = kindOf(this.armed) === 'pistol' && !isSpray(this.armed);

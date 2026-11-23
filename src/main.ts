@@ -529,7 +529,7 @@ function loop(): void {
       } else hornDownAt = 0;
       if (dc && player.isDriving && (dc.siren || dc.lights) && nowH - lastSirenBeat > 1000) { lastSirenBeat = nowH; net.sendHorn(dc.x, dc.z, dc.siren ? 2 : 3); }
       aimK += ((input.aim && combat.isGun && !player.isDriving ? 1 : 0) - aimK) * Math.min(1, dt * 9);
-      player.followCamera(camera, dt, yaw + camOffset, pitch, aimK, intro !== null);
+      player.followCamera(camera, dt, yaw + camOffset + (combat?.recoilY ?? 0), pitch + (combat?.recoilP ?? 0), aimK, intro !== null);
       if (intro) flyIntro(dt);
       setListener(player.object.position.x, player.object.position.z, yaw + camOffset); // ouve do personagem, vira com a câmera
       player.setAimPitch(pitch);

@@ -42,6 +42,11 @@ const RIFLE_OF: Partial<Record<number, { kind: RifleKind; shot: 'r' | 'm' | 'q' 
   13: { kind: 'm16', shot: 'q', damage: 22, gap: 0.12 },
   14: { kind: 'hb', shot: 'h', damage: 16, gap: 0.1 },
 };
+/** Coice da câmera por tiro (rad): AK, M4A1, M16, Honey Badger e revólver. */
+const RECOIL: Record<string, number> = { r: 0.024, m: 0.017, q: 0.021, h: 0.012, p: 0.045 };
+const RECOIL_MAX = 0.17; // teto do recuo acumulado numa rajada (~10°)
+const RECOIL_RETURN = 6; // por segundo: quão rápido a mira volta
+
 const SHOT_DAMAGE: Record<string, number> = { r: 20, m: 18, q: 22, h: 16 };
 const FIST_GAP = 0.5;
 /** intervalo mínimo entre dois golpes/tiros da mesma arma (s), usado para validar o dano que vem da rede */
@@ -266,9 +271,18 @@ export class Combat {
     return id === this.d.net.id ? this.d.name : this.d.remotes.get(id)?.info.name ?? 'Alguém';
   }
 
+  /** Recuo da câmera (rad) somado ao giro do jogador: sobe a cada tiro e volta sozinho quando para de atirar. */
+  recoilP = 0;
+  recoilY = 0;
+
   update(dt: number, input: InputState, player: Player): void {
     this.player = player;
     this.tracers.update(dt);
+    const back = Math.exp(-dt * RECOIL_RETURN);
+    this.recoilP *= back;
+    this.recoilY *= back;
+    if (Math.abs(this.recoilP) < 1e-4) this.recoilP = 0;
+    if (Math.abs(this.recoilY) < 1e-4) this.recoilY = 0;
     // a cada 15 minutos a munição enche de novo (também enquanto o jogador está morto ou dirigindo)
     if (Date.now() - this.lastRefill >= AMMO_REFILL_MS) {
       this.refillGuns();
@@ -390,6 +404,13 @@ export class Combat {
 
   // ---------- tiro ----------
 
+  /** Coice da câmera: a mira sobe (e desvia um pouco para o lado) a cada tiro; o revólver chuta forte, o Honey Badger silenciado pouco; mirando o coice é menor. */
+  private addRecoil(kind: 'r' | 'm' | 'q' | 'h' | 'p', aiming: boolean): void {
+    const k = (RECOIL[kind] ?? 0.02) * (aiming ? 0.65 : 1);
+    this.recoilP = Math.min(RECOIL_MAX, this.recoilP + k);
+    this.recoilY = Math.max(-RECOIL_MAX * 0.5, Math.min(RECOIL_MAX * 0.5, this.recoilY + (Math.random() - 0.5) * k * 0.8));
+  }
+
   private fireGun(player: Player, aiming: boolean, kind: 'r' | 'm' | 'q' | 'h' | 'p'): void {
     const { camera, net } = this.d;
     // Direção da mira = para onde a câmera olha (inclui cima/baixo), com um pouco de dispersão
@@ -417,6 +438,7 @@ export class Combat {
 
     this.tracers.add(muzzle, end);
     player.weaponVis?.flash();
+    this.addRecoil(kind, aiming);
     playShotAt(muzzle.x, muzzle.z, kind === 'p' ? 'pistol' : kind === 'h' ? 'silenced' : kind === 'm' ? 'm4' : kind === 'q' ? 'm16' : 'rifle');
     if (hit.id) { this.hitTick++; this.recentHit.set(hit.id, performance.now()); }
     if (hit.npc) { const dmg = kind === 'p' ? PISTOL_DAMAGE : SHOT_DAMAGE[kind] ?? AK_DAMAGE; hit.npc.hurt(hit.head ? dmg * 2 : dmg, muzzle.x, muzzle.z); this.hitTick++; }
