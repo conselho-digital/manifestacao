@@ -254,6 +254,8 @@ export async function buildRigged(source: THREE.Object3D, name: string): Promise
     const dCurl = fing1.getWorldPosition(V3()).sub(p0);
     fing.quaternion.multiply(qc.clone().invert()); fing.updateMatrixWorld(true);
     const n = dCurl.addScaledVector(a, -dCurl.dot(a)).normalize();
+    // com os braços caídos (pose A) a palma olha para a coxa: mão direita (x < 0) para +x, esquerda para -x. O teste do Law1 acima deu a MESMA direção (-x) nas duas mãos, ou seja, a direita fechava para fora.
+    if (n.x * (W.x < 0 ? 1 : -1) < 0) n.negate();
     const u = V3().crossVectors(a, n).normalize();
     const rel = (p: THREE.Vector3): [number, number, number] => { wv.copy(p).sub(W); return [wv.dot(a), wv.dot(u), wv.dot(n)]; };
     const co = H.map((h) => rel(h.p));

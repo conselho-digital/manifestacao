@@ -14,6 +14,7 @@ type Kind = 'gta' | 'carlos';
 /** Quanto (rad) endireitar mid, chest, neck e head no crouch_idle. */
 /** Quanto as mãos livres ficam fechadas (0 aberta, 1 punho). */
 const RELAXED_CURL = 0.5;
+const RELAXED_CURL_OWN = 0.3;
 const CROUCH_LIFT = [0.25, 0.25, 0.2, 0.15];
 export type Armed = 'none' | 'rifle' | 'aim' | 'pistol' | 'pistol_aim' | 'bat' | 'sign' | 'cricket' | 'spray' | 'spray_aim' | ExtraMelee;
 /** Armas brancas extras (pacote de armas): garrafa quebrada, cano, cutelo, foice e machado. */
@@ -1070,8 +1071,9 @@ export class Animator {
   /** Mãos livres (parado, andando, correndo): 50% fechadas, como uma mão solta de verdade. */
   private relaxHands(): void {
     this.dirty = true;
-    this.curlHand(1, RELAXED_CURL);
-    this.curlHand(-1, RELAXED_CURL);
+    // dedos próprios do modelo: só LEVEMENTE fechados (a 50% dos ângulos de punho ficavam em garra)
+    this.curlHand(1, this.fingerRig[1] ? RELAXED_CURL_OWN : RELAXED_CURL);
+    this.curlHand(-1, this.fingerRig[-1] ? RELAXED_CURL_OWN : RELAXED_CURL);
   }
 
   /** Fecha a mão em torno do cabo (w: 0 aberta, 1 fechada). Os dedos dobram no eixo local Z do osso. */
