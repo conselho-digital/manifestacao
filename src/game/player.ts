@@ -11,6 +11,8 @@ import { rifleNetCode, type RifleKind } from './rifles';
 const WALK_SPEED = 2.1;
 const SPRINT_SPEED = 6.2;
 const CROUCH_SPEED = 1.0;
+const GROUND_ACC = 9; // m/s² ao acelerar
+const GROUND_DEC = 15; // m/s² ao frear ou virar
 const AIM_SPEED = 2.7; // andando com o fuzil no ombro
 const GRAVITY = -20;
 const JUMP_V = 6.8;
@@ -125,6 +127,11 @@ export class Player {
   readonly object: THREE.Object3D;
   private heading = 0; // rotação do corpo (rad)
   private vy = 0;
+  /** velocidade horizontal atual a pé (m/s): acelera e freia aos poucos, como no GTA */
+  private velX = 0;
+  private velZ = 0;
+  private sprintAnim = false;
+  private lean = 0;
   private mode: Mode = 'ground';
   private launchT = 0;
   private landT = 0;
@@ -385,6 +392,7 @@ export class Player {
     this.weaponVis?.update(dt);
     this.holdCrouch = input.crouchHeld;
 
+    if (this.mode !== 'ground' && this.mode !== 'air') { this.velX = 0; this.velZ = 0; this.sprintAnim = false; }
     if (this.mode === 'dead') { this.finish(dt); return; }
     if (this.mode === 'approach') { this.updateApproach(dt); return; }
     if (this.mode === 'enter' || this.mode === 'exit') { this.updateSeq(dt); return; }
@@ -422,18 +430,33 @@ export class Player {
     const forward = new THREE.Vector3(Math.sin(yaw), 0, Math.cos(yaw));
     const right = new THREE.Vector3(-forward.z, 0, forward.x);
     const move = forward.multiplyScalar(input.y).add(right.multiplyScalar(input.x));
+    let wantX = 0;
+    let wantZ = 0;
     if (moving && move.lengthSq() > 1e-6) {
       const speed = this.crouching ? CROUCH_SPEED
         : this.armed === 'aim' || this.armed === 'pistol_aim' ? AIM_SPEED
           : input.sprint ? SPRINT_SPEED : facesAim(this.armed) ? AIM_SPEED : WALK_SPEED;
       const dir = move.clone().normalize();
       const wade = waterDepth(pos.x, pos.z) > 0.05 ? 0.6 : 1; // dentro da água rasa anda mais devagar
-      this.moveHoriz(dir.x * speed * wade * dt, dir.z * speed * wade * dt);
+      wantX = dir.x * speed * wade;
+      wantZ = dir.z * speed * wade;
       this.heading = Math.atan2(dir.x, dir.z);
       // direção em relação ao corpo quando ele olha para onde a câmera aponta
       this.moveF = dir.x * Math.sin(yaw) + dir.z * Math.cos(yaw);
       this.moveL = dir.x * Math.cos(yaw) - dir.z * Math.sin(yaw);
     }
+    // aceleração e frenagem graduais (sai do lugar em ~0,25 s andando e ~0,7 s correndo; para deslizando um pouco)
+    const wl = Math.hypot(wantX, wantZ);
+    const vl0 = Math.hypot(this.velX, this.velZ);
+    const turning = vl0 > 1 && wl > 0 && (this.velX * wantX + this.velZ * wantZ) / (vl0 * wl) < 0.9; // muda de direção: faz a curva mais rápido
+    const accel = (wl >= vl0 && !turning ? GROUND_ACC : GROUND_DEC) * dt;
+    const dvx = wantX - this.velX;
+    const dvz = wantZ - this.velZ;
+    const dvl = Math.hypot(dvx, dvz);
+    if (dvl <= accel) { this.velX = wantX; this.velZ = wantZ; } else { this.velX += (dvx / dvl) * accel; this.velZ += (dvz / dvl) * accel; }
+    const vs = Math.hypot(this.velX, this.velZ);
+    if (vs > 1e-4) this.moveHoriz(this.velX * dt, this.velZ * dt);
+    this.sprintAnim = (input.sprint || this.sprintAnim) && vs > (this.sprintAnim ? 2.9 : 3.4); // corre só quando a velocidade já passou do andar
     // Armado (em pé, andando, mirando ou atirando): o corpo acompanha para onde a câmera aponta
     if (facesAim(this.armed) && !this.crouching) this.heading = yaw; // agachado o corpo segue o movimento (andar agachado de lado ficava torto)
 
@@ -457,7 +480,8 @@ export class Player {
     }
 
     this.applyMotion();
-    this.selectAnimation(dt, input, moving);
+    this.selectAnimation(dt, moving || vs > 0.45);
+    this.animator?.setGait(vs);
     this.finish(dt);
   }
 
@@ -485,7 +509,7 @@ export class Player {
     return true;
   }
 
-  private selectAnimation(dt: number, input: InputState, moving: boolean): void {
+  private selectAnimation(dt: number, moving: boolean): void {
     const a = this.animator;
     if (!a) return;
     if (this.mode === 'air') {
@@ -503,7 +527,7 @@ export class Player {
     if (this.crouching) {
       // agachado: andar para a frente ou para trás (de lado usa o andar para a frente)
       a.play(moving ? (armed && this.moveF < -0.5 ? 'crouch_bwd' : 'crouch_fwd') : 'crouch_idle');
-    } else if (moving && armed && !input.sprint) {
+    } else if (moving && armed && !this.sprintAnim) {
       // com o fuzil o corpo olha para a mira: anda de frente, de costas ou de lado
       let clip: string;
       if (Math.abs(this.moveF) >= Math.abs(this.moveL)) clip = this.moveF >= 0 ? ('gun_fwd') : 'gun_bwd';
@@ -512,7 +536,7 @@ export class Player {
     } else if (moving) {
       // correndo armado: fuzil nas duas mãos = run_armed; pistola = run_1armed (ped.ifp); sem arma de fogo, sprint
       const gunRun = this.armed === 'rifle' || this.armed === 'aim' ? 'run_armed' : this.armed === 'pistol' || this.armed === 'pistol_aim' ? 'run_1armed' : 'sprint';
-      const clip = input.sprint ? (a.has(gunRun) ? gunRun : 'sprint') : 'walk';
+      const clip = this.sprintAnim ? (a.has(gunRun) ? gunRun : 'sprint') : 'walk';
       a.play(a.has(clip) ? clip : 'walk');
     } else if (this.armed === 'pistol_aim' && a.has('arrestgun')) a.play('arrestgun'); // pistola mirando parado: o corpo e a pose de mirar do ARRESTgun (ped.ifp)
     else a.play(this.combatT > 0 && this.armed === 'none' && a.has('combat_idle') ? 'combat_idle' : isKnifeLike(this.armed) && a.has('knife_idle') ? 'knife_idle' : isBatLike(this.armed) && a.has('bat_idle') ? 'bat_idle' : (this.armed === 'rifle' || this.armed === 'aim') && a.has('gun_idle') ? 'gun_idle' : 'idle');
@@ -972,7 +996,14 @@ export class Player {
     // Gira suavemente até a direção do movimento
     let diff = this.heading - this.object.rotation.y;
     diff = Math.atan2(Math.sin(diff), Math.cos(diff));
-    this.object.rotation.y += diff * Math.min(1, dt * 18);
+    const turn = diff * Math.min(1, dt * 18);
+    this.object.rotation.y += turn;
+    // inclina o corpo para dentro da curva quando corre e vira (como o CJ)
+    const vs = Math.hypot(this.velX, this.velZ);
+    const wantLean = this.mode === 'ground' && dt > 0 ? THREE.MathUtils.clamp((-turn / dt) * 0.022 * (vs / SPRINT_SPEED), -0.16, 0.16) : 0;
+    this.lean += (wantLean - this.lean) * Math.min(1, dt * 8);
+    const body = this.object.children[0];
+    if (body && this.mode !== 'dead') body.rotation.z = this.lean;
     this.animator?.update(dt);
     if (this.animator) this.weaponVis?.setSuppressed(!this.animator.holdsWeapon);
     // Morto: deita de costas

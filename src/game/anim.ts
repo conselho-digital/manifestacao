@@ -80,6 +80,8 @@ function gtaKey(name: string): string {
 }
 
 const FADE = 0.2;
+/** Velocidade (m/s) para a qual o passo de cada clipe de andar/correr foi calibrado (TIME_SCALE); igual às de player.ts. */
+const GAIT_SPEED: Record<string, number> = { walk: 2.1, sprint: 6.2, run_armed: 6.2, run_1armed: 6.2, gun_fwd: 2.7, gun_bwd: 2.7, gun_left: 2.7, gun_right: 2.7, crouch_fwd: 1, crouch_bwd: 1 };
 const CURL_Q = new THREE.Quaternion();
 const CURL_AXIS = new THREE.Vector3(0, 0, 1);
 const JAB_TIME = 0.42;
@@ -466,11 +468,19 @@ export class Animator {
     const next = this.actions.get(name);
     if (!next) return;
     next.reset().play();
+    next.timeScale = TIME_SCALE[name] ?? 1;
     if (this.current && this.current !== next) this.current.crossFadeTo(next, FADE, false);
     else next.fadeIn(FADE);
     this.current = next;
     this.clipName = name;
     this.done = false;
+  }
+
+  /** O passo acompanha a velocidade real (acelerando ou freando): os pés não patinam. */
+  setGait(speed: number): void {
+    const nominal = GAIT_SPEED[this.clipName];
+    if (!nominal || !this.current) return;
+    this.current.timeScale = (TIME_SCALE[this.clipName] ?? 1) * THREE.MathUtils.clamp(speed / nominal, 0.4, 1.5);
   }
 
   /** Tempo atual do clipe que está tocando (s do clipe, já com a velocidade). */
