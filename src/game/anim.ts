@@ -213,6 +213,7 @@ export class Animator {
   private shoulderFwd = 0;
   /** deslocamento (no sistema do osso da mão direita) do punho do modelo em relação aos ossos dos dedos (autoRig.ts `handGrip`) */
   private handGrip: THREE.Vector3 | null = null;
+  private handGripL: THREE.Vector3 | null = null;
   private idleK = 0; // parado: leva os ombros para a frente (o clipe deixa 4-8 cm atrás do peito)
   private leanK = 0; // sprint e agachado parado: endireita o tronco, que o clipe deixa caído para a esquerda
   private allBones: THREE.Object3D[] | null = null;
@@ -257,6 +258,7 @@ export class Animator {
     root.traverse((o) => {
       if (typeof o.userData.shoulderFwd === 'number') this.shoulderFwd = o.userData.shoulderFwd as number;
       if (Array.isArray(o.userData.handGrip)) this.handGrip = new THREE.Vector3().fromArray(o.userData.handGrip as number[]);
+      if (Array.isArray(o.userData.handGripL)) this.handGripL = new THREE.Vector3().fromArray(o.userData.handGripL as number[]);
     });
     mixer.addEventListener('finished', (e) => {
       if ((e as unknown as { action: THREE.AnimationAction }).action === this.current) this.done = true;
@@ -1277,6 +1279,9 @@ export class Animator {
     // o alvo é onde a PALMA deve ficar: o pulso fica um pouco antes, na direção do ombro
     const sh0 = this.posIn(arm.u, new THREE.Vector3());
     const wrist = target.clone().addScaledVector(target.clone().sub(sh0).normalize(), -PALM);
+    // a malha da mão do modelo não fica onde ficam os ossos dos dedos do Law1 (`handGrip`/`handGripL`): corrige o pulso para a mão do modelo (e não o osso) ficar na empunhadura
+    const hg = arm.side < 0 ? this.handGrip : this.handGripL;
+    if (hg) wrist.add(hg.clone().applyQuaternion(this.quatIn(arm.h, new THREE.Quaternion()))); // sinal conferido no olho (Vini, Xandão, Mai): com a soma a mão fecha em volta do cabo/empunhadura; subtraindo, a arma ficava flutuando à frente da mão
     // clavícula: acompanha um pouco o braço (evita o ombro "rasgar" quando o braço sobe)
     if (arm.c) {
       arm.c.updateMatrixWorld(true);
