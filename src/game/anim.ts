@@ -84,6 +84,11 @@ const FADE = 0.2;
 const GAIT_SPEED: Record<string, number> = { walk: 2.1, sprint: 6.2, run_armed: 6.2, run_1armed: 6.2, gun_fwd: 2.7, gun_bwd: 2.7, gun_left: 2.7, gun_right: 2.7, crouch_fwd: 1, crouch_bwd: 1 };
 const CURL_Q = new THREE.Quaternion();
 const CURL_AXIS = new THREE.Vector3(0, 0, 1);
+/** Para onde a palma deve olhar (espaço da arma; x = esquerda do personagem): mão direita no cabo olha para o centro da arma, a esquerda segura por baixo (fuzil) ou pelo lado (pistola) */
+const GRIP_ADJ = { pistolR: new THREE.Vector3(0, 0.085, -0.01), pistolL: new THREE.Vector3(0, 0.06, 0), rifleR: new THREE.Vector3(0, 0.04, 0), rifleL: new THREE.Vector3(0, 0.09, 0.03) };
+const P_RIGHT = new THREE.Vector3(1, 0, 0);
+const P_LEFT_RIFLE = new THREE.Vector3(-0.3, 1, 0).normalize();
+const P_LEFT_PISTOL = new THREE.Vector3(-1, 0, 0);
 const JAB_TIME = 0.42;
 /** Distância do osso do pulso até o meio da palma (m): é a palma, não o pulso, que segura o cabo. */
 const PALM = 0.1;
@@ -214,6 +219,11 @@ export class Animator {
   /** deslocamento (no sistema do osso da mão direita) do punho do modelo em relação aos ossos dos dedos (autoRig.ts `handGrip`) */
   private handGrip: THREE.Vector3 | null = null;
   private handGripL: THREE.Vector3 | null = null;
+  /** normal da palma de cada mão no sistema do osso da mão (para virar a palma para a arma) e a palma desejada (espaço do personagem) enquanto se resolve o braço */
+  private palmN: Record<number, THREE.Vector3> = {};
+  private wantPalm: THREE.Vector3 | null = null;
+  /** dedos do modelo (autoRig.ts `fingerRig`): ossos criados na malha da mão de cada personagem, por lado (-1 direita, 1 esquerda) */
+  private fingerRig: Record<number, { bone: THREE.Bone; axis: THREE.Vector3; ang: number }[]> = {};
   private idleK = 0; // parado: leva os ombros para a frente (o clipe deixa 4-8 cm atrás do peito)
   private leanK = 0; // sprint e agachado parado: endireita o tronco, que o clipe deixa caído para a esquerda
   private allBones: THREE.Object3D[] | null = null;
@@ -259,6 +269,10 @@ export class Animator {
       if (typeof o.userData.shoulderFwd === 'number') this.shoulderFwd = o.userData.shoulderFwd as number;
       if (Array.isArray(o.userData.handGrip)) this.handGrip = new THREE.Vector3().fromArray(o.userData.handGrip as number[]);
       if (Array.isArray(o.userData.handGripL)) this.handGripL = new THREE.Vector3().fromArray(o.userData.handGripL as number[]);
+      const pn = o.userData.palmN as Record<string, number[]> | undefined;
+      if (pn?.r && pn.l) { this.palmN[-1] = new THREE.Vector3().fromArray(pn.r); this.palmN[1] = new THREE.Vector3().fromArray(pn.l); }
+      const fr = o.userData.fingerRig as Record<string, { bone: THREE.Bone; axis: number[]; ang: number }[]> | undefined;
+      if (fr?.r && fr.l) for (const [sd, key] of [[-1, 'r'], [1, 'l']] as const) this.fingerRig[sd] = fr[key]!.map((e) => ({ bone: e.bone, axis: new THREE.Vector3().fromArray(e.axis), ang: e.ang }));
     });
     mixer.addEventListener('finished', (e) => {
       if ((e as unknown as { action: THREE.AnimationAction }).action === this.current) this.done = true;
@@ -670,6 +684,7 @@ export class Animator {
   }
 
   private pose(dt: number): void {
+    for (const list of Object.values(this.fingerRig)) for (const e of list) e.bone.quaternion.identity(); // dedos do modelo: abertos, a menos que curlHand feche
     this.applyDrop();
     // braços por IK só quando o clipe não segura o fuzil sozinho (ou ao mirar no ombro)
     const kind = kindOf(this.armed);
@@ -785,16 +800,21 @@ export class Animator {
       this.applyHandAdjust();
       // armas brancas (faca, taco, bandeira, placa, foice...): o cabo fica no meio dos dedos já fechados, não acima da mão (o osso da mão + PALM deixava a arma flutuando)
       if (kind === 'bat' && this.bat) {
-        const fingers = this.hands.find((h) => h.side === -1)?.fingers ?? [];
-        if (fingers.length) {
+        const arm = this.arms.find((a) => a.side === -1);
+        if (this.handGrip && arm) {
+          // personagem com mão medida: o cabo passa pelo buraco do punho fechado (centro da palma + folga do cabo)
           this.updateRoot();
-          const c = new THREE.Vector3();
-          const v = new THREE.Vector3();
-          for (const f of fingers) c.add(this.posIn(f, v));
-          c.divideScalar(fingers.length);
-          const arm = this.arms.find((a) => a.side === -1);
-          if (this.handGrip && arm) c.add(this.handGrip.clone().applyQuaternion(this.quatIn(arm.h, new THREE.Quaternion()))); // o punho do modelo não fica no mesmo lugar dos ossos dos dedos do Law1
-          this.bat.position.copy(c);
+          this.bat.position.copy(this.posIn(arm.h, new THREE.Vector3()).add(this.handGrip.clone().applyQuaternion(this.quatIn(arm.h, new THREE.Quaternion()))));
+        } else {
+          const fingers = this.hands.find((h) => h.side === -1)?.fingers ?? [];
+          if (fingers.length) {
+            this.updateRoot();
+            const c = new THREE.Vector3();
+            const v = new THREE.Vector3();
+            for (const f of fingers) c.add(this.posIn(f, v));
+            c.divideScalar(fingers.length);
+            this.bat.position.copy(c);
+          }
         }
       }
     }
@@ -1059,6 +1079,14 @@ export class Animator {
     if (w < 0.01) return;
     const hand = this.hands.find((h) => h.side === side);
     if (!hand) return;
+    const own = this.fingerRig[side];
+    if (own) { // dedos medidos na malha do modelo: cada junta dobra em volta do eixo lateral da mão
+      for (const e of own) {
+        e.bone.quaternion.setFromAxisAngle(e.axis, e.ang * w);
+        e.bone.updateMatrixWorld(true);
+      }
+      return;
+    }
     const dbg = (window as unknown as { __CURL?: number[] }).__CURL;
     const ax = dbg ? new THREE.Vector3(dbg[0], dbg[1], dbg[2]) : CURL_AXIS;
     const ang = (dbg?.[3] ?? 75) * (Math.PI / 180) * (dbg?.[4] === 0 ? 1 : side) * w;
@@ -1261,27 +1289,47 @@ export class Animator {
     return { pos, q };
   }
 
+  /** Ajuste (espaço da arma) do ponto de empunhadura para o punho do modelo cair no cabo/guarda-mão. */
+  private gripAdjust(side: number): THREE.Vector3 {
+    if (this.armed === 'pistol' || this.armed === 'pistol_aim') return side < 0 ? GRIP_ADJ.pistolR : GRIP_ADJ.pistolL;
+    return side < 0 ? GRIP_ADJ.rifleR : GRIP_ADJ.rifleL;
+  }
+
   private poseArm(arm: Arm, frame: { pos: THREE.Vector3; q: THREE.Quaternion }, dt: number): void {
     const cfgHold = this.cfgNow();
     const w = isSpray(this.armed) && arm.side > 0 ? 0 : this.armW; // lata de spray: só a mão direita segura
     if (w < 0.01) return;
-    const wrist = (arm.side < 0 ? cfgHold.gripR : cfgHold.gripL).clone().applyQuaternion(frame.q).add(frame.pos);
+    const gripLocal = (arm.side < 0 ? cfgHold.gripR : cfgHold.gripL).clone();
+    // personagens com mão medida: o punho fecha NO cabo da arma (os pontos de CFG foram calibrados para a mão achatada do Law1 e ficam ~10 cm abaixo do cabo)
+    if (arm.side < 0 ? this.handGrip : this.handGripL) gripLocal.add(this.gripAdjust(arm.side));
+    const wrist = gripLocal.applyQuaternion(frame.q).add(frame.pos);
     if (arm.side > 0 && this.ovLeft) {
       // recarregando: a mão esquerda segue o colt45_reload em relação ao pulso direito
       const rW = cfgHold.gripR.clone().applyQuaternion(frame.q).add(frame.pos);
       wrist.lerp(rW.add(this.ovLeft.lr), this.ovLeft.w);
     }
+    const rifle = this.armed === 'rifle' || this.armed === 'aim';
+    const gun = rifle || this.armed === 'pistol' || this.armed === 'pistol_aim';
+    this.wantPalm = gun ? (arm.side < 0 ? P_RIGHT : rifle ? P_LEFT_RIFLE : P_LEFT_PISTOL).clone().applyQuaternion(frame.q) : null;
     this.solveArm(arm, wrist, w, dt);
+    this.wantPalm = null;
   }
 
   /** Leva a mão do braço até `wrist` (espaço do personagem) com peso `w` sobre o que o clipe fez. */
   private solveArm(arm: Arm, target: THREE.Vector3, w: number, dt: number): void {
+    this.solveArmOnce(arm, target, w, dt, null);
+    // personagem com mão medida: a orientação da mão muda ao resolver o braço, então o pulso é recalculado (sem suavização) até o punho cair no alvo
+    if (arm.side < 0 ? this.handGrip : this.handGripL) for (let i = 0; i < 3; i++) this.solveArmOnce(arm, target, w, dt, 1);
+  }
+
+  private solveArmOnce(arm: Arm, target: THREE.Vector3, w: number, dt: number, kOver: number | null): void {
     // o alvo é onde a PALMA deve ficar: o pulso fica um pouco antes, na direção do ombro
     const sh0 = this.posIn(arm.u, new THREE.Vector3());
-    const wrist = target.clone().addScaledVector(target.clone().sub(sh0).normalize(), -PALM);
-    // a malha da mão do modelo não fica onde ficam os ossos dos dedos do Law1 (`handGrip`/`handGripL`): corrige o pulso para a mão do modelo (e não o osso) ficar na empunhadura
     const hg = arm.side < 0 ? this.handGrip : this.handGripL;
-    if (hg) wrist.add(hg.clone().applyQuaternion(this.quatIn(arm.h, new THREE.Quaternion()))); // sinal conferido no olho (Vini, Xandão, Mai): com a soma a mão fecha em volta do cabo/empunhadura; subtraindo, a arma ficava flutuando à frente da mão
+    // personagem com mão medida: o pulso fica onde o PUNHO (centro da palma + folga do cabo) cai no alvo; senão o pulso recua PALM em direção ao ombro
+    const wrist = hg
+      ? target.clone().sub(hg.clone().applyQuaternion(this.quatIn(arm.h, new THREE.Quaternion())))
+      : target.clone().addScaledVector(target.clone().sub(sh0).normalize(), -PALM);
     // clavícula: acompanha um pouco o braço (evita o ombro "rasgar" quando o braço sobe)
     if (arm.c) {
       arm.c.updateMatrixWorld(true);
@@ -1305,7 +1353,7 @@ export class Animator {
     const tU = elbow.clone().sub(shoulder).normalize();
     const tF = wrist.clone().sub(elbow).normalize();
 
-    const k = Math.min(1, dt * 14);
+    const k = kOver ?? Math.min(1, dt * 14);
     arm.curU.lerp(tU, k).normalize();
     arm.curF.lerp(tF, k).normalize();
     const qU = new THREE.Quaternion().setFromUnitVectors(arm.dir0[0], arm.curU);
@@ -1323,6 +1371,16 @@ export class Animator {
         // pulso para trás: a mão gira em volta do eixo esquerda-direita (perpendicular ao antebraço e à vertical), sem mexer no braço
         const axis = new THREE.Vector3().crossVectors(arm.curF, Y).normalize();
         if (axis.lengthSq() > 0.01) world = new THREE.Quaternion().setFromAxisAngle(axis, this.handBend).multiply(world);
+      }
+      if (i === 2 && this.wantPalm && this.palmN[arm.side]) {
+        // gira a mão em volta do antebraço até a palma (a face onde os dedos fecham) olhar para a arma
+        const pn = this.palmN[arm.side]!.clone().applyQuaternion(world);
+        pn.addScaledVector(arm.curF, -pn.dot(arm.curF));
+        const dw = this.wantPalm.clone().addScaledVector(arm.curF, -this.wantPalm.dot(arm.curF));
+        if (pn.lengthSq() > 1e-6 && dw.lengthSq() > 1e-6) {
+          const ang = Math.atan2(arm.curF.dot(new THREE.Vector3().crossVectors(pn, dw)), pn.dot(dw));
+          world = new THREE.Quaternion().setFromAxisAngle(arm.curF, ang).multiply(world);
+        }
       }
       const target = parentQ.invert().multiply(world);
       bone.quaternion.slerp(target, w);

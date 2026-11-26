@@ -154,11 +154,9 @@ export async function buildRigged(source: THREE.Object3D, name: string): Promise
   const inv = new THREE.Matrix4().copy(parent.matrixWorld).invert();
   const tmp = new THREE.Vector3();
   const v = new THREE.Vector3();
-  const skeleton = new THREE.Skeleton(skelBones);
   const bodyFix = BODY_FIX[name];
-  // centro da malha de cada mão (repouso): serve para pôr armas e empunhaduras no punho do modelo e não no osso do Law1
-  const gripSum = { r: new THREE.Vector3(), l: new THREE.Vector3() };
-  const gripN = { r: 0, l: 0 };
+  interface Built { m: THREE.Mesh; pos: Float32Array; wpos: Float32Array; si: Uint16Array; sw: Float32Array }
+  const built: Built[] = [];
   const w4 = new Float32Array(segs.length);
   for (const m of meshes) {
     const g = m.geometry;
@@ -167,6 +165,7 @@ export async function buildRigged(source: THREE.Object3D, name: string): Promise
     const pos = new Float32Array(n * 3);
     const si = new Uint16Array(n * 4);
     const sw = new Float32Array(n * 4);
+    const wpos = new Float32Array(n * 3);
     const nIdx = g.getAttribute('_rigidx');
     const nW = g.getAttribute('_rigw');
     const native = nIdx && nW ? RIG_NAMES.map((nm) => segs.findIndex((sg) => sg.k === nm)) : null;
@@ -210,43 +209,186 @@ export async function buildRigged(source: THREE.Object3D, name: string): Promise
         }
         v.x += dx; v.y += dy; v.z += dz;
       }
-      let top = 0;
-      for (let k = 1; k < 4; k++) if (sw[i * 4 + k]! > sw[i * 4 + top]!) top = k;
-      const topKey = segs[si[i * 4 + top]!]?.k ?? '';
-      const gm = /^([rl]) (hand|finger|finger01)$/.exec(topKey);
-      if (gm && sw[i * 4 + top]! > 0.3) { const gs = gm[1] as 'r' | 'l'; gripSum[gs].add(v); gripN[gs]++; }
+      wpos[i * 3] = v.x; wpos[i * 3 + 1] = v.y; wpos[i * 3 + 2] = v.z;
       v.applyMatrix4(inv);
       pos[i * 3] = v.x; pos[i * 3 + 1] = v.y; pos[i * 3 + 2] = v.z;
     }
+    built.push({ m, pos, wpos, si, sw });
+  }
+  // ---- dedos de verdade: cada mão ganha 4 dedos (3 juntas) e o polegar (2 juntas) medidos na malha DA MÃO do modelo, não nos 2 ossos do Law1 ----
+  const extra: THREE.Bone[] = [];
+  const fingerRig: Record<string, { bone: THREE.Bone; axis: number[]; ang: number }[]> = { r: [], l: [] };
+  const palmGrip: Record<string, number[]> = {};
+  const palmN: Record<string, number[]> = {};
+  const FINGER_ANG = [1.15, 1.4, 1.0]; // dobra de cada junta com a mão 100% fechada (rad)
+  const THUMB_ANG = [0.7, 0.6];
+  const reweights: { b: Built; i: number; list: [number, number][] }[] = [];
+  const V3 = (): THREE.Vector3 => new THREE.Vector3();
+  const wv = V3();
+  for (const sd of SIDES) {
+    const handB = bones.get(`${sd} hand`)!;
+    const H: { b: Built; i: number; p: THREE.Vector3 }[] = [];
+    for (const b of built) {
+      const n = b.si.length / 4;
+      for (let i = 0; i < n; i++) {
+        let top = 0;
+        for (let k = 1; k < 4; k++) if (b.sw[i * 4 + k]! > b.sw[i * 4 + top]!) top = k;
+        const key = segs[b.si[i * 4 + top]!]?.k;
+        if ((key === `${sd} hand` || key === `${sd} finger` || key === `${sd} finger01`) && b.sw[i * 4 + top]! > 0.3) H.push({ b, i, p: new THREE.Vector3(b.wpos[i * 3]!, b.wpos[i * 3 + 1]!, b.wpos[i * 3 + 2]!) });
+      }
+    }
+    if (H.length < 24) continue;
+    const W = P(`${sd} hand`);
+    const C = V3();
+    for (const h of H) C.add(h.p);
+    C.multiplyScalar(1 / H.length);
+    const aLaw = P(`${sd} finger`).sub(W).normalize();
+    const aMesh = C.clone().sub(W).normalize();
+    const a = aMesh.angleTo(aLaw) < 0.6 ? aMesh : aLaw;
+    // lado da palma: para onde a ponta do Law1 vai ao fechar a mão (o jogo dobra o osso `finger` no eixo Z local, 75° × lado)
+    const fing = bones.get(`${sd} finger`)!;
+    const fing1 = bones.get(`${sd} finger01`)!;
+    const p0 = fing1.getWorldPosition(V3());
+    const qc = new THREE.Quaternion().setFromAxisAngle(Z_AXIS, (75 * Math.PI / 180) * (sd === 'l' ? 1 : -1));
+    fing.quaternion.multiply(qc); fing.updateMatrixWorld(true);
+    const dCurl = fing1.getWorldPosition(V3()).sub(p0);
+    fing.quaternion.multiply(qc.clone().invert()); fing.updateMatrixWorld(true);
+    const n = dCurl.addScaledVector(a, -dCurl.dot(a)).normalize();
+    const u = V3().crossVectors(a, n).normalize();
+    const rel = (p: THREE.Vector3): [number, number, number] => { wv.copy(p).sub(W); return [wv.dot(a), wv.dot(u), wv.dot(n)]; };
+    const co = H.map((h) => rel(h.p));
+    // a malha da mão não começa onde está o osso do pulso do Law1: o pulso do MODELO é a ponta mais baixa da mão (2º percentil)
+    const ps = co.map((c) => c[0]).sort((x, y) => x - y);
+    const pw = ps[Math.floor(ps.length * 0.02)]!;
+    const L = ps[ps.length - 1]!;
+    if (L - pw < 0.07) continue;
+    const pk = pw + 0.48 * (L - pw);
+    // palma: largura e superfície
+    let xmin = 1e9, xmax = -1e9;
+    const palmW: number[] = [];
+    let pcn = 0;
+    for (const c of co) if (c[0] > pw + 0.1 * (L - pw) && c[0] < pk) { xmin = Math.min(xmin, c[1]); xmax = Math.max(xmax, c[1]); palmW.push(c[2]); }
+    if (palmW.length < 6) continue;
+    palmW.sort((q, r) => q - r);
+    pcn = palmW[Math.floor(palmW.length * 0.9)]!;
+    const xmid = (xmin + xmax) / 2;
+    const half = Math.max(0.012, (xmax - xmin) / 2);
+    // ponto onde o cabo/empunhadura fica na mão fechada: um pouco à frente da palma, entre a palma e os nós dos dedos
+    const gw = W.clone().addScaledVector(a, pw + 0.7 * (pk - pw)).addScaledVector(u, xmid).addScaledVector(n, pcn + 0.012);
+    palmGrip[sd] = gw.sub(W).applyQuaternion(handB.getWorldQuaternion(new THREE.Quaternion()).invert()).toArray();
+    // polegar: lado da frente do corpo (palma para a coxa), saindo da lateral da palma
+    const tsign = Math.abs(u.z) > 0.2 ? Math.sign(u.z) : 1;
+    const isThumb = (c: [number, number, number]): boolean => tsign * (c[1] - xmid) > half * (c[0] < pk ? 0.8 : 1.05) && c[0] < pw + 0.9 * (L - pw) && c[0] > pw + 0.1 * (L - pw);
+    const fingerIdx: number[] = [];
+    const thumbIdx: number[] = [];
+    co.forEach((c, k) => { if (isThumb(c)) thumbIdx.push(k); else if (c[0] > pk - 0.012) fingerIdx.push(k); });
+    if (fingerIdx.length < 8) continue;
+    let fxa = 1e9, fxb = -1e9, fw = 0;
+    for (const k of fingerIdx) { fxa = Math.min(fxa, co[k]![1]); fxb = Math.max(fxb, co[k]![1]); fw += co[k]![2]; }
+    fw /= fingerIdx.length;
+    const fspan = Math.max(0.02, fxb - fxa);
+    const hq = handB.getWorldQuaternion(new THREE.Quaternion());
+    const hqi = hq.clone().invert();
+    const mkBone = (parent: THREE.Bone, world: THREE.Vector3, nm: string): THREE.Bone => {
+      const bn = new THREE.Bone();
+      bn.name = nm;
+      bn.position.copy(parent.worldToLocal(world.clone()));
+      parent.add(bn);
+      parent.updateMatrixWorld(true);
+      bn.updateMatrixWorld(true);
+      return bn;
+    };
+    const at = (pp: number, xx: number, ww: number): THREE.Vector3 => W.clone().addScaledVector(a, pp).addScaledVector(u, xx).addScaledVector(n, ww);
+    const axisU = u.clone().applyQuaternion(hqi).toArray();
+    palmN[sd] = n.clone().applyQuaternion(hqi).toArray();
+    const J = [pk, pk + 0.36 * (L - pk), pk + 0.68 * (L - pk)];
+    const laneBase: number[] = [];
+    for (let k = 0; k < 4; k++) {
+      let parent = handB;
+      laneBase.push(segs.length + extra.length);
+      for (let j = 0; j < 3; j++) {
+        const bn = mkBone(parent, at(J[j]!, fxa + ((k + 0.5) / 4) * fspan, fw), `${sd}_f${k}_${j}`);
+        extra.push(bn);
+        fingerRig[sd]!.push({ bone: bn, axis: axisU, ang: FINGER_ANG[j]! });
+        parent = bn;
+      }
+    }
+    const handIdx = segs.findIndex((sg) => sg.k === `${sd} hand`);
+    const B = 0.012;
+    for (const k of fingerIdx) {
+      const h = H[k]!;
+      const c = co[k]!;
+      const f = ((c[1] - fxa) / fspan) * 4 - 0.5;
+      const lo = Math.max(0, Math.min(3, Math.floor(f)));
+      const hi = Math.min(3, lo + 1);
+      const t = lo === hi ? 0 : Math.max(0, Math.min(1, f - lo));
+      const sm = J.map((jp) => smooth(c[0], jp - B, jp + B));
+      const sj = [sm[0]! - sm[1]!, sm[1]! - sm[2]!, sm[2]!];
+      const list: [number, number][] = [[handIdx, 1 - sm[0]!]];
+      for (let j = 0; j < 3; j++) {
+        list.push([laneBase[lo]! + j, sj[j]! * (1 - t)]);
+        if (hi !== lo) list.push([laneBase[hi]! + j, sj[j]! * t]);
+      }
+      reweights.push({ b: h.b, i: h.i, list });
+    }
+    if (thumbIdx.length >= 6) {
+      const tb = at(pw + 0.2 * (L - pw), xmid + tsign * half, pcn * 0.6);
+      let tip = tb.clone();
+      let best = 0;
+      for (const k of thumbIdx) { const d = H[k]!.p.distanceTo(tb); if (d > best) { best = d; tip = H[k]!.p; } }
+      const dirT = tip.clone().sub(tb).normalize();
+      const lenT = Math.max(0.03, best);
+      const t0 = mkBone(handB, tb, `${sd}_th0`);
+      const t1 = mkBone(t0, tb.clone().addScaledVector(dirT, 0.5 * lenT), `${sd}_th1`);
+      const i0 = segs.length + extra.length;
+      extra.push(t0, t1);
+      const axisT = V3().crossVectors(dirT, n).normalize().applyQuaternion(hqi).toArray();
+      fingerRig[sd]!.push({ bone: t0, axis: axisT, ang: THUMB_ANG[0]! }, { bone: t1, axis: axisT, ang: THUMB_ANG[1]! });
+      for (const k of thumbIdx) {
+        const q = H[k]!.p.clone().sub(tb).dot(dirT);
+        const s0 = smooth(q, -0.012, 0.012);
+        const s1 = smooth(q, 0.5 * lenT - 0.012, 0.5 * lenT + 0.012);
+        reweights.push({ b: H[k]!.b, i: H[k]!.i, list: [[handIdx, 1 - s0], [i0, s0 - s1], [i0 + 1, s1]] });
+      }
+    }
+  }
+  rig.updateMatrixWorld(true);
+  const skeleton = new THREE.Skeleton([...skelBones, ...extra]);
+  for (const rw of reweights) {
+    const l = rw.list.filter((e) => e[1] > 1e-3).sort((x, y) => y[1] - x[1]).slice(0, 4);
+    let sum = 0;
+    for (const e of l) sum += e[1];
+    for (let k = 0; k < 4; k++) {
+      rw.b.si[rw.i * 4 + k] = l[k]?.[0] ?? 0;
+      rw.b.sw[rw.i * 4 + k] = l[k] ? l[k]![1] / sum : 0;
+    }
+  }
+  for (const b of built) {
+    const g = b.m.geometry;
     const ng = new THREE.BufferGeometry();
-    ng.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    ng.setAttribute('position', new THREE.BufferAttribute(b.pos, 3));
     const uv = g.getAttribute('uv');
     if (uv) ng.setAttribute('uv', uv);
     const col = g.getAttribute('color');
     if (col) ng.setAttribute('color', col);
-    ng.setAttribute('skinIndex', new THREE.BufferAttribute(si, 4));
-    ng.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4));
+    ng.setAttribute('skinIndex', new THREE.BufferAttribute(b.si, 4));
+    ng.setAttribute('skinWeight', new THREE.BufferAttribute(b.sw, 4));
     if (g.index) ng.setIndex(g.index);
     for (const grp of g.groups) ng.addGroup(grp.start, grp.count, grp.materialIndex);
     ng.computeVertexNormals();
-    const mat = Array.isArray(m.material) ? m.material.map((x) => x.clone()) : m.material.clone();
+    const mat = Array.isArray(b.m.material) ? b.m.material.map((x) => x.clone()) : b.m.material.clone();
     const sm = new THREE.SkinnedMesh(ng, mat);
-    sm.name = `rig_${name}_${m.name || meshes.indexOf(m)}`;
+    sm.name = `rig_${name}_${b.m.name || meshes.indexOf(b.m)}`;
     sm.castShadow = true;
     sm.frustumCulled = false;
     parent.add(sm);
     sm.updateMatrixWorld(true);
     sm.bind(skeleton);
   }
-  for (const sd of SIDES) {
-    if (gripN[sd] <= 8) continue;
-    // diferença (no sistema do osso da mão) entre o centro da mão do modelo e o centro dos ossos dos dedos do Law1
-    const f = P(`${sd} finger`).add(P(`${sd} finger01`)).multiplyScalar(0.5);
-    const d = gripSum[sd].multiplyScalar(1 / gripN[sd]).sub(f);
-    d.applyQuaternion(bones.get(`${sd} hand`)!.getWorldQuaternion(new THREE.Quaternion()).invert());
-    if (d.length() > 0.07) d.setLength(0.07); // limite: mãos de modelo muito estilizado (dedos longos) não levam a arma longe demais
-    root.userData[sd === 'r' ? 'handGrip' : 'handGripL'] = d.toArray();
-  }
+  if (palmGrip.r) root.userData.handGrip = palmGrip.r;
+  if (palmGrip.l) root.userData.handGripL = palmGrip.l;
+  if (palmN.r && palmN.l) root.userData.palmN = palmN;
+  if (fingerRig.r!.length && fingerRig.l!.length) root.userData.fingerRig = fingerRig;
   if (SHOULDER_FWD[name] !== undefined) root.userData.shoulderFwd = SHOULDER_FWD[name];
   return root;
 }
