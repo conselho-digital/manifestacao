@@ -11,8 +11,6 @@ import { rifleNetCode, type RifleKind } from './rifles';
 const WALK_SPEED = 2.1;
 const SPRINT_SPEED = 6.2;
 const CROUCH_SPEED = 1.0;
-const GROUND_ACC = 9; // m/s² ao acelerar
-const GROUND_DEC = 15; // m/s² ao frear ou virar
 const AIM_SPEED = 2.7; // andando com o fuzil no ombro
 const GRAVITY = -20;
 const JUMP_V = 6.8;
@@ -445,18 +443,12 @@ export class Player {
       this.moveF = dir.x * Math.sin(yaw) + dir.z * Math.cos(yaw);
       this.moveL = dir.x * Math.cos(yaw) - dir.z * Math.sin(yaw);
     }
-    // aceleração e frenagem graduais (sai do lugar em ~0,25 s andando e ~0,7 s correndo; para deslizando um pouco)
-    const wl = Math.hypot(wantX, wantZ);
-    const vl0 = Math.hypot(this.velX, this.velZ);
-    const turning = vl0 > 1 && wl > 0 && (this.velX * wantX + this.velZ * wantZ) / (vl0 * wl) < 0.9; // muda de direção: faz a curva mais rápido
-    const accel = (wl >= vl0 && !turning ? GROUND_ACC : GROUND_DEC) * dt;
-    const dvx = wantX - this.velX;
-    const dvz = wantZ - this.velZ;
-    const dvl = Math.hypot(dvx, dvz);
-    if (dvl <= accel) { this.velX = wantX; this.velZ = wantZ; } else { this.velX += (dvx / dvl) * accel; this.velZ += (dvz / dvl) * accel; }
-    const vs = Math.hypot(this.velX, this.velZ);
-    if (vs > 1e-4) this.moveHoriz(this.velX * dt, this.velZ * dt);
-    this.sprintAnim = (input.sprint || this.sprintAnim) && vs > (this.sprintAnim ? 2.9 : 3.4); // corre só quando a velocidade já passou do andar
+    // sem inércia: o corpo anda exatamente na velocidade do passo da animação e para junto com ela (nada de deslizar)
+    this.velX = wantX;
+    this.velZ = wantZ;
+    const vs = Math.hypot(wantX, wantZ);
+    if (vs > 1e-4) this.moveHoriz(wantX * dt, wantZ * dt);
+    this.sprintAnim = input.sprint && moving;
     // Armado (em pé, andando, mirando ou atirando): o corpo acompanha para onde a câmera aponta
     if (facesAim(this.armed) && !this.crouching) this.heading = yaw; // agachado o corpo segue o movimento (andar agachado de lado ficava torto)
 
@@ -480,7 +472,7 @@ export class Player {
     }
 
     this.applyMotion();
-    this.selectAnimation(dt, moving || vs > 0.45);
+    this.selectAnimation(dt, moving);
     this.animator?.setGait(vs);
     this.finish(dt);
   }

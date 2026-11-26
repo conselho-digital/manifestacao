@@ -35,8 +35,8 @@ const SHOULDER_FWD: Record<string, number> = { Vini: -0.35 };
  * ([radial, axial, profundidade]: quanto o membro engrossa e, nos pés, quanto alonga a partir do tornozelo), antes de ligar os pesos; vale na pose de repouso, então anima junto.
  */
 const BODY_FIX: Record<string, Record<string, readonly [number, number, number?]>> = {
-  MaiBrasil: { thigh: [1.05, 1, 1.55], calf: [1.05, 1, 1.5], foot: [1.7, 1.5], toe0: [1.7, 1.5] },
-  MaiMexico: { thigh: [1.05, 1, 1.55], calf: [1.05, 1, 1.5], foot: [1.7, 1.5], toe0: [1.7, 1.5] },
+  MaiBrasil: { thigh: [1.05, 1, 1.55], calf: [1.05, 1, 1.5], foot: [1.2, 1.1], toe0: [1.2, 1.1] },
+  MaiMexico: { thigh: [1.05, 1, 1.55], calf: [1.05, 1, 1.5], foot: [1.2, 1.1], toe0: [1.2, 1.1] },
 };
 /** Ordem dos ossos nos atributos `_rigidx`/`_rigw` (pesos de pele NATIVOS do DFF, gravados por scripts/models/chars/dff2glb.mjs com SKIN=1: MESMA lista). */
 const RIG_NAMES = ['pelvis', 'spine', 'spine1', 'neck', 'head', 'r clavicle', 'r upperarm', 'r forearm', 'r hand', 'r finger', 'r finger01', 'l clavicle', 'l upperarm', 'l forearm', 'l hand', 'l finger', 'l finger01', 'r thigh', 'r calf', 'r foot', 'r toe0', 'l thigh', 'l calf', 'l foot', 'l toe0'];
