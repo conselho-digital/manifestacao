@@ -156,6 +156,8 @@ export async function buildRigged(source: THREE.Object3D, name: string): Promise
   const v = new THREE.Vector3();
   const skeleton = new THREE.Skeleton(skelBones);
   const bodyFix = BODY_FIX[name];
+  const gripSum = new THREE.Vector3(); // centro da malha da mão direita (repouso): serve para pôr armas no punho do modelo e não no osso do Law1
+  let gripN = 0;
   const w4 = new Float32Array(segs.length);
   for (const m of meshes) {
     const g = m.geometry;
@@ -207,6 +209,10 @@ export async function buildRigged(source: THREE.Object3D, name: string): Promise
         }
         v.x += dx; v.y += dy; v.z += dz;
       }
+      let top = 0;
+      for (let k = 1; k < 4; k++) if (sw[i * 4 + k]! > sw[i * 4 + top]!) top = k;
+      const topKey = segs[si[i * 4 + top]!]?.k;
+      if ((topKey === 'r hand' || topKey === 'r finger' || topKey === 'r finger01') && sw[i * 4 + top]! > 0.3) { gripSum.add(v); gripN++; }
       v.applyMatrix4(inv);
       pos[i * 3] = v.x; pos[i * 3 + 1] = v.y; pos[i * 3 + 2] = v.z;
     }
@@ -229,6 +235,15 @@ export async function buildRigged(source: THREE.Object3D, name: string): Promise
     parent.add(sm);
     sm.updateMatrixWorld(true);
     sm.bind(skeleton);
+  }
+  if (gripN > 8) {
+    // diferença (no sistema do osso da mão) entre o centro do punho do modelo e o centro dos ossos dos dedos do Law1
+    const f = P('r finger').add(P('r finger01')).multiplyScalar(0.5);
+    const d = gripSum.multiplyScalar(1 / gripN).sub(f);
+    const hq = bones.get('r hand')!.getWorldQuaternion(new THREE.Quaternion());
+    d.applyQuaternion(hq.invert());
+    if (d.length() > 0.07) d.setLength(0.07); // limite: mãos de modelo muito estilizado (dedos longos) não levam a arma longe demais
+    root.userData.handGrip = d.toArray();
   }
   if (SHOULDER_FWD[name] !== undefined) root.userData.shoulderFwd = SHOULDER_FWD[name];
   return root;
